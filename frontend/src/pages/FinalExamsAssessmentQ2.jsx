@@ -139,7 +139,7 @@ export default function FinalExamsAssessment() {
       setStudents(studentsRes.data);
       setClasses(classesRes.data || []);
     } catch (error) {
-      toast.error("Failed to load data");
+      toast.error(getApiErrorMessage(error) || "Failed to load data");
     }
   };
 
@@ -150,7 +150,7 @@ export default function FinalExamsAssessment() {
       });
       setWeeks(response.data || []);
     } catch (error) {
-      toast.error("Failed to load weeks");
+      toast.error(getApiErrorMessage(error) || "Failed to load weeks");
     }
   };
 

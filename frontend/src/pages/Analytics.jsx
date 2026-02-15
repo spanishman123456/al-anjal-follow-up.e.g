@@ -12,7 +12,7 @@ import {
   Tooltip,
   Legend,
 } from "recharts";
-import { api } from "@/lib/api";
+import { api, getApiErrorMessage } from "@/lib/api";
 import { useTranslations } from "@/lib/i18n";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -127,7 +127,7 @@ export default function Analytics() {
         } catch (fallbackError) {
           setOverview(null);
           setClassSummary([]);
-          toast.error(t("analytics_failed"));
+          toast.error(getApiErrorMessage(fallbackError) || t("analytics_failed"));
         }
       } finally {
         if (!cancelled) setLoading(false);

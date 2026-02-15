@@ -281,7 +281,7 @@ export default function Students() {
       setClasses(classesRes.data);
       setPromotionEnabled(Boolean(promotionRes.data?.enabled));
     } catch (error) {
-      toast.error("Failed to load students");
+      toast.error(getApiErrorMessage(error) || "Failed to load students");
     }
   };
 
@@ -293,7 +293,7 @@ export default function Students() {
       setWeeks(response.data || []);
       // Do not set activeWeekId here; let useEffect([weeks]) restore from sessionStorage so both pages stay in sync
     } catch (error) {
-      toast.error("Failed to load weeks");
+      toast.error(getApiErrorMessage(error) || "Failed to load weeks");
     }
   };
 

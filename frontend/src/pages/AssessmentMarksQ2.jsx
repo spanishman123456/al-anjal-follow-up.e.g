@@ -136,7 +136,7 @@ export default function AssessmentMarksQ2() {
       setStudents(studentsRes.data);
       setClasses(classesRes.data || []);
     } catch (error) {
-      toast.error("Failed to load data");
+      toast.error(getApiErrorMessage(error) || "Failed to load data");
     }
   };
 
@@ -148,7 +148,7 @@ export default function AssessmentMarksQ2() {
       setWeeks(response.data || []);
       // Do not set activeWeekId here; let useEffect([weeks]) restore from sessionStorage so both pages stay in sync
     } catch (error) {
-      toast.error("Failed to load weeks");
+      toast.error(getApiErrorMessage(error) || "Failed to load weeks");
     }
   };
 

@@ -2654,13 +2654,14 @@ async def get_analytics_summary(
     semester: Optional[int] = Query(default=1),
 ):
     """Summary for Dashboard: use final-exams combined (50 per quarter) so progress reflects 1st/2nd quarter marks."""
-    student_query = {"class_id": class_id} if class_id else {}
-    class_query = {"id": class_id} if class_id else {}
-    students = await db.students.find(student_query, {"_id": 0}).to_list(5000)
-    classes = await db.classes.find(class_query, {"_id": 0}).to_list(200)
-    if students:
-        scores_by_student = await build_full_year_score_map([s["id"] for s in students])
-        for student in students:
+    try:
+        student_query = {"class_id": class_id} if class_id else {}
+        class_query = {"id": class_id} if class_id else {}
+        students = await db.students.find(student_query, {"_id": 0}).to_list(5000)
+        classes = await db.classes.find(class_query, {"_id": 0}).to_list(200)
+        if students:
+            scores_by_student = await build_full_year_score_map([s["id"] for s in students])
+            for student in students:
             sw = scores_by_student.get(student["id"], {})
             avg_9 = compute_avg_first_9_weeks(sw)
             avg_10_18 = compute_avg_weeks_10_18(sw)
@@ -2686,7 +2687,10 @@ async def get_analytics_summary(
             stot = (student.get("quarter1_total") or 0) + (student.get("quarter2_total") or 0)
             student["semester_total"] = round(stot, 2) if stot else None
             student["total_score_normalized"] = round(stot / 2, 2) if stot else None
-    return build_summary(students, classes)
+        return build_summary(students, classes)
+    except Exception as e:
+        logger.exception("Analytics summary failed")
+        raise HTTPException(status_code=500, detail=f"Failed to load analytics summary: {str(e)}")
 
 
 @api_router.get("/analytics/overview")
@@ -2948,9 +2952,13 @@ async def _build_class_summary_list(classes: List[Dict[str, Any]], semester: int
 
 @api_router.get("/classes/summary")
 async def get_class_summary(current_user: Dict[str, Any] = Depends(get_current_user)):
-    class_query = _teacher_class_filter(current_user)
-    classes = await db.classes.find(class_query, {"_id": 0}).sort("grade", 1).to_list(200)
-    return await _build_class_summary_list(classes)
+    try:
+        class_query = _teacher_class_filter(current_user)
+        classes = await db.classes.find(class_query, {"_id": 0}).sort("grade", 1).to_list(200)
+        return await _build_class_summary_list(classes)
+    except Exception as e:
+        logger.exception("Classes summary failed")
+        raise HTTPException(status_code=500, detail=f"Failed to load classes: {str(e)}")
 
 
 def _worst_performance_level(level1: str, level2: str) -> str:

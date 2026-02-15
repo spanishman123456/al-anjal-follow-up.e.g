@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useOutletContext, Link } from "react-router-dom";
 import { toast } from "sonner";
-import { api } from "@/lib/api";
+import { api, getApiErrorMessage } from "@/lib/api";
 import { useTranslations } from "@/lib/i18n";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -55,7 +55,7 @@ export default function Classes() {
       }
       setClasses(data);
     } catch (error) {
-      toast.error("Failed to load classes");
+      toast.error(getApiErrorMessage(error) || "Failed to load classes");
     }
   };
 
