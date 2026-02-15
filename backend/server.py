@@ -2662,31 +2662,31 @@ async def get_analytics_summary(
         if students:
             scores_by_student = await build_full_year_score_map([s["id"] for s in students])
             for student in students:
-            sw = scores_by_student.get(student["id"], {})
-            avg_9 = compute_avg_first_9_weeks(sw)
-            avg_10_18 = compute_avg_weeks_10_18(sw)
-            students_total_q1 = compute_students_total_for_assessment(sw, weeks_10_18=False)
-            students_total_q2 = compute_students_total_for_assessment(sw, weeks_10_18=True)
-            effective_q1 = _effective_scores_q1(sw)
-            effective_q2 = _effective_scores_q2(sw)
-            res_q1 = compute_final_exams_combined(
-                effective_q1, avg_first_9_weeks=avg_9, quarter=1, students_total_override=students_total_q1
-            )
-            res_q2 = compute_final_exams_combined(
-                effective_q2, avg_weeks_10_18=avg_10_18, quarter=2, students_total_override=students_total_q2
-            )
-            student["quarter1_total"] = res_q1.get("combined_total")
-            student["quarter2_total"] = res_q2.get("combined_total")
-            student["performance_level_q1"] = res_q1.get("performance_level", "no_data")
-            student["performance_level_q2"] = res_q2.get("performance_level", "no_data")
-            student["performance_level"] = _worst_performance_level(
-                student["performance_level_q1"], student["performance_level_q2"]
-            )
-            label_map = {"on_level": "On Level", "approach": "Approach", "below": "Below", "no_data": "No Data"}
-            student["performance_label"] = label_map.get(student["performance_level"], "No Data")
-            stot = (student.get("quarter1_total") or 0) + (student.get("quarter2_total") or 0)
-            student["semester_total"] = round(stot, 2) if stot else None
-            student["total_score_normalized"] = round(stot / 2, 2) if stot else None
+                sw = scores_by_student.get(student["id"], {})
+                avg_9 = compute_avg_first_9_weeks(sw)
+                avg_10_18 = compute_avg_weeks_10_18(sw)
+                students_total_q1 = compute_students_total_for_assessment(sw, weeks_10_18=False)
+                students_total_q2 = compute_students_total_for_assessment(sw, weeks_10_18=True)
+                effective_q1 = _effective_scores_q1(sw)
+                effective_q2 = _effective_scores_q2(sw)
+                res_q1 = compute_final_exams_combined(
+                    effective_q1, avg_first_9_weeks=avg_9, quarter=1, students_total_override=students_total_q1
+                )
+                res_q2 = compute_final_exams_combined(
+                    effective_q2, avg_weeks_10_18=avg_10_18, quarter=2, students_total_override=students_total_q2
+                )
+                student["quarter1_total"] = res_q1.get("combined_total")
+                student["quarter2_total"] = res_q2.get("combined_total")
+                student["performance_level_q1"] = res_q1.get("performance_level", "no_data")
+                student["performance_level_q2"] = res_q2.get("performance_level", "no_data")
+                student["performance_level"] = _worst_performance_level(
+                    student["performance_level_q1"], student["performance_level_q2"]
+                )
+                label_map = {"on_level": "On Level", "approach": "Approach", "below": "Below", "no_data": "No Data"}
+                student["performance_label"] = label_map.get(student["performance_level"], "No Data")
+                stot = (student.get("quarter1_total") or 0) + (student.get("quarter2_total") or 0)
+                student["semester_total"] = round(stot, 2) if stot else None
+                student["total_score_normalized"] = round(stot / 2, 2) if stot else None
         return build_summary(students, classes)
     except Exception as e:
         logger.exception("Analytics summary failed")
