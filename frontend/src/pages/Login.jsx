@@ -50,7 +50,6 @@ export default function Login({ language = "en", onLogin, onLanguageChange }) {
             ? "Login request failed. Keep the Start_App.bat window open and try again in a moment."
             : "Cannot reach backend. Run Start_App.bat (keep its window open), then try again.";
         }
-      }
       } else if (status === 503 && detail) {
         msg = typeof detail === "string" ? detail : "Server temporarily unavailable. Try again in a moment.";
       } else if (detail && typeof detail === "string") {
