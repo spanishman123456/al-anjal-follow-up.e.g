@@ -590,8 +590,16 @@ export default function AssessmentMarksQ2() {
               {filteredStudents.length ? (
                 filteredStudents.map((student) => {
                   const current = bulkScores[student.id] || student;
-                  const total = computeCombinedTotal(student, current);
-                  const perfLevel = computeAssessmentPerformanceLevel(student, current);
+                  const total =
+                    !bulkEditMode &&
+                    student.assessment_q2_combined_total != null &&
+                    !Number.isNaN(Number(student.assessment_q2_combined_total))
+                      ? Number(student.assessment_q2_combined_total)
+                      : computeCombinedTotal(student, current);
+                  const perfLevel =
+                    !bulkEditMode && student.assessment_q2_performance_level
+                      ? student.assessment_q2_performance_level
+                      : computeAssessmentPerformanceLevel(student, current);
                   return (
                     <TableRow key={student.id} data-testid={`assessment-row-${student.id}`}>
                       <TableCell>{student.full_name}</TableCell>

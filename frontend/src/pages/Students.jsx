@@ -987,24 +987,6 @@ export default function Students() {
                 <TableHead data-testid="students-col-participation" className="text-center">{t("participation")} (2.5)</TableHead>
                 <TableHead data-testid="students-col-behavior" className="text-center">{t("behavior")} (5)</TableHead>
                 <TableHead data-testid="students-col-homework" className="text-center">{t("homework")} (5)</TableHead>
-                {isWeek4 && (
-                  <>
-                    <TableHead data-testid="students-col-quiz1" className="text-center">{t("quiz1")}</TableHead>
-                    <TableHead data-testid="students-col-quiz2" className="text-center">{t("quiz2")}</TableHead>
-                    <TableHead data-testid="students-col-chapter1-practical" className="text-center">
-                      {t("chapter_test1_practical")}
-                    </TableHead>
-                  </>
-                )}
-                {isWeek16 && (
-                  <>
-                    <TableHead data-testid="students-col-quiz3" className="text-center">{t("quiz3")}</TableHead>
-                    <TableHead data-testid="students-col-quiz4" className="text-center">{t("quiz4")}</TableHead>
-                    <TableHead data-testid="students-col-chapter2-practical" className="text-center">
-                      {t("chapter_test2_practical")}
-                    </TableHead>
-                  </>
-                )}
               {isWeek9 && (
                 <TableHead data-testid="students-col-quarter1-practical" className="text-center">
                   {t("quarter1_practical")}
@@ -1235,114 +1217,6 @@ export default function Students() {
                           formatScore(student.homework)
                         )}
                       </TableCell>
-                      {isWeek4 && (
-                        <>
-                          <TableCell data-testid={`student-quiz1-${student.id}`} className="text-center">
-                            {bulkEditMode ? (
-                              <Input
-                                type="number"
-                                min={0}
-                                max={5}
-                                step={0.5}
-                                className="text-center"
-                                value={currentScores.quiz1}
-                                onChange={(event) => handleScoreChange(student.id, "quiz1", event.target.value)}
-                                data-testid={`student-bulk-quiz1-${student.id}`}
-                              />
-                            ) : (
-                              formatScore(student.quiz1)
-                            )}
-                          </TableCell>
-                          <TableCell data-testid={`student-quiz2-${student.id}`} className="text-center">
-                            {bulkEditMode ? (
-                              <Input
-                                type="number"
-                                min={0}
-                                max={5}
-                                step={0.5}
-                                className="text-center"
-                                value={currentScores.quiz2}
-                                onChange={(event) => handleScoreChange(student.id, "quiz2", event.target.value)}
-                                data-testid={`student-bulk-quiz2-${student.id}`}
-                              />
-                            ) : (
-                              formatScore(student.quiz2)
-                            )}
-                          </TableCell>
-                          <TableCell data-testid={`student-chapter1-practical-${student.id}`} className="text-center">
-                            {bulkEditMode ? (
-                              <Input
-                                type="number"
-                                min={0}
-                                max={10}
-                                step={0.5}
-                                className="text-center"
-                                value={currentScores.chapter_test1_practical}
-                                onChange={(event) =>
-                                  handleScoreChange(student.id, "chapter_test1_practical", event.target.value)
-                                }
-                                data-testid={`student-bulk-chapter1-practical-${student.id}`}
-                              />
-                            ) : (
-                              formatScore(student.chapter_test1_practical)
-                            )}
-                          </TableCell>
-                        </>
-                      )}
-                      {isWeek16 && (
-                        <>
-                          <TableCell data-testid={`student-quiz3-${student.id}`} className="text-center">
-                            {bulkEditMode ? (
-                              <Input
-                                type="number"
-                                min={0}
-                                max={5}
-                                step={0.5}
-                                className="text-center"
-                                value={currentScores.quiz3}
-                                onChange={(event) => handleScoreChange(student.id, "quiz3", event.target.value)}
-                                data-testid={`student-bulk-quiz3-${student.id}`}
-                              />
-                            ) : (
-                              formatScore(student.quiz3)
-                            )}
-                          </TableCell>
-                          <TableCell data-testid={`student-quiz4-${student.id}`} className="text-center">
-                            {bulkEditMode ? (
-                              <Input
-                                type="number"
-                                min={0}
-                                max={5}
-                                step={0.5}
-                                className="text-center"
-                                value={currentScores.quiz4}
-                                onChange={(event) => handleScoreChange(student.id, "quiz4", event.target.value)}
-                                data-testid={`student-bulk-quiz4-${student.id}`}
-                              />
-                            ) : (
-                              formatScore(student.quiz4)
-                            )}
-                          </TableCell>
-                          <TableCell data-testid={`student-chapter2-practical-${student.id}`} className="text-center">
-                            {bulkEditMode ? (
-                              <Input
-                                type="number"
-                                min={0}
-                                max={10}
-                                step={0.5}
-                                className="text-center"
-                                value={currentScores.chapter_test2_practical}
-                                onChange={(event) =>
-                                  handleScoreChange(student.id, "chapter_test2_practical", event.target.value)
-                                }
-                                data-testid={`student-bulk-chapter2-practical-${student.id}`}
-                              />
-                            ) : (
-                              formatScore(student.chapter_test2_practical)
-                            )}
-                          </TableCell>
-                        </>
-                      )}
                       {isWeek9 && (
                         <TableCell data-testid={`student-quarter1-practical-${student.id}`} className="text-center">
                           {bulkEditMode ? (
@@ -1538,7 +1412,6 @@ export default function Students() {
                   <TableCell
                     colSpan={
                       11 +
-                      (isWeek4 || isWeek16 ? 3 : 0) +
                       (isWeek9 || isWeek10 || isWeek17 || isWeek18 ? 1 : 0)
                     }
                     data-testid="students-empty"

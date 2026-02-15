@@ -591,8 +591,15 @@ export default function AssessmentMarks() {
               {filteredStudents.length ? (
                 filteredStudents.map((student) => {
                   const current = bulkScores[student.id] || student;
-                  const total = computeCombinedTotal(student, current);
-                  const perfLevel = computeAssessmentPerformanceLevel(student, current);
+                  // Use backend combined total when available (so 30/30 shows correctly); in bulk edit use local computation for live preview
+                  const total =
+                    !bulkEditMode && student.assessment_combined_total != null && !Number.isNaN(Number(student.assessment_combined_total))
+                      ? Number(student.assessment_combined_total)
+                      : computeCombinedTotal(student, current);
+                  const perfLevel =
+                    !bulkEditMode && student.assessment_performance_level
+                      ? student.assessment_performance_level
+                      : computeAssessmentPerformanceLevel(student, current);
                   return (
                     <TableRow key={student.id} data-testid={`assessment-row-${student.id}`}>
                       <TableCell>{student.full_name}</TableCell>

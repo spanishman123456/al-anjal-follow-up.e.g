@@ -471,8 +471,17 @@ export default function FinalExamsAssessment() {
               {filteredStudents.length ? (
                 filteredStudents.map((student) => {
                   const current = bulkScores[student.id] || student;
-                  const total = computeFinalTotal(student, current);
-                  const perfLevel = computeFinalPerformanceLevel(student, current);
+                  // Use backend final-exams combined total when available (50/50); in bulk edit use local computation for live preview
+                  const total =
+                    !bulkEditMode &&
+                    student.final_exams_combined_total != null &&
+                    !Number.isNaN(Number(student.final_exams_combined_total))
+                      ? Number(student.final_exams_combined_total)
+                      : computeFinalTotal(student, current);
+                  const perfLevel =
+                    !bulkEditMode && student.final_exams_performance_level
+                      ? student.final_exams_performance_level
+                      : computeFinalPerformanceLevel(student, current);
                   return (
                     <TableRow key={student.id} data-testid={`final-exams-row-${student.id}`}>
                       <TableCell>{student.full_name}</TableCell>

@@ -345,6 +345,27 @@ async def build_semester_score_map(student_ids: List[str], semester: int) -> Dic
     return scores_by_student
 
 
+async def build_full_year_score_map(student_ids: List[str]) -> Dict[str, Dict[int, Dict[str, Optional[float]]]]:
+    """Load scores for weeks from BOTH semesters so Q1 (weeks 1-9) and Q2 (weeks 10-18) both have data for Dashboard, Analytics, Classes, Reports."""
+    if not student_ids:
+        return {}
+    all_weeks = await db.weeks.find({"semester": {"$in": [1, 2]}}, {"_id": 0}).to_list(200)
+    week_number_map = {week["id"]: week["number"] for week in all_weeks}
+    week_ids = list(week_number_map.keys())
+    if not week_ids:
+        return {}
+    all_scores = await db.student_scores.find(
+        {"week_id": {"$in": week_ids}, "student_id": {"$in": student_ids}}, {"_id": 0}
+    ).to_list(10000)
+    scores_by_student: Dict[str, Dict[int, Dict[str, Optional[float]]]] = {}
+    for score in all_scores:
+        week_number = week_number_map.get(score.get("week_id"))
+        if not week_number:
+            continue
+        scores_by_student.setdefault(score["student_id"], {})[week_number] = score
+    return scores_by_student
+
+
 def compute_avg_first_9_weeks(scores_by_week: Dict[int, Dict[str, Optional[float]]]) -> Optional[float]:
     """Average of student's follow-up total (attendance+participation+behavior+homework, max 15) over weeks 1-9."""
     FIRST_N_WEEKS = 9
@@ -384,8 +405,34 @@ def compute_avg_weeks_10_18(scores_by_week: Dict[int, Dict[str, Optional[float]]
     return round(sum(week_totals) / 9, 2)
 
 
-# Total Score = attendance (max 2.5) + participation (max 2.5) + behavior (max 5) + homework (max 5) = out of 15.
-# Performance: On Level 13-15, Approach 10-12, Below <10.
+def compute_students_total_for_assessment(
+    scores_by_week: Dict[int, Dict[str, Optional[float]]],
+    avg_first_9_weeks: Optional[float] = None,
+    weeks_10_18: bool = False,
+) -> float:
+    """Students total (max 15) for Assessment/Final: max(avg, best single week) so 15 in any one week counts as 15."""
+    if weeks_10_18:
+        week_nums = list(range(10, 19))
+        avg = compute_avg_weeks_10_18(scores_by_week)
+    else:
+        week_nums = list(range(1, 10))
+        avg = compute_avg_first_9_weeks(scores_by_week)
+    best_week = 0.0
+    for w in week_nums:
+        s = scores_by_week.get(w) or {}
+        total = sum(
+            float(v) if v is not None and not (isinstance(v, float) and pd.isna(v)) else 0
+            for v in [s.get("attendance"), s.get("participation"), s.get("behavior"), s.get("homework")]
+        )
+        best_week = max(best_week, min(total, 15))
+    candidate = max(avg or 0, best_week)
+    return round(min(max(0, candidate), 15), 2)
+
+
+# Students page total: attendance (2.5) + participation (2.5) + behavior (5) + homework (5) = 15 max.
+# Assessment Marks: Students total (15) + best(Quiz1, Quiz2)(5) + Chapter Test 1 Practical(10) = 30 max.
+# Final Exams: Assessment (30) + Quarter Practical(10) + Quarter Theory(10) = 50 max.
+# Performance: On Level 13-15 (Students), 25-30 (Assessment), 42-50 (Final); Approach/Below per thresholds.
 TOTAL_SCORE_MAX = 15  # 2.5 + 2.5 + 5 + 5
 
 
@@ -430,23 +477,27 @@ def compute_assessment_combined(
     scores: Dict[str, Optional[float]],
     avg_first_9_weeks: Optional[float] = None,
     avg_weeks_10_18: Optional[float] = None,
+    students_total_override: Optional[float] = None,
 ) -> Dict[str, Any]:
-    """Combined total = avg of first 9 weeks or weeks 10-18 (max 15) + best(Quiz1, Quiz2) + Chapter Test (max 15), total max 30."""
-    avg_to_use = avg_weeks_10_18 if avg_weeks_10_18 is not None else avg_first_9_weeks
-    if avg_to_use is not None:
-        students_total = round(min(max(0, float(avg_to_use)), 15), 2)
+    """Combined total = students part (max 15) + best(Quiz1, Quiz2) + Chapter Test (max 15), total max 30."""
+    if students_total_override is not None:
+        students_total = round(min(max(0, float(students_total_override)), 15), 2)
     else:
-        behavioral = {
-            "attendance": scores.get("attendance"),
-            "participation": scores.get("participation"),
-            "behavior": scores.get("behavior"),
-            "homework": scores.get("homework"),
-        }
-        students_total = sum(
-            float(v) if v is not None and not (isinstance(v, float) and pd.isna(v)) else 0
-            for v in behavioral.values()
-        )
-        students_total = round(min(max(0, students_total), 15), 2)
+        avg_to_use = avg_weeks_10_18 if avg_weeks_10_18 is not None else avg_first_9_weeks
+        if avg_to_use is not None:
+            students_total = round(min(max(0, float(avg_to_use)), 15), 2)
+        else:
+            behavioral = {
+                "attendance": scores.get("attendance"),
+                "participation": scores.get("participation"),
+                "behavior": scores.get("behavior"),
+                "homework": scores.get("homework"),
+            }
+            students_total = sum(
+                float(v) if v is not None and not (isinstance(v, float) and pd.isna(v)) else 0
+                for v in behavioral.values()
+            )
+            students_total = round(min(max(0, students_total), 15), 2)
     q1 = float(scores.get("quiz1")) if scores.get("quiz1") is not None and not (isinstance(scores.get("quiz1"), float) and pd.isna(scores.get("quiz1"))) else 0
     q2 = float(scores.get("quiz2")) if scores.get("quiz2") is not None and not (isinstance(scores.get("quiz2"), float) and pd.isna(scores.get("quiz2"))) else 0
     pt = float(scores.get("chapter_test1_practical")) if scores.get("chapter_test1_practical") is not None and not (isinstance(scores.get("chapter_test1_practical"), float) and pd.isna(scores.get("chapter_test1_practical"))) else 0
@@ -474,16 +525,71 @@ def compute_assessment_combined(
     return {"combined_total": combined, "performance_level": level, "performance_label": label}
 
 
+def compute_assessment_combined_q2(
+    scores: Dict[str, Optional[float]],
+    avg_weeks_10_18: Optional[float] = None,
+    students_total_override: Optional[float] = None,
+) -> Dict[str, Any]:
+    """Q2 Assessment combined: students part (max 15) + best(Quiz3, Quiz4) + Chapter Test 2 Practical (max 15), total max 30."""
+    if students_total_override is not None:
+        students_total = round(min(max(0, float(students_total_override)), 15), 2)
+    elif avg_weeks_10_18 is not None:
+        students_total = round(min(max(0, float(avg_weeks_10_18)), 15), 2)
+    else:
+        behavioral = {
+            "attendance": scores.get("attendance"),
+            "participation": scores.get("participation"),
+            "behavior": scores.get("behavior"),
+            "homework": scores.get("homework"),
+        }
+        students_total = sum(
+            float(v) if v is not None and not (isinstance(v, float) and pd.isna(v)) else 0
+            for v in behavioral.values()
+        )
+        students_total = round(min(max(0, students_total), 15), 2)
+    q3 = float(scores.get("quiz3")) if scores.get("quiz3") is not None and not (isinstance(scores.get("quiz3"), float) and pd.isna(scores.get("quiz3"))) else 0
+    q4 = float(scores.get("quiz4")) if scores.get("quiz4") is not None and not (isinstance(scores.get("quiz4"), float) and pd.isna(scores.get("quiz4"))) else 0
+    pt = float(scores.get("chapter_test2_practical")) if scores.get("chapter_test2_practical") is not None and not (isinstance(scores.get("chapter_test2_practical"), float) and pd.isna(scores.get("chapter_test2_practical"))) else 0
+    assessment_total = round(min(max(0, max(q3, q4) + pt), 15), 2)
+    combined = round(min(students_total + assessment_total, 30), 2)
+    has_any = (
+        avg_weeks_10_18 is not None
+        or students_total_override is not None
+        or any(
+            v is not None and not (isinstance(v, float) and pd.isna(v))
+            for v in [scores.get("quiz3"), scores.get("quiz4"), scores.get("chapter_test2_practical")]
+        )
+    )
+    if not has_any:
+        return {"combined_total": None, "performance_level": "no_data", "performance_label": "No Data"}
+    if combined >= 25:
+        level, label = "on_level", "On Level"
+    elif combined >= 20:
+        level, label = "approach", "Approach"
+    else:
+        level, label = "below", "Below"
+    return {"combined_total": combined, "performance_level": level, "performance_label": label}
+
+
 def compute_final_exams_combined(
     scores: Dict[str, Optional[float]],
     avg_first_9_weeks: Optional[float] = None,
     avg_weeks_10_18: Optional[float] = None,
     quarter: int = 1,
+    students_total_override: Optional[float] = None,
 ) -> Dict[str, Any]:
     """Final total = assessment part (30) + quarter practical (10) + quarter theory (10), max 50. quarter=1 uses weeks 1-9 and quarter1_*; quarter=2 uses weeks 10-18 and quarter2_*."""
-    assessment_result = compute_assessment_combined(
-        scores, avg_first_9_weeks=avg_first_9_weeks, avg_weeks_10_18=avg_weeks_10_18
-    )
+    if quarter == 2:
+        assessment_result = compute_assessment_combined_q2(
+            scores, avg_weeks_10_18=avg_weeks_10_18, students_total_override=students_total_override
+        )
+    else:
+        assessment_result = compute_assessment_combined(
+            scores,
+            avg_first_9_weeks=avg_first_9_weeks,
+            avg_weeks_10_18=avg_weeks_10_18,
+            students_total_override=students_total_override,
+        )
     assessment_part = assessment_result.get("combined_total") or 0
     if quarter == 2:
         qp = float(scores.get("quarter2_practical")) if scores.get("quarter2_practical") is not None and not (isinstance(scores.get("quarter2_practical"), float) and pd.isna(scores.get("quarter2_practical"))) else 0
@@ -511,6 +617,54 @@ def compute_final_exams_combined(
     else:
         level, label = "below", "Below"
     return {"combined_total": combined, "performance_level": level, "performance_label": label}
+
+
+def _effective_scores_q1(scores_by_week: Dict[int, Dict[str, Optional[float]]]) -> Dict[str, Optional[float]]:
+    """Build effective Q1 scores from weeks 1-9: best quiz/chapter from any week, exams from 9/10."""
+    q1_list = []
+    q2_list = []
+    ch1_list = []
+    for w in range(1, 10):
+        s = scores_by_week.get(w) or {}
+        if s.get("quiz1") is not None:
+            q1_list.append(float(s["quiz1"]) if not (isinstance(s["quiz1"], float) and pd.isna(s["quiz1"])) else 0)
+        if s.get("quiz2") is not None:
+            q2_list.append(float(s["quiz2"]) if not (isinstance(s["quiz2"], float) and pd.isna(s["quiz2"])) else 0)
+        if s.get("chapter_test1_practical") is not None:
+            ch1_list.append(float(s["chapter_test1_practical"]) if not (isinstance(s["chapter_test1_practical"], float) and pd.isna(s["chapter_test1_practical"])) else 0)
+    quiz1 = max(q1_list) if q1_list else None
+    quiz2 = max(q2_list) if q2_list else None
+    ch1 = max(ch1_list) if ch1_list else None
+    s9 = scores_by_week.get(9) or {}
+    s10 = scores_by_week.get(10) or {}
+    return {
+        "quiz1": quiz1, "quiz2": quiz2, "chapter_test1_practical": ch1,
+        "quarter1_practical": s9.get("quarter1_practical"), "quarter1_theory": s10.get("quarter1_theory"),
+    }
+
+
+def _effective_scores_q2(scores_by_week: Dict[int, Dict[str, Optional[float]]]) -> Dict[str, Optional[float]]:
+    """Build effective Q2 scores from weeks 10-18: best quiz/chapter from any week, exams from 17/18."""
+    q3_list = []
+    q4_list = []
+    ch2_list = []
+    for w in range(10, 19):
+        s = scores_by_week.get(w) or {}
+        if s.get("quiz3") is not None:
+            q3_list.append(float(s["quiz3"]) if not (isinstance(s["quiz3"], float) and pd.isna(s["quiz3"])) else 0)
+        if s.get("quiz4") is not None:
+            q4_list.append(float(s["quiz4"]) if not (isinstance(s["quiz4"], float) and pd.isna(s["quiz4"])) else 0)
+        if s.get("chapter_test2_practical") is not None:
+            ch2_list.append(float(s["chapter_test2_practical"]) if not (isinstance(s["chapter_test2_practical"], float) and pd.isna(s["chapter_test2_practical"])) else 0)
+    quiz3 = max(q3_list) if q3_list else None
+    quiz4 = max(q4_list) if q4_list else None
+    ch2 = max(ch2_list) if ch2_list else None
+    s17 = scores_by_week.get(17) or {}
+    s18 = scores_by_week.get(18) or {}
+    return {
+        "quiz3": quiz3, "quiz4": quiz4, "chapter_test2_practical": ch2,
+        "quarter2_practical": s17.get("quarter2_practical"), "quarter2_theory": s18.get("quarter2_theory"),
+    }
 
 
 def parse_class_name(name: str) -> Dict[str, Optional[Any]]:
@@ -1598,6 +1752,54 @@ async def get_students(
                 # For Assessment Marks (2nd quarter): average of weeks 10-18 follow-up total (out of 15)
                 avg_10_18 = compute_avg_weeks_10_18(scores_by_student.get(student["id"], {}))
                 student["avg_weeks_10_18"] = avg_10_18
+                # Students total for assessment: max(avg, best single week) so 15 in any one week = 15
+                students_total_q1 = compute_students_total_for_assessment(
+                    scores_by_student.get(student["id"], {}), avg_first_9_weeks=avg_9, weeks_10_18=False
+                )
+                students_total_q2 = compute_students_total_for_assessment(
+                    scores_by_student.get(student["id"], {}), avg_first_9_weeks=avg_10_18, weeks_10_18=True
+                )
+                # Assessment combined (30) and Final Exams combined (50) for display on Assessment/Final pages
+                scores_dict = {
+                    "attendance": student.get("attendance"),
+                    "participation": student.get("participation"),
+                    "behavior": student.get("behavior"),
+                    "homework": student.get("homework"),
+                    "quiz1": student.get("quiz1"),
+                    "quiz2": student.get("quiz2"),
+                    "quiz3": student.get("quiz3"),
+                    "quiz4": student.get("quiz4"),
+                    "chapter_test1_practical": student.get("chapter_test1_practical"),
+                    "chapter_test2_practical": student.get("chapter_test2_practical"),
+                    "quarter1_practical": student.get("quarter1_practical"),
+                    "quarter1_theory": student.get("quarter1_theory"),
+                    "quarter2_practical": student.get("quarter2_practical"),
+                    "quarter2_theory": student.get("quarter2_theory"),
+                }
+                res_q1 = compute_assessment_combined(
+                    scores_dict, avg_first_9_weeks=avg_9, students_total_override=students_total_q1
+                )
+                student["assessment_combined_total"] = res_q1.get("combined_total")
+                student["assessment_performance_level"] = res_q1.get("performance_level")
+                student["assessment_performance_label"] = res_q1.get("performance_label")
+                res_q2 = compute_assessment_combined_q2(
+                    scores_dict, avg_weeks_10_18=avg_10_18, students_total_override=students_total_q2
+                )
+                student["assessment_q2_combined_total"] = res_q2.get("combined_total")
+                student["assessment_q2_performance_level"] = res_q2.get("performance_level")
+                student["assessment_q2_performance_label"] = res_q2.get("performance_label")
+                res_final_q1 = compute_final_exams_combined(
+                    scores_dict, avg_first_9_weeks=avg_9, quarter=1, students_total_override=students_total_q1
+                )
+                student["final_exams_combined_total"] = res_final_q1.get("combined_total")
+                student["final_exams_performance_level"] = res_final_q1.get("performance_level")
+                student["final_exams_performance_label"] = res_final_q1.get("performance_label")
+                res_final_q2 = compute_final_exams_combined(
+                    scores_dict, avg_weeks_10_18=avg_10_18, quarter=2, students_total_override=students_total_q2
+                )
+                student["final_exams_q2_combined_total"] = res_final_q2.get("combined_total")
+                student["final_exams_q2_performance_level"] = res_final_q2.get("performance_level")
+                student["final_exams_q2_performance_label"] = res_final_q2.get("performance_label")
     return [enrich_student(student) for student in students]
 
 
@@ -2388,7 +2590,11 @@ async def delete_reward(reward_id: str):
 
 
 def build_summary(students: List[Dict[str, Any]], classes: List[Dict[str, Any]]) -> Dict[str, Any]:
-    enriched = [enrich_student(student) for student in students]
+    # If caller already set semester_total/total_score_normalized/performance_level (e.g. from final-exams), keep them
+    enriched = [
+        student if student.get("semester_total") is not None else enrich_student(student)
+        for student in students
+    ]
     counts = {"on_level": 0, "approach": 0, "below": 0, "no_data": 0}
     total_scores = []
     quiz_scores = []
@@ -2443,11 +2649,43 @@ def build_summary(students: List[Dict[str, Any]], classes: List[Dict[str, Any]])
 
 
 @api_router.get("/analytics/summary")
-async def get_analytics_summary(class_id: Optional[str] = Query(default=None)):
+async def get_analytics_summary(
+    class_id: Optional[str] = Query(default=None),
+    semester: Optional[int] = Query(default=1),
+):
+    """Summary for Dashboard: use final-exams combined (50 per quarter) so progress reflects 1st/2nd quarter marks."""
     student_query = {"class_id": class_id} if class_id else {}
     class_query = {"id": class_id} if class_id else {}
     students = await db.students.find(student_query, {"_id": 0}).to_list(5000)
     classes = await db.classes.find(class_query, {"_id": 0}).to_list(200)
+    if students:
+        scores_by_student = await build_full_year_score_map([s["id"] for s in students])
+        for student in students:
+            sw = scores_by_student.get(student["id"], {})
+            avg_9 = compute_avg_first_9_weeks(sw)
+            avg_10_18 = compute_avg_weeks_10_18(sw)
+            students_total_q1 = compute_students_total_for_assessment(sw, weeks_10_18=False)
+            students_total_q2 = compute_students_total_for_assessment(sw, weeks_10_18=True)
+            effective_q1 = _effective_scores_q1(sw)
+            effective_q2 = _effective_scores_q2(sw)
+            res_q1 = compute_final_exams_combined(
+                effective_q1, avg_first_9_weeks=avg_9, quarter=1, students_total_override=students_total_q1
+            )
+            res_q2 = compute_final_exams_combined(
+                effective_q2, avg_weeks_10_18=avg_10_18, quarter=2, students_total_override=students_total_q2
+            )
+            student["quarter1_total"] = res_q1.get("combined_total")
+            student["quarter2_total"] = res_q2.get("combined_total")
+            student["performance_level_q1"] = res_q1.get("performance_level", "no_data")
+            student["performance_level_q2"] = res_q2.get("performance_level", "no_data")
+            student["performance_level"] = _worst_performance_level(
+                student["performance_level_q1"], student["performance_level_q2"]
+            )
+            label_map = {"on_level": "On Level", "approach": "Approach", "below": "Below", "no_data": "No Data"}
+            student["performance_label"] = label_map.get(student["performance_level"], "No Data")
+            stot = (student.get("quarter1_total") or 0) + (student.get("quarter2_total") or 0)
+            student["semester_total"] = round(stot, 2) if stot else None
+            student["total_score_normalized"] = round(stot / 2, 2) if stot else None
     return build_summary(students, classes)
 
 
@@ -2478,16 +2716,29 @@ async def get_analytics_overview(
     for s in students:
         s["class_name"] = class_id_to_name.get(s.get("class_id"), s.get("class_name", ""))
     student_ids = [s["id"] for s in students]
-    scores_by_student = await build_semester_score_map(student_ids, semester)
-    # Enrich each student with quarter totals and insights
+    scores_by_student = await build_full_year_score_map(student_ids)
+    # Enrich each student with quarter totals (final-exams 50 scale) and insights
     for student in students:
         sw = scores_by_student.get(student["id"], {})
-        student.update(compute_quarter_totals(sw))
         insights = compute_student_insights(sw)
         student["weak_areas"] = insights["weak_areas"]
         student["strengths"] = insights["strengths"]
-        student["performance_level_q1"] = quarter_total_to_level(student.get("quarter1_total"))
-        student["performance_level_q2"] = quarter_total_to_level(student.get("quarter2_total"))
+        avg_9 = compute_avg_first_9_weeks(sw)
+        avg_10_18 = compute_avg_weeks_10_18(sw)
+        students_total_q1 = compute_students_total_for_assessment(sw, weeks_10_18=False)
+        students_total_q2 = compute_students_total_for_assessment(sw, weeks_10_18=True)
+        effective_q1 = _effective_scores_q1(sw)
+        effective_q2 = _effective_scores_q2(sw)
+        res_q1 = compute_final_exams_combined(
+            effective_q1, avg_first_9_weeks=avg_9, quarter=1, students_total_override=students_total_q1
+        )
+        res_q2 = compute_final_exams_combined(
+            effective_q2, avg_weeks_10_18=avg_10_18, quarter=2, students_total_override=students_total_q2
+        )
+        student["quarter1_total"] = res_q1.get("combined_total")
+        student["quarter2_total"] = res_q2.get("combined_total")
+        student["performance_level_q1"] = res_q1.get("performance_level", "no_data")
+        student["performance_level_q2"] = res_q2.get("performance_level", "no_data")
     # Quarter distributions
     q1_counts = {"on_level": 0, "approach": 0, "below": 0, "no_data": 0}
     q2_counts = {"on_level": 0, "approach": 0, "below": 0, "no_data": 0}
@@ -2619,12 +2870,25 @@ async def _build_class_summary_list(classes: List[Dict[str, Any]], semester: int
             }
             for c in classes
         ]
-    scores_by_student = await build_semester_score_map([s["id"] for s in students], semester)
+    scores_by_student = await build_full_year_score_map([s["id"] for s in students])
     for student in students:
         sw = scores_by_student.get(student["id"], {})
-        student.update(compute_quarter_totals(sw))
-        student["performance_level_q1"] = quarter_total_to_level(student.get("quarter1_total"))
-        student["performance_level_q2"] = quarter_total_to_level(student.get("quarter2_total"))
+        avg_9 = compute_avg_first_9_weeks(sw)
+        avg_10_18 = compute_avg_weeks_10_18(sw)
+        students_total_q1 = compute_students_total_for_assessment(sw, weeks_10_18=False)
+        students_total_q2 = compute_students_total_for_assessment(sw, weeks_10_18=True)
+        effective_q1 = _effective_scores_q1(sw)
+        effective_q2 = _effective_scores_q2(sw)
+        res_q1 = compute_final_exams_combined(
+            effective_q1, avg_first_9_weeks=avg_9, quarter=1, students_total_override=students_total_q1
+        )
+        res_q2 = compute_final_exams_combined(
+            effective_q2, avg_weeks_10_18=avg_10_18, quarter=2, students_total_override=students_total_q2
+        )
+        student["quarter1_total"] = res_q1.get("combined_total")
+        student["quarter2_total"] = res_q2.get("combined_total")
+        student["performance_level_q1"] = res_q1.get("performance_level", "no_data")
+        student["performance_level_q2"] = res_q2.get("performance_level", "no_data")
         student["performance_level"] = _worst_performance_level(
             student["performance_level_q1"], student["performance_level_q2"]
         )
@@ -2729,17 +2993,28 @@ async def get_grade_report(grade: int = Query(...), semester: Optional[int] = Qu
             "class_breakdown": [{"class_name": c["name"], "student_count": 0} for c in classes],
         }
 
-    scores_by_student = await build_semester_score_map(
-        [s["id"] for s in students], semester or 1
-    )
+    scores_by_student = await build_full_year_score_map([s["id"] for s in students])
     for student in students:
         sw = scores_by_student.get(student["id"], {})
-        student.update(compute_quarter_totals(sw))
         insights = compute_student_insights(sw)
         student["weak_areas"] = insights["weak_areas"]
         student["strengths"] = insights["strengths"]
-        student["performance_level_q1"] = quarter_total_to_level(student.get("quarter1_total"))
-        student["performance_level_q2"] = quarter_total_to_level(student.get("quarter2_total"))
+        avg_9 = compute_avg_first_9_weeks(sw)
+        avg_10_18 = compute_avg_weeks_10_18(sw)
+        students_total_q1 = compute_students_total_for_assessment(sw, weeks_10_18=False)
+        students_total_q2 = compute_students_total_for_assessment(sw, weeks_10_18=True)
+        effective_q1 = _effective_scores_q1(sw)
+        effective_q2 = _effective_scores_q2(sw)
+        res_q1 = compute_final_exams_combined(
+            effective_q1, avg_first_9_weeks=avg_9, quarter=1, students_total_override=students_total_q1
+        )
+        res_q2 = compute_final_exams_combined(
+            effective_q2, avg_weeks_10_18=avg_10_18, quarter=2, students_total_override=students_total_q2
+        )
+        student["quarter1_total"] = res_q1.get("combined_total")
+        student["quarter2_total"] = res_q2.get("combined_total")
+        student["performance_level_q1"] = res_q1.get("performance_level", "no_data")
+        student["performance_level_q2"] = res_q2.get("performance_level", "no_data")
         student["performance_level"] = _worst_performance_level(
             student["performance_level_q1"], student["performance_level_q2"]
         )
