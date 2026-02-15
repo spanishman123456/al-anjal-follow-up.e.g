@@ -1,6 +1,13 @@
-# Keep the backend fast (optional)
+# Keep the backend fast
 
 On **Render’s free tier**, your backend **spins down after about 15 minutes** of no traffic. The **first request** after that can take **50+ seconds** while it wakes up, then it’s fast again until the next idle period.
+
+## Built-in keep-alive (no setup)
+
+While **someone has the app open and is logged in**, the frontend **pings the backend every 10 minutes**. That keeps the server awake so your next action (save marks, import, etc.) is fast instead of waiting for a cold start. So:
+
+- If you or a colleague keep the app open during the school day, the backend stays awake and the site stays fast.
+- If nobody has the app open for more than ~15 minutes, the next person to open it may still see one slow first load; then the keep-alive starts again.
 
 ## What we changed in the app
 

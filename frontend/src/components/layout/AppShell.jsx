@@ -18,7 +18,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useTranslations } from "@/lib/i18n";
-import { api } from "@/lib/api";
+import { api, BACKEND_ROOT_URL, isProductionBackendUrl } from "@/lib/api";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -96,6 +96,18 @@ export const AppShell = ({
 
   useEffect(() => {
     loadNotifications();
+  }, []);
+
+  // Keep backend awake on Render free tier: ping every 10 min while app is open so it doesn't spin down
+  useEffect(() => {
+    if (!isProductionBackendUrl || !BACKEND_ROOT_URL) return;
+    const ping = () => {
+      fetch(`${BACKEND_ROOT_URL}/health`, { method: "GET" }).catch(() => {});
+    };
+    ping();
+    const intervalMs = 10 * 60 * 1000;
+    const id = setInterval(ping, intervalMs);
+    return () => clearInterval(id);
   }, []);
 
   const handleLogout = () => {
