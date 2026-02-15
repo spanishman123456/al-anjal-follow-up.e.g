@@ -3394,7 +3394,35 @@ async def import_excel(file: UploadFile = File(...), week_id: Optional[str] = Qu
         # Store Quiz 1 and Quiz 2 exactly as in the file. The Assessment Marks total still uses max(quiz1, quiz2) + chapter test for the combined score.
         existing = await db.students.find_one({"full_name": student_name, "class_id": class_doc["id"]}, {"_id": 0})
         if not existing:
-            # Marks-only import: do not create new students; skip row
+            # Enroll new student from Excel row
+            create_data = {k: payload[k] for k in payload if k in StudentRecord.model_fields}
+            new_record = StudentRecord(**create_data)
+            await db.students.insert_one(new_record.model_dump())
+            created_students += 1
+            student_id = new_record.id
+            if week_id:
+                score_fields = [
+                    "attendance", "participation", "behavior", "homework",
+                    "quiz1", "quiz2", "quiz3", "quiz4",
+                    "chapter_test1_practical", "chapter_test2_practical",
+                    "quarter1_practical", "quarter1_theory", "quarter2_practical", "quarter2_theory",
+                ]
+                def _has_value(v):
+                    if v is None:
+                        return False
+                    if isinstance(v, float) and pd.isna(v):
+                        return False
+                    return True
+                fields_in_file = [k for k in score_fields if k in column_lookup]
+                set_fields = {k: payload.get(k) for k in fields_in_file if _has_value(payload.get(k))}
+                set_fields["updated_at"] = iso_now()
+                if set_fields:
+                    await db.student_scores.update_one(
+                        {"student_id": student_id, "week_id": week_id},
+                        {"$set": set_fields},
+                        upsert=True,
+                    )
+            processed_rows += 1
             continue
         payload["updated_at"] = iso_now()
         await db.students.update_one({"id": existing["id"]}, {"$set": payload})
@@ -3431,7 +3459,7 @@ async def import_excel(file: UploadFile = File(...), week_id: Optional[str] = Qu
     if processed_rows == 0:
         raise HTTPException(
             status_code=400,
-            detail="No marks updated. Ensure the file lists existing students (name and class) with score columns filled.",
+            detail="No students created or updated. Check that the file has a student name column, class (or grade/section), and that the class exists or matches the filename (e.g. 5A.xlsx for class 5A).",
         )
     return {
         "created_students": created_students,
