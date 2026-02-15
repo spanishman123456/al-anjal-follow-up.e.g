@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { api, checkBackendHealth } from "@/lib/api";
+import { api, checkBackendHealth, isProductionBackendUrl } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Globe } from "lucide-react";
 import { Input } from "@/components/ui/input";
@@ -43,9 +43,14 @@ export default function Login({ language = "en", onLogin, onLanguageChange }) {
       const isNetwork = !error.response;
       let msg = t("login_failed");
       if (isNetwork) {
-        msg = backendOk
-          ? "Login request failed. Keep the Start_App.bat window open and try again in a moment."
-          : "Cannot reach backend. Run Start_App.bat (keep its window open), then try again.";
+        if (isProductionBackendUrl) {
+          msg = "Server is waking up (free hosting). Please wait up to a minute and try again.";
+        } else {
+          msg = backendOk
+            ? "Login request failed. Keep the Start_App.bat window open and try again in a moment."
+            : "Cannot reach backend. Run Start_App.bat (keep its window open), then try again.";
+        }
+      }
       } else if (status === 503 && detail) {
         msg = typeof detail === "string" ? detail : "Server temporarily unavailable. Try again in a moment.";
       } else if (detail && typeof detail === "string") {
@@ -159,7 +164,11 @@ export default function Login({ language = "en", onLogin, onLanguageChange }) {
                 <p className="text-xs text-green-600 mt-2">Server connected</p>
               )}
               {backendOk === false && (
-                <p className="text-xs text-amber-600 mt-2">Server not connected. Run Start_App.bat and keep its window open.</p>
+                <p className="text-xs text-amber-600 mt-2">
+                  {isProductionBackendUrl
+                    ? "Server is waking up. Wait up to a minute and try again, or refresh the page."
+                    : "Server not connected. Run Start_App.bat and keep its window open."}
+                </p>
               )}
             </form>
           </CardContent>

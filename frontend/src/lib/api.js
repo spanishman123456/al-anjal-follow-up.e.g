@@ -1,19 +1,24 @@
 import axios from "axios";
 
-// Backend must be running (Start_App.bat) for login and all features
+// Backend must be running (Start_App.bat locally) or deployed (e.g. Render)
 const BACKEND_ROOT = process.env.REACT_APP_BACKEND_URL || "http://localhost:8000";
 const API_BASE = `${BACKEND_ROOT}/api`;
 
+// Render free tier spins down after ~15 min; cold start can take 50+ seconds
+const isProductionBackend = (BACKEND_ROOT || "").includes("onrender.com");
+const HEALTH_CHECK_MS = isProductionBackend ? 90000 : 4000;
+const API_TIMEOUT_MS = isProductionBackend ? 90000 : 20000;
+
 export const api = axios.create({
   baseURL: API_BASE,
-  timeout: 20000,
+  timeout: API_TIMEOUT_MS,
 });
 
 /** Check if backend server is reachable (for login page status). */
 export async function checkBackendHealth() {
   try {
     const c = new AbortController();
-    const t = setTimeout(() => c.abort(), 4000);
+    const t = setTimeout(() => c.abort(), HEALTH_CHECK_MS);
     const r = await fetch(`${BACKEND_ROOT}/health`, { method: "GET", signal: c.signal });
     clearTimeout(t);
     return r.ok;
@@ -21,6 +26,8 @@ export async function checkBackendHealth() {
     return false;
   }
 }
+
+export const isProductionBackendUrl = isProductionBackend;
 
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem("auth_token");
