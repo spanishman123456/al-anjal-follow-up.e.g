@@ -157,16 +157,24 @@ export default function Login({ language = "en", onLogin, onLanguageChange }) {
                 onChange={(event) => setForm((prev) => ({ ...prev, password: event.target.value }))}
                 data-testid="login-password"
               />
-              <Button type="submit" className="w-full" data-testid="login-submit" disabled={backendOk === false}>
+              <Button
+                type="submit"
+                className="w-full"
+                data-testid="login-submit"
+                disabled={backendOk === false && !isProductionBackendUrl}
+              >
                 {t("login")}
               </Button>
+              {backendOk === null && (
+                <p className="text-xs text-slate-500 mt-2">Checking server…</p>
+              )}
               {backendOk === true && (
                 <p className="text-xs text-green-600 mt-2">Server connected</p>
               )}
               {backendOk === false && (
                 <p className="text-xs text-amber-600 mt-2">
                   {isProductionBackendUrl
-                    ? "Server is waking up. Wait up to a minute and try again, or refresh the page."
+                    ? "Server may be waking up (free hosting). You can try logging in; it may take up to a minute."
                     : "Server not connected. Run Start_App.bat and keep its window open."}
                 </p>
               )}

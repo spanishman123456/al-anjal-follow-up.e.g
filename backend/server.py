@@ -3290,9 +3290,39 @@ async def import_excel(file: UploadFile = File(...), week_id: Optional[str] = Qu
                 break
     if "student_name" not in column_lookup and len(df.columns):
         column_lookup["student_name"] = df.columns[0]
-    # If file has two columns and we didn't match a class header, treat second column as class (name + class is enough)
     if "class_name" not in column_lookup and len(df.columns) >= 2:
         column_lookup["class_name"] = df.columns[1]
+
+    # Detect name vs class by content so column order does not matter (e.g. Class | Name or Name | Class)
+    def value_looks_like_class(val: Any) -> bool:
+        if pd.isna(val):
+            return False
+        s = str(val).strip()
+        if not s:
+            return False
+        parsed = parse_class_name(s)
+        return parsed.get("grade") is not None and parsed.get("section") is not None
+
+    if len(df.columns) >= 2:
+        sample = df.head(100)
+        class_scores: Dict[str, int] = {}
+        for col in df.columns:
+            count = sum(1 for _, v in sample[col].items() if value_looks_like_class(v))
+            class_scores[col] = count
+        # Column with most class-like values is the class column; the other (or first non-class) is name
+        best_class_col = max(class_scores, key=class_scores.get) if class_scores else None
+        if best_class_col and class_scores.get(best_class_col, 0) >= 1:
+            column_lookup["class_name"] = best_class_col
+            if len(df.columns) == 2:
+                other = next(c for c in df.columns if c != best_class_col)
+                column_lookup["student_name"] = other
+            elif "student_name" not in column_lookup:
+                # Multiple columns: use first column that isn't the class column as name
+                for c in df.columns:
+                    if c != best_class_col:
+                        column_lookup["student_name"] = c
+                        break
+
     classes = await db.classes.find({}, {"_id": 0}).to_list(200)
 
     def normalize_class_name(value: str) -> str:
@@ -3470,7 +3500,7 @@ async def import_excel(file: UploadFile = File(...), week_id: Optional[str] = Qu
     if processed_rows == 0:
         raise HTTPException(
             status_code=400,
-            detail="No students created or updated. Check that the file has a student name column, class (or grade/section), and that the class exists or matches the filename (e.g. 5A.xlsx for class 5A).",
+            detail="No students were imported. Please use an Excel file with one column for student names and one for class (e.g. 4A, 5B, 6A). Columns can be in any order.",
         )
     return {
         "created_students": created_students,
