@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useOutletContext } from "react-router-dom";
 import { toast } from "sonner";
-import { api } from "@/lib/api";
+import { api, getApiErrorMessage } from "@/lib/api";
 import { useTranslations } from "@/lib/i18n";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Button } from "@/components/ui/button";
@@ -257,7 +257,7 @@ export default function FinalExamsAssessment() {
       setBulkConfirmOpen(false);
       loadData(activeWeekId);
     } catch (error) {
-      toast.error(t("student_update_failed"));
+      toast.error(getApiErrorMessage(error) || t("student_update_failed"));
     }
   };
 
@@ -279,7 +279,7 @@ export default function FinalExamsAssessment() {
       setBulkScores({});
       toast.success(t("scores_cleared"));
     } catch (error) {
-      toast.error(error?.response?.data?.detail || t("student_update_failed"));
+      toast.error(getApiErrorMessage(error) || t("student_update_failed"));
     }
   };
 

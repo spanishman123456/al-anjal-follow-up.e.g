@@ -678,7 +678,7 @@ export default function Students() {
       setBulkConfirmOpen(false);
       loadData(activeWeekId);
     } catch (error) {
-      toast.error(t("student_update_failed"));
+      toast.error(getApiErrorMessage(error) || t("student_update_failed"));
     }
   };
 
@@ -700,7 +700,7 @@ export default function Students() {
       await loadData(activeWeekId);
       toast.success(t("scores_cleared"));
     } catch (error) {
-      toast.error(error?.response?.data?.detail || t("student_update_failed"));
+      toast.error(getApiErrorMessage(error) || t("student_update_failed"));
     }
   };
 
