@@ -50,5 +50,22 @@ api.interceptors.response.use(
   },
 );
 
+/**
+ * User-friendly message for API errors (timeout, network, or server detail).
+ * Use in catch blocks: toast.error(getApiErrorMessage(error))
+ */
+export function getApiErrorMessage(error) {
+  if (!error) return "Something went wrong.";
+  if (error.code === "ECONNABORTED" || error.message === "Network Error") {
+    return isProductionBackend
+      ? "Request timed out or server unreachable. The server may be waking up—please try again in a minute."
+      : "Request timed out or server unreachable. Make sure the backend is running (Start_App.bat).";
+  }
+  const detail = error?.response?.data?.detail;
+  if (typeof detail === "string") return detail;
+  if (detail && typeof detail === "object") return detail.msg || JSON.stringify(detail);
+  return error.message || "Something went wrong.";
+}
+
 export const API_BASE_URL = API_BASE;
 export const BACKEND_ROOT_URL = BACKEND_ROOT;

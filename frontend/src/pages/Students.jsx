@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useOutletContext } from "react-router-dom";
 import { toast } from "sonner";
-import { api } from "@/lib/api";
+import { api, getApiErrorMessage } from "@/lib/api";
 import { useTranslations } from "@/lib/i18n";
 import { getRewardSetsFromStorage, setStudentReward } from "@/lib/studentRewardsStorage";
 import { PageHeader } from "@/components/layout/PageHeader";
@@ -417,7 +417,7 @@ export default function Students() {
       if (bulkFileInputRef.current) bulkFileInputRef.current.value = "";
       loadData(activeWeekId);
     } catch (error) {
-      toast.error(error?.response?.data?.detail || t("marks_import_failed"));
+      toast.error(getApiErrorMessage(error) || t("marks_import_failed"));
     }
   };
 

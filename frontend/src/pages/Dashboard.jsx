@@ -12,7 +12,7 @@ import {
   Tooltip,
 } from "recharts";
 import { toast } from "sonner";
-import { api } from "@/lib/api";
+import { api, getApiErrorMessage } from "@/lib/api";
 import { useTranslations } from "@/lib/i18n";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -52,7 +52,7 @@ export default function Dashboard() {
       const response = await api.get("/analytics/summary");
       setSummary(response.data);
     } catch (error) {
-      toast.error("Failed to load dashboard data");
+      toast.error(getApiErrorMessage(error) || "Failed to load dashboard data");
     } finally {
       setLoading(false);
     }
@@ -93,7 +93,7 @@ export default function Dashboard() {
       setFile(null);
       fetchSummary();
     } catch (error) {
-      toast.error(error?.response?.data?.detail || "Import failed. Please check the file format.");
+      toast.error(getApiErrorMessage(error) || "Import failed. Please check the file format.");
     }
   };
 
