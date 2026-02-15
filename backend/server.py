@@ -480,8 +480,10 @@ def compute_assessment_combined(
     students_total_override: Optional[float] = None,
 ) -> Dict[str, Any]:
     """Combined total = students part (max 15) + best(Quiz1, Quiz2) + Chapter Test (max 15), total max 30."""
+    avg_to_use = None  # so has_any can always reference it
     if students_total_override is not None:
         students_total = round(min(max(0, float(students_total_override)), 15), 2)
+        avg_to_use = students_total_override
     else:
         avg_to_use = avg_weeks_10_18 if avg_weeks_10_18 is not None else avg_first_9_weeks
         if avg_to_use is not None:
