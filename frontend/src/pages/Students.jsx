@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useOutletContext } from "react-router-dom";
 import { toast } from "sonner";
-import { api, getApiErrorMessage } from "@/lib/api";
+import { api, getApiErrorMessage, BULK_SAVE_TIMEOUT_MS } from "@/lib/api";
 import { useTranslations } from "@/lib/i18n";
 import { getRewardSetsFromStorage, setStudentReward } from "@/lib/studentRewardsStorage";
 import { PageHeader } from "@/components/layout/PageHeader";
@@ -672,7 +672,7 @@ export default function Students() {
         quarter2_practical: parseScore(scores.quarter2_practical),
         quarter2_theory: parseScore(scores.quarter2_theory),
       }));
-      await api.post("/students/bulk-scores", { updates, week_id: activeWeekId || undefined });
+      await api.post("/students/bulk-scores", { updates, week_id: activeWeekId || undefined }, { timeout: BULK_SAVE_TIMEOUT_MS });
       toast.success(t("student_updated"));
       setBulkEditMode(false);
       setBulkConfirmOpen(false);
@@ -696,7 +696,7 @@ export default function Students() {
       await api.post("/students/bulk-scores", {
         updates,
         week_id: activeWeekId || undefined,
-      });
+      }, { timeout: BULK_SAVE_TIMEOUT_MS });
       await loadData(activeWeekId);
       toast.success(t("scores_cleared"));
     } catch (error) {
@@ -987,26 +987,6 @@ export default function Students() {
                 <TableHead data-testid="students-col-participation" className="text-center">{t("participation")} (2.5)</TableHead>
                 <TableHead data-testid="students-col-behavior" className="text-center">{t("behavior")} (5)</TableHead>
                 <TableHead data-testid="students-col-homework" className="text-center">{t("homework")} (5)</TableHead>
-              {isWeek9 && (
-                <TableHead data-testid="students-col-quarter1-practical" className="text-center">
-                  {t("quarter1_practical")}
-                </TableHead>
-              )}
-              {isWeek10 && (
-                <TableHead data-testid="students-col-quarter1-theory" className="text-center">
-                  {t("quarter1_theory")}
-                </TableHead>
-              )}
-              {isWeek17 && (
-                <TableHead data-testid="students-col-quarter2-practical" className="text-center">
-                  {t("quarter2_practical")}
-                </TableHead>
-              )}
-              {isWeek18 && (
-                <TableHead data-testid="students-col-quarter2-theory" className="text-center">
-                  {t("quarter2_theory")}
-                </TableHead>
-              )}
                 <TableHead data-testid="students-col-total" className="text-center">{t("total_score")}</TableHead>
                 <TableHead data-testid="students-col-performance" className="text-center">{t("performance_level")}</TableHead>
                 <TableHead data-testid="students-col-actions">{t("actions")}</TableHead>
@@ -1217,86 +1197,6 @@ export default function Students() {
                           formatScore(student.homework)
                         )}
                       </TableCell>
-                      {isWeek9 && (
-                        <TableCell data-testid={`student-quarter1-practical-${student.id}`} className="text-center">
-                          {bulkEditMode ? (
-                            <Input
-                              type="number"
-                              min={0}
-                              max={10}
-                              step={0.5}
-                              className="text-center"
-                              value={currentScores.quarter1_practical}
-                              onChange={(event) =>
-                                handleScoreChange(student.id, "quarter1_practical", event.target.value)
-                              }
-                              data-testid={`student-bulk-quarter1-practical-${student.id}`}
-                            />
-                          ) : (
-                            formatScore(student.quarter1_practical)
-                          )}
-                        </TableCell>
-                      )}
-                      {isWeek10 && (
-                        <TableCell data-testid={`student-quarter1-theory-${student.id}`} className="text-center">
-                          {bulkEditMode ? (
-                            <Input
-                              type="number"
-                              min={0}
-                              max={10}
-                              step={0.5}
-                              className="text-center"
-                              value={currentScores.quarter1_theory}
-                              onChange={(event) =>
-                                handleScoreChange(student.id, "quarter1_theory", event.target.value)
-                              }
-                              data-testid={`student-bulk-quarter1-theory-${student.id}`}
-                            />
-                          ) : (
-                            formatScore(student.quarter1_theory)
-                          )}
-                        </TableCell>
-                      )}
-                      {isWeek17 && (
-                        <TableCell data-testid={`student-quarter2-practical-${student.id}`} className="text-center">
-                          {bulkEditMode ? (
-                            <Input
-                              type="number"
-                              min={0}
-                              max={10}
-                              step={0.5}
-                              className="text-center"
-                              value={currentScores.quarter2_practical}
-                              onChange={(event) =>
-                                handleScoreChange(student.id, "quarter2_practical", event.target.value)
-                              }
-                              data-testid={`student-bulk-quarter2-practical-${student.id}`}
-                            />
-                          ) : (
-                            formatScore(student.quarter2_practical)
-                          )}
-                        </TableCell>
-                      )}
-                      {isWeek18 && (
-                        <TableCell data-testid={`student-quarter2-theory-${student.id}`} className="text-center">
-                          {bulkEditMode ? (
-                            <Input
-                              type="number"
-                              min={0}
-                              max={10}
-                              step={0.5}
-                              className="text-center"
-                              value={currentScores.quarter2_theory}
-                              onChange={(event) =>
-                                handleScoreChange(student.id, "quarter2_theory", event.target.value)
-                              }
-                              data-testid={`student-bulk-quarter2-theory-${student.id}`}
-                            />
-                          ) : (
-                            formatScore(student.quarter2_theory)
-                          )}
-                        </TableCell>
-                      )}
                       <TableCell data-testid={`student-total-${student.id}`} className="text-center">
                         {formatScore(computeTotalScore(bulkScores[student.id] || student), "/15")}
                       </TableCell>
@@ -1410,10 +1310,7 @@ export default function Students() {
               ) : (
                 <TableRow>
                   <TableCell
-                    colSpan={
-                      11 +
-                      (isWeek9 || isWeek10 || isWeek17 || isWeek18 ? 1 : 0)
-                    }
+                    colSpan={9}
                     data-testid="students-empty"
                   >
                     {t("no_data")}

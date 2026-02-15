@@ -1744,7 +1744,8 @@ async def get_students(
         week_doc = await db.weeks.find_one({"id": week_id}, {"_id": 0})
         if week_doc:
             semester = week_doc.get("semester", 1)
-            scores_by_student = await build_semester_score_map(student_ids, semester)
+            # Use full-year map so Final Exams can use Q1 quiz/chapter from weeks 1-9 and exam scores from 9/10
+            scores_by_student = await build_full_year_score_map(student_ids)
             for student in students:
                 totals = compute_quarter_totals(scores_by_student.get(student["id"], {}))
                 student.update(totals)
@@ -1759,8 +1760,19 @@ async def get_students(
                     scores_by_student.get(student["id"], {}), avg_first_9_weeks=avg_9, weeks_10_18=False
                 )
                 students_total_q2 = compute_students_total_for_assessment(
-                    scores_by_student.get(student["id"], {}), avg_first_9_weeks=avg_10_18, weeks_10_18=True
+                    scores_by_student.get(student["id"], {}), weeks_10_18=True
                 )
+                # Use current week's behavioral total when higher so same quiz/chapter marks give consistent 30/30 when current week has 15
+                a, p, b, h = (
+                    student.get("attendance"), student.get("participation"),
+                    student.get("behavior"), student.get("homework"),
+                )
+                _cur = sum(
+                    float(v) if v is not None and not (isinstance(v, float) and pd.isna(v)) else 0
+                    for v in [a, p, b, h]
+                )
+                current_week_behavioral = round(min(max(0, _cur), 15), 2)
+                students_total_q1 = max(students_total_q1, current_week_behavioral)
                 # Assessment combined (30) and Final Exams combined (50) for display on Assessment/Final pages
                 scores_dict = {
                     "attendance": student.get("attendance"),
@@ -1790,14 +1802,28 @@ async def get_students(
                 student["assessment_q2_combined_total"] = res_q2.get("combined_total")
                 student["assessment_q2_performance_level"] = res_q2.get("performance_level")
                 student["assessment_q2_performance_label"] = res_q2.get("performance_label")
+                # Final Exams Q1: use effective Q1 scores (best quiz/chapter from weeks 1-9, exams from 9/10) so total can be 50/50
+                sw = scores_by_student.get(student["id"], {})
+                effective_q1 = _effective_scores_q1(sw)
+                effective_q1_edit = {
+                    **effective_q1,
+                    "quarter1_practical": student.get("quarter1_practical") if student.get("quarter1_practical") is not None else effective_q1.get("quarter1_practical"),
+                    "quarter1_theory": student.get("quarter1_theory") if student.get("quarter1_theory") is not None else effective_q1.get("quarter1_theory"),
+                }
                 res_final_q1 = compute_final_exams_combined(
-                    scores_dict, avg_first_9_weeks=avg_9, quarter=1, students_total_override=students_total_q1
+                    effective_q1_edit, avg_first_9_weeks=avg_9, quarter=1, students_total_override=students_total_q1
                 )
                 student["final_exams_combined_total"] = res_final_q1.get("combined_total")
                 student["final_exams_performance_level"] = res_final_q1.get("performance_level")
                 student["final_exams_performance_label"] = res_final_q1.get("performance_label")
+                effective_q2 = _effective_scores_q2(sw)
+                effective_q2_edit = {
+                    **effective_q2,
+                    "quarter2_practical": student.get("quarter2_practical") if student.get("quarter2_practical") is not None else effective_q2.get("quarter2_practical"),
+                    "quarter2_theory": student.get("quarter2_theory") if student.get("quarter2_theory") is not None else effective_q2.get("quarter2_theory"),
+                }
                 res_final_q2 = compute_final_exams_combined(
-                    scores_dict, avg_weeks_10_18=avg_10_18, quarter=2, students_total_override=students_total_q2
+                    effective_q2_edit, avg_weeks_10_18=avg_10_18, quarter=2, students_total_override=students_total_q2
                 )
                 student["final_exams_q2_combined_total"] = res_final_q2.get("combined_total")
                 student["final_exams_q2_performance_level"] = res_final_q2.get("performance_level")

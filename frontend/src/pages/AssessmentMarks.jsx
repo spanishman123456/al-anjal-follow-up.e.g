@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useOutletContext } from "react-router-dom";
 import { toast } from "sonner";
-import { api, getApiErrorMessage } from "@/lib/api";
+import { api, getApiErrorMessage, BULK_SAVE_TIMEOUT_MS } from "@/lib/api";
 import { useTranslations } from "@/lib/i18n";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Button } from "@/components/ui/button";
@@ -265,7 +265,7 @@ export default function AssessmentMarks() {
           chapter_test1_practical: parseScore(current.chapter_test1_practical),
         };
       });
-      await api.post("/students/bulk-scores", { updates, week_id: activeWeekId || undefined });
+      await api.post("/students/bulk-scores", { updates, week_id: activeWeekId || undefined }, { timeout: BULK_SAVE_TIMEOUT_MS });
       toast.success(t("student_updated"));
       setBulkEditMode(false);
       setBulkConfirmOpen(false);
@@ -289,7 +289,7 @@ export default function AssessmentMarks() {
       chapter_test1_practical: null,
     }));
     try {
-      await api.post("/students/bulk-scores", { updates, week_id: activeWeekId });
+      await api.post("/students/bulk-scores", { updates, week_id: activeWeekId }, { timeout: BULK_SAVE_TIMEOUT_MS });
       await loadData(activeWeekId);
       setBulkEditMode(false);
       setBulkScores({});

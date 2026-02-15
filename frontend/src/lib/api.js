@@ -7,7 +7,9 @@ const API_BASE = `${BACKEND_ROOT}/api`;
 // Render free tier spins down after ~15 min; cold start can take 50+ seconds
 const isProductionBackend = (BACKEND_ROOT || "").includes("onrender.com");
 const HEALTH_CHECK_MS = isProductionBackend ? 90000 : 4000;
-const API_TIMEOUT_MS = isProductionBackend ? 90000 : 20000;
+const API_TIMEOUT_MS = isProductionBackend ? 120000 : 30000; // 2 min for production (bulk save can be slow)
+/** Use for bulk-scores and other long-running writes to avoid timeout. */
+export const BULK_SAVE_TIMEOUT_MS = isProductionBackend ? 180000 : 60000; // 3 min prod, 1 min dev
 
 export const api = axios.create({
   baseURL: API_BASE,
