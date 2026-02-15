@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useOutletContext } from "react-router-dom";
 import {
   PieChart,
@@ -18,7 +18,6 @@ import { PageHeader } from "@/components/layout/PageHeader";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import TimetableEditor from "@/components/TimetableEditor";
 
@@ -41,8 +40,8 @@ export default function Dashboard() {
   const t = useTranslations(language);
   const isTeacher = profile?.role_name === "Teacher";
   const [summary, setSummary] = useState(null);
-  const [file, setFile] = useState(null);
   const [loading, setLoading] = useState(false);
+  const fileInputRef = useRef(null);
   const [schedule, setSchedule] = useState({});
   const [savingSchedule, setSavingSchedule] = useState(false);
 
@@ -78,11 +77,14 @@ export default function Dashboard() {
     }
   };
 
-  const handleImport = async () => {
-    if (!file) {
-      toast.error("Please select a file first");
-      return;
-    }
+  const handleImportClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleFileSelected = async (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
     const formData = new FormData();
     formData.append("file", file);
     try {
@@ -90,7 +92,6 @@ export default function Dashboard() {
         headers: { "Content-Type": "multipart/form-data" },
       });
       toast.success("Excel data imported successfully");
-      setFile(null);
       fetchSummary();
     } catch (error) {
       toast.error(getApiErrorMessage(error) || "Import failed. Please check the file format.");
@@ -297,15 +298,18 @@ export default function Dashboard() {
               <p className="text-sm text-muted-foreground" data-testid="dashboard-import-instructions">
                 {t("import_instructions")}
               </p>
-              <Input
+              <input
+                ref={fileInputRef}
                 type="file"
-                accept=".xlsx,.xls"
-                onChange={(event) => setFile(event.target.files?.[0] || null)}
+                accept=".xlsx,.xls,.csv"
+                onChange={handleFileSelected}
+                style={{ display: "none" }}
+                aria-hidden="true"
                 data-testid="dashboard-import-file-input"
               />
               <Button
                 className="w-full"
-                onClick={handleImport}
+                onClick={handleImportClick}
                 data-testid="dashboard-import-submit-button"
               >
                 {t("import_excel")}
