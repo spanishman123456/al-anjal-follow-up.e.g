@@ -1,0 +1,184 @@
+@import url("https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;700&family=IBM+Plex+Sans:wght@400;500&family=Manrope:wght@600;700;800&display=swap");
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+    --font-heading: "Manrope", sans-serif;
+    --font-body: "IBM Plex Sans", sans-serif;
+}
+
+body {
+    margin: 0;
+    font-family: var(--font-body);
+    font-weight: 500;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    /* Soothing base; theme background applied via Tailwind bg-background */
+}
+
+body.font-ar {
+    --font-body: "IBM Plex Sans Arabic", sans-serif;
+    --font-heading: "IBM Plex Sans Arabic", sans-serif;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+    font-family: var(--font-heading);
+    font-weight: 600;
+}
+
+code {
+    font-family: "SFMono-Regular", Menlo, Monaco, Consolas, "Liberation Mono",
+        "Courier New", monospace;
+}
+
+@layer base {
+    :root {
+        /* Soothing, easy-on-the-eyes page background (does not affect buttons) */
+        --background: 214 32% 96%;
+        --foreground: 222 47% 11%;
+        --card: 0 0% 100%;
+        --card-foreground: 222 47% 11%;
+        --popover: 0 0% 100%;
+        --popover-foreground: 222 47% 11%;
+        /* Primary: comfortable blue (main actions, e.g. Import Excel) – unchanged */
+        --primary: 217 52% 36%;
+        --primary-foreground: 0 0% 100%;
+        /* Secondary: soft teal (supporting actions, e.g. Download Template) – unchanged */
+        --secondary: 196 48% 40%;
+        --secondary-foreground: 0 0% 100%;
+        --muted: 212 28% 94%;
+        --muted-foreground: 215 16% 46%;
+        /* Accent: soft blue-gray for outline/ghost hovers */
+        --accent: 214 32% 92%;
+        --accent-foreground: 222 47% 20%;
+        /* Destructive: soft red (delete/danger) */
+        --destructive: 2 56% 48%;
+        --destructive-foreground: 0 0% 100%;
+        /* Success: soft green (confirm/success actions) */
+        --success: 158 44% 38%;
+        --success-foreground: 0 0% 100%;
+        /* Outline border: soft slate */
+        --border: 214 28% 82%;
+        --input: 214 28% 82%;
+        --ring: 217 52% 36%;
+        --chart-1: 196 48% 40%;
+        --chart-2: 217 52% 36%;
+        --chart-3: 43 72% 52%;
+        --chart-4: 2 56% 48%;
+        --chart-5: 215 20% 65%;
+        --radius: 0.75rem;
+        /* Deeper, distinct section backgrounds for dynamic visual hierarchy (light) */
+        --section-header: 0 0% 96%;
+        --section-context: 214 28% 88%;
+        --section-main: 214 26% 90%;
+        --section-toolbar: 214 24% 91%;
+        --section-card: 0 0% 98%;
+        --section-alt-1: 210 22% 91%;
+        --section-alt-2: 200 28% 89%;
+        --section-alt-3: 220 20% 90%;
+        --section-alt-4: 215 25% 92%;
+    }
+    .dark {
+        /* Soothing dark background – does not affect buttons */
+        --background: 222 42% 12%;
+        --foreground: 210 40% 98%;
+        --card: 222 42% 14%;
+        --card-foreground: 210 40% 98%;
+        --popover: 222 42% 14%;
+        --popover-foreground: 210 40% 98%;
+        --primary: 217 55% 58%;
+        --primary-foreground: 222 47% 11%;
+        --secondary: 196 45% 48%;
+        --secondary-foreground: 0 0% 100%;
+        --muted: 217 19% 20%;
+        --muted-foreground: 215 20% 65%;
+        --accent: 217 25% 22%;
+        --accent-foreground: 210 40% 98%;
+        --destructive: 2 58% 52%;
+        --destructive-foreground: 0 0% 100%;
+        --success: 158 42% 42%;
+        --success-foreground: 0 0% 100%;
+        --border: 217 19% 35%;
+        --input: 217 19% 35%;
+        --ring: 217 55% 58%;
+        --chart-1: 196 45% 48%;
+        --chart-2: 217 55% 58%;
+        --chart-3: 43 72% 52%;
+        --chart-4: 2 58% 52%;
+        --chart-5: 215 20% 65%;
+        /* Deeper distinct section backgrounds (dark) */
+        --section-header: 222 36% 15%;
+        --section-context: 222 32% 17%;
+        --section-main: 222 40% 13%;
+        --section-toolbar: 217 30% 16%;
+        --section-card: 222 38% 15%;
+        --section-alt-1: 217 26% 18%;
+        --section-alt-2: 222 28% 16%;
+        --section-alt-3: 215 24% 19%;
+        --section-alt-4: 220 22% 17%;
+    }
+}
+
+@layer base {
+    * {
+        @apply border-border;
+    }
+    body {
+        @apply bg-background text-foreground;
+    }
+    p, span, label, li, td, th, a, input, select, textarea, button {
+        @apply font-medium;
+    }
+}
+
+/* Page content area – deeper distinct section background */
+.page-content-bg {
+    background: hsl(var(--section-main));
+}
+
+/* Distinct section backgrounds – use on wrappers for dynamic, engaging layout */
+.section-toolbar-bg { background: hsl(var(--section-toolbar)); }
+.section-card-bg { background: hsl(var(--section-card)); }
+.section-bg-alt-1 { background: hsl(var(--section-alt-1)); }
+.section-bg-alt-2 { background: hsl(var(--section-alt-2)); }
+.section-bg-alt-3 { background: hsl(var(--section-alt-3)); }
+.section-bg-alt-4 { background: hsl(var(--section-alt-4)); }
+
+@layer base {
+    [data-debug-wrapper="true"] {
+        display: contents !important;
+    }
+
+    [data-debug-wrapper="true"] > * {
+        margin-left: inherit;
+        margin-right: inherit;
+        margin-top: inherit;
+        margin-bottom: inherit;
+        padding-left: inherit;
+        padding-right: inherit;
+        padding-top: inherit;
+        padding-bottom: inherit;
+        column-gap: inherit;
+        row-gap: inherit;
+        gap: inherit;
+        border-left-width: inherit;
+        border-right-width: inherit;
+        border-top-width: inherit;
+        border-bottom-width: inherit;
+        border-left-style: inherit;
+        border-right-style: inherit;
+        border-top-style: inherit;
+        border-bottom-style: inherit;
+        border-left-color: inherit;
+        border-right-color: inherit;
+        border-top-color: inherit;
+        border-bottom-color: inherit;
+    }
+}

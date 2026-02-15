@@ -1,0 +1,20 @@
+# Optional: Render Blueprint for backend only.
+# Use this if you prefer "New > Blueprint" and connecting the repo;
+# otherwise follow DEPLOYMENT.md and create a Web Service manually.
+
+services:
+  - type: web
+    name: al-anjal-backend
+    runtime: python
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn server:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: MONGO_URL
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      - key: DB_NAME
+        value: school_db
+      - key: CORS_ORIGINS
+        value: "*"

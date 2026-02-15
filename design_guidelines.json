@@ -1,0 +1,193 @@
+{
+  "identity": {
+    "name": "E1",
+    "role": "Creative Designer (Top 1%)",
+    "principles": [
+      "Fusion over Imitation",
+      "Emotion First",
+      "Content is King",
+      "Zoom In",
+      "Negative Space",
+      "Contrast"
+    ],
+    "anti_patterns": [
+      "Purple/Teal for CTA",
+      "Inter everywhere",
+      "Center-Everything Disease",
+      "Gradient Overload",
+      "Generic SaaS Blue"
+    ]
+  },
+  "project_context": {
+    "app_name": "EduTrack Pro",
+    "type": "SaaS / Education Dashboard",
+    "theme_strategy": "Swiss Utility (High Clarity + Warmth)",
+    "bilingual": true,
+    "rtl_support": true
+  },
+  "typography": {
+    "fonts": {
+      "heading": {
+        "family": "Manrope",
+        "weights": ["600", "700", "800"],
+        "usage": "Page titles, Card headers, Big metrics"
+      },
+      "body": {
+        "family": "IBM Plex Sans",
+        "weights": ["400", "500"],
+        "usage": "General text, Data tables, Form inputs"
+      },
+      "arabic": {
+        "family": "IBM Plex Sans Arabic",
+        "weights": ["400", "500", "700"],
+        "usage": "All Arabic text content"
+      }
+    },
+    "scale": {
+      "h1": "text-4xl md:text-5xl font-bold tracking-tight",
+      "h2": "text-3xl font-bold tracking-tight",
+      "h3": "text-2xl font-semibold tracking-tight",
+      "body_lg": "text-lg leading-relaxed",
+      "body_base": "text-base leading-relaxed",
+      "caption": "text-sm text-muted-foreground uppercase tracking-wider"
+    }
+  },
+  "colors": {
+    "palette": {
+      "primary": {
+        "DEFAULT": "#1e3a8a",
+        "foreground": "#ffffff",
+        "description": "Academic Navy - Trust, Authority, Focus"
+      },
+      "secondary": {
+        "DEFAULT": "#10b981",
+        "foreground": "#ffffff",
+        "description": "Success Green - Growth, Progress, Meeting Expectations"
+      },
+      "accent": {
+        "DEFAULT": "#f59e0b",
+        "foreground": "#0f172a",
+        "description": "Insight Amber - Attention, Approaching Level"
+      },
+      "destructive": {
+        "DEFAULT": "#ef4444",
+        "foreground": "#ffffff",
+        "description": "Alert Red - Below Level, Critical Actions"
+      },
+      "background": {
+        "light": "#f8fafc",
+        "dark": "#0f172a"
+      },
+      "surface": {
+        "light": "#ffffff",
+        "dark": "#1e293b"
+      }
+    },
+    "semantic": {
+      "exceeding": "#10b981",
+      "meeting": "#3b82f6",
+      "approaching": "#f59e0b",
+      "below": "#ef4444"
+    }
+  },
+  "layout": {
+    "grid_system": {
+      "dashboard": "grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-6",
+      "detail_view": "grid grid-cols-1 lg:grid-cols-12 gap-8"
+    },
+    "spacing": {
+      "container_padding": "p-6 md:p-8 lg:p-12",
+      "card_padding": "p-6",
+      "section_gap": "gap-8"
+    },
+    "rtl_rules": [
+      "Mirror all margins and paddings (ms-*, me-*)",
+      "Mirror flex direction for row layouts",
+      "Ensure icons flip if directional (arrows)",
+      "Use logical properties (start/end) instead of left/right"
+    ]
+  },
+  "components": {
+    "cards": {
+      "style": "bg-card text-card-foreground rounded-xl border border-border/50 shadow-sm hover:shadow-md transition-all duration-200",
+      "header": "flex flex-row items-center justify-between space-y-0 pb-2"
+    },
+    "buttons": {
+      "primary": "bg-primary text-primary-foreground hover:bg-primary/90 h-10 px-4 py-2 rounded-md font-medium transition-colors",
+      "ghost": "hover:bg-accent hover:text-accent-foreground h-10 px-4 py-2 rounded-md transition-colors",
+      "outline": "border border-input bg-background hover:bg-accent hover:text-accent-foreground h-10 px-4 py-2 rounded-md transition-colors"
+    },
+    "tables": {
+      "wrapper": "rounded-md border border-border overflow-hidden",
+      "header": "bg-muted/50 font-medium text-muted-foreground",
+      "row": "hover:bg-muted/50 transition-colors data-[state=selected]:bg-muted"
+    },
+    "charts": {
+      "library": "recharts",
+      "style": "Minimalist, no grid lines, rounded bars, custom tooltips"
+    }
+  },
+  "visual_enhancers": {
+    "shadows": {
+      "soft": "shadow-[0_2px_10px_rgba(0,0,0,0.05)]",
+      "hover": "shadow-[0_10px_30px_rgba(0,0,0,0.08)]"
+    },
+    "borders": {
+      "subtle": "border border-slate-200 dark:border-slate-800",
+      "active": "border-primary/50 ring-2 ring-primary/20"
+    },
+    "glassmorphism": {
+      "header": "bg-background/80 backdrop-blur-md border-b border-border/40"
+    }
+  },
+  "assets": {
+    "images": {
+      "students": [
+        "https://images.unsplash.com/photo-1543689604-6fe8dbcd1f59?crop=entropy&cs=srgb&fm=jpg&q=85",
+        "https://images.unsplash.com/photo-1765572144519-1dc1e6e07bc9?crop=entropy&cs=srgb&fm=jpg&q=85",
+        "https://images.unsplash.com/photo-1758613171176-ea64579c2dcf?crop=entropy&cs=srgb&fm=jpg&q=85"
+      ],
+      "classroom": [
+        "https://images.unsplash.com/photo-1764720572930-eb63afd14b06?crop=entropy&cs=srgb&fm=jpg&q=85",
+        "https://images.unsplash.com/photo-1746862932765-c450b9d2f3c5?crop=entropy&cs=srgb&fm=jpg&q=85"
+      ]
+    },
+    "icons": {
+      "library": "lucide-react",
+      "style": "Stroke width 1.5px, rounded joins"
+    }
+  },
+  "instructions_to_main_agent": [
+    "DO NOT use 'Inter' font for headings. Use 'Manrope'.",
+    "Ensure all text is legible against the background (Contrast Ratio > 4.5:1).",
+    "Use 'sonner' for toast notifications.",
+    "Implement a 'Theme Toggle' (Light/Dark) in the settings or header.",
+    "For Arabic support, ensure the 'dir' attribute on the HTML tag changes to 'rtl' when Arabic is selected.",
+    "Use 'recharts' for all data visualization.",
+    "Do not use gradients for backgrounds; use solid colors or subtle noise textures.",
+    "All interactive elements must have a 'data-testid'.",
+    "Use 'lucide-react' for icons.",
+    "Follow the 'Bento' grid layout for the dashboard.",
+    "Use 'shadcn/ui' components but customize them to match the 'Swiss Utility' theme."
+  ],
+  "UNIVERSAL_GUIDELINES_FOR_MAIN_AGENT": [
+    "Dark colors look good when used independently without gradients. DO NOT use dark colors as gradients",
+    "Don't make generic centered layouts, simplistic gradients, and uniform styling.",
+    "Create depth through layered design elements with z-index hierarchy",
+    "Use glass-morphism effects with backdrop filters (12-24px blur)",
+    "You MUST NOT apply universal transition. Eg: 'transition: all'. This results in breaking transforms. Always add transitions for specific interactive elements like button, input excluding transforms",
+    "You MUST NOT center align the app container, ie do not add '.App { text-align: center; }' in the css file. This disrupts the human natural reading flow of text",
+    "Always use modern button styles like pill-shaped, or sharp button with interaction animations & color relevant to the app style",
+    "NEVER: use AI assistant Emoji characters like 🤖🧠💭💡🔮🎯📚🎭🎬🎪🎉🎊🎁🎀🎂🍰🎈🎨🎰💰💵💳🏦💎🪙💸🤑📊📈📉💹🔢🏆🥇 etc for icons.",
+    "Every interaction needs micro-animations - hover states, transitions, parallax effects, and entrance animations. Static = dead.",
+    "Use 2-3x more spacing than feels comfortable. Cramped designs look cheap.",
+    "Subtle grain textures, noise overlays, custom cursors, selection states, and loading animations: separates good from extraordinary.",
+    "Main agent relies on these image URLs. Missing categories (especially sponsor logos) = main agent will use placeholder text which is FORBIDDEN",
+    "Prioritize using pre-existing components from src/components/ui when applicable",
+    "Create new components that match the style and conventions of existing components when needed",
+    "Examine existing components to understand the project's component patterns before creating new ones",
+    "Components MUST use named exports (export const ComponentName = ...)",
+    "Pages MUST use default exports (export default function PageName() {...})",
+    "Use 'sonner' for toasts"
+  ]
+}

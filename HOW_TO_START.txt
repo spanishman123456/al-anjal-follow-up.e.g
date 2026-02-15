@@ -1,0 +1,26 @@
+========================================
+  Al Anjal – how to start and log in
+========================================
+
+TO LOG IN AND GET FULL ACCESS (all features, change password, etc.):
+
+1. Double-click:  Start_App.bat
+   (in this folder)
+
+2. Keep the FIRST window open.
+   It says "Backend is running" – that window must stay open.
+
+3. When the browser opens, log in with:
+   Username:  2297033843
+   Password:  BabaMama1
+
+4. You are in with full access. No yellow bars.
+
+----------------------------------------
+
+If you only open the website (e.g. localhost:3000) without running Start_App.bat first:
+- You can still log in with 2297033843 / BabaMama1 and see the app,
+  but data and some features (e.g. change password) need the backend.
+- To get full access: run Start_App.bat, then refresh the page and log in again.
+
+========================================
