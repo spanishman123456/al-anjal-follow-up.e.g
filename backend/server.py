@@ -3290,6 +3290,9 @@ async def import_excel(file: UploadFile = File(...), week_id: Optional[str] = Qu
                 break
     if "student_name" not in column_lookup and len(df.columns):
         column_lookup["student_name"] = df.columns[0]
+    # If file has two columns and we didn't match a class header, treat second column as class (name + class is enough)
+    if "class_name" not in column_lookup and len(df.columns) >= 2:
+        column_lookup["class_name"] = df.columns[1]
     classes = await db.classes.find({}, {"_id": 0}).to_list(200)
 
     def normalize_class_name(value: str) -> str:
@@ -3323,14 +3326,8 @@ async def import_excel(file: UploadFile = File(...), week_id: Optional[str] = Qu
     created_students = 0
     updated_students = 0
     if "student_name" not in column_lookup:
-        raise HTTPException(status_code=400, detail="Excel must include student name column")
-    if "class_name" not in column_lookup and not default_class_doc and not (
-        column_lookup.get("grade") and column_lookup.get("section")
-    ):
-        raise HTTPException(
-            status_code=400,
-            detail="Excel must include class column (or grade/section) or a class in filename",
-        )
+        raise HTTPException(status_code=400, detail="Excel must include at least one column with student names.")
+    # Class can come from: class column, grade+section columns, or filename (e.g. 5A.xlsx). No strict requirement here.
 
     created_classes = 0
     processed_rows = 0
@@ -3347,9 +3344,23 @@ async def import_excel(file: UploadFile = File(...), week_id: Optional[str] = Qu
                 class_name = None
             else:
                 class_doc = class_map.get(normalize_class_name(class_name))
-            if not class_doc:
-                if class_name:
-                    # Marks-only import: do not create new classes; skip row
+            if not class_doc and class_name:
+                # Try to create new class from class name (e.g. 5A, 6B) so enrollment works without pre-creating classes
+                parsed = parse_class_name(class_name)
+                if parsed.get("grade") is not None and parsed.get("section"):
+                    new_class_name = f"{parsed['grade']}{parsed['section']}"
+                    class_doc = class_map.get(normalize_class_name(new_class_name))
+                    if not class_doc:
+                        class_record = ClassRecord(
+                            name=new_class_name,
+                            grade=parsed["grade"],
+                            section=parsed["section"],
+                        )
+                        await db.classes.insert_one(class_record.model_dump())
+                        class_doc = class_record.model_dump()
+                        class_map[normalize_class_name(new_class_name)] = class_doc
+                        created_classes += 1
+                else:
                     continue
         if not class_doc and default_class_doc:
             class_doc = default_class_doc
