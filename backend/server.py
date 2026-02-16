@@ -346,12 +346,21 @@ async def build_semester_score_map(student_ids: List[str], semester: int) -> Dic
     return scores_by_student
 
 
+def _normalized_week_number(week: Dict[str, Any]) -> int:
+    """Map to global week index: semester 1 = 1-9, semester 2 = 10-18. So Q1 and Q2 never overwrite."""
+    num = week.get("number", 1)
+    sem = week.get("semester", 1)
+    if sem == 2 and num <= 9:
+        return 9 + num  # 1->10, 2->11, ... 9->18
+    return num
+
+
 async def build_full_year_score_map(student_ids: List[str]) -> Dict[str, Dict[int, Dict[str, Optional[float]]]]:
     """Load scores for weeks from BOTH semesters so Q1 (weeks 1-9) and Q2 (weeks 10-18) both have data for Dashboard, Analytics, Classes, Reports."""
     if not student_ids:
         return {}
     all_weeks = await db.weeks.find({"semester": {"$in": [1, 2]}}, {"_id": 0}).to_list(200)
-    week_number_map = {week["id"]: week["number"] for week in all_weeks}
+    week_number_map = {week["id"]: _normalized_week_number(week) for week in all_weeks}
     week_ids = list(week_number_map.keys())
     if not week_ids:
         return {}
@@ -1680,8 +1689,12 @@ async def list_weeks(semester: Optional[int] = Query(default=None)):
 
 @api_router.post("/weeks", response_model=WeekRecord)
 async def create_week(payload: WeekCreate):
+    """Create week: semester 1 = numbers 1-9 (Q1), semester 2 = numbers 10-18 (Q2) so data is clearly separated."""
     last_week = await db.weeks.find({"semester": payload.semester}, {"_id": 0}).sort("number", -1).to_list(1)
-    next_number = (last_week[0]["number"] + 1) if last_week else 1
+    if payload.semester == 2:
+        next_number = (last_week[0]["number"] + 1) if last_week and last_week[0]["number"] >= 10 else 10
+    else:
+        next_number = (last_week[0]["number"] + 1) if last_week else 1
     label = payload.label or f"Week {next_number}"
     week = WeekRecord(semester=payload.semester, number=next_number, label=label)
     await db.weeks.insert_one(week.model_dump())
@@ -2949,11 +2962,20 @@ async def _build_class_summary_list(classes: List[Dict[str, Any]], semester: int
         student["quarter2_total"] = res_q2.get("combined_total")
         student["performance_level_q1"] = res_q1.get("performance_level", "no_data")
         student["performance_level_q2"] = res_q2.get("performance_level", "no_data")
-        student["performance_level"] = _worst_performance_level(
+        student["performance_level"] = _overall_performance_level(
             student["performance_level_q1"], student["performance_level_q2"]
         )
-        stot = (student.get("quarter1_total") or 0) + (student.get("quarter2_total") or 0)
-        student["semester_total"] = round(stot, 2) if stot else None
+        q1_val = student.get("quarter1_total")
+        q2_val = student.get("quarter2_total")
+        if q1_val is not None and q2_val is not None:
+            stot = float(q1_val) + float(q2_val)
+            student["semester_total"] = round(stot, 2)
+        elif q1_val is not None:
+            student["semester_total"] = round(float(q1_val), 2)
+        elif q2_val is not None:
+            student["semester_total"] = round(float(q2_val), 2)
+        else:
+            student["semester_total"] = None
     student_map: Dict[str, List[Dict[str, Any]]] = {}
     for student in students:
         student_map.setdefault(student["class_id"], []).append(student)
@@ -3088,14 +3110,26 @@ async def get_grade_report(grade: int = Query(...), semester: Optional[int] = Qu
         student["quarter2_total"] = res_q2.get("combined_total")
         student["performance_level_q1"] = res_q1.get("performance_level", "no_data")
         student["performance_level_q2"] = res_q2.get("performance_level", "no_data")
-        student["performance_level"] = _worst_performance_level(
+        student["performance_level"] = _overall_performance_level(
             student["performance_level_q1"], student["performance_level_q2"]
         )
         label_map = {"on_level": "On Level", "approach": "Approach", "below": "Below", "no_data": "No Data"}
         student["performance_label"] = label_map.get(student["performance_level"], student["performance_level"])
-        semester_total = (student.get("quarter1_total") or 0) + (student.get("quarter2_total") or 0)
-        student["semester_total"] = round(semester_total, 2)
-        student["total_score_normalized"] = round(semester_total / 2, 2) if semester_total else None
+        q1_val = student.get("quarter1_total")
+        q2_val = student.get("quarter2_total")
+        if q1_val is not None and q2_val is not None:
+            stot = float(q1_val) + float(q2_val)
+            student["semester_total"] = round(stot, 2)
+            student["total_score_normalized"] = round(stot / 2, 2)
+        elif q1_val is not None:
+            student["semester_total"] = round(float(q1_val), 2)
+            student["total_score_normalized"] = round(float(q1_val), 2)
+        elif q2_val is not None:
+            student["semester_total"] = round(float(q2_val), 2)
+            student["total_score_normalized"] = round(float(q2_val), 2)
+        else:
+            student["semester_total"] = None
+            student["total_score_normalized"] = None
 
     q1_counts = {"on_level": 0, "approach": 0, "below": 0, "no_data": 0}
     q2_counts = {"on_level": 0, "approach": 0, "below": 0, "no_data": 0}
