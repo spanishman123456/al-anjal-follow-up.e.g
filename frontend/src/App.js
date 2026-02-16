@@ -1,7 +1,8 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import "@/App.css";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AppShell } from "@/components/layout/AppShell";
+import { api } from "@/lib/api";
 import Dashboard from "@/pages/Dashboard";
 import Students from "@/pages/Students";
 import AssessmentMarks from "@/pages/AssessmentMarks";
@@ -41,6 +42,22 @@ function App() {
     const startYear = now.getMonth() >= 7 ? now.getFullYear() : now.getFullYear() - 1;
     return `${startYear}-${startYear + 1}`;
   })();
+
+  const [classes, setClasses] = useState([]);
+  const [classesLoaded, setClassesLoaded] = useState(false);
+  const loadClasses = useCallback(async () => {
+    try {
+      const r = await api.get("/classes");
+      setClasses(r.data || []);
+    } catch {
+      setClasses([]);
+    } finally {
+      setClassesLoaded(true);
+    }
+  }, []);
+  useEffect(() => {
+    loadClasses();
+  }, [loadClasses]);
 
   useEffect(() => {
     const isArabic = language === "ar";
@@ -89,6 +106,9 @@ function App() {
                 semester={semester}
                 setSemester={setSemester}
                 academicYear={academicYear}
+                classes={classes}
+                classesLoaded={classesLoaded}
+                loadClasses={loadClasses}
               />
             }
           >

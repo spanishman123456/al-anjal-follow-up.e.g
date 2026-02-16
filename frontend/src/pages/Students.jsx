@@ -237,7 +237,7 @@ function CertificateDialog({ reward, open, onOpenChange }) {
 }
 
 export default function Students() {
-  const { language, semester, profile } = useOutletContext();
+  const { language, semester, profile, classes: contextClasses, classesLoaded } = useOutletContext();
   const t = useTranslations(language);
   const isTeacher = profile?.role_name === "Teacher";
   const [students, setStudents] = useState([]);
@@ -272,14 +272,15 @@ export default function Students() {
 
   const loadData = async (weekId = activeWeekId) => {
     try {
-      const [studentsRes, classesRes, promotionRes] = await Promise.all([
+      const requests = [
         api.get("/students", { params: weekId ? { week_id: weekId } : {} }),
-        api.get("/classes"),
         api.get("/settings/promotion"),
-      ]);
-      setStudents(studentsRes.data);
-      setClasses(classesRes.data);
-      setPromotionEnabled(Boolean(promotionRes.data?.enabled));
+      ];
+      if (!classesLoaded) requests.push(api.get("/classes"));
+      const results = await Promise.all(requests);
+      setStudents(results[0].data);
+      setPromotionEnabled(Boolean(results[1].data?.enabled));
+      if (classesLoaded) setClasses(contextClasses || []); else if (results[2]) setClasses(results[2].data || []);
     } catch (error) {
       toast.error(getApiErrorMessage(error) || "Failed to load students");
     }
@@ -326,6 +327,10 @@ export default function Students() {
   useEffect(() => {
     loadWeeks();
   }, [semester]);
+
+  useEffect(() => {
+    if (classesLoaded && contextClasses) setClasses(contextClasses);
+  }, [classesLoaded, contextClasses]);
 
   useEffect(() => {
     if (activeWeekId) {

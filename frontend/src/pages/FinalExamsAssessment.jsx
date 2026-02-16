@@ -112,7 +112,7 @@ function computeFinalPerformanceLevel(baseStudent, currentStudent = baseStudent)
 }
 
 export default function FinalExamsAssessment() {
-  const { language, semester, profile } = useOutletContext();
+  const { language, semester, profile, classes: contextClasses, classesLoaded } = useOutletContext();
   const t = useTranslations(language);
   const [students, setStudents] = useState([]);
   const [classes, setClasses] = useState([]);
@@ -132,12 +132,11 @@ export default function FinalExamsAssessment() {
 
   const loadData = async (weekId = activeWeekId) => {
     try {
-      const [studentsRes, classesRes] = await Promise.all([
-        api.get("/students", { params: weekId ? { week_id: weekId } : {} }),
-        api.get("/classes"),
-      ]);
-      setStudents(studentsRes.data);
-      setClasses(classesRes.data || []);
+      const requests = [api.get("/students", { params: weekId ? { week_id: weekId } : {} })];
+      if (!classesLoaded) requests.push(api.get("/classes"));
+      const results = await Promise.all(requests);
+      setStudents(results[0].data);
+      if (classesLoaded) setClasses(contextClasses || []); else if (results[1]) setClasses(results[1].data || []);
     } catch (error) {
       toast.error(getApiErrorMessage(error) || "Failed to load data");
     }

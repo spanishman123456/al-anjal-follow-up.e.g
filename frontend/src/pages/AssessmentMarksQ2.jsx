@@ -108,7 +108,7 @@ function computeAssessmentPerformanceLevel(baseStudent, currentStudent = baseStu
 }
 
 export default function AssessmentMarksQ2() {
-  const { language, semester, profile } = useOutletContext();
+  const { language, semester, profile, classes: contextClasses, classesLoaded } = useOutletContext();
   const t = useTranslations(language);
   const isTeacher = profile?.role_name === "Teacher";
   const [students, setStudents] = useState([]);
@@ -129,12 +129,11 @@ export default function AssessmentMarksQ2() {
 
   const loadData = async (weekId = activeWeekId) => {
     try {
-      const [studentsRes, classesRes] = await Promise.all([
-        api.get("/students", { params: weekId ? { week_id: weekId } : {} }),
-        api.get("/classes"),
-      ]);
-      setStudents(studentsRes.data);
-      setClasses(classesRes.data || []);
+      const requests = [api.get("/students", { params: weekId ? { week_id: weekId } : {} })];
+      if (!classesLoaded) requests.push(api.get("/classes"));
+      const results = await Promise.all(requests);
+      setStudents(results[0].data);
+      if (classesLoaded) setClasses(contextClasses || []); else if (results[1]) setClasses(results[1].data || []);
     } catch (error) {
       toast.error(getApiErrorMessage(error) || "Failed to load data");
     }

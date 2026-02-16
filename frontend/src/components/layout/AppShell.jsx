@@ -50,6 +50,9 @@ export const AppShell = ({
   semester,
   setSemester,
   academicYear,
+  classes = [],
+  classesLoaded = false,
+  loadClasses,
 }) => {
   const t = useTranslations(language);
   const isRTL = language === "ar";
@@ -468,6 +471,9 @@ export const AppShell = ({
               setSemester,
               academicYear,
               profile,
+              classes,
+              classesLoaded,
+              loadClasses: loadClasses || (() => {}),
             }}
           />
         </main>

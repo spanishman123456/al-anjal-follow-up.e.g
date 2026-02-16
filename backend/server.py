@@ -44,6 +44,7 @@ from sendgrid.helpers.mail import (
     Email as SGEmail,
 )
 import requests
+from pymongo import UpdateOne
 from twilio.rest import Client as TwilioClient
 import jwt
 from passlib.context import CryptContext
@@ -1967,7 +1968,15 @@ async def update_student(student_id: str, payload: StudentUpdate):
 
 @api_router.post("/students/bulk-scores")
 async def bulk_update_scores(payload: BulkScoresPayload):
-    updated = 0
+    """Bulk update scores in one DB round-trip for speed (no per-student round-trips)."""
+    score_field_names = {
+        "attendance", "participation", "behavior", "homework",
+        "quiz1", "quiz2", "quiz3", "quiz4",
+        "chapter_test1_practical", "chapter_test2_practical",
+        "quarter1_practical", "quarter1_theory", "quarter2_practical", "quarter2_theory",
+        "updated_at",
+    }
+    operations = []
     for item in payload.updates:
         update_data = {
             k: normalize_score(v)
@@ -1997,26 +2006,27 @@ async def bulk_update_scores(payload: BulkScoresPayload):
         if "chapter_test2_practical" in update_data:
             update_data["chapter_test2"] = update_data.get("chapter_test2_practical")
         update_data["updated_at"] = iso_now()
-        score_field_names = {
-            "attendance", "participation", "behavior", "homework",
-            "quiz1", "quiz2", "quiz3", "quiz4",
-            "chapter_test1_practical", "chapter_test2_practical",
-            "quarter1_practical", "quarter1_theory", "quarter2_practical", "quarter2_theory",
-            "updated_at",
-        }
-        # Only $set fields that were sent by the client, so Assessment Clear does not wipe Students data and vice versa.
         set_dict = {k: update_data[k] for k in score_field_names if k in update_data}
         if payload.week_id and set_dict:
-            await db.student_scores.update_one(
-                {"student_id": item.id, "week_id": payload.week_id},
-                {"$set": set_dict},
-                upsert=True,
+            operations.append(
+                UpdateOne(
+                    {"student_id": item.id, "week_id": payload.week_id},
+                    {"$set": set_dict},
+                    upsert=True,
+                )
             )
-            updated += 1
         else:
-            result = await db.students.update_one({"id": item.id}, {"$set": update_data})
-            if result.modified_count:
-                updated += 1
+            operations.append(
+                UpdateOne(
+                    {"id": item.id},
+                    {"$set": update_data},
+                )
+            )
+    if not operations:
+        return {"status": "updated", "updated": 0}
+    collection = db.student_scores if payload.week_id else db.students
+    result = await collection.bulk_write(operations)
+    updated = (result.upserted_count or 0) + (result.modified_count or 0)
     return {"status": "updated", "updated": updated}
 
 
@@ -2707,14 +2717,32 @@ async def get_analytics_summary(
                 student["quarter2_total"] = res_q2.get("combined_total")
                 student["performance_level_q1"] = res_q1.get("performance_level", "no_data")
                 student["performance_level_q2"] = res_q2.get("performance_level", "no_data")
-                student["performance_level"] = _worst_performance_level(
+                student["performance_level"] = _overall_performance_level(
                     student["performance_level_q1"], student["performance_level_q2"]
                 )
                 label_map = {"on_level": "On Level", "approach": "Approach", "below": "Below", "no_data": "No Data"}
                 student["performance_label"] = label_map.get(student["performance_level"], "No Data")
-                stot = (student.get("quarter1_total") or 0) + (student.get("quarter2_total") or 0)
-                student["semester_total"] = round(stot, 2) if stot else None
-                student["total_score_normalized"] = round(stot / 2, 2) if stot else None
+                q1_val = student.get("quarter1_total")
+                q2_val = student.get("quarter2_total")
+                if q1_val is not None and q2_val is not None:
+                    student["semester_total"] = round(float(q1_val) + float(q2_val), 2)
+                    student["total_score_normalized"] = round((float(q1_val) + float(q2_val)) / 2, 2)
+                elif q1_val is not None:
+                    student["semester_total"] = round(float(q1_val), 2)
+                    student["total_score_normalized"] = round(float(q1_val), 2)
+                elif q2_val is not None:
+                    student["semester_total"] = round(float(q2_val), 2)
+                    student["total_score_normalized"] = round(float(q2_val), 2)
+                else:
+                    student["semester_total"] = None
+                    student["total_score_normalized"] = None
+                # So Dashboard avg_quiz_score and avg_total_score use correct scale (quiz out of 5, total out of 50)
+                student["quiz1"] = effective_q1.get("quiz1")
+                student["quiz2"] = effective_q1.get("quiz2")
+                student["chapter_test1"] = effective_q1.get("chapter_test1_practical")
+                student["quiz3"] = effective_q2.get("quiz3")
+                student["quiz4"] = effective_q2.get("quiz4")
+                student["chapter_test2"] = effective_q2.get("chapter_test2_practical")
         return build_summary(students, classes)
     except Exception as e:
         logger.exception("Analytics summary failed")
@@ -2993,6 +3021,15 @@ def _worst_performance_level(level1: str, level2: str) -> str:
     """Return the worse of two performance levels (no_data < below < approach < on_level)."""
     order = {"no_data": 0, "below": 1, "approach": 2, "on_level": 3}
     return level1 if order.get(level1, 0) <= order.get(level2, 0) else level2
+
+
+def _overall_performance_level(level_q1: str, level_q2: str) -> str:
+    """When one quarter has no_data, use the other; when both have data use worst. So full marks in one quarter show on_level."""
+    if level_q1 == "no_data":
+        return level_q2
+    if level_q2 == "no_data":
+        return level_q1
+    return _worst_performance_level(level_q1, level_q2)
 
 
 @api_router.get("/reports/grade")
