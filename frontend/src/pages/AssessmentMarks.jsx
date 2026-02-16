@@ -6,7 +6,6 @@ import { useTranslations } from "@/lib/i18n";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { PerformanceLevelPopper } from "@/components/PerformanceLevelPopper";
 import {
   Table,
   TableBody,
@@ -32,7 +31,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { AssessmentPageFooter } from "@/components/AssessmentPageFooter";
-import { sortByClassOrder } from "@/lib/utils";
+import { cn, sortByClassOrder } from "@/lib/utils";
 
 const formatScore = (value, suffix = "") => {
   if (value === null || value === undefined) {
@@ -656,11 +655,18 @@ export default function AssessmentMarks() {
                         {formatScore(total, "/30")}
                       </TableCell>
                       <TableCell className="text-center">
-                        <PerformanceLevelPopper
-                          level={perfLevel}
-                          label={t(perfLevel)}
+                        <span
+                          className={cn(
+                            "text-sm font-medium",
+                            perfLevel === "on_level" && "text-emerald-600",
+                            perfLevel === "approach" && "text-amber-600",
+                            perfLevel === "below" && "text-rose-600",
+                            perfLevel === "no_data" && "text-slate-500"
+                          )}
                           data-testid={`assessment-perf-${student.id}`}
-                        />
+                        >
+                          {t(perfLevel)}
+                        </span>
                       </TableCell>
                     </TableRow>
                   );
