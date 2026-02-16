@@ -2,11 +2,13 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { api, checkBackendHealth, isProductionBackendUrl } from "@/lib/api";
 import { Button } from "@/components/ui/button";
-import { Globe } from "lucide-react";
+import { Globe, MessageCircle } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useTranslations } from "@/lib/i18n";
+import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { SocialLinks } from "@/components/SocialLinks";
 
 export default function Login({
   language = "en",
@@ -27,6 +29,9 @@ export default function Login({
     checkBackendHealth().then((ok) => {
       if (!cancelled) setLocalBackendOk(ok);
     });
+    const safety = setTimeout(() => {
+      if (!cancelled) setLocalBackendOk((v) => (v === null ? false : v));
+    }, 12000);
     const interval = setInterval(() => {
       checkBackendHealth().then((ok) => {
         if (!cancelled) setLocalBackendOk(ok);
@@ -34,6 +39,7 @@ export default function Login({
     }, 8000);
     return () => {
       cancelled = true;
+      clearTimeout(safety);
       clearInterval(interval);
     };
   }, [serverStatusProp]);
@@ -42,7 +48,7 @@ export default function Login({
     event.preventDefault();
     try {
       const response = await api.post("/auth/login", form);
-      localStorage.setItem("auth_token", response.data.access_token);
+      sessionStorage.setItem("auth_token", response.data.access_token);
       onLogin?.(response.data.access_token);
       navigate("/");
     } catch (error) {
@@ -69,12 +75,12 @@ export default function Login({
 
   return (
     <div
-      className="min-h-screen flex flex-col items-center justify-center p-6 relative"
+      className="min-h-screen flex flex-col items-center justify-center p-6 relative overflow-hidden bg-gradient-to-b from-slate-50 to-white"
       data-testid="login-page"
     >
-      {/* Background image – brightened so it appears clear */}
+      {/* Background image – clearer visibility (reduced transparency) */}
       <div
-        className="absolute inset-0"
+        className="absolute inset-0 opacity-50"
         aria-hidden="true"
         style={{
           backgroundImage: "url('/login-bg.png')",
@@ -82,43 +88,50 @@ export default function Login({
           backgroundPosition: "center",
           backgroundSize: "cover",
           backgroundColor: "#e8e8e8",
-          filter: "brightness(1.12) contrast(1.05)",
         }}
       />
-      {/* Light overlay so text and form stay readable */}
-      <div
-        className="absolute inset-0 bg-slate-900/20"
-        aria-hidden="true"
-      />
-      {/* Top bar: Al-Anjal logo on top, Cognia seal centered below it, left-aligned */}
-      <div className="absolute top-0 left-0 right-0 z-10 flex justify-start px-4 py-4 sm:px-6 sm:py-5">
-        <div className="flex flex-col items-center gap-2 sm:gap-3">
+      {/* Left column: logos top, social + Contact Us bottom, same horizontal center */}
+      <div className="absolute left-0 top-0 bottom-0 z-10 flex flex-col items-center pt-5 pb-6 px-6 w-56 sm:w-60" data-testid="login-left-column">
+        <div className="flex flex-col items-center gap-2">
           <img
             src="/logo-al-anjal.png"
-            alt="Al-Anjal Private Schools"
-            className="h-20 sm:h-24 md:h-28 w-auto object-contain"
+            alt="Al-Anjal"
+            className="h-20 sm:h-24 w-auto object-contain"
             data-testid="login-logo-school"
           />
           <img
             src="/logo-cognia.png"
-            alt="Accredited Cognia"
-            className="h-16 sm:h-18 md:h-20 w-auto object-contain"
+            alt="Cognia"
+            className="h-14 sm:h-16 w-auto object-contain"
             data-testid="login-logo-cognia"
           />
         </div>
+        <div className="mt-auto flex flex-col items-center gap-3" data-testid="login-social-contact">
+          <SocialLinks layout="column" iconSize="h-10 w-10" />
+          <a
+            href="#contact"
+            className="flex items-center justify-center gap-2 rounded-xl bg-primary text-white py-2.5 px-4 font-medium text-sm hover:bg-primary/90 transition-all duration-200 hover:translate-y-[-2px] hover:scale-[1.02] hover:shadow-md active:translate-y-0 active:scale-[0.98] shadow-lg whitespace-nowrap"
+            data-testid="login-contact-us"
+          >
+            <span className="relative flex items-center">
+              <MessageCircle className="h-4 w-4 shrink-0" />
+              <MessageCircle className="h-4 w-4 shrink-0 -ml-2.5 opacity-90" aria-hidden />
+            </span>
+            <span>{t("contact_us")}</span>
+          </a>
+        </div>
       </div>
-      <div className="relative z-10 flex w-full max-w-md flex-col items-center text-center text-white px-4 py-5 rounded-2xl bg-slate-900/35 shadow-lg" data-testid="login-welcome">
-        <h1 className="text-2xl font-semibold [text-shadow:0_1px_2px_rgba(0,0,0,0.4),0_2px_8px_rgba(0,0,0,0.35)]">{t("login_welcome_title")}</h1>
-        <p className="mt-2 text-sm font-medium [text-shadow:0_1px_2px_rgba(0,0,0,0.4),0_0_6px_rgba(0,0,0,0.3)]">{t("login_welcome_subtitle")}</p>
-        <div className="mt-4 flex items-center gap-2" data-testid="login-language-toggle">
+      {/* Language toggle top right */}
+      <div className="absolute top-0 right-0 z-10 flex items-center gap-2 px-6 py-5" data-testid="login-language-toggle">
           <Button
             size="sm"
             onClick={() => onLanguageChange?.("en")}
-            className={
+            className={cn(
+              "hover:translate-y-0 hover:scale-100",
               language === "en"
-                ? "bg-[#1f4c9a] text-white hover:bg-[#1a3f7f]"
-                : "border-[#1f4c9a] text-[#1f4c9a] hover:bg-[#1f4c9a]/10"
-            }
+                ? "bg-primary text-white hover:bg-primary/90 shadow-md"
+                : "bg-white border-2 border-slate-300 text-slate-600 hover:border-primary hover:bg-primary/5"
+            )}
             variant={language === "en" ? "default" : "outline"}
             data-testid="login-lang-en"
           >
@@ -128,33 +141,43 @@ export default function Login({
           <Button
             size="sm"
             onClick={() => onLanguageChange?.("ar")}
-            className={
+            className={cn(
+              "hover:translate-y-0 hover:scale-100",
               language === "ar"
-                ? "bg-[#1f4c9a] text-white hover:bg-[#1a3f7f]"
-                : "border-[#1f4c9a] text-[#1f4c9a] hover:bg-[#1f4c9a]/10"
-            }
+                ? "bg-primary text-white hover:bg-primary/90 shadow-md"
+                : "bg-white border-2 border-slate-300 text-slate-600 hover:border-primary hover:bg-primary/5"
+            )}
             variant={language === "ar" ? "default" : "outline"}
             data-testid="login-lang-ar"
           >
             <Globe className="mr-1 h-4 w-4" />
             AR
           </Button>
-        </div>
       </div>
+
+      {/* Hero section – Interacto style: large title + subtitle (darker green) */}
+      <div className="relative z-10 w-full max-w-lg text-center mt-24 mb-10 animate-fade-in-up" style={{ animationDuration: "0.6s" }} data-testid="login-welcome">
+        <h1 className="text-4xl sm:text-5xl font-bold tracking-tight text-[hsl(166,76%,28%)]">{t("login_welcome_title")}</h1>
+        <p className="mt-4 text-lg max-w-md mx-auto text-[hsl(166,76%,24%)]">{t("login_welcome_subtitle")}</p>
+      </div>
+
+      {/* Login card – white, shadow, rounded (no hover pop on this page) */}
       <div
-        className="relative z-10 mt-8 w-full max-w-md rounded-[28px] border-2 border-[#1f4c9a]/30 bg-white/95 backdrop-blur-sm p-2 shadow-xl"
+        className="relative z-10 w-full max-w-md rounded-2xl bg-white border border-slate-200 shadow-xl p-8 animate-scale-in"
+        style={{ animationDuration: "0.5s", animationDelay: "0.15s", animationFillMode: "backwards" }}
         data-testid="login-frame"
       >
-        <Card className="rounded-[24px] border border-[#1f4c9a]/10">
-          <CardHeader>
-            <CardTitle>{t("login_title")}</CardTitle>
+        <Card noHoverPop className="rounded-xl border-0 shadow-none bg-transparent">
+          <CardHeader className="px-0 pt-0">
+            <CardTitle className="text-xl text-[hsl(166,76%,28%)]">{t("login_title")}</CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="px-0 pb-0">
             <form className="space-y-4" onSubmit={handleLogin}>
               <Input
                 placeholder={t("username")}
                 value={form.username}
                 onChange={(event) => setForm((prev) => ({ ...prev, username: event.target.value }))}
+                className="h-11 border-slate-200 focus:ring-2 focus:ring-primary/20"
                 data-testid="login-username"
               />
               <Input
@@ -162,11 +185,12 @@ export default function Login({
                 placeholder={t("password")}
                 value={form.password}
                 onChange={(event) => setForm((prev) => ({ ...prev, password: event.target.value }))}
+                className="h-11 border-slate-200 focus:ring-2 focus:ring-primary/20"
                 data-testid="login-password"
               />
               <Button
                 type="submit"
-                className="w-full"
+                className="w-full h-11 bg-primary hover:bg-primary/90 text-white font-semibold shadow-md"
                 data-testid="login-submit"
                 disabled={backendOk === false && !isProductionBackendUrl}
               >

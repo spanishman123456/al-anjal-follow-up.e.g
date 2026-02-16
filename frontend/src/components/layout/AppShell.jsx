@@ -15,6 +15,7 @@ import {
   LogOut,
   ChevronDown,
   ChevronRight,
+  MessageCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useTranslations } from "@/lib/i18n";
@@ -41,6 +42,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { SocialLinks } from "@/components/SocialLinks";
 
 export const AppShell = ({
   language,
@@ -63,11 +65,15 @@ export const AppShell = ({
   const [profile, setProfile] = useState(null);
   const [notifications, setNotifications] = useState([]);
   const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
-  const navKeyFromContext = `nav-s${semester === "semester2" ? 2 : 1}-q${quarter}`;
-  const [expandedNavKey, setExpandedNavKey] = useState(navKeyFromContext);
+
+  // Keep URL in sync with header semester/quarter when on quarter-specific pages
   useEffect(() => {
-    setExpandedNavKey(navKeyFromContext);
-  }, [navKeyFromContext]);
+    const path = location.pathname;
+    if (quarter === 2 && path === "/assessment-marks") navigate("/assessment-marks-q2", { replace: true });
+    else if (quarter === 2 && path === "/final-exams-assessment") navigate("/final-exams-assessment-q2", { replace: true });
+    else if (quarter === 1 && path === "/assessment-marks-q2") navigate("/assessment-marks", { replace: true });
+    else if (quarter === 1 && path === "/final-exams-assessment-q2") navigate("/final-exams-assessment", { replace: true });
+  }, [quarter, location.pathname, navigate]);
 
   const loadProfile = async () => {
     try {
@@ -115,62 +121,25 @@ export const AppShell = ({
   };
 
   const confirmLogout = () => {
-    localStorage.removeItem("auth_token");
+    sessionStorage.removeItem("auth_token");
     window.location.href = "/login";
   };
   const allNavItems = [
     { to: "/", label: t("dashboard"), icon: LayoutDashboard, testId: "nav-dashboard-link", roles: ["Admin", "Teacher"] },
+    { to: "/students", label: t("assessment"), icon: FileText, testId: "nav-students", roles: ["Admin", "Teacher"] },
     {
-      label: t("semester_one_quarter_one"),
+      to: quarter === 2 ? "/assessment-marks-q2" : "/assessment-marks",
+      label: t("nav_quizzes_chapter_test"),
       icon: FileText,
-      testId: "nav-s1-q1",
+      testId: "nav-assessment-marks",
       roles: ["Admin", "Teacher"],
-      semesterForGroup: "semester1",
-      quarterForGroup: 1,
-      children: [
-        { to: "/students", label: t("assessment"), testId: "nav-students-s1-q1" },
-        { to: "/assessment-marks", label: t("quizzes_chapter_test_marks"), testId: "nav-assessment-s1-q1" },
-        { to: "/final-exams-assessment", label: t("final_exams_assessment"), testId: "nav-final-exams-s1-q1" },
-      ],
     },
     {
-      label: t("semester_one_quarter_two"),
+      to: quarter === 2 ? "/final-exams-assessment-q2" : "/final-exams-assessment",
+      label: t("nav_final_exams"),
       icon: FileText,
-      testId: "nav-s1-q2",
+      testId: "nav-final-exams",
       roles: ["Admin", "Teacher"],
-      semesterForGroup: "semester1",
-      quarterForGroup: 2,
-      children: [
-        { to: "/students", label: t("assessment"), testId: "nav-students-s1-q2" },
-        { to: "/assessment-marks-q2", label: t("quizzes_chapter_test_marks"), testId: "nav-assessment-s1-q2" },
-        { to: "/final-exams-assessment-q2", label: t("final_exams_assessment"), testId: "nav-final-exams-s1-q2" },
-      ],
-    },
-    {
-      label: t("semester_two_quarter_one"),
-      icon: FileText,
-      testId: "nav-s2-q1",
-      roles: ["Admin", "Teacher"],
-      semesterForGroup: "semester2",
-      quarterForGroup: 1,
-      children: [
-        { to: "/students", label: t("assessment"), testId: "nav-students-s2-q1" },
-        { to: "/assessment-marks", label: t("quizzes_chapter_test_marks"), testId: "nav-assessment-s2-q1" },
-        { to: "/final-exams-assessment", label: t("final_exams_assessment"), testId: "nav-final-exams-s2-q1" },
-      ],
-    },
-    {
-      label: t("semester_two_quarter_two"),
-      icon: FileText,
-      testId: "nav-s2-q2",
-      roles: ["Admin", "Teacher"],
-      semesterForGroup: "semester2",
-      quarterForGroup: 2,
-      children: [
-        { to: "/students", label: t("assessment"), testId: "nav-students-s2-q2" },
-        { to: "/assessment-marks-q2", label: t("quizzes_chapter_test_marks"), testId: "nav-assessment-s2-q2" },
-        { to: "/final-exams-assessment-q2", label: t("final_exams_assessment"), testId: "nav-final-exams-s2-q2" },
-      ],
     },
     { to: "/teachers", label: t("teachers"), icon: UserRound, testId: "nav-teachers-link", roles: ["Admin"] },
     { to: "/classes", label: t("classes"), icon: GraduationCap, testId: "nav-classes-link", roles: ["Admin", "Teacher"] },
@@ -190,21 +159,15 @@ export const AppShell = ({
   return (
     <div className="min-h-screen w-full bg-background text-foreground flex flex-row" dir="ltr" data-testid="app-shell">
       <aside
-        className={`w-64 shrink-0 bg-slate-900 text-slate-100 flex flex-col justify-between ${
+        className={`w-64 shrink-0 text-white flex flex-col justify-between bg-gradient-to-b from-[hsl(166,76%,28%)] via-[hsl(166,76%,24%)] to-[hsl(172,66%,22%)] shadow-xl ${
           isRTL ? "order-2" : "order-1"
         }`}
         data-testid="sidebar"
         dir={isRTL ? "rtl" : undefined}
       >
         <div>
-          <div className="px-6 py-6 border-b border-slate-800">
-            <div className="flex items-center gap-3" data-testid="brand-block">
-              <div
-                className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/20 text-primary"
-                data-testid="brand-icon"
-              >
-                ET
-              </div>
+          <div className="px-6 py-6 border-b border-white/15">
+            <div className="flex items-center animate-fade-in" data-testid="brand-block">
               <div>
                 <p
                   className="text-sm font-semibold text-white"
@@ -213,7 +176,7 @@ export const AppShell = ({
                   {t("app_name")}
                 </p>
                 <p
-                  className="text-xs text-slate-400"
+                  className="text-xs text-white/70"
                   data-testid="brand-subtitle"
                 >
                   {t("app_subtitle")}
@@ -236,10 +199,10 @@ export const AppShell = ({
                       type="button"
                       data-testid={item.testId}
                       onClick={() => setExpandedNavKey((k) => (k === item.testId ? null : item.testId))}
-                      className={`pointer-events-auto flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                      className={                  `pointer-events-auto flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium nav-item-pop ${
                         isChildActive
-                          ? "bg-slate-800 text-white"
-                          : "text-slate-300 hover:bg-slate-800/60 hover:text-white"
+                          ? "bg-white/20 text-white"
+                          : "text-white/85 hover:bg-white/15 hover:text-white"
                       }`}
                     >
                       <Icon className="h-4 w-4 shrink-0" />
@@ -257,13 +220,9 @@ export const AppShell = ({
                             key={child.to}
                             to={child.to}
                             data-testid={child.testId}
-                            onClick={() => {
-                              if (item.semesterForGroup) setSemester(item.semesterForGroup);
-                              if (item.quarterForGroup != null) setQuarter(item.quarterForGroup);
-                            }}
                             className={({ isActive }) =>
-                              `flex items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors ${
-                                isActive ? "bg-slate-800 text-white" : "text-slate-400 hover:bg-slate-800/60 hover:text-white"
+                              `flex items-center gap-2 rounded-md px-2 py-1.5 text-sm nav-item-pop ${
+                                isActive ? "bg-white/20 text-white" : "text-white/75 hover:bg-white/15 hover:text-white"
                               }`
                             }
                           >
@@ -282,10 +241,10 @@ export const AppShell = ({
                   to={item.to}
                   data-testid={item.testId}
                   className={({ isActive }) =>
-                    `pointer-events-auto flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                    `pointer-events-auto flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium nav-item-pop ${
                       isActive
-                        ? "bg-slate-800 text-white"
-                        : "text-slate-300 hover:bg-slate-800/60 hover:text-white"
+                        ? "bg-white/20 text-white"
+                        : "text-white/85 hover:bg-white/15 hover:text-white"
                     }`
                   }
                 >
@@ -296,10 +255,10 @@ export const AppShell = ({
             })}
           </nav>
         </div>
-        <div className="px-4 pb-6" data-testid="sidebar-footer">
-          <div className="rounded-xl bg-slate-800/60 px-4 py-4">
+        <div className="px-4 pb-6 space-y-4" data-testid="sidebar-footer">
+          <div className="rounded-xl bg-white/10 px-4 py-4 backdrop-blur-sm border border-white/15 shadow-lg">
             <p
-              className="text-xs uppercase tracking-[0.2em] text-slate-400"
+              className="text-xs uppercase tracking-[0.2em] text-white/70"
               data-testid="sidebar-login-label"
             >
               Logged in as
@@ -311,10 +270,27 @@ export const AppShell = ({
               {profile?.name || "Administrator"}
             </p>
             <p
-              className="text-xs text-slate-400" data-testid="sidebar-login-role">
+              className="text-xs text-white/70" data-testid="sidebar-login-role">
               {profile?.role_name || "Admin"}
             </p>
           </div>
+          <a
+            href="#contact"
+            className="flex items-center justify-center gap-2 w-full rounded-xl bg-primary text-white py-2.5 px-4 font-medium text-sm hover:bg-primary/90 transition-all duration-200 hover:translate-y-[-2px] hover:scale-[1.02] hover:shadow-md active:translate-y-0 active:scale-[0.98] shadow-lg"
+            data-testid="sidebar-contact-us"
+          >
+            <span className="relative flex items-center">
+              <MessageCircle className="h-4 w-4 shrink-0" />
+              <MessageCircle className="h-4 w-4 shrink-0 -ml-2.5 opacity-90" aria-hidden />
+            </span>
+            <span>{t("contact_us")}</span>
+          </a>
+          <div data-testid="sidebar-social">
+            <SocialLinks layout="row" className="flex-wrap" />
+          </div>
+          <p className="text-xs text-white/60 text-center" data-testid="sidebar-copyright">
+            {t("sidebar_copyright")}
+          </p>
         </div>
       </aside>
       <div
@@ -323,8 +299,8 @@ export const AppShell = ({
         dir={isRTL ? "rtl" : undefined}
       >
         <header
-          className="flex flex-col gap-4 border-b border-border/50 px-6 py-4 backdrop-blur"
-          style={{ background: "hsl(var(--section-header))" }}
+          className="flex flex-col gap-4 border-b border-border/50 px-6 py-4 backdrop-blur-md glass-panel"
+          style={{ background: "hsl(var(--section-header) / 0.92)" }}
           data-testid="top-header"
         >
           <div className="flex flex-wrap items-center justify-between gap-4">
@@ -465,29 +441,34 @@ export const AppShell = ({
           >
             {t("academic_year")}: {academicYear}
           </div>
-          <Select value={semester} onValueChange={setSemester}>
+          <Select
+            value={`${semester}-${quarter}`}
+            onValueChange={(value) => {
+              const [s, q] = value.split("-");
+              if (s) setSemester(s === "semester2" ? "semester2" : "semester1");
+              if (q) setQuarter(parseInt(q, 10) === 2 ? 2 : 1);
+            }}
+            data-testid="semester-quarter-select"
+          >
             <SelectTrigger
-              className="w-[180px] rounded-full border border-border/80 bg-muted px-4 py-2 text-sm font-medium shadow-sm data-[state=open]:bg-muted"
-              data-testid="semester-select"
+              className="w-[220px] rounded-full border border-border/80 bg-muted px-4 py-2 text-sm font-medium shadow-sm data-[state=open]:bg-muted"
+              data-testid="semester-quarter-trigger"
             >
-              <SelectValue placeholder={t("semesters")} />
+              <SelectValue placeholder={t("select_semester_quarter")} />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="semester1" data-testid="semester-one-option">
-                {t("semester_one")}
+              <SelectItem value="semester1-1" data-testid="option-s1-q1">
+                {t("semester_one_quarter_one")}
               </SelectItem>
-              <SelectItem value="semester2" data-testid="semester-two-option">
-                {t("semester_two")}
+              <SelectItem value="semester1-2" data-testid="option-s1-q2">
+                {t("semester_one_quarter_two")}
               </SelectItem>
-            </SelectContent>
-          </Select>
-          <Select value={String(quarter)} onValueChange={(v) => setQuarter(parseInt(v, 10))}>
-            <SelectTrigger className="w-[160px] rounded-full border border-border/80 bg-muted px-4 py-2 text-sm font-medium shadow-sm" data-testid="quarter-select">
-              <SelectValue placeholder={t("quarter")} />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="1" data-testid="quarter-one-option">{t("quarter_one")}</SelectItem>
-              <SelectItem value="2" data-testid="quarter-two-option">{t("quarter_two")}</SelectItem>
+              <SelectItem value="semester2-1" data-testid="option-s2-q1">
+                {t("semester_two_quarter_one")}
+              </SelectItem>
+              <SelectItem value="semester2-2" data-testid="option-s2-q2">
+                {t("semester_two_quarter_two")}
+              </SelectItem>
             </SelectContent>
           </Select>
           <Button
@@ -500,7 +481,11 @@ export const AppShell = ({
             {t("refresh_data")}
           </Button>
         </div>
-        <main className="page-content-bg flex-1 px-6 py-8" data-testid="main-content">
+        <main
+          className="page-content-bg flex-1 px-6 py-8 page-enter"
+          data-testid="main-content"
+          style={theme === "dark" ? undefined : { background: "#f1f1f2" }}
+        >
           <Outlet
             context={{
               language,

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useOutletContext, useParams, useNavigate, Navigate } from "react-router-dom";
 import { api } from "@/lib/api";
 import { useTranslations } from "@/lib/i18n";
+import { sortByClassOrder } from "@/lib/utils";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -200,7 +201,7 @@ export default function TeacherProfile() {
           <CardTitle>{t("assigned_classes")}</CardTitle>
         </CardHeader>
         <CardContent className="flex flex-wrap gap-3">
-          {classes.map((cls) => (
+          {sortByClassOrder(classes).map((cls) => (
             <label key={cls.id} className="flex items-center gap-2 text-sm">
               <input
                 type="checkbox"

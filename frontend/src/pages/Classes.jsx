@@ -27,6 +27,8 @@ export default function Classes() {
   const [form, setForm] = useState({ name: "", grade: "", section: "" });
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [selectedClass, setSelectedClass] = useState(null);
+  const [clearScoresDialogOpen, setClearScoresDialogOpen] = useState(false);
+  const [classToClear, setClassToClear] = useState(null);
 
   const loadClasses = async () => {
     try {
@@ -110,6 +112,26 @@ export default function Classes() {
     setDeleteDialogOpen(true);
   };
 
+  const openClearScoresDialog = (cls) => {
+    setClassToClear(cls);
+    setClearScoresDialogOpen(true);
+  };
+
+  const handleClearQuarterScores = async () => {
+    if (!classToClear) return;
+    try {
+      await api.delete(`/classes/${classToClear.class_id}/quarter-scores`, {
+        params: { semester: semesterNumber, quarter },
+      });
+      toast.success(t("clear_quarter_scores_done"));
+      setClearScoresDialogOpen(false);
+      setClassToClear(null);
+      loadClasses();
+    } catch (error) {
+      toast.error(getApiErrorMessage(error) || t("clear_quarter_scores_failed"));
+    }
+  };
+
   const handleDeleteClass = async () => {
     if (!selectedClass) return;
     try {
@@ -175,9 +197,9 @@ export default function Classes() {
         </CardContent>
       </Card>
 
-      <section className="section-bg-alt-1 grid gap-6 rounded-xl border border-border/50 p-4 md:grid-cols-2 xl:grid-cols-3" data-testid="classes-grid">
+      <section className="section-bg-alt-1 grid gap-6 rounded-xl border border-border/50 p-4 md:grid-cols-2 xl:grid-cols-3 animate-stagger" data-testid="classes-grid">
         {classes.map((cls) => (
-          <Card key={cls.class_id} data-testid={`class-card-${cls.class_id}`}>
+          <Card key={cls.class_id} className="card-hover" data-testid={`class-card-${cls.class_id}`}>
             <CardHeader className="flex flex-row items-start justify-between">
               <CardTitle data-testid={`class-card-title-${cls.class_id}`}>
                 {cls.class_name}
@@ -225,6 +247,11 @@ export default function Classes() {
                 <div className="rounded-md bg-slate-100 px-2 py-1 text-slate-600 dark:bg-slate-800 dark:text-slate-400">
                   {t("need_support")}: {cls.students_needing_support_count ?? 0}
                 </div>
+                {(cls.distribution?.no_data ?? 0) > 0 && (
+                  <div className="col-span-2 rounded-md bg-slate-100 px-2 py-1 text-slate-600 dark:bg-slate-800 dark:text-slate-400">
+                    {t("no_data")}: {cls.distribution.no_data}
+                  </div>
+                )}
               </div>
               <div className="flex flex-wrap gap-2 border-t border-border/60 pt-2">
                 <Link
@@ -241,6 +268,14 @@ export default function Classes() {
                 >
                   {t("second_quarter_marks")}
                 </Link>
+                <button
+                  type="button"
+                  onClick={() => openClearScoresDialog(cls)}
+                  className="text-xs font-medium text-muted-foreground hover:text-destructive hover:underline"
+                  data-testid={`class-clear-scores-${cls.class_id}`}
+                >
+                  {t("clear_quarter_scores")}
+                </button>
               </div>
             </CardContent>
           </Card>
@@ -297,6 +332,25 @@ export default function Classes() {
             </Button>
             <Button variant="destructive" onClick={handleDeleteClass} data-testid="delete-class-confirm">
               {t("delete")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={clearScoresDialogOpen} onOpenChange={setClearScoresDialogOpen}>
+        <DialogContent data-testid="clear-quarter-scores-dialog">
+          <DialogHeader>
+            <DialogTitle>{t("clear_quarter_scores")}</DialogTitle>
+            <DialogDescription>
+              {classToClear ? classToClear.class_name : ""} — {t("clear_quarter_scores_confirm")}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setClearScoresDialogOpen(false)} data-testid="clear-scores-cancel">
+              {t("cancel")}
+            </Button>
+            <Button variant="destructive" onClick={handleClearQuarterScores} data-testid="clear-scores-confirm">
+              {t("clear_quarter_scores")}
             </Button>
           </DialogFooter>
         </DialogContent>

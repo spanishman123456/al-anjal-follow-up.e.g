@@ -6,7 +6,8 @@ const API_BASE = `${BACKEND_ROOT}/api`;
 
 // Render free tier spins down after ~15 min; cold start can take 50+ seconds
 const isProductionBackend = (BACKEND_ROOT || "").includes("onrender.com");
-const HEALTH_CHECK_MS = isProductionBackend ? 90000 : 4000;
+// Short timeout so "Checking server" doesn't block the login page for minutes; login request itself can wait longer
+const HEALTH_CHECK_MS = 10000;
 const API_TIMEOUT_MS = isProductionBackend ? 120000 : 30000; // 2 min for production (bulk save can be slow)
 /** Use for bulk-scores and other long-running writes to avoid timeout. */
 export const BULK_SAVE_TIMEOUT_MS = isProductionBackend ? 180000 : 60000; // 3 min prod, 1 min dev
@@ -32,7 +33,7 @@ export async function checkBackendHealth() {
 export const isProductionBackendUrl = isProductionBackend;
 
 api.interceptors.request.use((config) => {
-  const token = localStorage.getItem("auth_token");
+  const token = sessionStorage.getItem("auth_token");
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
@@ -43,10 +44,8 @@ api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error?.response?.status === 401) {
-      localStorage.removeItem("auth_token");
-      if (window.location.pathname !== "/login") {
-        window.location.href = "/login";
-      }
+      sessionStorage.removeItem("auth_token");
+      window.dispatchEvent(new CustomEvent("auth-logout"));
     }
     return Promise.reject(error);
   },

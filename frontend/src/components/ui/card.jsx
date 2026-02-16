@@ -2,9 +2,10 @@ import * as React from "react"
 
 import { cn } from "@/lib/utils"
 
-const Card = React.forwardRef(({ className, ...props }, ref) => (
+const Card = React.forwardRef(({ className, noHoverPop, ...props }, ref) => (
   <div
     ref={ref}
+    data-card-pop={noHoverPop ? undefined : "true"}
     className={cn("rounded-xl border-2 border-border bg-card text-card-foreground shadow", className)}
     {...props} />
 ))

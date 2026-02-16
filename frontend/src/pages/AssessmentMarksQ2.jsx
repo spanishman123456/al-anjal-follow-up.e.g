@@ -6,7 +6,7 @@ import { useTranslations } from "@/lib/i18n";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { PerformanceLevelPopper } from "@/components/PerformanceLevelPopper";
 import {
   Table,
   TableBody,
@@ -32,13 +32,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { AssessmentPageFooter } from "@/components/AssessmentPageFooter";
-
-const levelStyles = {
-  on_level: "bg-emerald-100 text-emerald-700",
-  approach: "bg-amber-100 text-amber-700",
-  below: "bg-rose-100 text-rose-700",
-  no_data: "bg-slate-100 text-slate-600",
-};
+import { sortByClassOrder } from "@/lib/utils";
 
 const formatScore = (value, suffix = "") => {
   if (value === null || value === undefined) {
@@ -470,7 +464,7 @@ export default function AssessmentMarksQ2() {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">{t("all_classes")}</SelectItem>
-              {classes.map((cls) => (
+              {sortByClassOrder(classes).map((cls) => (
                 <SelectItem key={cls.id} value={cls.id}>
                   {cls.name}
                 </SelectItem>
@@ -661,9 +655,11 @@ export default function AssessmentMarksQ2() {
                         {formatScore(total, "/30")}
                       </TableCell>
                       <TableCell className="text-center">
-                        <Badge className={levelStyles[perfLevel]} data-testid={`assessment-perf-${student.id}`}>
-                          {t(perfLevel)}
-                        </Badge>
+                        <PerformanceLevelPopper
+                          level={perfLevel}
+                          label={t(perfLevel)}
+                          data-testid={`assessment-perf-${student.id}`}
+                        />
                       </TableCell>
                     </TableRow>
                   );

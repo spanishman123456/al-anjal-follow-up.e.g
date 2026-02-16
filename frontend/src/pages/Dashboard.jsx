@@ -14,6 +14,7 @@ import {
 import { toast } from "sonner";
 import { api, getApiErrorMessage } from "@/lib/api";
 import { useTranslations } from "@/lib/i18n";
+import { sortByClassOrder } from "@/lib/utils";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -107,7 +108,7 @@ export default function Dashboard() {
     level: item.level,
   }));
 
-  const classData = summary?.students_per_class || [];
+  const classData = sortByClassOrder(summary?.students_per_class || []);
   const supportCount = summary
     ? (summary.counts?.approach || 0) + (summary.counts?.below || 0)
     : 0;
@@ -244,8 +245,8 @@ export default function Dashboard() {
         </Card>
       </section>
 
-      <section className="section-bg-alt-2 grid gap-6 rounded-xl border border-border/50 p-4 lg:grid-cols-3" data-testid="dashboard-main">
-        <Card className="lg:col-span-2" data-testid="dashboard-distribution">
+      <section className="section-bg-alt-2 grid gap-6 rounded-xl border border-border/50 p-4 lg:grid-cols-3 animate-stagger" data-testid="dashboard-main">
+        <Card className="lg:col-span-2 card-hover" data-testid="dashboard-distribution">
           <CardHeader>
             <CardTitle data-testid="dashboard-distribution-title">
               {t("performance_distribution")}
@@ -291,7 +292,7 @@ export default function Dashboard() {
         </Card>
 
         {!isTeacher && (
-          <Card data-testid="dashboard-import">
+          <Card className="card-hover" data-testid="dashboard-import">
             <CardHeader>
               <CardTitle data-testid="dashboard-import-title">
                 {t("import_excel")}
@@ -323,7 +324,7 @@ export default function Dashboard() {
       </section>
 
       <section className="grid gap-6 lg:grid-cols-3" data-testid="dashboard-lists">
-        <Card className="lg:col-span-2" data-testid="dashboard-class-counts">
+        <Card className="lg:col-span-2 card-hover" data-testid="dashboard-class-counts">
           <CardHeader>
             <CardTitle data-testid="dashboard-class-counts-title">
               {t("students_per_class")}
@@ -342,7 +343,7 @@ export default function Dashboard() {
             </div>
           </CardContent>
         </Card>
-        <Card data-testid="dashboard-support-list">
+        <Card className="card-hover" data-testid="dashboard-support-list">
           <CardHeader>
             <CardTitle data-testid="dashboard-support-title">
               {t("students_needing_support")}
@@ -382,7 +383,7 @@ export default function Dashboard() {
       </section>
 
       <section className="grid gap-6 lg:grid-cols-2" data-testid="dashboard-performers">
-        <Card data-testid="dashboard-top-performers">
+        <Card className="card-hover" data-testid="dashboard-top-performers">
           <CardHeader>
             <CardTitle data-testid="dashboard-top-performers-title">
               {t("top_performers")}
@@ -419,7 +420,7 @@ export default function Dashboard() {
             )}
           </CardContent>
         </Card>
-        <Card data-testid="dashboard-average-scores">
+        <Card className="card-hover" data-testid="dashboard-average-scores">
           <CardHeader>
             <CardTitle data-testid="dashboard-average-title">
               {t("avg_total_score")}

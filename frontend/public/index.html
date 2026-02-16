@@ -1,6 +1,18 @@
 <!doctype html>
 <html lang="en">
     <head>
+        <script>
+          // Run before any bundle: suppress ResizeObserver loop errors so the dev overlay does not show
+          (function() {
+            window.addEventListener('error', function(e) {
+              if (e.message && (e.message.indexOf('ResizeObserver loop') !== -1)) {
+                e.stopImmediatePropagation();
+                e.preventDefault();
+                return true;
+              }
+            }, true);
+          })();
+        </script>
         <meta charset="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <meta name="theme-color" content="#000000" />

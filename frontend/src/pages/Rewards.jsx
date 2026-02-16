@@ -29,100 +29,6 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { MoreVertical, Award, FileText, MessageCircle, PartyPopper } from "lucide-react";
 
-/** Celebration overlay: realistic UHD-style confetti explosion blast on vibrant blue */
-function CelebrationOverlay({ studentName, onClose }) {
-  useEffect(() => {
-    const t = setTimeout(onClose, 4500);
-    return () => clearTimeout(t);
-  }, [onClose]);
-
-  const directions = [
-    { name: "n" }, { name: "ne" }, { name: "e" }, { name: "se" },
-    { name: "s" }, { name: "sw" }, { name: "w" }, { name: "nw" },
-  ];
-  const colors = [
-    "#dc2626", "#ef4444", "#eab308", "#fbbf24", "#84cc16", "#22c55e",
-    "#ec4899", "#d946ef", "#f472b6", "#f97316", "#ffffff", "#fef08a",
-  ];
-  const shapes = ["circle", "strip", "square", "triangle", "plus", "strip", "square", "circle", "triangle"];
-  const confetti = Array.from({ length: 220 }, (_, i) => {
-    const d = directions[i % 8];
-    const dist = 45 + (i % 14) * 6 + (i % 3) * 4;
-    const delay = (i % 30) * 0.015;
-    const shape = shapes[i % shapes.length];
-    const rot = 360 + (i % 5) * 360;
-    let size;
-    if (shape === "strip") size = { w: 8 + (i % 5) * 3, h: 2 };
-    else if (shape === "square") size = 5 + (i % 3);
-    else if (shape === "triangle") size = 6 + (i % 3);
-    else if (shape === "plus") size = 6 + (i % 2) * 2;
-    else size = 4 + (i % 3);
-    return { ...d, dist, delay, color: colors[i % colors.length], shape, rot, size };
-  });
-
-  return (
-    <div
-      className="fixed inset-0 z-[100] flex items-center justify-center bg-gradient-to-br from-blue-500 via-blue-600 to-indigo-700 animate-in fade-in duration-300"
-      data-testid="rewards-celebration-overlay"
-      aria-modal="true"
-      role="dialog"
-    >
-      {/* Confetti explosion: squares, triangles, plus signs, circles, strips */}
-      <div className="absolute inset-0 flex items-center justify-center pointer-events-none overflow-hidden">
-        {confetti.map((p, i) => {
-          const isCircle = p.shape === "circle";
-          const isStrip = p.shape === "strip";
-          const isTriangle = p.shape === "triangle";
-          const isPlus = p.shape === "plus";
-          const w = isStrip ? p.size.w : (isCircle ? p.size : isTriangle || isPlus ? p.size : p.size);
-          const h = isStrip ? p.size.h : (isCircle ? p.size : isTriangle || isPlus ? p.size : p.size);
-          const baseStyle = {
-            left: "50%",
-            top: "50%",
-            marginLeft: -w / 2,
-            marginTop: -h / 2,
-            width: w,
-            height: h,
-            ["--dist"]: `${p.dist}vh`,
-            ["--rot"]: `${p.rot}deg`,
-            animation: `rewards-confetti-${p.name} 2.1s ease-out ${p.delay}s forwards`,
-          };
-          if (isPlus) {
-            return (
-              <div key={i} className="absolute confetti-blast-particle flex items-center justify-center" style={baseStyle}>
-                <span style={{ position: "absolute", width: 2, height: h, background: p.color, borderRadius: 1 }} />
-                <span style={{ position: "absolute", width: w, height: 2, background: p.color, borderRadius: 1 }} />
-              </div>
-            );
-          }
-          return (
-            <div
-              key={i}
-              className="absolute confetti-blast-particle"
-              style={{
-                ...baseStyle,
-                borderRadius: isCircle ? "50%" : isStrip ? "1px" : "1px",
-                background: p.color,
-                clipPath: isTriangle ? "polygon(50% 0%, 0% 100%, 100% 100%)" : undefined,
-                boxShadow: "0 0 1px rgba(0,0,0,0.15)",
-              }}
-            />
-          );
-        })}
-      </div>
-      {/* Center card */}
-      <div className="relative z-10 text-center px-8 py-10 bg-white/95 backdrop-blur rounded-2xl shadow-2xl border-2 border-amber-300/80 animate-in zoom-in-95 duration-500">
-        <div className="flex justify-center mb-4">
-          <PartyPopper className="h-20 w-20 text-amber-500 drop-shadow-md" strokeWidth={1.5} />
-        </div>
-        <p className="text-slate-500 text-sm uppercase tracking-wider mb-1 font-medium">Congratulations!</p>
-        <h2 className="text-2xl font-bold text-slate-800 mb-2">{studentName}</h2>
-        <p className="text-amber-600 font-medium">Great job! Keep up the excellent work.</p>
-      </div>
-    </div>
-  );
-}
-
 /** Certificate dialog for a rewarded student */
 function CertificateDialog({ reward, open, onOpenChange }) {
   if (!reward) return null;
@@ -176,7 +82,6 @@ export default function Rewards() {
   const { language } = useOutletContext();
   const t = useTranslations(language);
   const [students, setStudents] = useState([]);
-  const [celebrationFor, setCelebrationFor] = useState(null);
   const [badgeRewardIds, setBadgeRewardIds] = useState(() => getRewardSetsFromStorage().badge);
   const [certificateRewardIds, setCertificateRewardIds] = useState(() => getRewardSetsFromStorage().certificate);
   const [commentRewardIds, setCommentRewardIds] = useState(() => getRewardSetsFromStorage().comment);
@@ -210,7 +115,7 @@ export default function Rewards() {
       const next = new Set(prev);
       if (adding) {
         next.add(key);
-        setCelebrationFor({ studentName: student.full_name });
+        toast.success(`${student.full_name} ${t("rewarded") || "rewarded"}!`);
       } else next.delete(key);
       return next;
     });
@@ -397,54 +302,11 @@ export default function Rewards() {
         </CardContent>
       </Card>
 
-      {celebrationFor && (
-        <CelebrationOverlay
-          studentName={celebrationFor.studentName}
-          onClose={() => setCelebrationFor(null)}
-        />
-      )}
-
       <CertificateDialog
         reward={certificateFor}
         open={!!certificateFor}
         onOpenChange={(open) => !open && setCertificateFor(null)}
       />
-
-      <style>{`
-        .confetti-blast-particle { transform: translate(-50%, -50%); will-change: transform, opacity; }
-        @keyframes rewards-confetti-n {
-          0% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
-          to { transform: translate(-50%, calc(-50% - var(--dist, 80vh))) rotate(var(--rot, 0deg)); opacity: 0.7; }
-        }
-        @keyframes rewards-confetti-ne {
-          0% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
-          to { transform: translate(calc(-50% + var(--dist, 80vh) * 0.7), calc(-50% - var(--dist, 80vh) * 0.7)) rotate(var(--rot, 0deg)); opacity: 0.7; }
-        }
-        @keyframes rewards-confetti-e {
-          0% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
-          to { transform: translate(calc(-50% + var(--dist, 80vh)), -50%) rotate(var(--rot, 0deg)); opacity: 0.7; }
-        }
-        @keyframes rewards-confetti-se {
-          0% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
-          to { transform: translate(calc(-50% + var(--dist, 80vh) * 0.7), calc(-50% + var(--dist, 80vh) * 0.7)) rotate(var(--rot, 0deg)); opacity: 0.7; }
-        }
-        @keyframes rewards-confetti-s {
-          0% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
-          to { transform: translate(-50%, calc(-50% + var(--dist, 80vh))) rotate(var(--rot, 0deg)); opacity: 0.7; }
-        }
-        @keyframes rewards-confetti-sw {
-          0% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
-          to { transform: translate(calc(-50% - var(--dist, 80vh) * 0.7), calc(-50% + var(--dist, 80vh) * 0.7)) rotate(var(--rot, 0deg)); opacity: 0.7; }
-        }
-        @keyframes rewards-confetti-w {
-          0% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
-          to { transform: translate(calc(-50% - var(--dist, 80vh)), -50%) rotate(var(--rot, 0deg)); opacity: 0.7; }
-        }
-        @keyframes rewards-confetti-nw {
-          0% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
-          to { transform: translate(calc(-50% - var(--dist, 80vh) * 0.7), calc(-50% - var(--dist, 80vh) * 0.7)) rotate(var(--rot, 0deg)); opacity: 0.7; }
-        }
-      `}</style>
     </div>
   );
 }

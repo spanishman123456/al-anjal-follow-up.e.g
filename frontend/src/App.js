@@ -1,26 +1,57 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, lazy, Suspense, Component } from "react";
 import "@/App.css";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AppShell } from "@/components/layout/AppShell";
 import { api, checkBackendHealth } from "@/lib/api";
-import Dashboard from "@/pages/Dashboard";
-import Students from "@/pages/Students";
-import AssessmentMarks from "@/pages/AssessmentMarks";
-import FinalExamsAssessment from "@/pages/FinalExamsAssessment";
-import AssessmentMarksQ2 from "@/pages/AssessmentMarksQ2";
-import FinalExamsAssessmentQ2 from "@/pages/FinalExamsAssessmentQ2";
-import Teachers from "@/pages/Teachers";
-import TeacherProfile from "@/pages/TeacherProfile";
-import Classes from "@/pages/Classes";
-import Analytics from "@/pages/Analytics";
-import RemedialPlans from "@/pages/RemedialPlans";
-import Rewards from "@/pages/Rewards";
-import Reports from "@/pages/Reports";
-import Settings from "@/pages/Settings";
-import Calendar from "@/pages/Calendar";
-import Notifications from "@/pages/Notifications";
 import Login from "@/pages/Login";
 import { Toaster } from "@/components/ui/sonner";
+
+const Dashboard = lazy(() => import("@/pages/Dashboard"));
+const Students = lazy(() => import("@/pages/Students"));
+const AssessmentMarks = lazy(() => import("@/pages/AssessmentMarks"));
+const FinalExamsAssessment = lazy(() => import("@/pages/FinalExamsAssessment"));
+const AssessmentMarksQ2 = lazy(() => import("@/pages/AssessmentMarksQ2"));
+const FinalExamsAssessmentQ2 = lazy(() => import("@/pages/FinalExamsAssessmentQ2"));
+const Teachers = lazy(() => import("@/pages/Teachers"));
+const TeacherProfile = lazy(() => import("@/pages/TeacherProfile"));
+const Classes = lazy(() => import("@/pages/Classes"));
+const Analytics = lazy(() => import("@/pages/Analytics"));
+const RemedialPlans = lazy(() => import("@/pages/RemedialPlans"));
+const Rewards = lazy(() => import("@/pages/Rewards"));
+const Reports = lazy(() => import("@/pages/Reports"));
+const Settings = lazy(() => import("@/pages/Settings"));
+const Calendar = lazy(() => import("@/pages/Calendar"));
+const Notifications = lazy(() => import("@/pages/Notifications"));
+
+const PageFallback = () => (
+  <div className="flex min-h-[200px] items-center justify-center text-muted-foreground">
+    <span className="animate-pulse">Loading…</span>
+  </div>
+);
+
+class AppErrorBoundary extends Component {
+  state = { hasError: false };
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-background p-4 text-center">
+          <p className="text-muted-foreground">Something went wrong.</p>
+          <button
+            type="button"
+            className="rounded bg-primary px-4 py-2 text-primary-foreground"
+            onClick={() => window.location.reload()}
+          >
+            Reload page
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 function App() {
   const [language, setLanguage] = useState(() => {
@@ -33,7 +64,8 @@ function App() {
     return stored;
   });
   const [theme, setTheme] = useState("light");
-  const [token, setToken] = useState(localStorage.getItem("auth_token"));
+  const [token, setToken] = useState(() => sessionStorage.getItem("auth_token"));
+  const [authReady, setAuthReady] = useState(() => (sessionStorage.getItem("auth_token") ? null : true));
   const [semester, setSemester] = useState(
     () => localStorage.getItem("semester") || "semester1",
   );
@@ -46,12 +78,33 @@ function App() {
     return `${startYear}-${startYear + 1}`;
   })();
 
-  const [classes, setClasses] = useState([]);
-  const [classesLoaded, setClassesLoaded] = useState(false);
+  const CLASSES_CACHE_KEY = "app_classes_cache";
+  const CLASSES_CACHE_TTL_MS = 2 * 60 * 1000; // 2 minutes
+  const [classes, setClasses] = useState(() => {
+    try {
+      const raw = sessionStorage.getItem(CLASSES_CACHE_KEY);
+      if (!raw) return [];
+      const { data, at } = JSON.parse(raw);
+      if (Date.now() - at < CLASSES_CACHE_TTL_MS && Array.isArray(data)) return data;
+    } catch { /* ignore */ }
+    return [];
+  });
+  const [classesLoaded, setClassesLoaded] = useState(() => {
+    try {
+      const raw = sessionStorage.getItem(CLASSES_CACHE_KEY);
+      if (!raw) return false;
+      const { data, at } = JSON.parse(raw);
+      return Date.now() - at < CLASSES_CACHE_TTL_MS && Array.isArray(data);
+    } catch { return false; }
+  });
   const loadClasses = useCallback(async () => {
     try {
       const r = await api.get("/classes");
-      setClasses(r.data || []);
+      const list = r.data || [];
+      setClasses(list);
+      try {
+        sessionStorage.setItem(CLASSES_CACHE_KEY, JSON.stringify({ data: list, at: Date.now() }));
+      } catch { /* ignore */ }
     } catch {
       setClasses([]);
     } finally {
@@ -59,8 +112,33 @@ function App() {
     }
   }, []);
   useEffect(() => {
-    loadClasses();
-  }, [loadClasses]);
+    if (!token) return;
+    let cancelled = false;
+    api.get("/users/profile", { timeout: 10000 })
+      .then(() => { if (!cancelled) setAuthReady(true); })
+      .catch((err) => {
+        if (cancelled) return;
+        if (err?.response?.status === 401 || err?.code === "ECONNABORTED" || err?.message === "Network Error") {
+          sessionStorage.removeItem("auth_token");
+          setToken(null);
+        }
+        setAuthReady(true);
+      });
+    return () => { cancelled = true; };
+  }, [token]);
+
+  useEffect(() => {
+    const handler = () => {
+      setToken(null);
+      setAuthReady(true);
+    };
+    window.addEventListener("auth-logout", handler);
+    return () => window.removeEventListener("auth-logout", handler);
+  }, []);
+
+  useEffect(() => {
+    if (token && authReady) loadClasses();
+  }, [token, authReady, loadClasses]);
 
   useEffect(() => {
     const isArabic = language === "ar";
@@ -85,8 +163,8 @@ function App() {
     localStorage.setItem("quarter", String(quarter));
   }, [quarter]);
 
-  // Start backend health check as soon as app loads (when not logged in),
-  // so we have server status before or soon after the login form appears.
+  // Start backend health check as soon as app loads (when not logged in).
+  // Short timeout so "Checking server" doesn't block for minutes; login can still be tried.
   const [backendOk, setBackendOk] = useState(null);
   useEffect(() => {
     if (token) return;
@@ -94,6 +172,9 @@ function App() {
     checkBackendHealth().then((ok) => {
       if (!cancelled) setBackendOk(ok);
     });
+    const safety = setTimeout(() => {
+      if (!cancelled) setBackendOk((v) => (v === null ? false : v));
+    }, 12000);
     const interval = setInterval(() => {
       checkBackendHealth().then((ok) => {
         if (!cancelled) setBackendOk(ok);
@@ -101,30 +182,49 @@ function App() {
     }, 8000);
     return () => {
       cancelled = true;
+      clearTimeout(safety);
       clearInterval(interval);
     };
   }, [token]);
 
-  if (!token) {
+  const handleLogin = useCallback((newToken) => {
+    setToken(newToken);
+    setAuthReady(true);
+  }, []);
+
+  if (!token || (token && authReady === null)) {
+    if (token && authReady === null) {
+      return (
+        <AppErrorBoundary>
+          <div className="App flex min-h-screen items-center justify-center bg-background">
+            <span className="text-muted-foreground animate-pulse">Checking session…</span>
+            <Toaster richColors position="top-right" />
+          </div>
+        </AppErrorBoundary>
+      );
+    }
     return (
-      <div className="App">
-        <BrowserRouter>
-        <Login
-          language={language}
-          onLogin={setToken}
-          onLanguageChange={setLanguage}
-          serverStatus={backendOk}
-        />
-        </BrowserRouter>
-        <Toaster richColors position="top-right" />
-      </div>
+      <AppErrorBoundary>
+        <div className="App">
+          <BrowserRouter>
+            <Login
+              language={language}
+              onLogin={handleLogin}
+              onLanguageChange={setLanguage}
+              serverStatus={backendOk}
+            />
+          </BrowserRouter>
+          <Toaster richColors position="top-right" />
+        </div>
+      </AppErrorBoundary>
     );
   }
 
   return (
-    <div className="App">
-      <BrowserRouter>
-        <Routes>
+    <AppErrorBoundary>
+      <div className="App">
+        <BrowserRouter>
+          <Routes>
           <Route
             path="/"
             element={
@@ -145,27 +245,28 @@ function App() {
               />
             }
           >
-            <Route index element={<Dashboard />} />
-            <Route path="students" element={<Students />} />
-            <Route path="assessment-marks" element={<AssessmentMarks />} />
-            <Route path="final-exams-assessment" element={<FinalExamsAssessment />} />
-            <Route path="assessment-marks-q2" element={<AssessmentMarksQ2 />} />
-            <Route path="final-exams-assessment-q2" element={<FinalExamsAssessmentQ2 />} />
-            <Route path="teachers" element={<Teachers />} />
-            <Route path="teachers/:teacherId" element={<TeacherProfile />} />
-            <Route path="classes" element={<Classes />} />
-            <Route path="analytics" element={<Analytics />} />
-            <Route path="remedial-plans" element={<RemedialPlans />} />
-            <Route path="rewards" element={<Rewards />} />
-            <Route path="reports" element={<Reports />} />
-            <Route path="notifications" element={<Notifications />} />
-            <Route path="calendar" element={<Calendar />} />
-            <Route path="settings" element={<Settings />} />
+            <Route index element={<Suspense fallback={<PageFallback />}><Dashboard /></Suspense>} />
+            <Route path="students" element={<Suspense fallback={<PageFallback />}><Students /></Suspense>} />
+            <Route path="assessment-marks" element={<Suspense fallback={<PageFallback />}><AssessmentMarks /></Suspense>} />
+            <Route path="final-exams-assessment" element={<Suspense fallback={<PageFallback />}><FinalExamsAssessment /></Suspense>} />
+            <Route path="assessment-marks-q2" element={<Suspense fallback={<PageFallback />}><AssessmentMarksQ2 /></Suspense>} />
+            <Route path="final-exams-assessment-q2" element={<Suspense fallback={<PageFallback />}><FinalExamsAssessmentQ2 /></Suspense>} />
+            <Route path="teachers" element={<Suspense fallback={<PageFallback />}><Teachers /></Suspense>} />
+            <Route path="teachers/:teacherId" element={<Suspense fallback={<PageFallback />}><TeacherProfile /></Suspense>} />
+            <Route path="classes" element={<Suspense fallback={<PageFallback />}><Classes /></Suspense>} />
+            <Route path="analytics" element={<Suspense fallback={<PageFallback />}><Analytics /></Suspense>} />
+            <Route path="remedial-plans" element={<Suspense fallback={<PageFallback />}><RemedialPlans /></Suspense>} />
+            <Route path="rewards" element={<Suspense fallback={<PageFallback />}><Rewards /></Suspense>} />
+            <Route path="reports" element={<Suspense fallback={<PageFallback />}><Reports /></Suspense>} />
+            <Route path="notifications" element={<Suspense fallback={<PageFallback />}><Notifications /></Suspense>} />
+            <Route path="calendar" element={<Suspense fallback={<PageFallback />}><Calendar /></Suspense>} />
+            <Route path="settings" element={<Suspense fallback={<PageFallback />}><Settings /></Suspense>} />
           </Route>
-        </Routes>
-      </BrowserRouter>
-      <Toaster richColors position="top-right" />
-    </div>
+          </Routes>
+        </BrowserRouter>
+        <Toaster richColors position="top-right" />
+      </div>
+    </AppErrorBoundary>
   );
 }
 

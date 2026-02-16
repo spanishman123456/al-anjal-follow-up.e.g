@@ -40,18 +40,18 @@ code {
 
 @layer base {
     :root {
-        /* Soothing, easy-on-the-eyes page background (does not affect buttons) */
-        --background: 214 32% 96%;
-        --foreground: 222 47% 11%;
+        /* Clean white/light gray – Interacto style */
+        --background: 0 0% 98%;
+        --foreground: 220 20% 18%;
         --card: 0 0% 100%;
         --card-foreground: 222 47% 11%;
         --popover: 0 0% 100%;
         --popover-foreground: 222 47% 11%;
-        /* Primary: comfortable blue (main actions, e.g. Import Excel) – unchanged */
-        --primary: 217 52% 36%;
+        /* Primary: Interacto-style teal/green (main actions) */
+        --primary: 166 76% 38%;
         --primary-foreground: 0 0% 100%;
-        /* Secondary: soft teal (supporting actions, e.g. Download Template) – unchanged */
-        --secondary: 196 48% 40%;
+        /* Secondary: complementary teal (supporting actions) */
+        --secondary: 172 66% 42%;
         --secondary-foreground: 0 0% 100%;
         --muted: 212 28% 94%;
         --muted-foreground: 215 16% 46%;
@@ -67,23 +67,23 @@ code {
         /* Outline border: soft slate */
         --border: 214 28% 82%;
         --input: 214 28% 82%;
-        --ring: 217 52% 36%;
-        --chart-1: 196 48% 40%;
-        --chart-2: 217 52% 36%;
+        --ring: 166 76% 38%;
+        --chart-1: 172 66% 42%;
+        --chart-2: 166 76% 38%;
         --chart-3: 43 72% 52%;
         --chart-4: 2 56% 48%;
         --chart-5: 215 20% 65%;
         --radius: 0.75rem;
-        /* Deeper, distinct section backgrounds for dynamic visual hierarchy (light) */
+        /* Deeper, distinct section backgrounds – neutral gray (no blue tint) */
         --section-header: 0 0% 96%;
-        --section-context: 214 28% 88%;
-        --section-main: 214 26% 90%;
-        --section-toolbar: 214 24% 91%;
+        --section-context: 0 0% 92%;
+        --section-main: 0 0% 94%;
+        --section-toolbar: 0 0% 93%;
         --section-card: 0 0% 98%;
-        --section-alt-1: 210 22% 91%;
-        --section-alt-2: 200 28% 89%;
-        --section-alt-3: 220 20% 90%;
-        --section-alt-4: 215 25% 92%;
+        --section-alt-1: 0 0% 92%;
+        --section-alt-2: 0 0% 91%;
+        --section-alt-3: 0 0% 93%;
+        --section-alt-4: 0 0% 92%;
     }
     .dark {
         /* Soothing dark background – does not affect buttons */
@@ -93,9 +93,9 @@ code {
         --card-foreground: 210 40% 98%;
         --popover: 222 42% 14%;
         --popover-foreground: 210 40% 98%;
-        --primary: 217 55% 58%;
-        --primary-foreground: 222 47% 11%;
-        --secondary: 196 45% 48%;
+        --primary: 166 70% 48%;
+        --primary-foreground: 0 0% 100%;
+        --secondary: 172 60% 50%;
         --secondary-foreground: 0 0% 100%;
         --muted: 217 19% 20%;
         --muted-foreground: 215 20% 65%;
@@ -107,9 +107,9 @@ code {
         --success-foreground: 0 0% 100%;
         --border: 217 19% 35%;
         --input: 217 19% 35%;
-        --ring: 217 55% 58%;
-        --chart-1: 196 45% 48%;
-        --chart-2: 217 55% 58%;
+        --ring: 166 70% 48%;
+        --chart-1: 172 60% 50%;
+        --chart-2: 166 70% 48%;
         --chart-3: 43 72% 52%;
         --chart-4: 2 58% 52%;
         --chart-5: 215 20% 65%;
@@ -138,18 +138,139 @@ code {
     }
 }
 
-/* Page content area – deeper distinct section background */
-.page-content-bg {
-    background: hsl(var(--section-main));
+/* Motion & animation tokens (Interacto / Anjal inspired) */
+:root {
+    --motion-ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+    --motion-duration-smooth: 350ms;
+    --motion-duration-motion: 500ms;
 }
 
-/* Distinct section backgrounds – use on wrappers for dynamic, engaging layout */
-.section-toolbar-bg { background: hsl(var(--section-toolbar)); }
-.section-card-bg { background: hsl(var(--section-card)); }
+/* Stagger children for list/card entrances */
+.animate-stagger > * {
+    opacity: 0;
+    animation: fade-in-up 0.5s var(--motion-ease-out) forwards;
+}
+.animate-stagger > *:nth-child(1) { animation-delay: 0.05s; }
+.animate-stagger > *:nth-child(2) { animation-delay: 0.1s; }
+.animate-stagger > *:nth-child(3) { animation-delay: 0.15s; }
+.animate-stagger > *:nth-child(4) { animation-delay: 0.2s; }
+.animate-stagger > *:nth-child(5) { animation-delay: 0.25s; }
+.animate-stagger > *:nth-child(6) { animation-delay: 0.3s; }
+.animate-stagger > *:nth-child(7) { animation-delay: 0.35s; }
+.animate-stagger > *:nth-child(8) { animation-delay: 0.4s; }
+.animate-stagger > *:nth-child(9) { animation-delay: 0.45s; }
+.animate-stagger > *:nth-child(n+10) { animation-delay: 0.5s; }
+
+@keyframes fade-in-up {
+    from { opacity: 0; transform: translateY(14px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* Universal pop effect: cards, sections, anything with .hover-pop */
+.hover-pop {
+    transition: transform var(--motion-duration-smooth) var(--motion-ease-out),
+                box-shadow var(--motion-duration-smooth) var(--motion-ease-out);
+}
+.hover-pop:hover {
+    transform: translateY(-4px) scale(1.01);
+    box-shadow: 0 14px 32px -8px rgba(0, 0, 0, 0.14), 0 8px 24px -6px rgba(0, 0, 0, 0.08);
+}
+.dark .hover-pop:hover {
+    box-shadow: 0 14px 32px -8px rgba(0, 0, 0, 0.35), 0 8px 24px -6px rgba(0, 0, 0, 0.18);
+}
+
+/* Card: pop-up + shadow (all cards get this via Card component) */
+.card-hover,
+[data-card-pop="true"] {
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06), 0 4px 12px rgba(0, 0, 0, 0.04);
+    transition: transform var(--motion-duration-smooth) var(--motion-ease-out),
+                box-shadow var(--motion-duration-smooth) var(--motion-ease-out);
+}
+.card-hover:hover,
+[data-card-pop="true"]:hover {
+    transform: translateY(-4px) scale(1.01);
+    box-shadow: 0 14px 32px -8px rgba(0, 0, 0, 0.15), 0 8px 24px -6px rgba(0, 0, 0, 0.08);
+}
+.dark .card-hover,
+.dark [data-card-pop="true"] {
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+.dark .card-hover:hover,
+.dark [data-card-pop="true"]:hover {
+    box-shadow: 0 14px 32px -8px rgba(0, 0, 0, 0.4), 0 8px 24px -6px rgba(0, 0, 0, 0.2);
+}
+
+/* Sections: pop effect on hover */
+.section-hover {
+    transition: transform var(--motion-duration-smooth) var(--motion-ease-out),
+                box-shadow var(--motion-duration-smooth) var(--motion-ease-out);
+}
+.section-hover:hover {
+    transform: translateY(-2px) scale(1.005);
+    box-shadow: 0 10px 24px -6px rgba(0, 0, 0, 0.1), 0 4px 14px -4px rgba(0, 0, 0, 0.06);
+}
+.dark .section-hover:hover {
+    box-shadow: 0 10px 24px -6px rgba(0, 0, 0, 0.3), 0 4px 14px -4px rgba(0, 0, 0, 0.15);
+}
+
+/* Sidebar nav items: subtle pop on hover */
+.nav-item-pop {
+    transition: transform 0.2s ease-out, background-color 0.2s ease-out;
+}
+.nav-item-pop:hover {
+    transform: translateY(-1px) scale(1.02);
+}
+.nav-item-pop:active {
+    transform: translateY(0) scale(0.99);
+}
+
+/* Glass panel (Interacto / Anjal style) */
+.glass-panel {
+    background: hsl(var(--card) / 0.85);
+    -webkit-backdrop-filter: blur(12px);
+    backdrop-filter: blur(12px);
+}
+
+/* Page content entrance */
+.page-enter {
+    animation: fade-in-up 0.45s var(--motion-ease-out) forwards;
+}
+
+/* Page content area – neutral light gray (no blue); main also gets inline style in AppShell */
+.page-content-bg {
+    background: #f1f1f2 !important;
+}
+html.dark .page-content-bg {
+    background: hsl(var(--background)) !important;
+}
+
+/* Distinct section backgrounds + section pop on hover */
 .section-bg-alt-1 { background: hsl(var(--section-alt-1)); }
 .section-bg-alt-2 { background: hsl(var(--section-alt-2)); }
 .section-bg-alt-3 { background: hsl(var(--section-alt-3)); }
 .section-bg-alt-4 { background: hsl(var(--section-alt-4)); }
+.section-toolbar-bg { background: hsl(var(--section-toolbar)); }
+.section-card-bg { background: hsl(var(--section-card)); }
+.section-bg-alt-1,
+.section-bg-alt-2,
+.section-bg-alt-3,
+.section-bg-alt-4 {
+    transition: transform var(--motion-duration-smooth) var(--motion-ease-out),
+                box-shadow var(--motion-duration-smooth) var(--motion-ease-out);
+}
+.section-bg-alt-1:hover,
+.section-bg-alt-2:hover,
+.section-bg-alt-3:hover,
+.section-bg-alt-4:hover {
+    transform: translateY(-2px) scale(1.005);
+    box-shadow: 0 10px 24px -6px rgba(0, 0, 0, 0.1), 0 4px 14px -4px rgba(0, 0, 0, 0.06);
+}
+.dark .section-bg-alt-1:hover,
+.dark .section-bg-alt-2:hover,
+.dark .section-bg-alt-3:hover,
+.dark .section-bg-alt-4:hover {
+    box-shadow: 0 10px 24px -6px rgba(0, 0, 0, 0.3), 0 4px 14px -4px rgba(0, 0, 0, 0.15);
+}
 
 @layer base {
     [data-debug-wrapper="true"] {

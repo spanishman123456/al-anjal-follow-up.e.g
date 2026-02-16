@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { useTranslations } from "@/lib/i18n";
+import { sortByClassOrder } from "@/lib/utils";
 
 /**
  * Footer for assessment, quizzes, chapter marks, and final exams pages.
@@ -32,7 +33,7 @@ export function AssessmentPageFooter({ language }) {
         {t("students_per_class")}
       </p>
       <div className="flex flex-wrap gap-x-6 gap-y-1 text-sm">
-        {classSummary.map((cls) => (
+        {sortByClassOrder(classSummary).map((cls) => (
           <span
             key={cls.class_id}
             className="text-foreground/90"

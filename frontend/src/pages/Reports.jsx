@@ -424,7 +424,7 @@ export default function Reports() {
           </div>
 
           {/* Analysis insights: strengths, weaknesses, performance, standout data, actions, recommendations */}
-          <section className="grid gap-4 rounded-xl border border-border/50 p-4 md:grid-cols-2" data-testid="reports-insights">
+          <section className="section-hover grid gap-4 rounded-xl border border-border/50 p-4 md:grid-cols-2" data-testid="reports-insights">
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="text-base text-emerald-700 dark:text-emerald-400">{t("analysis_strengths")}</CardTitle>

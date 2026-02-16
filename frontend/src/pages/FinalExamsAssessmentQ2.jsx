@@ -32,6 +32,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { AssessmentPageFooter } from "@/components/AssessmentPageFooter";
+import { sortByClassOrder } from "@/lib/utils";
 
 const levelStyles = {
   on_level: "bg-emerald-100 text-emerald-700",
@@ -423,7 +424,7 @@ export default function FinalExamsAssessmentQ2() {
             <SelectTrigger><SelectValue placeholder={t("select_class")} /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">{t("all_classes")}</SelectItem>
-              {classes.map((cls) => <SelectItem key={cls.id} value={cls.id}>{cls.name}</SelectItem>)}
+              {sortByClassOrder(classes).map((cls) => <SelectItem key={cls.id} value={cls.id}>{cls.name}</SelectItem>)}
             </SelectContent>
           </Select>
           <Select value={performanceFilter} onValueChange={setPerformanceFilter}>

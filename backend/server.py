@@ -412,15 +412,13 @@ async def build_full_year_score_map(student_ids: List[str]) -> Dict[str, Dict[in
 
 
 def compute_avg_first_9_weeks(scores_by_week: Dict[int, Dict[str, Optional[float]]]) -> Optional[float]:
-    """Average of student's follow-up total (attendance+participation+behavior+homework, max 15) over weeks 1-9."""
-    FIRST_N_WEEKS = 9
+    """Average of student's follow-up total (attendance+participation+behavior+homework, max 15) over weeks 1-9. Only includes weeks that have at least one non-null score; returns None if no such weeks."""
     week_totals: List[float] = []
-    for week_num in range(1, FIRST_N_WEEKS + 1):
+    for week_num in range(1, 10):
         score = scores_by_week.get(week_num) or {}
-        a = score.get("attendance")
-        p = score.get("participation")
-        b = score.get("behavior")
-        h = score.get("homework")
+        a, p, b, h = score.get("attendance"), score.get("participation"), score.get("behavior"), score.get("homework")
+        if all(v is None or (isinstance(v, float) and pd.isna(v)) for v in [a, p, b, h]):
+            continue
         total = sum(
             float(v) if v is not None and not (isinstance(v, float) and pd.isna(v)) else 0
             for v in [a, p, b, h]
@@ -428,18 +426,17 @@ def compute_avg_first_9_weeks(scores_by_week: Dict[int, Dict[str, Optional[float
         week_totals.append(min(total, TOTAL_SCORE_MAX))
     if not week_totals:
         return None
-    return round(sum(week_totals) / FIRST_N_WEEKS, 2)
+    return round(sum(week_totals) / len(week_totals), 2)
 
 
 def compute_avg_weeks_10_18(scores_by_week: Dict[int, Dict[str, Optional[float]]]) -> Optional[float]:
-    """Average of student's follow-up total (attendance+participation+behavior+homework, max 15) over weeks 10-18."""
+    """Average of student's follow-up total (attendance+participation+behavior+homework, max 15) over weeks 10-18. Only includes weeks that have at least one non-null score; returns None if no such weeks."""
     week_totals: List[float] = []
     for week_num in range(10, 19):
         score = scores_by_week.get(week_num) or {}
-        a = score.get("attendance")
-        p = score.get("participation")
-        b = score.get("behavior")
-        h = score.get("homework")
+        a, p, b, h = score.get("attendance"), score.get("participation"), score.get("behavior"), score.get("homework")
+        if all(v is None or (isinstance(v, float) and pd.isna(v)) for v in [a, p, b, h]):
+            continue
         total = sum(
             float(v) if v is not None and not (isinstance(v, float) and pd.isna(v)) else 0
             for v in [a, p, b, h]
@@ -447,7 +444,7 @@ def compute_avg_weeks_10_18(scores_by_week: Dict[int, Dict[str, Optional[float]]
         week_totals.append(min(total, 15))
     if not week_totals:
         return None
-    return round(sum(week_totals) / 9, 2)
+    return round(sum(week_totals) / len(week_totals), 2)
 
 
 def compute_students_total_for_assessment(
@@ -714,12 +711,57 @@ def _effective_scores_q2(scores_by_week: Dict[int, Dict[str, Optional[float]]]) 
     }
 
 
+# Only these fields count as "entered marks". Ignore id, student_id, week_id, etc.
+_SCORE_VALUE_KEYS = (
+    "attendance", "participation", "behavior", "homework",
+    "quiz1", "quiz2", "quiz3", "quiz4",
+    "chapter_test1_practical", "chapter_test2_practical",
+    "quarter1_practical", "quarter1_theory", "quarter2_practical", "quarter2_theory",
+)
+
+
+def _is_meaningful_score(v: Any) -> bool:
+    """True if value counts as 'entered' (non-null, non-NaN, and non-zero). Avoids treating all-zero/blank as 'has data'."""
+    if v is None:
+        return False
+    if isinstance(v, float) and pd.isna(v):
+        return False
+    try:
+        if float(v) == 0:
+            return False
+    except (TypeError, ValueError):
+        return False
+    return True
+
+
+def _has_any_scores(scores_by_week: Dict[int, Dict[str, Optional[float]]]) -> bool:
+    """True only if at least one week has at least one *meaningful* score (non-null, non-NaN, non-zero). So no marks / all zeros = no data."""
+    for week_data in scores_by_week.values():
+        doc = week_data or {}
+        for key in _SCORE_VALUE_KEYS:
+            if _is_meaningful_score(doc.get(key)):
+                return True
+    return False
+
+
 def _enrich_student_single_quarter(
     student: Dict[str, Any],
     sw: Dict[int, Dict[str, Optional[float]]],
     quarter: int,
 ) -> None:
     """Enrich student with only one quarter's total and performance (for S1Q1, S1Q2, S2Q1, S2Q2 separation)."""
+    if not _has_any_scores(sw):
+        student["quarter1_total"] = None
+        student["quarter2_total"] = None
+        student["performance_level_q1"] = "no_data"
+        student["performance_level_q2"] = "no_data"
+        student["performance_level"] = "no_data"
+        student["semester_total"] = None
+        student["total_score_normalized"] = None
+        student["performance_label"] = "No Data"
+        for k in ("quiz1", "quiz2", "quiz3", "quiz4", "chapter_test1", "chapter_test2"):
+            student[k] = None
+        return
     if quarter == 2:
         avg_10_18 = compute_avg_weeks_10_18(sw)
         students_total = compute_students_total_for_assessment(sw, weeks_10_18=True)
@@ -771,6 +813,14 @@ def parse_class_name(name: str) -> Dict[str, Optional[Any]]:
     grade = int(match.group(1)) if match else None
     section = match.group(2).upper() if match else None
     return {"grade": grade, "section": section}
+
+
+def _class_sort_key(class_name: str) -> tuple:
+    """Sort key for class names: (grade, section) so 6A before 6B, 7A before 7B."""
+    parsed = parse_class_name(class_name)
+    grade = parsed.get("grade") if parsed.get("grade") is not None else 999
+    section = parsed.get("section") or "Z"
+    return (grade, section)
 
 
 def enrich_student(student: Dict[str, Any]) -> Dict[str, Any]:
@@ -1774,22 +1824,19 @@ async def list_weeks(
     semester: Optional[int] = Query(default=None),
     quarter: Optional[int] = Query(default=None, description="1 = weeks 1-9, 2 = weeks 10-18 (per semester)"),
 ):
-    """Return weeks for the given semester and quarter. Full separation: S1Q1, S1Q2, S2Q1, S2Q2 each have their own weeks."""
-    if semester is not None and quarter is not None:
-        query = {"semester": semester, "quarter": quarter}
+    """Return weeks for the given semester and quarter only. Full separation: S1Q1, S1Q2, S2Q1, S2Q2 each have their own weeks. Never returns weeks from another quarter."""
+    # When semester is set, always filter by quarter (default 1). Avoid ever returning "all weeks" for a semester.
+    sem = semester if semester is not None else 1
+    q = quarter if quarter in (1, 2) else 1
+    if semester is not None:
+        query = {"semester": sem, "quarter": q}
         all_weeks = await db.weeks.find(query, {"_id": 0}).sort("number", 1).to_list(200)
-        # Backfill quarter on docs that don't have it (migration)
         for w in all_weeks:
             if "quarter" not in w or w["quarter"] not in (1, 2):
                 w["quarter"] = 1 if w.get("number", 1) <= 9 else 2
         return all_weeks
-    # Legacy: no quarter -> filter by semester and quarter from number
-    query = {"semester": semester} if semester else {}
-    all_weeks = await db.weeks.find(query, {"_id": 0}).sort([("semester", 1), ("number", 1)]).to_list(200)
-    if quarter == 1:
-        all_weeks = [w for w in all_weeks if _week_quarter(w) == 1 and 1 <= w.get("number", 1) <= 9]
-    elif quarter == 2:
-        all_weeks = [w for w in all_weeks if _week_quarter(w) == 2 and 10 <= w.get("number", 18) <= 18]
+    # No semester: return all weeks (e.g. admin tools) with quarter backfilled
+    all_weeks = await db.weeks.find({"semester": {"$in": [1, 2]}}, {"_id": 0}).sort([("semester", 1), ("number", 1)]).to_list(200)
     for w in all_weeks:
         if "quarter" not in w or w["quarter"] not in (1, 2):
             w["quarter"] = 1 if w.get("number", 1) <= 9 else 2
@@ -1815,10 +1862,60 @@ async def create_week(payload: WeekCreate):
 
 
 @api_router.delete("/weeks/{week_id}")
-async def delete_week(week_id: str):
+async def delete_week(
+    week_id: str,
+    semester: Optional[int] = Query(default=None),
+    quarter: Optional[int] = Query(default=None),
+):
+    """Delete a week only if it belongs to the given (semester, quarter). Prevents deleting a week from another quarter."""
+    week_doc = await db.weeks.find_one({"id": week_id}, {"_id": 0, "semester": 1, "quarter": 1, "number": 1})
+    if not week_doc:
+        raise HTTPException(status_code=404, detail="Week not found")
+    if semester is not None and quarter is not None:
+        doc_quarter = week_doc.get("quarter")
+        if doc_quarter not in (1, 2):
+            doc_quarter = 1 if (week_doc.get("number", 1) <= 9) else 2
+        if week_doc.get("semester") != semester or doc_quarter != quarter:
+            raise HTTPException(
+                status_code=403,
+                detail="Week does not belong to the selected semester/quarter. Deletion refused to keep quarters separate.",
+            )
     await db.weeks.delete_one({"id": week_id})
     await db.student_scores.delete_many({"week_id": week_id})
     return {"status": "deleted"}
+
+
+@api_router.delete("/classes/{class_id}/quarter-scores")
+async def clear_class_quarter_scores(
+    class_id: str,
+    semester: int = Query(..., ge=1, le=2),
+    quarter: int = Query(..., ge=1, le=2),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+):
+    """Clear all score records for this class for the given (semester, quarter) only. Use when a class has stale/wrong data and should show 'No Data' for that quarter."""
+    class_doc = await db.classes.find_one({"id": class_id}, {"_id": 0})
+    if not class_doc:
+        raise HTTPException(status_code=404, detail="Class not found")
+    if current_user.get("role_name") == "Teacher":
+        assigned = current_user.get("assigned_class_ids", [])
+        if assigned and class_id not in assigned:
+            raise HTTPException(status_code=403, detail="Not allowed to clear scores for this class")
+    query = {"semester": semester, "quarter": quarter}
+    quarter_weeks = await db.weeks.find(query, {"_id": 0, "id": 1}).to_list(200)
+    if not quarter_weeks:
+        all_sem = await db.weeks.find({"semester": semester}, {"_id": 0, "id": 1, "number": 1, "quarter": 1}).to_list(200)
+        quarter_weeks = [w for w in all_sem if _week_quarter(w) == quarter]
+    week_ids = [w["id"] for w in quarter_weeks]
+    students = await db.students.find({"class_id": class_id}, {"_id": 0, "id": 1}).to_list(5000)
+    student_ids = [s["id"] for s in students]
+    if not student_ids:
+        return {"status": "cleared", "deleted": 0, "message": "No students in class"}
+    if not week_ids:
+        return {"status": "cleared", "deleted": 0, "message": "No weeks for this semester/quarter"}
+    result = await db.student_scores.delete_many(
+        {"student_id": {"$in": student_ids}, "week_id": {"$in": week_ids}}
+    )
+    return {"status": "cleared", "deleted": result.deleted_count}
 
 
 @api_router.get("/students")
@@ -2810,7 +2907,8 @@ def build_summary(students: List[Dict[str, Any]], classes: List[Dict[str, Any]])
     for student in enriched:
         class_counts[student["class_name"]] = class_counts.get(student["class_name"], 0) + 1
     students_per_class = [
-        {"class_name": name, "count": count} for name, count in sorted(class_counts.items())
+        {"class_name": name, "count": count}
+        for name, count in sorted(class_counts.items(), key=lambda x: _class_sort_key(x[0]))
     ]
     distribution = [
         {"level": "on_level", "count": counts["on_level"]},
@@ -2955,7 +3053,10 @@ async def get_analytics_overview(
     for s in students:
         cn = s.get("class_name") or "Unknown"
         class_counts_map[cn] = class_counts_map.get(cn, 0) + 1
-    students_per_class = [{"class_name": name, "count": count} for name, count in sorted(class_counts_map.items())]
+    students_per_class = [
+        {"class_name": name, "count": count}
+        for name, count in sorted(class_counts_map.items(), key=lambda x: _class_sort_key(x[0]))
+    ]
     return {
         "total_students": len(students),
         "classes_count": len(classes),
@@ -3078,7 +3179,8 @@ async def get_class_summary(
     try:
         class_query = _teacher_class_filter(current_user)
         classes = await db.classes.find(class_query, {"_id": 0}).sort("grade", 1).to_list(200)
-        return await _build_class_summary_list(classes, semester or 1, quarter or 1)
+        summaries = await _build_class_summary_list(classes, semester or 1, quarter or 1)
+        return sorted(summaries, key=lambda x: _class_sort_key(x.get("class_name") or ""))
     except Exception as e:
         logger.exception("Classes summary failed")
         raise HTTPException(status_code=500, detail=f"Failed to load classes: {str(e)}")

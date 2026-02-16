@@ -14,6 +14,7 @@ import {
 } from "recharts";
 import { api, getApiErrorMessage } from "@/lib/api";
 import { useTranslations } from "@/lib/i18n";
+import { sortByClassOrder } from "@/lib/utils";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -169,12 +170,12 @@ export default function Analytics() {
     }));
   }, [q1.distribution, q2.distribution, t]);
 
-  const classChartData = classSummary
-    .filter((cls) => selectedClassId === "all" || cls.class_id === selectedClassId)
-    .map((cls) => ({
-      name: cls.class_name,
-      score: cls.avg_total_score || 0,
-    }));
+  const classChartData = sortByClassOrder(
+    classSummary.filter((cls) => selectedClassId === "all" || cls.class_id === selectedClassId)
+  ).map((cls) => ({
+    name: cls.class_name,
+    score: cls.avg_total_score || 0,
+  }));
 
   const gradeSummary = useMemo(() => {
     const map = {};
@@ -245,7 +246,7 @@ export default function Analytics() {
                 <SelectItem value="all" data-testid="analytics-class-all">
                   {t("all_classes")}
                 </SelectItem>
-                {classOptions.map((cls) => (
+                {sortByClassOrder(classOptions).map((cls) => (
                   <SelectItem key={cls.id} value={cls.id} data-testid={`analytics-class-${cls.id}`}>
                     {cls.name}
                   </SelectItem>
@@ -706,7 +707,7 @@ export default function Analytics() {
       </div>
 
       {/* Analysis insights: strengths, weaknesses, performance, standout data, actions, recommendations */}
-      <section className="grid gap-4 rounded-xl border border-border/50 p-4 md:grid-cols-2" data-testid="analytics-insights">
+      <section className="section-hover grid gap-4 rounded-xl border border-border/50 p-4 md:grid-cols-2" data-testid="analytics-insights">
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-base text-emerald-700 dark:text-emerald-400">{t("analysis_strengths")}</CardTitle>
