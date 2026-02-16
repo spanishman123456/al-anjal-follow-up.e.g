@@ -298,13 +298,18 @@ export default function Students() {
     }
   };
 
+  const weekStorageKey = semester === "semester2" ? "app_selected_week_id_q2" : "app_selected_week_id_q1";
+  const classStorageKey = semester === "semester2" ? "app_selected_class_id_q2" : "app_selected_class_id_q1";
+
   const handleAddWeek = async () => {
     try {
       const response = await api.post("/weeks", {
         semester: semester === "semester2" ? 2 : 1,
       });
       setWeeks((prev) => [...prev, response.data]);
-      setActiveWeekId(response.data.id);
+      const newId = response.data.id;
+      setActiveWeekId(newId);
+      sessionStorage.setItem(weekStorageKey, newId);
       toast.success(t("week_added"));
     } catch (error) {
       toast.error(t("week_add_failed"));
@@ -319,8 +324,11 @@ export default function Students() {
       const response = await api.get("/weeks", {
         params: { quarter: semester === "semester2" ? 2 : 1 },
       });
-      setWeeks(response.data || []);
-      setActiveWeekId((response.data || [])[0]?.id || "");
+      const list = response.data || [];
+      const firstId = list[0]?.id || "";
+      setWeeks(list);
+      setActiveWeekId(firstId);
+      sessionStorage.setItem(weekStorageKey, firstId);
     } catch (error) {
       toast.error(t("week_delete_failed"));
     }
@@ -379,19 +387,19 @@ export default function Students() {
   useEffect(() => {
     if (!visibleWeeks.length) return;
     if (visibleWeeks.find((week) => week.id === activeWeekId)) return;
-    const saved = sessionStorage.getItem("app_selected_week_id");
+    const saved = sessionStorage.getItem(weekStorageKey);
     if (saved && visibleWeeks.some((w) => w.id === saved)) setActiveWeekId(saved);
     else setActiveWeekId(visibleWeeks[0].id);
-  }, [weeks]);
+  }, [weeks, weekStorageKey]);
 
   useEffect(() => {
     if (!classes?.length) return;
-    const saved = sessionStorage.getItem("app_selected_class_id");
+    const saved = sessionStorage.getItem(classStorageKey);
     if (saved === "all" || classes.some((c) => c.id === saved)) setFilterClass(saved || "all");
-  }, [classes]);
+  }, [classes, classStorageKey]);
 
   const resetFilters = () => {
-    sessionStorage.setItem("app_selected_class_id", "all");
+    sessionStorage.setItem(classStorageKey, "all");
     setFilterClass("all");
     setSearchTerm("");
     setPerformanceFilter("all");
@@ -419,7 +427,7 @@ export default function Students() {
         params: { week_id: activeWeekId },
       });
       toast.success(t("marks_import_success"));
-      sessionStorage.setItem("app_selected_week_id", activeWeekId);
+      sessionStorage.setItem(weekStorageKey, activeWeekId);
       setBulkFile(null);
       if (bulkFileInputRef.current) bulkFileInputRef.current.value = "";
       loadData(activeWeekId);
@@ -809,7 +817,7 @@ export default function Students() {
             <Select
               value={activeWeekId}
               onValueChange={(value) => {
-                sessionStorage.setItem("app_selected_week_id", value);
+                sessionStorage.setItem(weekStorageKey, value);
                 setActiveWeekId(value);
                 setBulkEditMode(false);
               }}
@@ -859,7 +867,7 @@ export default function Students() {
           <Select
             value={filterClass}
             onValueChange={(value) => {
-              sessionStorage.setItem("app_selected_class_id", value);
+              sessionStorage.setItem(classStorageKey, value);
               setFilterClass(value);
             }}
             data-testid="students-class-filter"

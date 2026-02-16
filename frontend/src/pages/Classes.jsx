@@ -224,14 +224,14 @@ export default function Classes() {
               <div className="flex flex-wrap gap-2 border-t border-border/60 pt-2">
                 <Link
                   to="/assessment-marks"
-                  onClick={() => sessionStorage.setItem("app_selected_class_id", cls.class_id)}
+                  onClick={() => sessionStorage.setItem("app_selected_class_id_q1", cls.class_id)}
                   className="text-xs font-medium text-primary hover:underline"
                 >
                   {t("first_quarter_marks")}
                 </Link>
                 <Link
                   to="/assessment-marks-q2"
-                  onClick={() => sessionStorage.setItem("app_selected_class_id", cls.class_id)}
+                  onClick={() => sessionStorage.setItem("app_selected_class_id_q2", cls.class_id)}
                   className="text-xs font-medium text-primary hover:underline"
                 >
                   {t("second_quarter_marks")}

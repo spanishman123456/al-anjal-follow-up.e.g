@@ -164,13 +164,13 @@ export default function FinalExamsAssessment() {
   useEffect(() => {
     if (!weeks.length) return;
     if (weeks.find((w) => w.id === activeWeekId)) return;
-    const saved = sessionStorage.getItem("app_selected_week_id");
+    const saved = sessionStorage.getItem("app_selected_week_id_q2");
     if (saved && weeks.some((w) => w.id === saved)) setActiveWeekId(saved);
     else setActiveWeekId(weeks[0]?.id || "");
   }, [weeks]);
   useEffect(() => {
     if (!classes?.length) return;
-    const saved = sessionStorage.getItem("app_selected_class_id");
+    const saved = sessionStorage.getItem("app_selected_class_id_q2");
     if (saved === "all" || classes.some((c) => c.id === saved)) setFilterClass(saved || "all");
   }, [classes]);
 
@@ -190,7 +190,7 @@ export default function FinalExamsAssessment() {
   }, [students, filterClass, searchTerm, performanceFilter, scoreMin, scoreMax]);
 
   const resetFilters = () => {
-    sessionStorage.setItem("app_selected_class_id", "all");
+    sessionStorage.setItem("app_selected_class_id_q2", "all");
     setFilterClass("all");
     setSearchTerm("");
     setPerformanceFilter("all");
@@ -348,7 +348,7 @@ export default function FinalExamsAssessment() {
         params: { week_id: activeWeekId },
       });
       toast.success(t("bulk_import_completed") || "Bulk import completed");
-      sessionStorage.setItem("app_selected_week_id", activeWeekId);
+      sessionStorage.setItem("app_selected_week_id_q2", activeWeekId);
       if (bulkFileInputRef.current) bulkFileInputRef.current.value = "";
       loadData(activeWeekId);
     } catch (error) {
@@ -410,7 +410,7 @@ export default function FinalExamsAssessment() {
           <Select
             value={filterClass}
             onValueChange={(value) => {
-              sessionStorage.setItem("app_selected_class_id", value);
+              sessionStorage.setItem("app_selected_class_id_q2", value);
               setFilterClass(value);
             }}
           >
