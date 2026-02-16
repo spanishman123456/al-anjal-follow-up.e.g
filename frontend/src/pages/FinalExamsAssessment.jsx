@@ -155,12 +155,12 @@ export default function FinalExamsAssessment() {
 
   useEffect(() => { loadWeeks(); }, []);
   useEffect(() => {
-    if (activeWeekId) {
-      setBulkEditMode(false);
-      setBulkScores({});
-      loadData(activeWeekId);
-    }
-  }, [activeWeekId]);
+    if (!activeWeekId || !weeks.length) return;
+    if (!weeks.some((w) => w.id === activeWeekId)) return;
+    setBulkEditMode(false);
+    setBulkScores({});
+    loadData(activeWeekId);
+  }, [activeWeekId, weeks]);
   useEffect(() => {
     if (!weeks.length) return;
     if (weeks.find((w) => w.id === activeWeekId)) return;

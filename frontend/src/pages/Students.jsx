@@ -335,6 +335,8 @@ export default function Students() {
   };
 
   useEffect(() => {
+    setWeeks([]);
+    setActiveWeekId("");
     loadWeeks();
   }, [semester]);
 
@@ -343,12 +345,12 @@ export default function Students() {
   }, [classesLoaded, contextClasses]);
 
   useEffect(() => {
-    if (activeWeekId) {
-      setBulkEditMode(false);
-      setBulkScores({});
-      loadData(activeWeekId);
-    }
-  }, [activeWeekId]);
+    if (!activeWeekId || !weeks.length) return;
+    if (!weeks.some((w) => w.id === activeWeekId)) return;
+    setBulkEditMode(false);
+    setBulkScores({});
+    loadData(activeWeekId);
+  }, [activeWeekId, weeks]);
 
   const filteredStudents = useMemo(() => {
     const minValue = scoreMin ? Number(scoreMin) : null;
@@ -415,8 +417,8 @@ export default function Students() {
       toast.error("Please select a file first");
       return;
     }
-    if (!activeWeekId) {
-      toast.error(t("select_week_before_import") || "Please select a week before importing marks so they are saved correctly.");
+    if (!activeWeekId || !weeks.some((w) => w.id === activeWeekId)) {
+      toast.error(t("select_week_before_import") || "Please select a week from the current semester before importing.");
       return;
     }
     const formData = new FormData();
@@ -669,6 +671,10 @@ export default function Students() {
   };
 
   const handleBulkSave = async () => {
+    if (!activeWeekId || !weeks.some((w) => w.id === activeWeekId)) {
+      toast.error(t("select_week_from_current_semester") || "Please select a week from the current semester.");
+      return;
+    }
     try {
       const updates = Object.entries(bulkScores).map(([id, scores]) => ({
         id,
@@ -699,6 +705,10 @@ export default function Students() {
 
   const handleClearScores = async () => {
     setClearScoresOpen(false);
+    if (!activeWeekId || !weeks.some((w) => w.id === activeWeekId)) {
+      toast.error(t("select_week_from_current_semester") || "Please select a week from the current semester.");
+      return;
+    }
     // Clear only Students-page fields (follow-up scores); do not clear assessment marks.
     const updates = students.map((student) => ({
       id: student.id,

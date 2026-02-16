@@ -156,12 +156,12 @@ export default function AssessmentMarksQ2() {
   }, []);
 
   useEffect(() => {
-    if (activeWeekId) {
-      setBulkEditMode(false);
-      setBulkScores({});
-      loadData(activeWeekId);
-    }
-  }, [activeWeekId]);
+    if (!activeWeekId || !weeks.length) return;
+    if (!weeks.some((w) => w.id === activeWeekId)) return;
+    setBulkEditMode(false);
+    setBulkScores({});
+    loadData(activeWeekId);
+  }, [activeWeekId, weeks]);
 
   useEffect(() => {
     if (!weeks.length) return;
