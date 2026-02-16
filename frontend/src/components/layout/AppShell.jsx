@@ -49,6 +49,8 @@ export const AppShell = ({
   setTheme,
   semester,
   setSemester,
+  quarter,
+  setQuarter,
   academicYear,
   classes = [],
   classesLoaded = false,
@@ -61,16 +63,11 @@ export const AppShell = ({
   const [profile, setProfile] = useState(null);
   const [notifications, setNotifications] = useState([]);
   const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
-  const expandedNavKeyFromPath =
-    location.pathname === "/students" || location.pathname === "/assessment-marks" || location.pathname === "/final-exams-assessment"
-      ? "nav-quarter-marks"
-      : location.pathname === "/assessment-marks-q2" || location.pathname === "/final-exams-assessment-q2"
-        ? "nav-quarter-marks-q2"
-        : null;
-  const [expandedNavKey, setExpandedNavKey] = useState(expandedNavKeyFromPath);
+  const navKeyFromContext = `nav-s${semester === "semester2" ? 2 : 1}-q${quarter}`;
+  const [expandedNavKey, setExpandedNavKey] = useState(navKeyFromContext);
   useEffect(() => {
-    if (expandedNavKeyFromPath) setExpandedNavKey(expandedNavKeyFromPath);
-  }, [expandedNavKeyFromPath]);
+    setExpandedNavKey(navKeyFromContext);
+  }, [navKeyFromContext]);
 
   const loadProfile = async () => {
     try {
@@ -124,25 +121,55 @@ export const AppShell = ({
   const allNavItems = [
     { to: "/", label: t("dashboard"), icon: LayoutDashboard, testId: "nav-dashboard-link", roles: ["Admin", "Teacher"] },
     {
-      label: t("first_quarter_marks"),
+      label: t("semester_one_quarter_one"),
       icon: FileText,
-      testId: "nav-quarter-marks",
+      testId: "nav-s1-q1",
       roles: ["Admin", "Teacher"],
+      semesterForGroup: "semester1",
+      quarterForGroup: 1,
       children: [
-        { to: "/students", label: t("assessment"), testId: "nav-students-link" },
-        { to: "/assessment-marks", label: t("quizzes_chapter_test_marks"), testId: "nav-assessment-marks-link" },
-        { to: "/final-exams-assessment", label: t("final_exams_assessment"), testId: "nav-final-exams-assessment-link" },
+        { to: "/students", label: t("assessment"), testId: "nav-students-s1-q1" },
+        { to: "/assessment-marks", label: t("quizzes_chapter_test_marks"), testId: "nav-assessment-s1-q1" },
+        { to: "/final-exams-assessment", label: t("final_exams_assessment"), testId: "nav-final-exams-s1-q1" },
       ],
     },
     {
-      label: t("second_quarter_marks"),
+      label: t("semester_one_quarter_two"),
       icon: FileText,
-      testId: "nav-quarter-marks-q2",
+      testId: "nav-s1-q2",
       roles: ["Admin", "Teacher"],
+      semesterForGroup: "semester1",
+      quarterForGroup: 2,
       children: [
-        { to: "/students", label: t("assessment"), testId: "nav-students-q2-link" },
-        { to: "/assessment-marks-q2", label: t("quizzes_chapter_test_marks"), testId: "nav-assessment-marks-q2-link" },
-        { to: "/final-exams-assessment-q2", label: t("final_exams_assessment"), testId: "nav-final-exams-assessment-q2-link" },
+        { to: "/students", label: t("assessment"), testId: "nav-students-s1-q2" },
+        { to: "/assessment-marks-q2", label: t("quizzes_chapter_test_marks"), testId: "nav-assessment-s1-q2" },
+        { to: "/final-exams-assessment-q2", label: t("final_exams_assessment"), testId: "nav-final-exams-s1-q2" },
+      ],
+    },
+    {
+      label: t("semester_two_quarter_one"),
+      icon: FileText,
+      testId: "nav-s2-q1",
+      roles: ["Admin", "Teacher"],
+      semesterForGroup: "semester2",
+      quarterForGroup: 1,
+      children: [
+        { to: "/students", label: t("assessment"), testId: "nav-students-s2-q1" },
+        { to: "/assessment-marks", label: t("quizzes_chapter_test_marks"), testId: "nav-assessment-s2-q1" },
+        { to: "/final-exams-assessment", label: t("final_exams_assessment"), testId: "nav-final-exams-s2-q1" },
+      ],
+    },
+    {
+      label: t("semester_two_quarter_two"),
+      icon: FileText,
+      testId: "nav-s2-q2",
+      roles: ["Admin", "Teacher"],
+      semesterForGroup: "semester2",
+      quarterForGroup: 2,
+      children: [
+        { to: "/students", label: t("assessment"), testId: "nav-students-s2-q2" },
+        { to: "/assessment-marks-q2", label: t("quizzes_chapter_test_marks"), testId: "nav-assessment-s2-q2" },
+        { to: "/final-exams-assessment-q2", label: t("final_exams_assessment"), testId: "nav-final-exams-s2-q2" },
       ],
     },
     { to: "/teachers", label: t("teachers"), icon: UserRound, testId: "nav-teachers-link", roles: ["Admin"] },
@@ -230,6 +257,10 @@ export const AppShell = ({
                             key={child.to}
                             to={child.to}
                             data-testid={child.testId}
+                            onClick={() => {
+                              if (item.semesterForGroup) setSemester(item.semesterForGroup);
+                              if (item.quarterForGroup != null) setQuarter(item.quarterForGroup);
+                            }}
                             className={({ isActive }) =>
                               `flex items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors ${
                                 isActive ? "bg-slate-800 text-white" : "text-slate-400 hover:bg-slate-800/60 hover:text-white"
@@ -450,6 +481,15 @@ export const AppShell = ({
               </SelectItem>
             </SelectContent>
           </Select>
+          <Select value={String(quarter)} onValueChange={(v) => setQuarter(parseInt(v, 10))}>
+            <SelectTrigger className="w-[160px] rounded-full border border-border/80 bg-muted px-4 py-2 text-sm font-medium shadow-sm" data-testid="quarter-select">
+              <SelectValue placeholder={t("quarter")} />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="1" data-testid="quarter-one-option">{t("quarter_one")}</SelectItem>
+              <SelectItem value="2" data-testid="quarter-two-option">{t("quarter_two")}</SelectItem>
+            </SelectContent>
+          </Select>
           <Button
             variant="outline"
             size="sm"
@@ -469,6 +509,8 @@ export const AppShell = ({
               setTheme,
               semester,
               setSemester,
+              quarter,
+              setQuarter,
               academicYear,
               profile,
               classes,

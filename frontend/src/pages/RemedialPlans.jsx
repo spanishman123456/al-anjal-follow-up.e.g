@@ -42,8 +42,9 @@ const emptyForm = {
 };
 
 export default function RemedialPlans() {
-  const { language } = useOutletContext();
+  const { language, semester, quarter } = useOutletContext();
   const t = useTranslations(language);
+  const semesterNumber = semester === "semester2" ? 2 : 1;
   const [plans, setPlans] = useState([]);
   const [students, setStudents] = useState([]);
   const [summary, setSummary] = useState(null);
@@ -55,7 +56,7 @@ export default function RemedialPlans() {
       const [plansRes, studentsRes, summaryRes] = await Promise.all([
         api.get("/remedial-plans"),
         api.get("/students"),
-        api.get("/analytics/summary"),
+        api.get("/analytics/summary", { params: { semester: semesterNumber, quarter } }),
       ]);
       setPlans(plansRes.data);
       setStudents(studentsRes.data);
@@ -67,7 +68,7 @@ export default function RemedialPlans() {
 
   useEffect(() => {
     loadData();
-  }, []);
+  }, [semesterNumber, quarter]);
 
   const handleCreate = async () => {
     const student = students.find((item) => item.id === form.student_id);

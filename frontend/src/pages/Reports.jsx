@@ -43,8 +43,9 @@ const PERFORMANCE_COLORS = {
 };
 
 export default function Reports() {
-  const { language, semester } = useOutletContext();
+  const { language, semester, quarter } = useOutletContext();
   const t = useTranslations(language);
+  const semesterNumber = semester === "semester2" ? 2 : 1;
   const [grade, setGrade] = useState("4");
   const [reportType, setReportType] = useState("summary");
   const [report, setReport] = useState(null);
@@ -57,7 +58,7 @@ export default function Reports() {
 
   const handleGenerate = async () => {
     const response = await api.get("/reports/grade", {
-      params: { grade, semester: semester === "semester2" ? 2 : 1 },
+      params: { grade, semester: semesterNumber, quarter },
     });
     setReport(response.data);
   };
@@ -73,16 +74,19 @@ export default function Reports() {
           grade,
           format,
           report_type: reportType,
-          semester: semester === "semester2" ? 2 : 1,
+          semester: semesterNumber,
+          quarter,
         },
         responseType: "blob",
       });
       const url = window.URL.createObjectURL(new Blob([response.data]));
       const link = document.createElement("a");
       link.href = url;
+      const sLabel = semesterNumber === 2 ? "S2" : "S1";
+      const qLabel = `Q${quarter}`;
       link.setAttribute(
         "download",
-        `grade_${grade}_report.${format === "excel" ? "xlsx" : "pdf"}`,
+        `grade_${grade}_${sLabel}_${qLabel}_report.${format === "excel" ? "xlsx" : "pdf"}`,
       );
       document.body.appendChild(link);
       link.click();

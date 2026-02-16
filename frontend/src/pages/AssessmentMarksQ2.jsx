@@ -65,14 +65,13 @@ function computeStudentsTotal(student) {
   return Math.min(STUDENTS_TOTAL_MAX, Math.round((a + p + b + h) * 100) / 100);
 }
 
-// Assessment total = best of Quiz 1 or Quiz 2 (5) + Practical Chapter Test (10), max 15.
-// Uses the higher of the two quiz scores so both are stored but only the best counts toward the total.
+// 2nd quarter assessment total = best of Quiz 3 or Quiz 4 (5) + Chapter Test 2 Practical (10), max 15.
 const ASSESSMENT_TOTAL_MAX = 15;
 function computeAssessmentTotal(student) {
-  const q1 = Number(student?.quiz1) ?? 0;
-  const q2 = Number(student?.quiz2) ?? 0;
-  const pt = Number(student?.chapter_test1_practical) ?? 0;
-  const bestQuiz = Math.max(Number.isNaN(q1) ? 0 : q1, Number.isNaN(q2) ? 0 : q2);
+  const q3 = Number(student?.quiz3) ?? 0;
+  const q4 = Number(student?.quiz4) ?? 0;
+  const pt = Number(student?.chapter_test2_practical) ?? 0;
+  const bestQuiz = Math.max(Number.isNaN(q3) ? 0 : q3, Number.isNaN(q4) ? 0 : q4);
   const sum = (Number.isNaN(pt) ? 0 : pt) + bestQuiz;
   return Math.min(ASSESSMENT_TOTAL_MAX, Math.round(sum * 100) / 100);
 }
@@ -98,7 +97,7 @@ function computeAssessmentPerformanceLevel(baseStudent, currentStudent = baseStu
     [baseStudent?.attendance, baseStudent?.participation, baseStudent?.behavior, baseStudent?.homework].some(
       (v) => v != null && v !== "" && !Number.isNaN(Number(v))
     );
-  const hasAssessment = [currentStudent?.quiz1, currentStudent?.quiz2, currentStudent?.chapter_test1_practical].some(
+  const hasAssessment = [currentStudent?.quiz3, currentStudent?.quiz4, currentStudent?.chapter_test2_practical].some(
     (v) => v != null && v !== "" && !Number.isNaN(Number(v))
   );
   if (!hasStudents && !hasAssessment) return "no_data";
@@ -108,9 +107,10 @@ function computeAssessmentPerformanceLevel(baseStudent, currentStudent = baseStu
 }
 
 export default function AssessmentMarksQ2() {
-  const { language, semester, profile, classes: contextClasses, classesLoaded } = useOutletContext();
+  const { language, semester, quarter, profile, classes: contextClasses, classesLoaded } = useOutletContext();
   const t = useTranslations(language);
   const isTeacher = profile?.role_name === "Teacher";
+  const semesterNumber = semester === "semester2" ? 2 : 1;
   const [students, setStudents] = useState([]);
   const [classes, setClasses] = useState([]);
   const [weeks, setWeeks] = useState([]);
@@ -124,16 +124,20 @@ export default function AssessmentMarksQ2() {
   const [bulkScores, setBulkScores] = useState({});
   const [bulkConfirmOpen, setBulkConfirmOpen] = useState(false);
   const [clearScoresOpen, setClearScoresOpen] = useState(false);
-  const [fillValues, setFillValues] = useState({ quiz1: "", quiz2: "", chapter_test1_practical: "" });
+  const [fillValues, setFillValues] = useState({ quiz3: "", quiz4: "", chapter_test2_practical: "" });
   const bulkFileInputRef = useRef(null);
 
   const loadData = async (weekId = activeWeekId) => {
     try {
       const requests = [api.get("/students", { params: weekId ? { week_id: weekId } : {} })];
-      if (!classesLoaded) requests.push(api.get("/classes"));
+      // Always fetch classes if context is empty so Classes dropdown and Class column show
+      if (!classesLoaded || !contextClasses?.length) requests.push(api.get("/classes"));
       const results = await Promise.all(requests);
       setStudents(results[0].data);
-      if (classesLoaded) setClasses(contextClasses || []); else if (results[1]) setClasses(results[1].data || []);
+      const classesFromApi = results[1]?.data;
+      if (classesLoaded && contextClasses?.length) setClasses(contextClasses || []);
+      else if (classesFromApi?.length) setClasses(classesFromApi);
+      else setClasses(contextClasses || []);
     } catch (error) {
       toast.error(getApiErrorMessage(error) || "Failed to load data");
     }
@@ -142,7 +146,7 @@ export default function AssessmentMarksQ2() {
   const loadWeeks = async () => {
     try {
       const response = await api.get("/weeks", {
-        params: { quarter: 2 },
+        params: { semester: semesterNumber, quarter },
       });
       setWeeks(response.data || []);
       // Do not set activeWeekId here; let useEffect([weeks]) restore from sessionStorage so both pages stay in sync
@@ -166,16 +170,18 @@ export default function AssessmentMarksQ2() {
   useEffect(() => {
     if (!weeks.length) return;
     if (weeks.find((w) => w.id === activeWeekId)) return;
-    const saved = sessionStorage.getItem("app_selected_week_id_q2");
+    const key = `app_selected_week_id_s${semesterNumber}_q${quarter}`;
+    const saved = sessionStorage.getItem(key);
     if (saved && weeks.some((w) => w.id === saved)) setActiveWeekId(saved);
-    else setActiveWeekId(weeks[0].id);
-  }, [weeks]);
+    else setActiveWeekId(weeks[0]?.id || "");
+  }, [weeks, semesterNumber, quarter]);
 
   useEffect(() => {
     if (!classes?.length) return;
-    const saved = sessionStorage.getItem("app_selected_class_id_q2");
+    const key = `app_selected_class_id_s${semesterNumber}_q${quarter}`;
+    const saved = sessionStorage.getItem(key);
     if (saved === "all" || classes.some((c) => c.id === saved)) setFilterClass(saved || "all");
-  }, [classes]);
+  }, [classes, semesterNumber, quarter]);
 
   const filteredStudents = useMemo(() => {
     const minValue = scoreMin ? Number(scoreMin) : null;
@@ -193,7 +199,7 @@ export default function AssessmentMarksQ2() {
   }, [students, filterClass, searchTerm, performanceFilter, scoreMin, scoreMax]);
 
   const resetFilters = () => {
-    sessionStorage.setItem("app_selected_class_id_q2", "all");
+    sessionStorage.setItem(`app_selected_class_id_s${semesterNumber}_q${quarter}`, "all");
     setFilterClass("all");
     setSearchTerm("");
     setPerformanceFilter("all");
@@ -253,14 +259,14 @@ export default function AssessmentMarksQ2() {
 
   const handleBulkSave = async () => {
     try {
-      // Include all visible students so both quiz scores are saved; total uses best of Quiz 1 and Quiz 2
+      // 2nd quarter: save quiz3, quiz4, chapter_test2_practical (separate from Q1's quiz1/quiz2/chapter_test1)
       const updates = filteredStudents.map((student) => {
         const current = bulkScores[student.id] || student;
         return {
           id: student.id,
-          quiz1: parseScore(current.quiz1),
-          quiz2: parseScore(current.quiz2),
-          chapter_test1_practical: parseScore(current.chapter_test1_practical),
+          quiz3: parseScore(current.quiz3),
+          quiz4: parseScore(current.quiz4),
+          chapter_test2_practical: parseScore(current.chapter_test2_practical),
         };
       });
       await api.post("/students/bulk-scores", { updates, week_id: activeWeekId || undefined }, { timeout: BULK_SAVE_TIMEOUT_MS });
@@ -279,12 +285,12 @@ export default function AssessmentMarksQ2() {
       toast.error(t("select_week_before_import") || "Please select a week first.");
       return;
     }
-    // Clear only assessment fields for this week; do not touch Students-page scores.
+    // Clear only 2nd quarter assessment fields for this week.
     const updates = students.map((student) => ({
       id: student.id,
-      quiz1: null,
-      quiz2: null,
-      chapter_test1_practical: null,
+      quiz3: null,
+      quiz4: null,
+      chapter_test2_practical: null,
     }));
     try {
       await api.post("/students/bulk-scores", { updates, week_id: activeWeekId }, { timeout: BULK_SAVE_TIMEOUT_MS });
@@ -367,7 +373,7 @@ export default function AssessmentMarksQ2() {
         params: { week_id: activeWeekId },
       });
       toast.success(t("bulk_import_completed") || "Bulk import completed");
-      sessionStorage.setItem("app_selected_week_id_q2", activeWeekId);
+      sessionStorage.setItem(`app_selected_week_id_s${semesterNumber}_q${quarter}`, activeWeekId);
       if (bulkFileInputRef.current) bulkFileInputRef.current.value = "";
       loadData(activeWeekId);
     } catch (error) {
@@ -454,7 +460,7 @@ export default function AssessmentMarksQ2() {
           <Select
             value={filterClass}
             onValueChange={(value) => {
-              sessionStorage.setItem("app_selected_class_id_q2", value);
+              sessionStorage.setItem(`app_selected_class_id_s${semesterNumber}_q${quarter}`, value);
               setFilterClass(value);
             }}
             data-testid="assessment-q2-class-filter"
@@ -497,9 +503,9 @@ export default function AssessmentMarksQ2() {
               <TableRow>
                 <TableHead>{t("student_name")}</TableHead>
                 <TableHead>{t("class_name")}</TableHead>
-                <TableHead className="text-center">{t("quiz1")} (5)</TableHead>
-                <TableHead className="text-center">{t("quiz2")} (5)</TableHead>
-                <TableHead className="text-center">{t("chapter_test1_practical")} (10)</TableHead>
+                <TableHead className="text-center">{t("quiz3")} (5)</TableHead>
+                <TableHead className="text-center">{t("quiz4")} (5)</TableHead>
+                <TableHead className="text-center">{t("chapter_test2_practical")} (10)</TableHead>
                 <TableHead className="text-center">{t("total_score")}</TableHead>
                 <TableHead className="text-center">{t("performance_level")}</TableHead>
               </TableRow>
@@ -518,17 +524,17 @@ export default function AssessmentMarksQ2() {
                       step={0.5}
                       className="w-14 h-8 text-center text-sm"
                       placeholder="0–5"
-                      value={fillValues.quiz1}
-                      onChange={(e) => setFillValues((prev) => ({ ...prev, quiz1: e.target.value }))}
-                      data-testid="assessment-q2-fill-quiz1"
+                      value={fillValues.quiz3}
+                      onChange={(e) => setFillValues((prev) => ({ ...prev, quiz3: e.target.value }))}
+                      data-testid="assessment-q2-fill-quiz3"
                     />
                     <Button
                       type="button"
                       variant="outline"
                       size="sm"
                       className="h-8 shrink-0"
-                      onClick={() => handleFillColumn("quiz1", 5)}
-                      data-testid="assessment-q2-fill-quiz1-btn"
+                      onClick={() => handleFillColumn("quiz3", 5)}
+                      data-testid="assessment-q2-fill-quiz3-btn"
                     >
                       {t("fill_column")}
                     </Button>
@@ -543,17 +549,17 @@ export default function AssessmentMarksQ2() {
                       step={0.5}
                       className="w-14 h-8 text-center text-sm"
                       placeholder="0–5"
-                      value={fillValues.quiz2}
-                      onChange={(e) => setFillValues((prev) => ({ ...prev, quiz2: e.target.value }))}
-                      data-testid="assessment-q2-fill-quiz2"
+                      value={fillValues.quiz4}
+                      onChange={(e) => setFillValues((prev) => ({ ...prev, quiz4: e.target.value }))}
+                      data-testid="assessment-q2-fill-quiz4"
                     />
                     <Button
                       type="button"
                       variant="outline"
                       size="sm"
                       className="h-8 shrink-0"
-                      onClick={() => handleFillColumn("quiz2", 5)}
-                      data-testid="assessment-q2-fill-quiz2-btn"
+                      onClick={() => handleFillColumn("quiz4", 5)}
+                      data-testid="assessment-q2-fill-quiz4-btn"
                     >
                       {t("fill_column")}
                     </Button>
@@ -568,8 +574,8 @@ export default function AssessmentMarksQ2() {
                       step={0.5}
                       className="w-14 h-8 text-center text-sm"
                       placeholder="0–10"
-                      value={fillValues.chapter_test1_practical}
-                      onChange={(e) => setFillValues((prev) => ({ ...prev, chapter_test1_practical: e.target.value }))}
+                      value={fillValues.chapter_test2_practical}
+                      onChange={(e) => setFillValues((prev) => ({ ...prev, chapter_test2_practical: e.target.value }))}
                       data-testid="assessment-q2-fill-practical"
                     />
                     <Button
@@ -577,7 +583,7 @@ export default function AssessmentMarksQ2() {
                       variant="outline"
                       size="sm"
                       className="h-8 shrink-0"
-                      onClick={() => handleFillColumn("chapter_test1_practical", 10)}
+                      onClick={() => handleFillColumn("chapter_test2_practical", 10)}
                       data-testid="assessment-q2-fill-practical-btn"
                     >
                       {t("fill_column")}
@@ -611,12 +617,12 @@ export default function AssessmentMarksQ2() {
                             max={5}
                             step={0.5}
                             className="text-center"
-                            value={current.quiz1 ?? ""}
-                            onChange={(e) => handleScoreChange(student.id, "quiz1", e.target.value, 5)}
-                            data-testid={`assessment-quiz1-${student.id}`}
+                            value={current.quiz3 ?? ""}
+                            onChange={(e) => handleScoreChange(student.id, "quiz3", e.target.value, 5)}
+                            data-testid={`assessment-quiz3-${student.id}`}
                           />
                         ) : (
-                          formatScore(student.quiz1)
+                          formatScore(student.quiz3)
                         )}
                       </TableCell>
                       <TableCell className="text-center">
@@ -627,12 +633,12 @@ export default function AssessmentMarksQ2() {
                             max={5}
                             step={0.5}
                             className="text-center"
-                            value={current.quiz2 ?? ""}
-                            onChange={(e) => handleScoreChange(student.id, "quiz2", e.target.value, 5)}
-                            data-testid={`assessment-quiz2-${student.id}`}
+                            value={current.quiz4 ?? ""}
+                            onChange={(e) => handleScoreChange(student.id, "quiz4", e.target.value, 5)}
+                            data-testid={`assessment-quiz4-${student.id}`}
                           />
                         ) : (
-                          formatScore(student.quiz2)
+                          formatScore(student.quiz4)
                         )}
                       </TableCell>
                       <TableCell className="text-center">
@@ -643,12 +649,12 @@ export default function AssessmentMarksQ2() {
                             max={10}
                             step={0.5}
                             className="text-center"
-                            value={current.chapter_test1_practical ?? ""}
-                            onChange={(e) => handleScoreChange(student.id, "chapter_test1_practical", e.target.value, 10)}
+                            value={current.chapter_test2_practical ?? ""}
+                            onChange={(e) => handleScoreChange(student.id, "chapter_test2_practical", e.target.value, 10)}
                             data-testid={`assessment-practical-${student.id}`}
                           />
                         ) : (
-                          formatScore(student.chapter_test1_practical)
+                          formatScore(student.chapter_test2_practical)
                         )}
                       </TableCell>
                       <TableCell className="text-center" data-testid={`assessment-total-${student.id}`}>

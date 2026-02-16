@@ -109,9 +109,10 @@ function computeAssessmentPerformanceLevel(baseStudent, currentStudent = baseStu
 }
 
 export default function AssessmentMarks() {
-  const { language, semester, profile, classes: contextClasses, classesLoaded } = useOutletContext();
+  const { language, semester, quarter, profile, classes: contextClasses, classesLoaded } = useOutletContext();
   const t = useTranslations(language);
   const isTeacher = profile?.role_name === "Teacher";
+  const semesterNumber = semester === "semester2" ? 2 : 1;
   const [students, setStudents] = useState([]);
   const [classes, setClasses] = useState([]);
   const [weeks, setWeeks] = useState([]);
@@ -131,10 +132,14 @@ export default function AssessmentMarks() {
   const loadData = async (weekId = activeWeekId) => {
     try {
       const requests = [api.get("/students", { params: weekId ? { week_id: weekId } : {} })];
-      if (!classesLoaded) requests.push(api.get("/classes"));
+      // Always fetch classes if context is empty so Classes dropdown and Class column show
+      if (!classesLoaded || !contextClasses?.length) requests.push(api.get("/classes"));
       const results = await Promise.all(requests);
       setStudents(results[0].data);
-      if (classesLoaded) setClasses(contextClasses || []); else if (results[1]) setClasses(results[1].data || []);
+      const classesFromApi = results[1]?.data;
+      if (classesLoaded && contextClasses?.length) setClasses(contextClasses || []);
+      else if (classesFromApi?.length) setClasses(classesFromApi);
+      else setClasses(contextClasses || []);
     } catch (error) {
       toast.error(getApiErrorMessage(error) || "Failed to load data");
     }
@@ -143,7 +148,7 @@ export default function AssessmentMarks() {
   const loadWeeks = async () => {
     try {
       const response = await api.get("/weeks", {
-        params: { quarter: 1 },
+        params: { semester: semesterNumber, quarter },
       });
       setWeeks(response.data || []);
       // Do not set activeWeekId here; let useEffect([weeks]) restore from sessionStorage so both pages stay in sync
@@ -167,16 +172,18 @@ export default function AssessmentMarks() {
   useEffect(() => {
     if (!weeks.length) return;
     if (weeks.find((w) => w.id === activeWeekId)) return;
-    const saved = sessionStorage.getItem("app_selected_week_id_q1");
+    const key = `app_selected_week_id_s${semesterNumber}_q${quarter}`;
+    const saved = sessionStorage.getItem(key);
     if (saved && weeks.some((w) => w.id === saved)) setActiveWeekId(saved);
-    else setActiveWeekId(weeks[0].id);
-  }, [weeks]);
+    else setActiveWeekId(weeks[0]?.id || "");
+  }, [weeks, semesterNumber, quarter]);
 
   useEffect(() => {
     if (!classes?.length) return;
-    const saved = sessionStorage.getItem("app_selected_class_id_q1");
+    const key = `app_selected_class_id_s${semesterNumber}_q${quarter}`;
+    const saved = sessionStorage.getItem(key);
     if (saved === "all" || classes.some((c) => c.id === saved)) setFilterClass(saved || "all");
-  }, [classes]);
+  }, [classes, semesterNumber, quarter]);
 
   const filteredStudents = useMemo(() => {
     const minValue = scoreMin ? Number(scoreMin) : null;
@@ -194,7 +201,7 @@ export default function AssessmentMarks() {
   }, [students, filterClass, searchTerm, performanceFilter, scoreMin, scoreMax]);
 
   const resetFilters = () => {
-    sessionStorage.setItem("app_selected_class_id_q1", "all");
+    sessionStorage.setItem(`app_selected_class_id_s${semesterNumber}_q${quarter}`, "all");
     setFilterClass("all");
     setSearchTerm("");
     setPerformanceFilter("all");
@@ -368,7 +375,7 @@ export default function AssessmentMarks() {
         params: { week_id: activeWeekId },
       });
       toast.success(t("bulk_import_completed") || "Bulk import completed");
-      sessionStorage.setItem("app_selected_week_id_q1", activeWeekId);
+      sessionStorage.setItem(`app_selected_week_id_s${semesterNumber}_q${quarter}`, activeWeekId);
       if (bulkFileInputRef.current) bulkFileInputRef.current.value = "";
       loadData(activeWeekId);
     } catch (error) {
@@ -455,7 +462,7 @@ export default function AssessmentMarks() {
           <Select
             value={filterClass}
             onValueChange={(value) => {
-              sessionStorage.setItem("app_selected_class_id_q1", value);
+              sessionStorage.setItem(`app_selected_class_id_s${semesterNumber}_q${quarter}`, value);
               setFilterClass(value);
             }}
             data-testid="assessment-class-filter"

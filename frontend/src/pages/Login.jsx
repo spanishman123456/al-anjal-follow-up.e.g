@@ -8,27 +8,35 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useTranslations } from "@/lib/i18n";
 import { toast } from "sonner";
 
-export default function Login({ language = "en", onLogin, onLanguageChange }) {
+export default function Login({
+  language = "en",
+  onLogin,
+  onLanguageChange,
+  serverStatus: serverStatusProp,
+}) {
   const t = useTranslations(language);
   const navigate = useNavigate();
   const [form, setForm] = useState({ username: "", password: "" });
-  const [backendOk, setBackendOk] = useState(null);
+  // Use app-level server status when provided (check starts as soon as you open the site); otherwise check when Login mounts
+  const [localBackendOk, setLocalBackendOk] = useState(null);
+  const backendOk = serverStatusProp !== undefined ? serverStatusProp : localBackendOk;
 
   useEffect(() => {
+    if (serverStatusProp !== undefined) return; // App is doing the health check
     let cancelled = false;
     checkBackendHealth().then((ok) => {
-      if (!cancelled) setBackendOk(ok);
+      if (!cancelled) setLocalBackendOk(ok);
     });
-    const t = setInterval(() => {
+    const interval = setInterval(() => {
       checkBackendHealth().then((ok) => {
-        if (!cancelled) setBackendOk(ok);
+        if (!cancelled) setLocalBackendOk(ok);
       });
     }, 8000);
     return () => {
       cancelled = true;
-      clearInterval(t);
+      clearInterval(interval);
     };
-  }, []);
+  }, [serverStatusProp]);
 
   const handleLogin = async (event) => {
     event.preventDefault();

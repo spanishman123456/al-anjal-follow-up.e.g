@@ -237,9 +237,10 @@ function CertificateDialog({ reward, open, onOpenChange }) {
 }
 
 export default function Students() {
-  const { language, semester, profile, classes: contextClasses, classesLoaded } = useOutletContext();
+  const { language, semester, quarter, profile, classes: contextClasses, classesLoaded } = useOutletContext();
   const t = useTranslations(language);
   const isTeacher = profile?.role_name === "Teacher";
+  const semesterNumber = semester === "semester2" ? 2 : 1;
   const [students, setStudents] = useState([]);
   const [classes, setClasses] = useState([]);
   const [weeks, setWeeks] = useState([]);
@@ -276,11 +277,14 @@ export default function Students() {
         api.get("/students", { params: weekId ? { week_id: weekId } : {} }),
         api.get("/settings/promotion"),
       ];
-      if (!classesLoaded) requests.push(api.get("/classes"));
+      if (!classesLoaded || !contextClasses?.length) requests.push(api.get("/classes"));
       const results = await Promise.all(requests);
       setStudents(results[0].data);
       setPromotionEnabled(Boolean(results[1].data?.enabled));
-      if (classesLoaded) setClasses(contextClasses || []); else if (results[2]) setClasses(results[2].data || []);
+      const classesFromApi = results[2]?.data;
+      if (classesLoaded && contextClasses?.length) setClasses(contextClasses || []);
+      else if (classesFromApi?.length) setClasses(classesFromApi);
+      else setClasses(contextClasses || []);
     } catch (error) {
       toast.error(getApiErrorMessage(error) || "Failed to load students");
     }
@@ -289,22 +293,22 @@ export default function Students() {
   const loadWeeks = async () => {
     try {
       const response = await api.get("/weeks", {
-        params: { quarter: semester === "semester2" ? 2 : 1 },
+        params: { semester: semesterNumber, quarter },
       });
       setWeeks(response.data || []);
-      // Do not set activeWeekId here; let useEffect([weeks]) restore from sessionStorage so both pages stay in sync
     } catch (error) {
       toast.error(getApiErrorMessage(error) || "Failed to load weeks");
     }
   };
 
-  const weekStorageKey = semester === "semester2" ? "app_selected_week_id_q2" : "app_selected_week_id_q1";
-  const classStorageKey = semester === "semester2" ? "app_selected_class_id_q2" : "app_selected_class_id_q1";
+  const weekStorageKey = `app_selected_week_id_s${semesterNumber}_q${quarter}`;
+  const classStorageKey = `app_selected_class_id_s${semesterNumber}_q${quarter}`;
 
   const handleAddWeek = async () => {
     try {
       const response = await api.post("/weeks", {
-        semester: semester === "semester2" ? 2 : 1,
+        semester: semesterNumber,
+        quarter,
       });
       setWeeks((prev) => [...prev, response.data]);
       const newId = response.data.id;
@@ -322,7 +326,7 @@ export default function Students() {
       toast.success(t("week_deleted"));
       setDeleteWeekOpen(false);
       const response = await api.get("/weeks", {
-        params: { quarter: semester === "semester2" ? 2 : 1 },
+        params: { semester: semesterNumber, quarter },
       });
       const list = response.data || [];
       const firstId = list[0]?.id || "";
@@ -338,7 +342,7 @@ export default function Students() {
     setWeeks([]);
     setActiveWeekId("");
     loadWeeks();
-  }, [semester]);
+  }, [semester, quarter]);
 
   useEffect(() => {
     if (classesLoaded && contextClasses) setClasses(contextClasses);

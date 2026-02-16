@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import "@/App.css";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AppShell } from "@/components/layout/AppShell";
-import { api } from "@/lib/api";
+import { api, checkBackendHealth } from "@/lib/api";
 import Dashboard from "@/pages/Dashboard";
 import Students from "@/pages/Students";
 import AssessmentMarks from "@/pages/AssessmentMarks";
@@ -36,6 +36,9 @@ function App() {
   const [token, setToken] = useState(localStorage.getItem("auth_token"));
   const [semester, setSemester] = useState(
     () => localStorage.getItem("semester") || "semester1",
+  );
+  const [quarter, setQuarter] = useState(
+    () => parseInt(localStorage.getItem("quarter") || "1", 10),
   );
   const academicYear = (() => {
     const now = new Date();
@@ -78,12 +81,40 @@ function App() {
   useEffect(() => {
     localStorage.setItem("semester", semester);
   }, [semester]);
+  useEffect(() => {
+    localStorage.setItem("quarter", String(quarter));
+  }, [quarter]);
+
+  // Start backend health check as soon as app loads (when not logged in),
+  // so we have server status before or soon after the login form appears.
+  const [backendOk, setBackendOk] = useState(null);
+  useEffect(() => {
+    if (token) return;
+    let cancelled = false;
+    checkBackendHealth().then((ok) => {
+      if (!cancelled) setBackendOk(ok);
+    });
+    const interval = setInterval(() => {
+      checkBackendHealth().then((ok) => {
+        if (!cancelled) setBackendOk(ok);
+      });
+    }, 8000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [token]);
 
   if (!token) {
     return (
       <div className="App">
         <BrowserRouter>
-        <Login language={language} onLogin={setToken} onLanguageChange={setLanguage} />
+        <Login
+          language={language}
+          onLogin={setToken}
+          onLanguageChange={setLanguage}
+          serverStatus={backendOk}
+        />
         </BrowserRouter>
         <Toaster richColors position="top-right" />
       </div>
@@ -105,6 +136,8 @@ function App() {
                 setTheme={setTheme}
                 semester={semester}
                 setSemester={setSemester}
+                quarter={quarter}
+                setQuarter={setQuarter}
                 academicYear={academicYear}
                 classes={classes}
                 classesLoaded={classesLoaded}

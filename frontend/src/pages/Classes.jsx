@@ -18,7 +18,8 @@ import { Input } from "@/components/ui/input";
 import { Trash2 } from "lucide-react";
 
 export default function Classes() {
-  const { language, profile } = useOutletContext();
+  const { language, profile, semester, quarter } = useOutletContext();
+  const semesterNumber = semester === "semester2" ? 2 : 1;
   const isTeacher = profile?.role_name === "Teacher";
   const t = useTranslations(language);
   const [classes, setClasses] = useState([]);
@@ -29,7 +30,9 @@ export default function Classes() {
 
   const loadClasses = async () => {
     try {
-      const response = await api.get("/classes/summary");
+      const response = await api.get("/classes/summary", {
+        params: { semester: semesterNumber, quarter },
+      });
       let data = response.data;
       if (!data.length) {
         const baseClasses = await api.get("/classes");
@@ -62,15 +65,17 @@ export default function Classes() {
   const handleDownload = async (format) => {
     try {
       const response = await api.get("/classes/summary/export", {
-        params: { format },
+        params: { format, semester: semesterNumber, quarter },
         responseType: "blob",
       });
       const url = window.URL.createObjectURL(new Blob([response.data]));
       const link = document.createElement("a");
       link.href = url;
+      const sLabel = semesterNumber === 2 ? "S2" : "S1";
+      const qLabel = `Q${quarter}`;
       link.setAttribute(
         "download",
-        `class_summary.${format === "excel" ? "xlsx" : "pdf"}`,
+        `class_summary_${sLabel}_${qLabel}.${format === "excel" ? "xlsx" : "pdf"}`,
       );
       document.body.appendChild(link);
       link.click();
@@ -82,7 +87,7 @@ export default function Classes() {
 
   useEffect(() => {
     loadClasses();
-  }, []);
+  }, [semesterNumber, quarter]);
 
   const handleCreate = async () => {
     try {

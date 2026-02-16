@@ -36,8 +36,9 @@ const PERFORMANCE_COLORS = {
 };
 
 export default function Analytics() {
-  const { language } = useOutletContext();
+  const { language, semester, quarter } = useOutletContext();
   const t = useTranslations(language);
+  const semesterNumber = semester === "semester2" ? 2 : 1;
   const [overview, setOverview] = useState(null);
   const [classSummary, setClassSummary] = useState([]);
   const [activeTab, setActiveTab] = useState("overview");
@@ -56,10 +57,14 @@ export default function Analytics() {
     const loadAnalytics = async () => {
       setLoading(true);
       try {
-        const params = selectedClassId !== "all" ? { class_id: selectedClassId } : {};
+        const params = {
+          semester: semesterNumber,
+          quarter,
+          ...(selectedClassId !== "all" ? { class_id: selectedClassId } : {}),
+        };
         const [overviewRes, classRes, classesRes] = await Promise.all([
           api.get("/analytics/overview", { params }),
-          api.get("/classes/summary"),
+          api.get("/classes/summary", { params: { semester: semesterNumber, quarter } }),
           api.get("/classes"),
         ]);
         if (cancelled) return;
@@ -69,10 +74,14 @@ export default function Analytics() {
       } catch (error) {
         if (cancelled) return;
         try {
-          const params = selectedClassId !== "all" ? { class_id: selectedClassId } : {};
+          const params = {
+            semester: semesterNumber,
+            quarter,
+            ...(selectedClassId !== "all" ? { class_id: selectedClassId } : {}),
+          };
           const [summaryRes, classRes, classesRes] = await Promise.all([
             api.get("/analytics/summary", { params }),
-            api.get("/classes/summary"),
+            api.get("/classes/summary", { params: { semester: semesterNumber, quarter } }),
             api.get("/classes"),
           ]);
           if (cancelled) return;
@@ -135,7 +144,7 @@ export default function Analytics() {
     };
     loadAnalytics();
     return () => { cancelled = true; };
-  }, [selectedClassId]);
+  }, [semesterNumber, quarter, selectedClassId]);
 
   const q1 = overview?.quarter1 || {};
   const q2 = overview?.quarter2 || {};
@@ -186,15 +195,17 @@ export default function Analytics() {
   const handleDownload = async (format) => {
     try {
       const response = await api.get("/analytics/summary/export", {
-        params: { format },
+        params: { format, semester: semesterNumber, quarter },
         responseType: "blob",
       });
       const url = window.URL.createObjectURL(new Blob([response.data]));
       const link = document.createElement("a");
       link.href = url;
+      const sLabel = semesterNumber === 2 ? "S2" : "S1";
+      const qLabel = `Q${quarter}`;
       link.setAttribute(
         "download",
-        `analytics_summary.${format === "excel" ? "xlsx" : "pdf"}`,
+        `analytics_summary_${sLabel}_${qLabel}.${format === "excel" ? "xlsx" : "pdf"}`,
       );
       document.body.appendChild(link);
       link.click();

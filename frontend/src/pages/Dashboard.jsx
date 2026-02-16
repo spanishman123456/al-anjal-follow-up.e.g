@@ -36,8 +36,9 @@ const formatScore = (value, suffix = "") => {
 };
 
 export default function Dashboard() {
-  const { language, semester, setSemester, academicYear, profile } = useOutletContext();
+  const { language, semester, setSemester, quarter, academicYear, profile } = useOutletContext();
   const t = useTranslations(language);
+  const semesterNumber = semester === "semester2" ? 2 : 1;
   const isTeacher = profile?.role_name === "Teacher";
   const [summary, setSummary] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -48,7 +49,9 @@ export default function Dashboard() {
   const fetchSummary = async () => {
     setLoading(true);
     try {
-      const response = await api.get("/analytics/summary");
+      const response = await api.get("/analytics/summary", {
+        params: { semester: semesterNumber, quarter },
+      });
       setSummary(response.data);
     } catch (error) {
       toast.error(getApiErrorMessage(error) || "Failed to load dashboard data");
@@ -63,7 +66,7 @@ export default function Dashboard() {
       .get("/users/profile")
       .then((response) => setSchedule(response.data?.schedule || {}))
       .catch(() => null);
-  }, []);
+  }, [semesterNumber, quarter]);
 
   const handleScheduleSave = async () => {
     try {

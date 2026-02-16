@@ -326,6 +326,14 @@ def compute_student_insights(scores_by_week: Dict[int, Dict[str, Optional[float]
     return {"weak_areas": weak_areas, "strengths": strengths}
 
 
+def _week_quarter(week: Dict[str, Any]) -> int:
+    """Infer quarter from week doc (for backward compat when quarter is missing)."""
+    if "quarter" in week and week["quarter"] in (1, 2):
+        return week["quarter"]
+    num = week.get("number", 1)
+    return 1 if num <= 9 else 2
+
+
 async def build_semester_score_map(student_ids: List[str], semester: int) -> Dict[str, Dict[int, Dict[str, Optional[float]]]]:
     if not student_ids:
         return {}
@@ -343,6 +351,33 @@ async def build_semester_score_map(student_ids: List[str], semester: int) -> Dic
         if not week_number:
             continue
         scores_by_student.setdefault(score["student_id"], {})[week_number] = score
+    return scores_by_student
+
+
+async def build_quarter_score_map(
+    student_ids: List[str], semester: int, quarter: int
+) -> Dict[str, Dict[int, Dict[str, Optional[float]]]]:
+    """Load scores only for weeks in (semester, quarter). Full separation: S1Q1, S1Q2, S2Q1, S2Q2."""
+    if not student_ids:
+        return {}
+    query = {"semester": semester, "quarter": quarter}
+    quarter_weeks = await db.weeks.find(query, {"_id": 0}).to_list(200)
+    if not quarter_weeks:
+        # Backward compat: weeks may lack quarter field
+        all_sem = await db.weeks.find({"semester": semester}, {"_id": 0}).to_list(200)
+        quarter_weeks = [w for w in all_sem if _week_quarter(w) == quarter]
+    week_number_map = {w["id"]: w["number"] for w in quarter_weeks}
+    week_ids = list(week_number_map.keys())
+    if not week_ids:
+        return {}
+    all_scores = await db.student_scores.find(
+        {"week_id": {"$in": week_ids}, "student_id": {"$in": student_ids}}, {"_id": 0}
+    ).to_list(5000)
+    scores_by_student: Dict[str, Dict[int, Dict[str, Optional[float]]]] = {}
+    for score in all_scores:
+        wn = week_number_map.get(score.get("week_id"))
+        if wn is not None:
+            scores_by_student.setdefault(score["student_id"], {})[wn] = score
     return scores_by_student
 
 
@@ -677,6 +712,58 @@ def _effective_scores_q2(scores_by_week: Dict[int, Dict[str, Optional[float]]]) 
         "quiz3": quiz3, "quiz4": quiz4, "chapter_test2_practical": ch2,
         "quarter2_practical": s17.get("quarter2_practical"), "quarter2_theory": s18.get("quarter2_theory"),
     }
+
+
+def _enrich_student_single_quarter(
+    student: Dict[str, Any],
+    sw: Dict[int, Dict[str, Optional[float]]],
+    quarter: int,
+) -> None:
+    """Enrich student with only one quarter's total and performance (for S1Q1, S1Q2, S2Q1, S2Q2 separation)."""
+    if quarter == 2:
+        avg_10_18 = compute_avg_weeks_10_18(sw)
+        students_total = compute_students_total_for_assessment(sw, weeks_10_18=True)
+        effective = _effective_scores_q2(sw)
+        res = compute_final_exams_combined(
+            effective, avg_weeks_10_18=avg_10_18, quarter=2, students_total_override=students_total
+        )
+        student["quarter1_total"] = None
+        student["quarter2_total"] = res.get("combined_total")
+        student["performance_level_q1"] = "no_data"
+        student["performance_level_q2"] = res.get("performance_level", "no_data")
+        student["performance_level"] = res.get("performance_level", "no_data")
+        val = res.get("combined_total")
+        student["semester_total"] = round(float(val), 2) if val is not None else None
+        student["total_score_normalized"] = round(float(val), 2) if val is not None else None
+        student["quiz3"] = effective.get("quiz3")
+        student["quiz4"] = effective.get("quiz4")
+        student["chapter_test2"] = effective.get("chapter_test2_practical")
+        student["quiz1"] = None
+        student["quiz2"] = None
+        student["chapter_test1"] = None
+    else:
+        avg_9 = compute_avg_first_9_weeks(sw)
+        students_total = compute_students_total_for_assessment(sw, weeks_10_18=False)
+        effective = _effective_scores_q1(sw)
+        res = compute_final_exams_combined(
+            effective, avg_first_9_weeks=avg_9, quarter=1, students_total_override=students_total
+        )
+        student["quarter1_total"] = res.get("combined_total")
+        student["quarter2_total"] = None
+        student["performance_level_q1"] = res.get("performance_level", "no_data")
+        student["performance_level_q2"] = "no_data"
+        student["performance_level"] = res.get("performance_level", "no_data")
+        val = res.get("combined_total")
+        student["semester_total"] = round(float(val), 2) if val is not None else None
+        student["total_score_normalized"] = round(float(val), 2) if val is not None else None
+        student["quiz1"] = effective.get("quiz1")
+        student["quiz2"] = effective.get("quiz2")
+        student["chapter_test1"] = effective.get("chapter_test1_practical")
+        student["quiz3"] = None
+        student["quiz4"] = None
+        student["chapter_test2"] = None
+    label_map = {"on_level": "On Level", "approach": "Approach", "below": "Below", "no_data": "No Data"}
+    student["performance_label"] = label_map.get(student["performance_level"], "No Data")
 
 
 def parse_class_name(name: str) -> Dict[str, Optional[Any]]:
@@ -1341,7 +1428,8 @@ class PromotionRequest(BaseModel):
 class WeekRecord(BaseModel):
     model_config = ConfigDict(extra="ignore")
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    semester: int
+    semester: int  # 1 or 2
+    quarter: int = 1  # 1 or 2 — full separation: S1Q1, S1Q2, S2Q1, S2Q2
     number: int
     label: str
     created_at: str = Field(default_factory=iso_now)
@@ -1350,6 +1438,7 @@ class WeekRecord(BaseModel):
 class WeekCreate(BaseModel):
     label: Optional[str] = None
     semester: int = 1
+    quarter: int = 1  # 1 or 2
 
 
 class StudentScoreRecord(BaseModel):
@@ -1683,28 +1772,44 @@ async def delete_class(class_id: str):
 @api_router.get("/weeks", response_model=List[WeekRecord])
 async def list_weeks(
     semester: Optional[int] = Query(default=None),
-    quarter: Optional[int] = Query(default=None, description="1 = weeks 1-9 only (1st quarter), 2 = weeks 10-18 only (2nd quarter)"),
+    quarter: Optional[int] = Query(default=None, description="1 = weeks 1-9, 2 = weeks 10-18 (per semester)"),
 ):
-    """Return weeks. If quarter=1 return only weeks 1-9 (1st quarter); if quarter=2 return only weeks 10-18 (2nd quarter). Otherwise filter by semester if given."""
-    query = {} if quarter else ({"semester": semester} if semester else {})
+    """Return weeks for the given semester and quarter. Full separation: S1Q1, S1Q2, S2Q1, S2Q2 each have their own weeks."""
+    if semester is not None and quarter is not None:
+        query = {"semester": semester, "quarter": quarter}
+        all_weeks = await db.weeks.find(query, {"_id": 0}).sort("number", 1).to_list(200)
+        # Backfill quarter on docs that don't have it (migration)
+        for w in all_weeks:
+            if "quarter" not in w or w["quarter"] not in (1, 2):
+                w["quarter"] = 1 if w.get("number", 1) <= 9 else 2
+        return all_weeks
+    # Legacy: no quarter -> filter by semester and quarter from number
+    query = {"semester": semester} if semester else {}
     all_weeks = await db.weeks.find(query, {"_id": 0}).sort([("semester", 1), ("number", 1)]).to_list(200)
     if quarter == 1:
-        all_weeks = [w for w in all_weeks if 1 <= _normalized_week_number(w) <= 9]
+        all_weeks = [w for w in all_weeks if _week_quarter(w) == 1 and 1 <= w.get("number", 1) <= 9]
     elif quarter == 2:
-        all_weeks = [w for w in all_weeks if 10 <= _normalized_week_number(w) <= 18]
+        all_weeks = [w for w in all_weeks if _week_quarter(w) == 2 and 10 <= w.get("number", 18) <= 18]
+    for w in all_weeks:
+        if "quarter" not in w or w["quarter"] not in (1, 2):
+            w["quarter"] = 1 if w.get("number", 1) <= 9 else 2
     return all_weeks
 
 
 @api_router.post("/weeks", response_model=WeekRecord)
 async def create_week(payload: WeekCreate):
-    """Create week: semester 1 = numbers 1-9 (Q1), semester 2 = numbers 10-18 (Q2) so data is clearly separated."""
-    last_week = await db.weeks.find({"semester": payload.semester}, {"_id": 0}).sort("number", -1).to_list(1)
-    if payload.semester == 2:
-        next_number = (last_week[0]["number"] + 1) if last_week and last_week[0]["number"] >= 10 else 10
-    else:
+    """Create week in (semester, quarter). Q1 = numbers 1-9, Q2 = numbers 10-18; each (semester, quarter) is independent."""
+    q = payload.quarter if payload.quarter in (1, 2) else 1
+    query = {"semester": payload.semester, "quarter": q}
+    last_week = await db.weeks.find(query, {"_id": 0}).sort("number", -1).to_list(1)
+    if q == 1:
         next_number = (last_week[0]["number"] + 1) if last_week else 1
+        next_number = min(max(next_number, 1), 9)
+    else:
+        next_number = (last_week[0]["number"] + 1) if last_week and last_week[0].get("number", 0) >= 10 else 10
+        next_number = min(max(next_number, 10), 18)
     label = payload.label or f"Week {next_number}"
-    week = WeekRecord(semester=payload.semester, number=next_number, label=label)
+    week = WeekRecord(semester=payload.semester, quarter=q, number=next_number, label=label)
     await db.weeks.insert_one(week.model_dump())
     return week
 
@@ -1765,26 +1870,20 @@ async def get_students(
                 student["quarter2_theory"] = score.get("quarter2_theory")
         week_doc = await db.weeks.find_one({"id": week_id}, {"_id": 0})
         if week_doc:
-            semester = week_doc.get("semester", 1)
-            # Use full-year map so Final Exams can use Q1 quiz/chapter from weeks 1-9 and exam scores from 9/10
-            scores_by_student = await build_full_year_score_map(student_ids)
+            sem = week_doc.get("semester", 1)
+            q = _week_quarter(week_doc)
+            # Only load scores for this (semester, quarter) — full separation S1Q1, S1Q2, S2Q1, S2Q2
+            scores_by_student = await build_quarter_score_map(student_ids, sem, q)
             for student in students:
-                totals = compute_quarter_totals(scores_by_student.get(student["id"], {}))
+                sw = scores_by_student.get(student["id"], {})
+                totals = compute_quarter_totals(sw)
                 student.update(totals)
-                # For Assessment Marks (1st quarter): average of first 9 weeks' follow-up total (out of 15)
-                avg_9 = compute_avg_first_9_weeks(scores_by_student.get(student["id"], {}))
+                avg_9 = compute_avg_first_9_weeks(sw)
+                avg_10_18 = compute_avg_weeks_10_18(sw)
                 student["avg_first_9_weeks"] = avg_9
-                # For Assessment Marks (2nd quarter): average of weeks 10-18 follow-up total (out of 15)
-                avg_10_18 = compute_avg_weeks_10_18(scores_by_student.get(student["id"], {}))
                 student["avg_weeks_10_18"] = avg_10_18
-                # Students total for assessment: max(avg, best single week) so 15 in any one week = 15
-                students_total_q1 = compute_students_total_for_assessment(
-                    scores_by_student.get(student["id"], {}), avg_first_9_weeks=avg_9, weeks_10_18=False
-                )
-                students_total_q2 = compute_students_total_for_assessment(
-                    scores_by_student.get(student["id"], {}), weeks_10_18=True
-                )
-                # Use current week's behavioral total when higher so same quiz/chapter marks give consistent 30/30 when current week has 15
+                students_total_q1 = compute_students_total_for_assessment(sw, avg_first_9_weeks=avg_9, weeks_10_18=False)
+                students_total_q2 = compute_students_total_for_assessment(sw, weeks_10_18=True)
                 a, p, b, h = (
                     student.get("attendance"), student.get("participation"),
                     student.get("behavior"), student.get("homework"),
@@ -1795,7 +1894,6 @@ async def get_students(
                 )
                 current_week_behavioral = round(min(max(0, _cur), 15), 2)
                 students_total_q1 = max(students_total_q1, current_week_behavioral)
-                # Assessment combined (30) and Final Exams combined (50) for display on Assessment/Final pages
                 scores_dict = {
                     "attendance": student.get("attendance"),
                     "participation": student.get("participation"),
@@ -1812,44 +1910,56 @@ async def get_students(
                     "quarter2_practical": student.get("quarter2_practical"),
                     "quarter2_theory": student.get("quarter2_theory"),
                 }
-                res_q1 = compute_assessment_combined(
-                    scores_dict, avg_first_9_weeks=avg_9, students_total_override=students_total_q1
-                )
-                student["assessment_combined_total"] = res_q1.get("combined_total")
-                student["assessment_performance_level"] = res_q1.get("performance_level")
-                student["assessment_performance_label"] = res_q1.get("performance_label")
-                res_q2 = compute_assessment_combined_q2(
-                    scores_dict, avg_weeks_10_18=avg_10_18, students_total_override=students_total_q2
-                )
-                student["assessment_q2_combined_total"] = res_q2.get("combined_total")
-                student["assessment_q2_performance_level"] = res_q2.get("performance_level")
-                student["assessment_q2_performance_label"] = res_q2.get("performance_label")
-                # Final Exams Q1: use effective Q1 scores (best quiz/chapter from weeks 1-9, exams from 9/10) so total can be 50/50
-                sw = scores_by_student.get(student["id"], {})
-                effective_q1 = _effective_scores_q1(sw)
-                effective_q1_edit = {
-                    **effective_q1,
-                    "quarter1_practical": student.get("quarter1_practical") if student.get("quarter1_practical") is not None else effective_q1.get("quarter1_practical"),
-                    "quarter1_theory": student.get("quarter1_theory") if student.get("quarter1_theory") is not None else effective_q1.get("quarter1_theory"),
-                }
-                res_final_q1 = compute_final_exams_combined(
-                    effective_q1_edit, avg_first_9_weeks=avg_9, quarter=1, students_total_override=students_total_q1
-                )
-                student["final_exams_combined_total"] = res_final_q1.get("combined_total")
-                student["final_exams_performance_level"] = res_final_q1.get("performance_level")
-                student["final_exams_performance_label"] = res_final_q1.get("performance_label")
-                effective_q2 = _effective_scores_q2(sw)
-                effective_q2_edit = {
-                    **effective_q2,
-                    "quarter2_practical": student.get("quarter2_practical") if student.get("quarter2_practical") is not None else effective_q2.get("quarter2_practical"),
-                    "quarter2_theory": student.get("quarter2_theory") if student.get("quarter2_theory") is not None else effective_q2.get("quarter2_theory"),
-                }
-                res_final_q2 = compute_final_exams_combined(
-                    effective_q2_edit, avg_weeks_10_18=avg_10_18, quarter=2, students_total_override=students_total_q2
-                )
-                student["final_exams_q2_combined_total"] = res_final_q2.get("combined_total")
-                student["final_exams_q2_performance_level"] = res_final_q2.get("performance_level")
-                student["final_exams_q2_performance_label"] = res_final_q2.get("performance_label")
+                if q == 1:
+                    res_q1 = compute_assessment_combined(
+                        scores_dict, avg_first_9_weeks=avg_9, students_total_override=students_total_q1
+                    )
+                    student["assessment_combined_total"] = res_q1.get("combined_total")
+                    student["assessment_performance_level"] = res_q1.get("performance_level")
+                    student["assessment_performance_label"] = res_q1.get("performance_label")
+                    student["assessment_q2_combined_total"] = None
+                    student["assessment_q2_performance_level"] = None
+                    student["assessment_q2_performance_label"] = None
+                    effective_q1 = _effective_scores_q1(sw)
+                    effective_q1_edit = {
+                        **effective_q1,
+                        "quarter1_practical": student.get("quarter1_practical") or effective_q1.get("quarter1_practical"),
+                        "quarter1_theory": student.get("quarter1_theory") or effective_q1.get("quarter1_theory"),
+                    }
+                    res_final_q1 = compute_final_exams_combined(
+                        effective_q1_edit, avg_first_9_weeks=avg_9, quarter=1, students_total_override=students_total_q1
+                    )
+                    student["final_exams_combined_total"] = res_final_q1.get("combined_total")
+                    student["final_exams_performance_level"] = res_final_q1.get("performance_level")
+                    student["final_exams_performance_label"] = res_final_q1.get("performance_label")
+                    student["final_exams_q2_combined_total"] = None
+                    student["final_exams_q2_performance_level"] = None
+                    student["final_exams_q2_performance_label"] = None
+                else:
+                    student["assessment_combined_total"] = None
+                    student["assessment_performance_level"] = None
+                    student["assessment_performance_label"] = None
+                    res_q2 = compute_assessment_combined_q2(
+                        scores_dict, avg_weeks_10_18=avg_10_18, students_total_override=students_total_q2
+                    )
+                    student["assessment_q2_combined_total"] = res_q2.get("combined_total")
+                    student["assessment_q2_performance_level"] = res_q2.get("performance_level")
+                    student["assessment_q2_performance_label"] = res_q2.get("performance_label")
+                    effective_q2 = _effective_scores_q2(sw)
+                    effective_q2_edit = {
+                        **effective_q2,
+                        "quarter2_practical": student.get("quarter2_practical") or effective_q2.get("quarter2_practical"),
+                        "quarter2_theory": student.get("quarter2_theory") or effective_q2.get("quarter2_theory"),
+                    }
+                    res_final_q2 = compute_final_exams_combined(
+                        effective_q2_edit, avg_weeks_10_18=avg_10_18, quarter=2, students_total_override=students_total_q2
+                    )
+                    student["final_exams_combined_total"] = None
+                    student["final_exams_performance_level"] = None
+                    student["final_exams_performance_label"] = None
+                    student["final_exams_q2_combined_total"] = res_final_q2.get("combined_total")
+                    student["final_exams_q2_performance_level"] = res_final_q2.get("performance_level")
+                    student["final_exams_q2_performance_label"] = res_final_q2.get("performance_label")
     return [enrich_student(student) for student in students]
 
 
@@ -2072,7 +2182,7 @@ async def download_import_template(
     if class_id:
         students = await get_students(class_id=class_id, week_id=week_id, current_user=current_user)
         if students:
-            if assessment_view or assessment_q2_view:
+            if assessment_view:
                 template_rows = [
                     {
                         "Student Name": s.get("full_name"),
@@ -2080,6 +2190,19 @@ async def download_import_template(
                         "Quiz 1 (5)": "",
                         "Quiz 2 (5)": "",
                         "Chapter Test 1 (Practical) (10)": "",
+                        "Total Score": "",
+                        "Performance Level": "",
+                    }
+                    for s in students
+                ]
+            elif assessment_q2_view:
+                template_rows = [
+                    {
+                        "Student Name": s.get("full_name"),
+                        "Class": s.get("class_name"),
+                        "Quiz 3 (5)": "",
+                        "Quiz 4 (5)": "",
+                        "Chapter Test 2 (Practical) (10)": "",
                         "Total Score": "",
                         "Performance Level": "",
                     }
@@ -2124,8 +2247,10 @@ async def download_import_template(
                     for s in students
                 ]
         else:
-            if assessment_view or assessment_q2_view:
+            if assessment_view:
                 empty_row = {"Student Name": "", "Class": "", "Quiz 1 (5)": "", "Quiz 2 (5)": "", "Chapter Test 1 (Practical) (10)": "", "Total Score": "", "Performance Level": ""}
+            elif assessment_q2_view:
+                empty_row = {"Student Name": "", "Class": "", "Quiz 3 (5)": "", "Quiz 4 (5)": "", "Chapter Test 2 (Practical) (10)": "", "Total Score": "", "Performance Level": ""}
             elif final_exams_view:
                 empty_row = {"Student Name": "", "Class": "", "1st Quarter Practical Exam (10)": "", "1st Quarter Theoretical Exam (10)": "", "Total Score": "", "Performance Level": ""}
             elif final_exams_q2_view:
@@ -2134,8 +2259,10 @@ async def download_import_template(
                 empty_row = {"Student Name": "", "Class": "", "Attendance (2.5)": "", "Participation (2.5)": "", "Behavior (5)": "", "Homework (5)": "", "Total Score": "", "Performance Level": ""}
             template_rows = [empty_row]
     else:
-        if assessment_view or assessment_q2_view:
+        if assessment_view:
             empty_row = {"Student Name": "", "Class": "", "Quiz 1 (5)": "", "Quiz 2 (5)": "", "Chapter Test 1 (Practical) (10)": "", "Total Score": "", "Performance Level": ""}
+        elif assessment_q2_view:
+            empty_row = {"Student Name": "", "Class": "", "Quiz 3 (5)": "", "Quiz 4 (5)": "", "Chapter Test 2 (Practical) (10)": "", "Total Score": "", "Performance Level": ""}
         elif final_exams_view:
             empty_row = {"Student Name": "", "Class": "", "1st Quarter Practical Exam (10)": "", "1st Quarter Theoretical Exam (10)": "", "Total Score": "", "Performance Level": ""}
         elif final_exams_q2_view:
@@ -2201,15 +2328,15 @@ async def export_students_marks(
                 }
             )
         elif assessment_q2_view:
-            combined = compute_assessment_combined(
+            combined = compute_assessment_combined_q2(
                 {
                     "attendance": student.get("attendance"),
                     "participation": student.get("participation"),
                     "behavior": student.get("behavior"),
                     "homework": student.get("homework"),
-                    "quiz1": student.get("quiz1"),
-                    "quiz2": student.get("quiz2"),
-                    "chapter_test1_practical": student.get("chapter_test1_practical"),
+                    "quiz3": student.get("quiz3"),
+                    "quiz4": student.get("quiz4"),
+                    "chapter_test2_practical": student.get("chapter_test2_practical"),
                 },
                 avg_weeks_10_18=student.get("avg_weeks_10_18"),
             )
@@ -2218,9 +2345,9 @@ async def export_students_marks(
                 {
                     "Student Name": student.get("full_name"),
                     "Class": student.get("class_name"),
-                    "Quiz 1 (5)": student.get("quiz1"),
-                    "Quiz 2 (5)": student.get("quiz2"),
-                    "Chapter Test 1 (Practical) (10)": student.get("chapter_test1_practical"),
+                    "Quiz 3 (5)": student.get("quiz3"),
+                    "Quiz 4 (5)": student.get("quiz4"),
+                    "Chapter Test 2 (Practical) (10)": student.get("chapter_test2_practical"),
                     "Total Score": total_display,
                     "Performance Level": combined.get("performance_label") or "No Data",
                 }
@@ -2711,59 +2838,21 @@ def build_summary(students: List[Dict[str, Any]], classes: List[Dict[str, Any]])
 async def get_analytics_summary(
     class_id: Optional[str] = Query(default=None),
     semester: Optional[int] = Query(default=1),
+    quarter: Optional[int] = Query(default=1),
 ):
-    """Summary for Dashboard: use final-exams combined (50 per quarter) so progress reflects 1st/2nd quarter marks."""
+    """Summary for Dashboard: one (semester, quarter) only. Full separation S1Q1, S1Q2, S2Q1, S2Q2."""
     try:
         student_query = {"class_id": class_id} if class_id else {}
         class_query = {"id": class_id} if class_id else {}
         students = await db.students.find(student_query, {"_id": 0}).to_list(5000)
         classes = await db.classes.find(class_query, {"_id": 0}).to_list(200)
+        sem = semester or 1
+        q = quarter or 1
         if students:
-            scores_by_student = await build_full_year_score_map([s["id"] for s in students])
+            scores_by_student = await build_quarter_score_map([s["id"] for s in students], sem, q)
             for student in students:
                 sw = scores_by_student.get(student["id"], {})
-                avg_9 = compute_avg_first_9_weeks(sw)
-                avg_10_18 = compute_avg_weeks_10_18(sw)
-                students_total_q1 = compute_students_total_for_assessment(sw, weeks_10_18=False)
-                students_total_q2 = compute_students_total_for_assessment(sw, weeks_10_18=True)
-                effective_q1 = _effective_scores_q1(sw)
-                effective_q2 = _effective_scores_q2(sw)
-                res_q1 = compute_final_exams_combined(
-                    effective_q1, avg_first_9_weeks=avg_9, quarter=1, students_total_override=students_total_q1
-                )
-                res_q2 = compute_final_exams_combined(
-                    effective_q2, avg_weeks_10_18=avg_10_18, quarter=2, students_total_override=students_total_q2
-                )
-                student["quarter1_total"] = res_q1.get("combined_total")
-                student["quarter2_total"] = res_q2.get("combined_total")
-                student["performance_level_q1"] = res_q1.get("performance_level", "no_data")
-                student["performance_level_q2"] = res_q2.get("performance_level", "no_data")
-                student["performance_level"] = _overall_performance_level(
-                    student["performance_level_q1"], student["performance_level_q2"]
-                )
-                label_map = {"on_level": "On Level", "approach": "Approach", "below": "Below", "no_data": "No Data"}
-                student["performance_label"] = label_map.get(student["performance_level"], "No Data")
-                q1_val = student.get("quarter1_total")
-                q2_val = student.get("quarter2_total")
-                if q1_val is not None and q2_val is not None:
-                    student["semester_total"] = round(float(q1_val) + float(q2_val), 2)
-                    student["total_score_normalized"] = round((float(q1_val) + float(q2_val)) / 2, 2)
-                elif q1_val is not None:
-                    student["semester_total"] = round(float(q1_val), 2)
-                    student["total_score_normalized"] = round(float(q1_val), 2)
-                elif q2_val is not None:
-                    student["semester_total"] = round(float(q2_val), 2)
-                    student["total_score_normalized"] = round(float(q2_val), 2)
-                else:
-                    student["semester_total"] = None
-                    student["total_score_normalized"] = None
-                # So Dashboard avg_quiz_score and avg_total_score use correct scale (quiz out of 5, total out of 50)
-                student["quiz1"] = effective_q1.get("quiz1")
-                student["quiz2"] = effective_q1.get("quiz2")
-                student["chapter_test1"] = effective_q1.get("chapter_test1_practical")
-                student["quiz3"] = effective_q2.get("quiz3")
-                student["quiz4"] = effective_q2.get("quiz4")
-                student["chapter_test2"] = effective_q2.get("chapter_test2_practical")
+                _enrich_student_single_quarter(student, sw, q)
         return build_summary(students, classes)
     except Exception as e:
         logger.exception("Analytics summary failed")
@@ -2774,19 +2863,24 @@ async def get_analytics_summary(
 async def get_analytics_overview(
     class_id: Optional[str] = Query(default=None),
     semester: Optional[int] = Query(default=1),
+    quarter: Optional[int] = Query(default=1),
 ):
     """
-    Analytics overview with both quarters: distributions, metrics, struggling students
-    (with weak_areas), and excelling students (with strengths).
+    Analytics overview for one (semester, quarter) only. Full separation S1Q1, S1Q2, S2Q1, S2Q2.
+    Returns single quarter distribution, struggling and excelling students for that quarter.
     """
     student_query = {"class_id": class_id} if class_id else {}
     class_query = {"id": class_id} if class_id else {}
     students = await db.students.find(student_query, {"_id": 0}).to_list(5000)
     classes = await db.classes.find(class_query, {"_id": 0}).to_list(200)
+    sem = semester or 1
+    q = quarter or 1
     if not students:
         return {
             "total_students": 0,
             "classes_count": len(classes),
+            "semester": sem,
+            "quarter": q,
             "quarter1": _empty_quarter_summary(),
             "quarter2": _empty_quarter_summary(),
             "struggling_students": [],
@@ -2797,68 +2891,36 @@ async def get_analytics_overview(
     for s in students:
         s["class_name"] = class_id_to_name.get(s.get("class_id"), s.get("class_name", ""))
     student_ids = [s["id"] for s in students]
-    scores_by_student = await build_full_year_score_map(student_ids)
-    # Enrich each student with quarter totals (final-exams 50 scale) and insights
+    scores_by_student = await build_quarter_score_map(student_ids, sem, q)
     for student in students:
         sw = scores_by_student.get(student["id"], {})
         insights = compute_student_insights(sw)
         student["weak_areas"] = insights["weak_areas"]
         student["strengths"] = insights["strengths"]
-        avg_9 = compute_avg_first_9_weeks(sw)
-        avg_10_18 = compute_avg_weeks_10_18(sw)
-        students_total_q1 = compute_students_total_for_assessment(sw, weeks_10_18=False)
-        students_total_q2 = compute_students_total_for_assessment(sw, weeks_10_18=True)
-        effective_q1 = _effective_scores_q1(sw)
-        effective_q2 = _effective_scores_q2(sw)
-        res_q1 = compute_final_exams_combined(
-            effective_q1, avg_first_9_weeks=avg_9, quarter=1, students_total_override=students_total_q1
-        )
-        res_q2 = compute_final_exams_combined(
-            effective_q2, avg_weeks_10_18=avg_10_18, quarter=2, students_total_override=students_total_q2
-        )
-        student["quarter1_total"] = res_q1.get("combined_total")
-        student["quarter2_total"] = res_q2.get("combined_total")
-        student["performance_level_q1"] = res_q1.get("performance_level", "no_data")
-        student["performance_level_q2"] = res_q2.get("performance_level", "no_data")
-    # Quarter distributions
-    q1_counts = {"on_level": 0, "approach": 0, "below": 0, "no_data": 0}
-    q2_counts = {"on_level": 0, "approach": 0, "below": 0, "no_data": 0}
-    q1_totals: List[float] = []
-    q2_totals: List[float] = []
+        _enrich_student_single_quarter(student, sw, q)
+    # Single quarter distribution
+    counts = {"on_level": 0, "approach": 0, "below": 0, "no_data": 0}
+    totals: List[float] = []
     for s in students:
-        q1_level = s.get("performance_level_q1", "no_data")
-        q2_level = s.get("performance_level_q2", "no_data")
-        q1_counts[q1_level] = q1_counts.get(q1_level, 0) + 1
-        q2_counts[q2_level] = q2_counts.get(q2_level, 0) + 1
-        if s.get("quarter1_total") is not None:
-            q1_totals.append(float(s["quarter1_total"]))
-        if s.get("quarter2_total") is not None:
-            q2_totals.append(float(s["quarter2_total"]))
-    total_with_q1 = len(students) - q1_counts.get("no_data", 0)
-    total_with_q2 = len(students) - q2_counts.get("no_data", 0)
-    quarter1 = {
+        level = s.get("performance_level", "no_data")
+        counts[level] = counts.get(level, 0) + 1
+        if s.get("semester_total") is not None:
+            totals.append(float(s["semester_total"]))
+    total_with_data = len(students) - counts.get("no_data", 0)
+    quarter_summary = {
         "distribution": [
-            {"level": "on_level", "count": q1_counts["on_level"]},
-            {"level": "approach", "count": q1_counts["approach"]},
-            {"level": "below", "count": q1_counts["below"]},
-            {"level": "no_data", "count": q1_counts["no_data"]},
+            {"level": "on_level", "count": counts["on_level"]},
+            {"level": "approach", "count": counts["approach"]},
+            {"level": "below", "count": counts["below"]},
+            {"level": "no_data", "count": counts["no_data"]},
         ],
-        "avg_total": round(sum(q1_totals) / len(q1_totals), 2) if q1_totals else None,
-        "on_level_rate": round((q1_counts["on_level"] / total_with_q1) * 100, 1) if total_with_q1 else 0,
-        "total_with_data": total_with_q1,
+        "avg_total": round(sum(totals) / len(totals), 2) if totals else None,
+        "on_level_rate": round((counts["on_level"] / total_with_data) * 100, 1) if total_with_data else 0,
+        "total_with_data": total_with_data,
     }
-    quarter2 = {
-        "distribution": [
-            {"level": "on_level", "count": q2_counts["on_level"]},
-            {"level": "approach", "count": q2_counts["approach"]},
-            {"level": "below", "count": q2_counts["below"]},
-            {"level": "no_data", "count": q2_counts["no_data"]},
-        ],
-        "avg_total": round(sum(q2_totals) / len(q2_totals), 2) if q2_totals else None,
-        "on_level_rate": round((q2_counts["on_level"] / total_with_q2) * 100, 1) if total_with_q2 else 0,
-        "total_with_data": total_with_q2,
-    }
-    # Struggling: approach or below in either quarter, with weak_areas
+    empty = _empty_quarter_summary()
+    quarter1 = quarter_summary if q == 1 else empty
+    quarter2 = quarter_summary if q == 2 else empty
     struggling_students = [
         {
             "id": s["id"],
@@ -2872,9 +2934,8 @@ async def get_analytics_overview(
             "weak_areas": s.get("weak_areas") or [],
         }
         for s in students
-        if s.get("performance_level_q1") in ("approach", "below") or s.get("performance_level_q2") in ("approach", "below")
+        if s.get("performance_level") in ("approach", "below")
     ]
-    # Excelling: on_level in both quarters (with data), with strengths
     excelling_students = [
         {
             "id": s["id"],
@@ -2888,16 +2949,18 @@ async def get_analytics_overview(
             "strengths": s.get("strengths") or [],
         }
         for s in students
-        if s.get("performance_level_q1") == "on_level" and s.get("performance_level_q2") == "on_level"
+        if s.get("performance_level") == "on_level"
     ]
-    class_counts: Dict[str, int] = {}
+    class_counts_map: Dict[str, int] = {}
     for s in students:
         cn = s.get("class_name") or "Unknown"
-        class_counts[cn] = class_counts.get(cn, 0) + 1
-    students_per_class = [{"class_name": name, "count": count} for name, count in sorted(class_counts.items())]
+        class_counts_map[cn] = class_counts_map.get(cn, 0) + 1
+    students_per_class = [{"class_name": name, "count": count} for name, count in sorted(class_counts_map.items())]
     return {
         "total_students": len(students),
         "classes_count": len(classes),
+        "semester": sem,
+        "quarter": q,
         "quarter1": quarter1,
         "quarter2": quarter2,
         "struggling_students": struggling_students,
@@ -2920,11 +2983,11 @@ def _empty_quarter_summary() -> Dict[str, Any]:
     }
 
 
-async def _build_class_summary_list(classes: List[Dict[str, Any]], semester: int = 1) -> List[Dict[str, Any]]:
+async def _build_class_summary_list(
+    classes: List[Dict[str, Any]], semester: int = 1, quarter: int = 1
+) -> List[Dict[str, Any]]:
     """
-    Build class performance summary aligned with both quarters and Analytics:
-    uses semester score map, quarter totals, and same performance levels so Classes
-    reflects the same insights as 1st/2nd Quarter Marks and Analytics.
+    Build class performance summary for one (semester, quarter) only. Full separation S1Q1, S1Q2, S2Q1, S2Q2.
     """
     if not classes:
         return []
@@ -2951,85 +3014,55 @@ async def _build_class_summary_list(classes: List[Dict[str, Any]], semester: int
             }
             for c in classes
         ]
-    scores_by_student = await build_full_year_score_map([s["id"] for s in students])
+    scores_by_student = await build_quarter_score_map([s["id"] for s in students], semester, quarter)
     for student in students:
         sw = scores_by_student.get(student["id"], {})
-        avg_9 = compute_avg_first_9_weeks(sw)
-        avg_10_18 = compute_avg_weeks_10_18(sw)
-        students_total_q1 = compute_students_total_for_assessment(sw, weeks_10_18=False)
-        students_total_q2 = compute_students_total_for_assessment(sw, weeks_10_18=True)
-        effective_q1 = _effective_scores_q1(sw)
-        effective_q2 = _effective_scores_q2(sw)
-        res_q1 = compute_final_exams_combined(
-            effective_q1, avg_first_9_weeks=avg_9, quarter=1, students_total_override=students_total_q1
-        )
-        res_q2 = compute_final_exams_combined(
-            effective_q2, avg_weeks_10_18=avg_10_18, quarter=2, students_total_override=students_total_q2
-        )
-        student["quarter1_total"] = res_q1.get("combined_total")
-        student["quarter2_total"] = res_q2.get("combined_total")
-        student["performance_level_q1"] = res_q1.get("performance_level", "no_data")
-        student["performance_level_q2"] = res_q2.get("performance_level", "no_data")
-        student["performance_level"] = _overall_performance_level(
-            student["performance_level_q1"], student["performance_level_q2"]
-        )
-        q1_val = student.get("quarter1_total")
-        q2_val = student.get("quarter2_total")
-        if q1_val is not None and q2_val is not None:
-            stot = float(q1_val) + float(q2_val)
-            student["semester_total"] = round(stot, 2)
-        elif q1_val is not None:
-            student["semester_total"] = round(float(q1_val), 2)
-        elif q2_val is not None:
-            student["semester_total"] = round(float(q2_val), 2)
-        else:
-            student["semester_total"] = None
+        _enrich_student_single_quarter(student, sw, quarter)
     student_map: Dict[str, List[Dict[str, Any]]] = {}
     for student in students:
         student_map.setdefault(student["class_id"], []).append(student)
     summaries = []
     for class_item in classes:
         class_students = student_map.get(class_item["id"], [])
-        q1_totals = [float(s["quarter1_total"]) for s in class_students if s.get("quarter1_total") is not None]
-        q2_totals = [float(s["quarter2_total"]) for s in class_students if s.get("quarter2_total") is not None]
-        semester_totals = [float(s["semester_total"]) for s in class_students if s.get("semester_total") is not None]
+        quarter_totals = [float(s["semester_total"]) for s in class_students if s.get("semester_total") is not None]
         counts = {"on_level": 0, "approach": 0, "below": 0, "no_data": 0}
-        q1_on_level = 0
-        q2_on_level = 0
-        q1_with_data = 0
-        q2_with_data = 0
+        on_level_count = 0
+        with_data = 0
         needing_support = 0
         top_performers = 0
         for s in class_students:
             level = s.get("performance_level", "no_data")
             counts[level] = counts.get(level, 0) + 1
-            if s.get("performance_level_q1") == "on_level":
-                q1_on_level += 1
-            if s.get("performance_level_q2") == "on_level":
-                q2_on_level += 1
-            if s.get("performance_level_q1") != "no_data":
-                q1_with_data += 1
-            if s.get("performance_level_q2") != "no_data":
-                q2_with_data += 1
-            if s.get("performance_level_q1") in ("approach", "below") or s.get("performance_level_q2") in ("approach", "below"):
+            if level == "on_level":
+                on_level_count += 1
+            if level != "no_data":
+                with_data += 1
+            if level in ("approach", "below"):
                 needing_support += 1
-            if s.get("performance_level_q1") == "on_level" and s.get("performance_level_q2") == "on_level":
+            if level == "on_level":
                 top_performers += 1
-        avg_semester = round(sum(semester_totals) / len(semester_totals), 2) if semester_totals else None
+        avg_total = round(sum(quarter_totals) / len(quarter_totals), 2) if quarter_totals else None
+        on_level_rate = round((on_level_count / with_data) * 100, 1) if with_data else 0
+        if quarter == 1:
+            q1_rate, q2_rate = on_level_rate, 0
+            q1_avg, q2_avg = avg_total, None
+        else:
+            q1_rate, q2_rate = 0, on_level_rate
+            q1_avg, q2_avg = None, avg_total
         summaries.append({
             "class_id": class_item["id"],
             "class_name": class_item["name"],
             "grade": class_item.get("grade"),
             "section": class_item.get("section"),
             "student_count": len(class_students),
-            "avg_quiz_score": average(q1_totals + q2_totals) if (q1_totals or q2_totals) else None,
+            "avg_quiz_score": None,
             "avg_chapter_score": None,
-            "avg_total_score": avg_semester,
+            "avg_total_score": avg_total,
             "distribution": counts,
-            "quarter1_on_level_rate": round((q1_on_level / q1_with_data) * 100, 1) if q1_with_data else 0,
-            "quarter2_on_level_rate": round((q2_on_level / q2_with_data) * 100, 1) if q2_with_data else 0,
-            "quarter1_avg_total": round(sum(q1_totals) / len(q1_totals), 2) if q1_totals else None,
-            "quarter2_avg_total": round(sum(q2_totals) / len(q2_totals), 2) if q2_totals else None,
+            "quarter1_on_level_rate": q1_rate,
+            "quarter2_on_level_rate": q2_rate,
+            "quarter1_avg_total": q1_avg,
+            "quarter2_avg_total": q2_avg,
             "students_needing_support_count": needing_support,
             "top_performers_count": top_performers,
         })
@@ -3037,11 +3070,15 @@ async def _build_class_summary_list(classes: List[Dict[str, Any]], semester: int
 
 
 @api_router.get("/classes/summary")
-async def get_class_summary(current_user: Dict[str, Any] = Depends(get_current_user)):
+async def get_class_summary(
+    current_user: Dict[str, Any] = Depends(get_current_user),
+    semester: Optional[int] = Query(default=1),
+    quarter: Optional[int] = Query(default=1),
+):
     try:
         class_query = _teacher_class_filter(current_user)
         classes = await db.classes.find(class_query, {"_id": 0}).sort("grade", 1).to_list(200)
-        return await _build_class_summary_list(classes)
+        return await _build_class_summary_list(classes, semester or 1, quarter or 1)
     except Exception as e:
         logger.exception("Classes summary failed")
         raise HTTPException(status_code=500, detail=f"Failed to load classes: {str(e)}")
@@ -3063,11 +3100,16 @@ def _overall_performance_level(level_q1: str, level_q2: str) -> str:
 
 
 @api_router.get("/reports/grade")
-async def get_grade_report(grade: int = Query(...), semester: Optional[int] = Query(default=None)):
+async def get_grade_report(
+    grade: int = Query(...),
+    semester: Optional[int] = Query(default=1),
+    quarter: Optional[int] = Query(default=1),
+):
     """
-    Grade report aligned with Analytics: same quarter totals, insights (weak_areas, strengths),
-    and Q1/Q2 distributions so reports reflect analytics insights in real time.
+    Grade report for one (semester, quarter) only. Full separation S1Q1, S1Q2, S2Q1, S2Q2.
     """
+    sem = semester or 1
+    q = quarter or 1
     classes = await db.classes.find({"grade": grade}, {"_id": 0}).to_list(200)
     class_ids = [c["id"] for c in classes]
     students = await db.students.find({"class_id": {"$in": class_ids}}, {"_id": 0}).to_list(5000)
@@ -3079,6 +3121,8 @@ async def get_grade_report(grade: int = Query(...), semester: Optional[int] = Qu
     if not students:
         return {
             "grade": grade,
+            "semester": sem,
+            "quarter": q,
             "total_students": 0,
             "classes_count": len(classes),
             "avg_total_score": None,
@@ -3096,101 +3140,42 @@ async def get_grade_report(grade: int = Query(...), semester: Optional[int] = Qu
             "class_breakdown": [{"class_name": c["name"], "student_count": 0} for c in classes],
         }
 
-    scores_by_student = await build_full_year_score_map([s["id"] for s in students])
+    scores_by_student = await build_quarter_score_map([s["id"] for s in students], sem, q)
     for student in students:
         sw = scores_by_student.get(student["id"], {})
         insights = compute_student_insights(sw)
         student["weak_areas"] = insights["weak_areas"]
         student["strengths"] = insights["strengths"]
-        avg_9 = compute_avg_first_9_weeks(sw)
-        avg_10_18 = compute_avg_weeks_10_18(sw)
-        students_total_q1 = compute_students_total_for_assessment(sw, weeks_10_18=False)
-        students_total_q2 = compute_students_total_for_assessment(sw, weeks_10_18=True)
-        effective_q1 = _effective_scores_q1(sw)
-        effective_q2 = _effective_scores_q2(sw)
-        res_q1 = compute_final_exams_combined(
-            effective_q1, avg_first_9_weeks=avg_9, quarter=1, students_total_override=students_total_q1
-        )
-        res_q2 = compute_final_exams_combined(
-            effective_q2, avg_weeks_10_18=avg_10_18, quarter=2, students_total_override=students_total_q2
-        )
-        student["quarter1_total"] = res_q1.get("combined_total")
-        student["quarter2_total"] = res_q2.get("combined_total")
-        student["performance_level_q1"] = res_q1.get("performance_level", "no_data")
-        student["performance_level_q2"] = res_q2.get("performance_level", "no_data")
-        student["performance_level"] = _overall_performance_level(
-            student["performance_level_q1"], student["performance_level_q2"]
-        )
-        label_map = {"on_level": "On Level", "approach": "Approach", "below": "Below", "no_data": "No Data"}
-        student["performance_label"] = label_map.get(student["performance_level"], student["performance_level"])
-        q1_val = student.get("quarter1_total")
-        q2_val = student.get("quarter2_total")
-        if q1_val is not None and q2_val is not None:
-            stot = float(q1_val) + float(q2_val)
-            student["semester_total"] = round(stot, 2)
-            student["total_score_normalized"] = round(stot / 2, 2)
-        elif q1_val is not None:
-            student["semester_total"] = round(float(q1_val), 2)
-            student["total_score_normalized"] = round(float(q1_val), 2)
-        elif q2_val is not None:
-            student["semester_total"] = round(float(q2_val), 2)
-            student["total_score_normalized"] = round(float(q2_val), 2)
-        else:
-            student["semester_total"] = None
-            student["total_score_normalized"] = None
+        _enrich_student_single_quarter(student, sw, q)
 
-    q1_counts = {"on_level": 0, "approach": 0, "below": 0, "no_data": 0}
-    q2_counts = {"on_level": 0, "approach": 0, "below": 0, "no_data": 0}
     report_level_counts = {"on_level": 0, "approach": 0, "below": 0, "no_data": 0}
-    q1_totals: List[float] = []
-    q2_totals: List[float] = []
-    semester_totals: List[float] = []
+    quarter_totals: List[float] = []
     for s in students:
-        q1_counts[s.get("performance_level_q1", "no_data")] = q1_counts.get(s.get("performance_level_q1", "no_data"), 0) + 1
-        q2_counts[s.get("performance_level_q2", "no_data")] = q2_counts.get(s.get("performance_level_q2", "no_data"), 0) + 1
         report_level_counts[s["performance_level"]] = report_level_counts.get(s["performance_level"], 0) + 1
-        if s.get("quarter1_total") is not None:
-            q1_totals.append(float(s["quarter1_total"]))
-        if s.get("quarter2_total") is not None:
-            q2_totals.append(float(s["quarter2_total"]))
         if s.get("semester_total") is not None:
-            semester_totals.append(float(s["semester_total"]))
+            quarter_totals.append(float(s["semester_total"]))
 
-    total_with_q1 = len(students) - q1_counts.get("no_data", 0)
-    total_with_q2 = len(students) - q2_counts.get("no_data", 0)
     total_with_data = len(students) - report_level_counts.get("no_data", 0)
-    on_level_both = sum(1 for s in students if s.get("performance_level_q1") == "on_level" and s.get("performance_level_q2") == "on_level")
-    exceeding_rate = round((on_level_both / total_with_data) * 100, 1) if total_with_data else 0
-    avg_semester = round(sum(semester_totals) / len(semester_totals), 2) if semester_totals else None
+    on_level_count = report_level_counts["on_level"]
+    exceeding_rate = round((on_level_count / total_with_data) * 100, 1) if total_with_data else 0
+    avg_total = round(sum(quarter_totals) / len(quarter_totals), 2) if quarter_totals else None
 
-    quarter1 = {
+    quarter_summary = {
         "distribution": [
-            {"level": "on_level", "count": q1_counts["on_level"]},
-            {"level": "approach", "count": q1_counts["approach"]},
-            {"level": "below", "count": q1_counts["below"]},
-            {"level": "no_data", "count": q1_counts["no_data"]},
+            {"level": "on_level", "count": report_level_counts["on_level"]},
+            {"level": "approach", "count": report_level_counts["approach"]},
+            {"level": "below", "count": report_level_counts["below"]},
+            {"level": "no_data", "count": report_level_counts["no_data"]},
         ],
-        "avg_total": round(sum(q1_totals) / len(q1_totals), 2) if q1_totals else None,
-        "on_level_rate": round((q1_counts["on_level"] / total_with_q1) * 100, 1) if total_with_q1 else 0,
-        "total_with_data": total_with_q1,
+        "avg_total": avg_total,
+        "on_level_rate": exceeding_rate,
+        "total_with_data": total_with_data,
     }
-    quarter2 = {
-        "distribution": [
-            {"level": "on_level", "count": q2_counts["on_level"]},
-            {"level": "approach", "count": q2_counts["approach"]},
-            {"level": "below", "count": q2_counts["below"]},
-            {"level": "no_data", "count": q2_counts["no_data"]},
-        ],
-        "avg_total": round(sum(q2_totals) / len(q2_totals), 2) if q2_totals else None,
-        "on_level_rate": round((q2_counts["on_level"] / total_with_q2) * 100, 1) if total_with_q2 else 0,
-        "total_with_data": total_with_q2,
-    }
-    distribution = [
-        {"level": "on_level", "count": report_level_counts["on_level"]},
-        {"level": "approach", "count": report_level_counts["approach"]},
-        {"level": "below", "count": report_level_counts["below"]},
-        {"level": "no_data", "count": report_level_counts["no_data"]},
-    ]
+    empty = _empty_quarter_summary()
+    quarter1 = quarter_summary if q == 1 else empty
+    quarter2 = quarter_summary if q == 2 else empty
+    distribution = quarter_summary["distribution"]
+
     students_needing_support = [
         {
             "id": s["id"],
@@ -3206,7 +3191,7 @@ async def get_grade_report(grade: int = Query(...), semester: Optional[int] = Qu
             "weak_areas": s.get("weak_areas") or [],
         }
         for s in students
-        if s.get("performance_level_q1") in ("approach", "below") or s.get("performance_level_q2") in ("approach", "below")
+        if s.get("performance_level") in ("approach", "below")
     ]
     top_performers = [
         {
@@ -3223,7 +3208,7 @@ async def get_grade_report(grade: int = Query(...), semester: Optional[int] = Qu
             "strengths": s.get("strengths") or [],
         }
         for s in students
-        if s.get("performance_level_q1") == "on_level" and s.get("performance_level_q2") == "on_level"
+        if s.get("performance_level") == "on_level"
     ]
     class_breakdown = [
         {"class_name": c["name"], "student_count": len([s for s in students if s["class_id"] == c["id"]])}
@@ -3231,9 +3216,11 @@ async def get_grade_report(grade: int = Query(...), semester: Optional[int] = Qu
     ]
     return {
         "grade": grade,
+        "semester": sem,
+        "quarter": q,
         "total_students": len(students),
         "classes_count": len(classes),
-        "avg_total_score": avg_semester,
+        "avg_total_score": avg_total,
         "exceeding_rate": exceeding_rate,
         "distribution": distribution,
         "quarter1": quarter1,
@@ -3470,9 +3457,10 @@ async def export_grade_report(
     grade: int = Query(...),
     format: str = Query("pdf"),
     report_type: str = Query("full"),
-    semester: Optional[int] = Query(default=None),
+    semester: Optional[int] = Query(default=1),
+    quarter: Optional[int] = Query(default=1),
 ):
-    summary = await get_grade_report(grade, semester)
+    summary = await get_grade_report(grade, semester, quarter)
     if format == "excel":
         content = generate_report_excel(summary, grade)
         filename = f"grade_{grade}_report.xlsx"
@@ -3486,9 +3474,20 @@ async def export_grade_report(
 
 
 @api_router.get("/analytics/summary/export")
-async def export_analytics_summary(format: str = Query("pdf")):
+async def export_analytics_summary(
+    format: str = Query("pdf"),
+    semester: Optional[int] = Query(default=1),
+    quarter: Optional[int] = Query(default=1),
+):
+    sem = semester or 1
+    q = quarter or 1
     students = await db.students.find({}, {"_id": 0}).to_list(5000)
     classes = await db.classes.find({}, {"_id": 0}).to_list(200)
+    if students:
+        scores_by_student = await build_quarter_score_map([s["id"] for s in students], sem, q)
+        for student in students:
+            sw = scores_by_student.get(student["id"], {})
+            _enrich_student_single_quarter(student, sw, q)
     summary = build_summary(students, classes)
     summary["class_breakdown"] = [
         {
@@ -3510,8 +3509,13 @@ async def export_analytics_summary(format: str = Query("pdf")):
 
 
 @api_router.get("/classes/summary/export")
-async def export_classes_summary(format: str = Query("pdf")):
-    class_summary = await get_class_summary()
+async def export_classes_summary(
+    current_user: Dict[str, Any] = Depends(get_current_user),
+    format: str = Query("pdf"),
+    semester: Optional[int] = Query(default=1),
+    quarter: Optional[int] = Query(default=1),
+):
+    class_summary = await get_class_summary(current_user, semester, quarter)
     if format == "excel":
         content = generate_class_summary_excel(class_summary)
         filename = "class_summary.xlsx"
@@ -3559,8 +3563,8 @@ async def import_excel(file: UploadFile = File(...), week_id: Optional[str] = Qu
         "homework": ["homework", "homework5", "واجبات", "واجب"],
         "quiz1": ["quiz1", "quiz15", "q1", "quizone", "اختبار1", "كويز1", "اختبارقصير1", "اختبار قصير 1"],
         "quiz2": ["quiz2", "quiz25", "q2", "quiztwo", "اختبار2", "كويز2", "اختبارقصير2", "اختبار قصير 2"],
-        "quiz3": ["quiz3", "q3", "quizthree", "اختبار3", "كويز3", "اختبارقصير3", "اختبار قصير 3"],
-        "quiz4": ["quiz4", "q4", "quizfour", "اختبار4", "كويز4", "اختبارقصير4", "اختبار قصير 4"],
+        "quiz3": ["quiz3", "quiz35", "q3", "quizthree", "اختبار3", "كويز3", "اختبارقصير3", "اختبار قصير 3"],
+        "quiz4": ["quiz4", "quiz45", "q4", "quizfour", "اختبار4", "كويز4", "اختبارقصير4", "اختبار قصير 4"],
         "chapter_test1_practical": [
             "chaptertest1practical",
             "chaptertest1practical10",
@@ -3570,6 +3574,7 @@ async def import_excel(file: UploadFile = File(...), week_id: Optional[str] = Qu
         ],
         "chapter_test2_practical": [
             "chaptertest2practical",
+            "chaptertest2practical1010",
             "ct2practical",
             "اختبارالفصل2عملي",
             "اختبار فصل 2 عملي",
@@ -3959,19 +3964,26 @@ async def seed_defaults():
             ]
             await db.roles.insert_many(roles)
         await db.weeks.update_many({"semester": {"$exists": False}}, {"$set": {"semester": 1}})
-        existing_weeks = await db.weeks.find({}, {"_id": 0, "number": 1, "semester": 1}).to_list(500)
+        # Migration: set quarter on existing weeks (1-9 -> Q1, 10-18 -> Q2) for full S1Q1/S1Q2/S2Q1/S2Q2 separation
+        async for doc in db.weeks.find({"$or": [{"quarter": {"$exists": False}}, {"quarter": {"$nin": [1, 2]}}]}, {"_id": 1, "number": 1}):
+            q = 1 if (doc.get("number", 1) <= 9) else 2
+            await db.weeks.update_one({"_id": doc["_id"]}, {"$set": {"quarter": q}})
+        existing_weeks = await db.weeks.find({}, {"_id": 0, "number": 1, "semester": 1, "quarter": 1}).to_list(500)
         existing_map = {}
         for week in existing_weeks:
-            semester = week.get("semester", 1)
-            existing_map.setdefault(semester, set()).add(week.get("number"))
+            sem = week.get("semester", 1)
+            q = week.get("quarter", 1 if week.get("number", 1) <= 9 else 2)
+            existing_map.setdefault((sem, q), set()).add(week.get("number"))
         weeks_to_insert = []
         for semester in [1, 2]:
-            existing_numbers = existing_map.get(semester, set())
-            for i in range(1, 20):
-                if i not in existing_numbers:
-                    weeks_to_insert.append(
-                        WeekRecord(semester=semester, number=i, label=f"Week {i}").model_dump()
-                    )
+            for quarter in [1, 2]:
+                lo, hi = (1, 9) if quarter == 1 else (10, 18)
+                existing_numbers = existing_map.get((semester, quarter), set())
+                for i in range(lo, hi + 1):
+                    if i not in existing_numbers:
+                        weeks_to_insert.append(
+                            WeekRecord(semester=semester, quarter=quarter, number=i, label=f"Week {i}").model_dump()
+                        )
         if weeks_to_insert:
             await db.weeks.insert_many(weeks_to_insert)
         if await db.users.count_documents({}) == 0:
