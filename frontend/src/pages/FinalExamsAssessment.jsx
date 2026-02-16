@@ -145,7 +145,7 @@ export default function FinalExamsAssessment() {
   const loadWeeks = async () => {
     try {
       const response = await api.get("/weeks", {
-        params: { semester: semester === "semester2" ? 2 : 1 },
+        params: { quarter: 1 },
       });
       setWeeks(response.data || []);
     } catch (error) {
@@ -153,7 +153,7 @@ export default function FinalExamsAssessment() {
     }
   };
 
-  useEffect(() => { loadWeeks(); }, [semester]);
+  useEffect(() => { loadWeeks(); }, []);
   useEffect(() => {
     if (activeWeekId) {
       setBulkEditMode(false);

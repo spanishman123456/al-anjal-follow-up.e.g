@@ -142,7 +142,7 @@ export default function AssessmentMarksQ2() {
   const loadWeeks = async () => {
     try {
       const response = await api.get("/weeks", {
-        params: { semester: semester === "semester2" ? 2 : 1 },
+        params: { quarter: 2 },
       });
       setWeeks(response.data || []);
       // Do not set activeWeekId here; let useEffect([weeks]) restore from sessionStorage so both pages stay in sync
@@ -153,7 +153,7 @@ export default function AssessmentMarksQ2() {
 
   useEffect(() => {
     loadWeeks();
-  }, [semester]);
+  }, []);
 
   useEffect(() => {
     if (activeWeekId) {

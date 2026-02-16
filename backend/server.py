@@ -1681,10 +1681,18 @@ async def delete_class(class_id: str):
 
 
 @api_router.get("/weeks", response_model=List[WeekRecord])
-async def list_weeks(semester: Optional[int] = Query(default=None)):
-    query = {"semester": semester} if semester else {}
-    weeks = await db.weeks.find(query, {"_id": 0}).sort([("semester", 1), ("number", 1)]).to_list(200)
-    return weeks
+async def list_weeks(
+    semester: Optional[int] = Query(default=None),
+    quarter: Optional[int] = Query(default=None, description="1 = weeks 1-9 only (1st quarter), 2 = weeks 10-18 only (2nd quarter)"),
+):
+    """Return weeks. If quarter=1 return only weeks 1-9 (1st quarter); if quarter=2 return only weeks 10-18 (2nd quarter). Otherwise filter by semester if given."""
+    query = {} if quarter else ({"semester": semester} if semester else {})
+    all_weeks = await db.weeks.find(query, {"_id": 0}).sort([("semester", 1), ("number", 1)]).to_list(200)
+    if quarter == 1:
+        all_weeks = [w for w in all_weeks if 1 <= _normalized_week_number(w) <= 9]
+    elif quarter == 2:
+        all_weeks = [w for w in all_weeks if 10 <= _normalized_week_number(w) <= 18]
+    return all_weeks
 
 
 @api_router.post("/weeks", response_model=WeekRecord)

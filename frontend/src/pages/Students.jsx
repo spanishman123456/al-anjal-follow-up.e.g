@@ -289,7 +289,7 @@ export default function Students() {
   const loadWeeks = async () => {
     try {
       const response = await api.get("/weeks", {
-        params: { semester: semester === "semester2" ? 2 : 1 },
+        params: { quarter: semester === "semester2" ? 2 : 1 },
       });
       setWeeks(response.data || []);
       // Do not set activeWeekId here; let useEffect([weeks]) restore from sessionStorage so both pages stay in sync
@@ -316,9 +316,11 @@ export default function Students() {
       await api.delete(`/weeks/${activeWeekId}`);
       toast.success(t("week_deleted"));
       setDeleteWeekOpen(false);
-      const response = await api.get("/weeks");
-      setWeeks(response.data);
-      setActiveWeekId(response.data[0]?.id || "");
+      const response = await api.get("/weeks", {
+        params: { quarter: semester === "semester2" ? 2 : 1 },
+      });
+      setWeeks(response.data || []);
+      setActiveWeekId((response.data || [])[0]?.id || "");
     } catch (error) {
       toast.error(t("week_delete_failed"));
     }
