@@ -35,10 +35,10 @@ import { AssessmentPageFooter } from "@/components/AssessmentPageFooter";
 import { sortByClassOrder } from "@/lib/utils";
 
 const levelStyles = {
-  on_level: "bg-emerald-100 text-emerald-700",
-  approach: "bg-amber-100 text-amber-700",
-  below: "bg-rose-100 text-rose-700",
-  no_data: "bg-slate-100 text-slate-600",
+  on_level: "border-emerald-300 bg-emerald-100 text-emerald-700",
+  approach: "border-amber-300 bg-amber-100 text-amber-700",
+  below: "border-rose-300 bg-rose-100 text-rose-700",
+  no_data: "border-slate-300 bg-slate-100 text-slate-600",
 };
 
 const formatScore = (value, suffix = "") => {
@@ -507,7 +507,7 @@ export default function FinalExamsAssessmentQ2() {
                         {formatScore(total, `/${FINAL_TOTAL_MAX}`)}
                       </TableCell>
                       <TableCell className="text-center">
-                        <Badge className={levelStyles[perfLevel]}>{t(perfLevel)}</Badge>
+                        <Badge variant="outline" className={levelStyles[perfLevel] ?? levelStyles.no_data}>{t(perfLevel)}</Badge>
                       </TableCell>
                     </TableRow>
                   );
