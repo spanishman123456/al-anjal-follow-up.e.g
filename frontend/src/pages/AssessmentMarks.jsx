@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { api, getApiErrorMessage, BULK_SAVE_TIMEOUT_MS } from "@/lib/api";
 import { useTranslations } from "@/lib/i18n";
 import { PageHeader } from "@/components/layout/PageHeader";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -31,7 +32,14 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { AssessmentPageFooter } from "@/components/AssessmentPageFooter";
-import { cn, sortByClassOrder } from "@/lib/utils";
+import { sortByClassOrder } from "@/lib/utils";
+
+const levelStyles = {
+  on_level: "bg-emerald-100 text-emerald-700",
+  approach: "bg-amber-100 text-amber-700",
+  below: "bg-rose-100 text-rose-700",
+  no_data: "bg-slate-100 text-slate-600",
+};
 
 const formatScore = (value, suffix = "") => {
   if (value === null || value === undefined) {
@@ -655,18 +663,9 @@ export default function AssessmentMarks() {
                         {formatScore(total, "/30")}
                       </TableCell>
                       <TableCell className="text-center">
-                        <span
-                          className={cn(
-                            "text-sm font-medium",
-                            perfLevel === "on_level" && "text-emerald-600",
-                            perfLevel === "approach" && "text-amber-600",
-                            perfLevel === "below" && "text-rose-600",
-                            perfLevel === "no_data" && "text-slate-500"
-                          )}
-                          data-testid={`assessment-perf-${student.id}`}
-                        >
+                        <Badge className={levelStyles[perfLevel]} data-testid={`assessment-perf-${student.id}`}>
                           {t(perfLevel)}
-                        </span>
+                        </Badge>
                       </TableCell>
                     </TableRow>
                   );
