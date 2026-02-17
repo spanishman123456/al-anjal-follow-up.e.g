@@ -288,13 +288,22 @@ export default function AssessmentMarks() {
       toast.error(t("select_week_before_import") || "Please select a week first.");
       return;
     }
-    // Clear only assessment fields for this week; do not touch Students-page scores.
-    const updates = students.map((student) => ({
+    if (filterClass === "all") {
+      toast.error(t("select_class_to_clear_scores") || "Please select a class first. Clear scores only affects the selected class.");
+      return;
+    }
+    // Clear only assessment fields for the selected class for this week.
+    const studentsToClear = students.filter((s) => s.class_id === filterClass);
+    const updates = studentsToClear.map((student) => ({
       id: student.id,
       quiz1: null,
       quiz2: null,
       chapter_test1_practical: null,
     }));
+    if (!updates.length) {
+      toast.error(t("no_students_in_class") || "No students in the selected class.");
+      return;
+    }
     try {
       await api.post("/students/bulk-scores", { updates, week_id: activeWeekId }, { timeout: BULK_SAVE_TIMEOUT_MS });
       await loadData(activeWeekId);

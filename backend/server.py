@@ -2964,8 +2964,9 @@ async def get_analytics_overview(
     quarter: Optional[int] = Query(default=1),
 ):
     """
-    Analytics overview for one (semester, quarter) only. Full separation S1Q1, S1Q2, S2Q1, S2Q2.
-    Returns single quarter distribution, struggling and excelling students for that quarter.
+    Analytics overview for the selected semester. Returns insights for BOTH quarter 1 and quarter 2
+    independently so the Analytics page can show each quarter's distribution and compare Q1 vs Q2.
+    Struggling/excelling lists use the currently selected quarter (q).
     """
     student_query = {"class_id": class_id} if class_id else {}
     class_query = {"id": class_id} if class_id else {}
@@ -2989,36 +2990,63 @@ async def get_analytics_overview(
     for s in students:
         s["class_name"] = class_id_to_name.get(s.get("class_id"), s.get("class_name", ""))
     student_ids = [s["id"] for s in students]
-    scores_by_student = await build_quarter_score_map(student_ids, sem, q)
+    # Build score maps for BOTH quarters so we can show each quarter's insight independently
+    scores_by_student_q1 = await build_quarter_score_map(student_ids, sem, 1)
+    scores_by_student_q2 = await build_quarter_score_map(student_ids, sem, 2)
     for student in students:
-        sw = scores_by_student.get(student["id"], {})
-        insights = compute_student_insights(sw)
+        sw1 = scores_by_student_q1.get(student["id"], {})
+        sw2 = scores_by_student_q2.get(student["id"], {})
+        insights = compute_student_insights(sw1 if q == 1 else sw2)
         student["weak_areas"] = insights["weak_areas"]
         student["strengths"] = insights["strengths"]
-        _enrich_student_single_quarter(student, sw, q)
-    # Single quarter distribution
-    counts = {"on_level": 0, "approach": 0, "below": 0, "no_data": 0}
-    totals: List[float] = []
+        _enrich_student_single_quarter(student, sw1, 1)
+        q1_total = student.get("quarter1_total")
+        q1_level = student.get("performance_level_q1")
+        _enrich_student_single_quarter(student, sw2, 2)
+        student["quarter1_total"] = q1_total
+        student["performance_level_q1"] = q1_level
+        student["performance_level"] = student.get("performance_level_q2") if q == 2 else q1_level
+        student["semester_total"] = student.get("quarter2_total") if q == 2 else q1_total
+    # Quarter 1 distribution (from each student's Q1 level/total)
+    counts_q1 = {"on_level": 0, "approach": 0, "below": 0, "no_data": 0}
+    totals_q1: List[float] = []
     for s in students:
-        level = s.get("performance_level", "no_data")
-        counts[level] = counts.get(level, 0) + 1
-        if s.get("semester_total") is not None:
-            totals.append(float(s["semester_total"]))
-    total_with_data = len(students) - counts.get("no_data", 0)
-    quarter_summary = {
+        level = s.get("performance_level_q1", "no_data")
+        counts_q1[level] = counts_q1.get(level, 0) + 1
+        if s.get("quarter1_total") is not None:
+            totals_q1.append(float(s["quarter1_total"]))
+    with_data_q1 = len(students) - counts_q1.get("no_data", 0)
+    quarter1 = {
         "distribution": [
-            {"level": "on_level", "count": counts["on_level"]},
-            {"level": "approach", "count": counts["approach"]},
-            {"level": "below", "count": counts["below"]},
-            {"level": "no_data", "count": counts["no_data"]},
+            {"level": "on_level", "count": counts_q1["on_level"]},
+            {"level": "approach", "count": counts_q1["approach"]},
+            {"level": "below", "count": counts_q1["below"]},
+            {"level": "no_data", "count": counts_q1["no_data"]},
         ],
-        "avg_total": round(sum(totals) / len(totals), 2) if totals else None,
-        "on_level_rate": round((counts["on_level"] / total_with_data) * 100, 1) if total_with_data else 0,
-        "total_with_data": total_with_data,
+        "avg_total": round(sum(totals_q1) / len(totals_q1), 2) if totals_q1 else None,
+        "on_level_rate": round((counts_q1["on_level"] / with_data_q1) * 100, 1) if with_data_q1 else 0,
+        "total_with_data": with_data_q1,
     }
-    empty = _empty_quarter_summary()
-    quarter1 = quarter_summary if q == 1 else empty
-    quarter2 = quarter_summary if q == 2 else empty
+    # Quarter 2 distribution
+    counts_q2 = {"on_level": 0, "approach": 0, "below": 0, "no_data": 0}
+    totals_q2: List[float] = []
+    for s in students:
+        level = s.get("performance_level_q2", "no_data")
+        counts_q2[level] = counts_q2.get(level, 0) + 1
+        if s.get("quarter2_total") is not None:
+            totals_q2.append(float(s["quarter2_total"]))
+    with_data_q2 = len(students) - counts_q2.get("no_data", 0)
+    quarter2 = {
+        "distribution": [
+            {"level": "on_level", "count": counts_q2["on_level"]},
+            {"level": "approach", "count": counts_q2["approach"]},
+            {"level": "below", "count": counts_q2["below"]},
+            {"level": "no_data", "count": counts_q2["no_data"]},
+        ],
+        "avg_total": round(sum(totals_q2) / len(totals_q2), 2) if totals_q2 else None,
+        "on_level_rate": round((counts_q2["on_level"] / with_data_q2) * 100, 1) if with_data_q2 else 0,
+        "total_with_data": with_data_q2,
+    }
     struggling_students = [
         {
             "id": s["id"],
@@ -3115,41 +3143,52 @@ async def _build_class_summary_list(
             }
             for c in classes
         ]
-    scores_by_student = await build_quarter_score_map([s["id"] for s in students], semester, quarter)
+    # Build both Q1 and Q2 so each class shows insights for each quarter independently
+    student_ids = [s["id"] for s in students]
+    scores_q1 = await build_quarter_score_map(student_ids, semester, 1)
+    scores_q2 = await build_quarter_score_map(student_ids, semester, 2)
     for student in students:
-        sw = scores_by_student.get(student["id"], {})
-        _enrich_student_single_quarter(student, sw, quarter)
+        sw1 = scores_q1.get(student["id"], {})
+        sw2 = scores_q2.get(student["id"], {})
+        _enrich_student_single_quarter(student, sw1, 1)
+        q1_total = student.get("quarter1_total")
+        q1_level = student.get("performance_level_q1")
+        _enrich_student_single_quarter(student, sw2, 2)
+        student["quarter1_total"] = q1_total
+        student["performance_level_q1"] = q1_level
+        student["performance_level"] = student.get("performance_level_q2") if quarter == 2 else q1_level
+        student["semester_total"] = student.get("quarter2_total") if quarter == 2 else q1_total
     student_map: Dict[str, List[Dict[str, Any]]] = {}
     for student in students:
         student_map.setdefault(student["class_id"], []).append(student)
     summaries = []
     for class_item in classes:
         class_students = student_map.get(class_item["id"], [])
+        # Q1 stats
+        q1_totals = [float(s["quarter1_total"]) for s in class_students if s.get("quarter1_total") is not None]
+        q1_on_level = sum(1 for s in class_students if s.get("performance_level_q1") == "on_level")
+        q1_with_data = sum(1 for s in class_students if s.get("performance_level_q1") != "no_data")
+        q1_rate = round((q1_on_level / q1_with_data) * 100, 1) if q1_with_data else 0
+        q1_avg = round(sum(q1_totals) / len(q1_totals), 2) if q1_totals else None
+        # Q2 stats
+        q2_totals = [float(s["quarter2_total"]) for s in class_students if s.get("quarter2_total") is not None]
+        q2_on_level = sum(1 for s in class_students if s.get("performance_level_q2") == "on_level")
+        q2_with_data = sum(1 for s in class_students if s.get("performance_level_q2") != "no_data")
+        q2_rate = round((q2_on_level / q2_with_data) * 100, 1) if q2_with_data else 0
+        q2_avg = round(sum(q2_totals) / len(q2_totals), 2) if q2_totals else None
+        # Current quarter (selected) for distribution and avg_total_score
         quarter_totals = [float(s["semester_total"]) for s in class_students if s.get("semester_total") is not None]
         counts = {"on_level": 0, "approach": 0, "below": 0, "no_data": 0}
-        on_level_count = 0
-        with_data = 0
         needing_support = 0
         top_performers = 0
         for s in class_students:
             level = s.get("performance_level", "no_data")
             counts[level] = counts.get(level, 0) + 1
-            if level == "on_level":
-                on_level_count += 1
-            if level != "no_data":
-                with_data += 1
             if level in ("approach", "below"):
                 needing_support += 1
             if level == "on_level":
                 top_performers += 1
         avg_total = round(sum(quarter_totals) / len(quarter_totals), 2) if quarter_totals else None
-        on_level_rate = round((on_level_count / with_data) * 100, 1) if with_data else 0
-        if quarter == 1:
-            q1_rate, q2_rate = on_level_rate, 0
-            q1_avg, q2_avg = avg_total, None
-        else:
-            q1_rate, q2_rate = 0, on_level_rate
-            q1_avg, q2_avg = None, avg_total
         summaries.append({
             "class_id": class_item["id"],
             "class_name": class_item["name"],

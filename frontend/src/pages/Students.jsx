@@ -640,14 +640,23 @@ export default function Students() {
       toast.error(t("select_week_from_current_semester") || "Please select a week from the current semester.");
       return;
     }
-    // Clear only Students-page fields (follow-up scores); do not clear assessment marks.
-    const updates = students.map((student) => ({
+    if (filterClass === "all") {
+      toast.error(t("select_class_to_clear_scores") || "Please select a class first. Clear scores only affects the selected class.");
+      return;
+    }
+    // Clear only for the selected class so other classes are not affected.
+    const studentsToClear = students.filter((s) => s.class_id === filterClass);
+    const updates = studentsToClear.map((student) => ({
       id: student.id,
       attendance: null,
       participation: null,
       behavior: null,
       homework: null,
     }));
+    if (!updates.length) {
+      toast.error(t("no_students_in_class") || "No students in the selected class.");
+      return;
+    }
     try {
       await api.post("/students/bulk-scores", {
         updates,
