@@ -191,7 +191,7 @@ def compute_quarter_totals(scores_by_week: Dict[int, Dict[str, Optional[float]]]
     chapter1 = scores_by_week.get(4, {}).get("chapter_test1_practical") or 0.0
     chapter2 = scores_by_week.get(16, {}).get("chapter_test2_practical") or 0.0
     quarter1_practical = scores_by_week.get(9, {}).get("quarter1_practical") or 0.0
-    quarter1_theory = scores_by_week.get(10, {}).get("quarter1_theory") or 0.0
+    quarter1_theory = scores_by_week.get(10, {}).get("quarter1_theory") or scores_by_week.get(9, {}).get("quarter1_theory") or 0.0
     quarter2_practical = scores_by_week.get(17, {}).get("quarter2_practical") or 0.0
     quarter2_theory = scores_by_week.get(18, {}).get("quarter2_theory") or 0.0
 
@@ -308,9 +308,9 @@ def compute_student_insights(scores_by_week: Dict[int, Dict[str, Optional[float]
     elif ch_val >= 8.5:
         strengths.append("Chapter tests")
 
-    # Quarter exams (practical + theory, max 10 each per quarter)
+    # Quarter exams (practical + theory, max 10 each per quarter). Q1 has only weeks 1-9, so fallback to week 9 for theory.
     q1_p = _safe_float(scores_by_week.get(9, {}).get("quarter1_practical"))
-    q1_t = _safe_float(scores_by_week.get(10, {}).get("quarter1_theory"))
+    q1_t = _safe_float(scores_by_week.get(10, {}).get("quarter1_theory") or scores_by_week.get(9, {}).get("quarter1_theory"))
     q2_p = _safe_float(scores_by_week.get(17, {}).get("quarter2_practical"))
     q2_t = _safe_float(scores_by_week.get(18, {}).get("quarter2_theory"))
     exam_q1 = (q1_p or 0) + (q1_t or 0)
@@ -664,7 +664,9 @@ def compute_final_exams_combined(
 
 
 def _effective_scores_q1(scores_by_week: Dict[int, Dict[str, Optional[float]]]) -> Dict[str, Optional[float]]:
-    """Build effective Q1 scores from weeks 1-9: best quiz/chapter from any week, exams from 9/10."""
+    """Build effective Q1 scores from weeks 1-9: best quiz/chapter from any week, exams from week 9 (or 9/10 if both exist).
+    Note: Quarter 1 only has weeks 1-9 in the DB, so week 10 is never present when loading Q1 only. Read quarter1_theory
+    from week 9 as fallback so theory marks are not lost and students are not wrongly marked Below."""
     q1_list = []
     q2_list = []
     ch1_list = []
@@ -681,9 +683,10 @@ def _effective_scores_q1(scores_by_week: Dict[int, Dict[str, Optional[float]]]) 
     ch1 = max(ch1_list) if ch1_list else None
     s9 = scores_by_week.get(9) or {}
     s10 = scores_by_week.get(10) or {}
+    quarter1_theory = s10.get("quarter1_theory") or s9.get("quarter1_theory")
     return {
         "quiz1": quiz1, "quiz2": quiz2, "chapter_test1_practical": ch1,
-        "quarter1_practical": s9.get("quarter1_practical"), "quarter1_theory": s10.get("quarter1_theory"),
+        "quarter1_practical": s9.get("quarter1_practical"), "quarter1_theory": quarter1_theory,
     }
 
 
