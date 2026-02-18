@@ -534,6 +534,34 @@ def compute_inclusive_quiz_chapter_q2(
     return (round(quiz_sum / n, 2), round(chapter_sum / n, 2))
 
 
+def compute_inclusive_quarter_exams_q1(
+    scores_by_week: Dict[int, Dict[str, Optional[float]]],
+) -> tuple:
+    """Avg practical/theory (max 10 each) over weeks 1-9; empty weeks = 0. Returns (avg_practical, avg_theory)."""
+    n = 9
+    practical_sum = 0.0
+    theory_sum = 0.0
+    for w in range(1, 10):
+        s = scores_by_week.get(w) or {}
+        practical_sum += min(_safe_float_score(s.get("quarter1_practical")), 10.0)
+        theory_sum += min(_safe_float_score(s.get("quarter1_theory")), 10.0)
+    return (round(practical_sum / n, 2), round(theory_sum / n, 2))
+
+
+def compute_inclusive_quarter_exams_q2(
+    scores_by_week: Dict[int, Dict[str, Optional[float]]],
+) -> tuple:
+    """Avg practical/theory (max 10 each) over weeks 10-18; empty weeks = 0. Returns (avg_practical, avg_theory)."""
+    n = 9
+    practical_sum = 0.0
+    theory_sum = 0.0
+    for w in range(10, 19):
+        s = scores_by_week.get(w) or {}
+        practical_sum += min(_safe_float_score(s.get("quarter2_practical")), 10.0)
+        theory_sum += min(_safe_float_score(s.get("quarter2_theory")), 10.0)
+    return (round(practical_sum / n, 2), round(theory_sum / n, 2))
+
+
 # Students page total: attendance (2.5) + participation (2.5) + behavior (5) + homework (5) = 15 max.
 # Assessment Marks: Students total (15) + best(Quiz1, Quiz2)(5) + Chapter Test 1 Practical(10) = 30 max.
 # Final Exams: Assessment (30) + Quarter Practical(10) + Quarter Theory(10) = 50 max.
@@ -815,6 +843,46 @@ def _has_any_scores(scores_by_week: Dict[int, Dict[str, Optional[float]]]) -> bo
     return False
 
 
+def _compute_cumulative_final_quarter(
+    scores_by_week: Dict[int, Dict[str, Optional[float]]],
+    quarter: int,
+) -> Dict[str, Any]:
+    """Cumulative quarter total (50 max): include empty weeks as 0 for consistent cross-page syncing."""
+    if quarter == 2:
+        students_total = compute_students_total_for_assessment(scores_by_week, weeks_10_18=True)
+        avg_quiz, avg_chapter = compute_inclusive_quiz_chapter_q2(scores_by_week)
+        avg_practical, avg_theory = compute_inclusive_quarter_exams_q2(scores_by_week)
+        week_range = range(10, 19)
+        quarter_keys = ("quiz3", "quiz4", "chapter_test2_practical", "quarter2_practical", "quarter2_theory")
+    else:
+        students_total = compute_students_total_for_assessment(scores_by_week, weeks_10_18=False)
+        avg_quiz, avg_chapter = compute_inclusive_quiz_chapter_q1(scores_by_week)
+        avg_practical, avg_theory = compute_inclusive_quarter_exams_q1(scores_by_week)
+        week_range = range(1, 10)
+        quarter_keys = ("quiz1", "quiz2", "chapter_test1_practical", "quarter1_practical", "quarter1_theory")
+
+    has_any = False
+    for w in week_range:
+        s = scores_by_week.get(w) or {}
+        for k in ("attendance", "participation", "behavior", "homework", *quarter_keys):
+            if _is_meaningful_score(s.get(k)):
+                has_any = True
+                break
+        if has_any:
+            break
+    if not has_any:
+        return {"combined_total": None, "performance_level": "no_data", "performance_label": "No Data"}
+
+    combined = round(min(students_total + avg_quiz + avg_chapter + avg_practical + avg_theory, 50), 2)
+    if combined >= 42:
+        level, label = "on_level", "On Level"
+    elif combined >= 35:
+        level, label = "approach", "Approach"
+    else:
+        level, label = "below", "Below"
+    return {"combined_total": combined, "performance_level": level, "performance_label": label}
+
+
 def _enrich_student_single_quarter(
     student: Dict[str, Any],
     sw: Dict[int, Dict[str, Optional[float]]],
@@ -834,12 +902,8 @@ def _enrich_student_single_quarter(
             student[k] = None
         return
     if quarter == 2:
-        avg_10_18 = compute_avg_weeks_10_18(sw)
-        students_total = compute_students_total_for_assessment(sw, weeks_10_18=True)
         effective = _effective_scores_q2(sw)
-        res = compute_final_exams_combined(
-            effective, avg_weeks_10_18=avg_10_18, quarter=2, students_total_override=students_total
-        )
+        res = _compute_cumulative_final_quarter(sw, quarter=2)
         student["quarter1_total"] = None
         student["quarter2_total"] = res.get("combined_total")
         student["performance_level_q1"] = "no_data"
@@ -855,12 +919,8 @@ def _enrich_student_single_quarter(
         student["quiz2"] = None
         student["chapter_test1"] = None
     else:
-        avg_9 = compute_avg_first_9_weeks(sw)
-        students_total = compute_students_total_for_assessment(sw, weeks_10_18=False)
         effective = _effective_scores_q1(sw)
-        res = compute_final_exams_combined(
-            effective, avg_first_9_weeks=avg_9, quarter=1, students_total_override=students_total
-        )
+        res = _compute_cumulative_final_quarter(sw, quarter=1)
         student["quarter1_total"] = res.get("combined_total")
         student["quarter2_total"] = None
         student["performance_level_q1"] = res.get("performance_level", "no_data")
