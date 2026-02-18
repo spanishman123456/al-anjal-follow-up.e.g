@@ -672,7 +672,7 @@ export default function Students() {
   return (
     <div className="space-y-8" data-testid="students-page">
       <PageHeader
-        title={t("students")}
+        title={t("assessment")}
         subtitle={t("overview")}
         testIdPrefix="students"
         action={

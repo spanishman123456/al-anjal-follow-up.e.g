@@ -394,7 +394,7 @@ export default function AssessmentMarksQ2() {
   return (
     <div className="space-y-8" data-testid="assessment-q2-marks-q2-page">
       <PageHeader
-        title={t("assessment_marks_q2")}
+        title={t("nav_quizzes_chapter_test")}
         subtitle={t("overview")}
         testIdPrefix="assessment-marks-q2"
         action={

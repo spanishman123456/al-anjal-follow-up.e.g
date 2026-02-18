@@ -375,7 +375,7 @@ export default function FinalExamsAssessmentQ2() {
   return (
     <div className="space-y-8" data-testid="final-exams-q2-assessment-page">
       <PageHeader
-        title={t("final_exams_assessment_q2")}
+        title={t("nav_final_exams")}
         subtitle={t("overview")}
         testIdPrefix="final-exams-q2"
         action={
