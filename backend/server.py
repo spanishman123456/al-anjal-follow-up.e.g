@@ -1067,7 +1067,11 @@ def format_scope_label(scope: Any) -> str:
     return str(scope)
 
 
-def generate_report_pdf(report: Dict[str, Any], scope: Any) -> bytes:
+def generate_report_pdf(
+    report: Dict[str, Any],
+    scope: Any,
+    insights: Optional[Dict[str, str]] = None,
+) -> bytes:
     def _fmt(value: Any, suffix: str = "") -> str:
         if value is None or value == "":
             return "-"
@@ -1269,6 +1273,20 @@ def generate_report_pdf(report: Dict[str, Any], scope: Any) -> bytes:
     if len(support_table_data) == 1:
         support_table_data.append(["-", "-", "-", "-", "-", "-"])
     elements.append(_styled_table(support_table_data, col_widths=[130, 58, 38, 38, 65, 210]))
+
+    insights = insights or {}
+    insight_rows = [
+        ["Insight", "Details"],
+        ["Strengths", (insights.get("analysis_strengths") or "").strip() or "-"],
+        ["Weaknesses", (insights.get("analysis_weaknesses") or "").strip() or "-"],
+        ["Student Performance", (insights.get("analysis_performance") or "").strip() or "-"],
+        ["Standout Data", (insights.get("analysis_standout_data") or "").strip() or "-"],
+        ["Recommended Actions", (insights.get("analysis_actions") or "").strip() or "-"],
+        ["Recommendations", (insights.get("analysis_recommendations") or "").strip() or "-"],
+    ]
+    elements.append(Spacer(1, 10))
+    elements.append(Paragraph("Key Insights", section_style))
+    elements.append(_styled_table(insight_rows, col_widths=[130, 380], repeat_header=True))
 
     doc.build(elements)
     pdf_value = buffer.getvalue()
@@ -3861,6 +3879,12 @@ async def export_grade_report(
     report_type: str = Query("full"),
     semester: Optional[int] = Query(default=1),
     quarter: Optional[int] = Query(default=1),
+    analysis_strengths: Optional[str] = Query(default=None),
+    analysis_weaknesses: Optional[str] = Query(default=None),
+    analysis_performance: Optional[str] = Query(default=None),
+    analysis_standout_data: Optional[str] = Query(default=None),
+    analysis_actions: Optional[str] = Query(default=None),
+    analysis_recommendations: Optional[str] = Query(default=None),
 ):
     summary = await get_grade_report(grade, semester, quarter)
     if format == "excel":
@@ -3868,7 +3892,15 @@ async def export_grade_report(
         filename = f"grade_{grade}_report.xlsx"
         media_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     else:
-        content = generate_report_pdf(summary, grade)
+        insights = {
+            "analysis_strengths": analysis_strengths or "",
+            "analysis_weaknesses": analysis_weaknesses or "",
+            "analysis_performance": analysis_performance or "",
+            "analysis_standout_data": analysis_standout_data or "",
+            "analysis_actions": analysis_actions or "",
+            "analysis_recommendations": analysis_recommendations or "",
+        }
+        content = generate_report_pdf(summary, grade, insights=insights)
         filename = f"grade_{grade}_report.pdf"
         media_type = "application/pdf"
     headers = {"Content-Disposition": f"attachment; filename={filename}"}

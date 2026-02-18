@@ -76,6 +76,12 @@ export default function Reports() {
           report_type: reportType,
           semester: semesterNumber,
           quarter,
+          analysis_strengths: analysisStrengths,
+          analysis_weaknesses: analysisWeaknesses,
+          analysis_performance: analysisPerformance,
+          analysis_standout_data: analysisStandoutData,
+          analysis_actions: analysisActions,
+          analysis_recommendations: analysisRecommendations,
         },
         responseType: "blob",
       });
