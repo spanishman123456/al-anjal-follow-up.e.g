@@ -1,6 +1,7 @@
 from fastapi import FastAPI, APIRouter, UploadFile, File, HTTPException, Query, Depends, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.responses import StreamingResponse
+from fastapi.middleware.gzip import GZipMiddleware
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -4184,6 +4185,13 @@ async def import_excel(file: UploadFile = File(...), week_id: Optional[str] = Qu
             class_map[normalize_class_name(inferred_class_name)] = default_class_doc
     created_students = 0
     updated_students = 0
+    existing_students_docs = await db.students.find({}, {"_id": 0, "id": 1, "full_name": 1, "class_id": 1}).to_list(20000)
+    existing_student_map: Dict[tuple, Dict[str, Any]] = {}
+    for s in existing_students_docs:
+        name_key = (s.get("full_name") or "").strip().lower()
+        class_key = s.get("class_id")
+        if name_key and class_key:
+            existing_student_map[(name_key, class_key)] = s
     if "student_name" not in column_lookup:
         raise HTTPException(status_code=400, detail="Excel must include at least one column with student names.")
     # Class can come from: class column, grade+section columns, or filename (e.g. 5A.xlsx). No strict requirement here.
@@ -4262,7 +4270,7 @@ async def import_excel(file: UploadFile = File(...), week_id: Optional[str] = Qu
         payload["chapter_test1"] = payload.get("chapter_test1_practical")
         payload["chapter_test2"] = payload.get("chapter_test2_practical")
         # Store Quiz 1 and Quiz 2 exactly as in the file. The Assessment Marks total still uses max(quiz1, quiz2) + chapter test for the combined score.
-        existing = await db.students.find_one({"full_name": student_name, "class_id": class_doc["id"]}, {"_id": 0})
+        existing = existing_student_map.get((student_name.strip().lower(), class_doc["id"]))
         if not existing:
             # Enroll new student from Excel row
             create_data = {k: payload[k] for k in payload if k in StudentRecord.model_fields}
@@ -4270,6 +4278,11 @@ async def import_excel(file: UploadFile = File(...), week_id: Optional[str] = Qu
             await db.students.insert_one(new_record.model_dump())
             created_students += 1
             student_id = new_record.id
+            existing_student_map[(student_name.strip().lower(), class_doc["id"])] = {
+                "id": new_record.id,
+                "full_name": student_name,
+                "class_id": class_doc["id"],
+            }
             if week_id:
                 score_fields = [
                     "attendance", "participation", "behavior", "homework",
@@ -4377,6 +4390,20 @@ async def seed_defaults():
         return  # Don't proceed if connection fails
     
     try:
+        # Performance: ensure key indexes exist for frequent reads/writes.
+        await db.students.create_index([("id", 1)])
+        await db.students.create_index([("class_id", 1)])
+        await db.students.create_index([("full_name", 1), ("class_id", 1)])
+        await db.student_scores.create_index([("student_id", 1)])
+        await db.student_scores.create_index([("week_id", 1)])
+        await db.student_scores.create_index([("student_id", 1), ("week_id", 1)])
+        await db.weeks.create_index([("id", 1)])
+        await db.weeks.create_index([("semester", 1), ("quarter", 1), ("number", 1)])
+        await db.classes.create_index([("id", 1)])
+        await db.classes.create_index([("name", 1)])
+        await db.users.create_index([("id", 1)])
+        await db.users.create_index([("role_name", 1)])
+
         if await db.classes.count_documents({}) == 0:
             default_classes = []
             for grade in range(4, 9):
@@ -4470,6 +4497,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.add_middleware(GZipMiddleware, minimum_size=1024)
 
 
 @app.on_event("shutdown")
