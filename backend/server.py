@@ -30,9 +30,9 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from reportlab.lib.pagesizes import A4
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image as RLImage
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image as RLImage, PageBreak
 from reportlab.lib import colors
-from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from sendgrid import SendGridAPIClient
 from sendgrid.helpers.mail import (
     Mail,
@@ -1046,103 +1046,177 @@ def format_scope_label(scope: Any) -> str:
 
 
 def generate_report_pdf(report: Dict[str, Any], scope: Any) -> bytes:
+    def _fmt(value: Any, suffix: str = "") -> str:
+        if value is None or value == "":
+            return "-"
+        return f"{value}{suffix}"
+
+    def _styled_table(data: List[List[Any]], col_widths: Optional[List[int]] = None, repeat_header: bool = True) -> Table:
+        tbl = Table(data, colWidths=col_widths, repeatRows=1 if repeat_header else 0, hAlign="LEFT")
+        tbl.setStyle(
+            TableStyle(
+                [
+                    ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#0f766e")),
+                    ("TEXTCOLOR", (0, 0), (-1, 0), colors.whitesmoke),
+                    ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                    ("FONTSIZE", (0, 0), (-1, 0), 9),
+                    ("FONTSIZE", (0, 1), (-1, -1), 8),
+                    ("ALIGN", (0, 0), (-1, -1), "LEFT"),
+                    ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                    ("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#9ca3af")),
+                    ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#f8fafc")]),
+                    ("LEFTPADDING", (0, 0), (-1, -1), 6),
+                    ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+                    ("TOPPADDING", (0, 0), (-1, -1), 4),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+                ]
+            )
+        )
+        return tbl
+
     buffer = io.BytesIO()
     styles = getSampleStyleSheet()
-    doc = SimpleDocTemplate(buffer, pagesize=A4)
-    elements = []
+    title_style = ParagraphStyle(
+        name="ReportTitle",
+        parent=styles["Title"],
+        fontSize=18,
+        textColor=colors.HexColor("#0f172a"),
+        spaceAfter=6,
+    )
+    subtitle_style = ParagraphStyle(
+        name="ReportSubtitle",
+        parent=styles["Normal"],
+        fontSize=10,
+        textColor=colors.HexColor("#475569"),
+        spaceAfter=10,
+    )
+    section_style = ParagraphStyle(
+        name="SectionHeading",
+        parent=styles["Heading2"],
+        fontSize=12,
+        textColor=colors.HexColor("#0f766e"),
+        spaceBefore=6,
+        spaceAfter=6,
+    )
+
+    doc = SimpleDocTemplate(buffer, pagesize=A4, leftMargin=28, rightMargin=28, topMargin=28, bottomMargin=28)
+    elements: List[Any] = []
     scope_label = format_scope_label(scope)
-    elements.append(Paragraph(f"{scope_label} Performance Report", styles["Title"]))
+
+    elements.append(Paragraph(f"{scope_label} Report", title_style))
     elements.append(
         Paragraph(
-            f"Generated on {datetime.now(REPORT_TIMEZONE).strftime('%Y-%m-%d %H:%M')}",
-            styles["Normal"],
+            f"Generated on {datetime.now(REPORT_TIMEZONE).strftime('%Y-%m-%d %H:%M')} | Professional Performance Summary",
+            subtitle_style,
         )
     )
-    elements.append(Spacer(1, 12))
 
-    summary_table_data = [
-        ["Scope", scope_label],
-        ["Total Students", report.get("total_students", 0)],
-        ["Avg Total Score", report.get("avg_total_score") or "-"],
-        ["Exceeding Rate (On Level both quarters)", f"{report.get('exceeding_rate', 0)}%"],
-    ]
-    summary_table = Table(summary_table_data, hAlign="LEFT")
-    summary_table.setStyle(
-        TableStyle([
-            ("BACKGROUND", (0, 0), (-1, 0), colors.lightgrey),
-            ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
-        ])
-    )
-    elements.append(summary_table)
-    elements.append(Spacer(1, 12))
     q1 = report.get("quarter1") or {}
     q2 = report.get("quarter2") or {}
-    if q1 or q2:
-        quarter_table_data = [
-            ["", "Quarter 1", "Quarter 2"],
-            ["On Level %", f"{q1.get('on_level_rate', 0)}%", f"{q2.get('on_level_rate', 0)}%"],
-            ["Avg Total", q1.get("avg_total") or "-", q2.get("avg_total") or "-"],
-        ]
-        quarter_table = Table(quarter_table_data, hAlign="LEFT")
-        quarter_table.setStyle(TableStyle([
-            ("BACKGROUND", (0, 0), (-1, 0), colors.lightgrey),
-            ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
-        ]))
-        elements.append(Paragraph("Quarter comparison (aligned with Analytics)", styles["Normal"]))
-        elements.append(quarter_table)
-    elements.append(Spacer(1, 16))
+    summary_data = [
+        ["Metric", "Value"],
+        ["Scope", scope_label],
+        ["Total Students", _fmt(report.get("total_students"))],
+        ["Average Total Score", _fmt(report.get("avg_total_score"))],
+        ["On Level (Both Quarters)", _fmt(report.get("exceeding_rate"), "%")],
+        ["Quarter 1 On Level", _fmt(q1.get("on_level_rate"), "%")],
+        ["Quarter 1 Avg Total", _fmt(q1.get("avg_total"))],
+        ["Quarter 2 On Level", _fmt(q2.get("on_level_rate"), "%")],
+        ["Quarter 2 Avg Total", _fmt(q2.get("avg_total"))],
+    ]
+    elements.append(_styled_table(summary_data, col_widths=[210, 320]))
+    elements.append(Spacer(1, 10))
 
-    distribution_chart = create_distribution_chart(report.get("distribution", []))
-    class_chart = create_class_breakdown_chart(report.get("class_breakdown", []))
-    elements.append(Paragraph("Performance Distribution", styles["Heading2"]))
-    elements.append(RLImage(distribution_chart, width=240, height=240))
-    elements.append(Spacer(1, 12))
-    elements.append(Paragraph("Class Breakdown", styles["Heading2"]))
-    elements.append(RLImage(class_chart, width=320, height=200))
-    elements.append(Spacer(1, 16))
+    elements.append(Paragraph("Quarter Comparison", section_style))
+    quarter_table_data = [
+        ["Metric", "Quarter 1", "Quarter 2"],
+        ["On Level %", _fmt(q1.get("on_level_rate"), "%"), _fmt(q2.get("on_level_rate"), "%")],
+        ["Avg Quarter Total", _fmt(q1.get("avg_total")), _fmt(q2.get("avg_total"))],
+        ["Students With Data", _fmt(q1.get("total_with_data")), _fmt(q2.get("total_with_data"))],
+    ]
+    elements.append(_styled_table(quarter_table_data, col_widths=[180, 175, 175]))
+    elements.append(Spacer(1, 10))
 
-    top_performers = report.get("top_performers", [])[:10]
-    if top_performers:
-        elements.append(Paragraph("Top Performers", styles["Heading2"]))
-        top_table_data = [["Student", "Class", "Quarter 1", "Quarter 2", "Total Score", "Strengths"]]
-        for student in top_performers:
-            strengths = student.get("strengths") or []
-            top_table_data.append([
-                student.get("full_name"),
-                student.get("class_name"),
-                student.get("quarter1_total", "-"),
-                student.get("quarter2_total", "-"),
-                f"{student.get('total_score_normalized') or '-'}",
-                ", ".join(strengths) if strengths else "-",
-            ])
-        top_table = Table(top_table_data, hAlign="LEFT")
-        top_table.setStyle(TableStyle([
-            ("BACKGROUND", (0, 0), (-1, 0), colors.lightgrey),
-            ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
-        ]))
-        elements.append(top_table)
-        elements.append(Spacer(1, 12))
+    elements.append(Paragraph("Performance Distribution", section_style))
+    distribution = report.get("distribution") or []
+    dist_rows = [["Level", "Count"]]
+    for item in distribution:
+        dist_rows.append([str(item.get("level", "")).replace("_", " ").title(), _fmt(item.get("count"))])
+    if len(dist_rows) == 1:
+        dist_rows.append(["No Data", "0"])
+    elements.append(_styled_table(dist_rows, col_widths=[260, 270]))
+    elements.append(Spacer(1, 8))
 
-    support_students = report.get("students_needing_support", [])[:10]
-    if support_students:
-        elements.append(Paragraph("Students Needing Support", styles["Heading2"]))
-        support_table_data = [["Student", "Class", "Quarter 1", "Quarter 2", "Performance", "Areas to Improve"]]
-        for student in support_students:
-            weak_areas = student.get("weak_areas") or []
-            support_table_data.append([
-                student.get("full_name"),
-                student.get("class_name"),
-                student.get("quarter1_total", "-"),
-                student.get("quarter2_total", "-"),
-                student.get("performance_label"),
-                ", ".join(weak_areas) if weak_areas else "-",
-            ])
-        support_table = Table(support_table_data, hAlign="LEFT")
-        support_table.setStyle(TableStyle([
-            ("BACKGROUND", (0, 0), (-1, 0), colors.lightgrey),
-            ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
-        ]))
-        elements.append(support_table)
+    distribution_chart = create_distribution_chart(distribution)
+    class_breakdown = report.get("class_breakdown", []) or []
+    class_chart = create_class_breakdown_chart(class_breakdown)
+    chart_table = Table(
+        [[RLImage(distribution_chart, width=240, height=220), RLImage(class_chart, width=260, height=190)]],
+        colWidths=[260, 270],
+        hAlign="LEFT",
+    )
+    chart_table.setStyle(
+        TableStyle(
+            [
+                ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                ("BOX", (0, 0), (-1, -1), 0.4, colors.HexColor("#cbd5e1")),
+                ("LEFTPADDING", (0, 0), (-1, -1), 6),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+                ("TOPPADDING", (0, 0), (-1, -1), 6),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+            ]
+        )
+    )
+    elements.append(chart_table)
+    elements.append(Spacer(1, 10))
+
+    elements.append(Paragraph("Class Breakdown", section_style))
+    class_table_data = [["Class", "Students"]]
+    for item in class_breakdown:
+        class_table_data.append([_fmt(item.get("class_name")), _fmt(item.get("student_count"))])
+    if len(class_table_data) == 1:
+        class_table_data.append(["-", "0"])
+    elements.append(_styled_table(class_table_data, col_widths=[350, 180]))
+    elements.append(PageBreak())
+
+    top_performers = report.get("top_performers", []) or []
+    elements.append(Paragraph("Top Performers", section_style))
+    top_table_data = [["Student", "Class", "Q1", "Q2", "Total", "Strengths"]]
+    for student in top_performers:
+        strengths = ", ".join(student.get("strengths") or []) or "-"
+        top_table_data.append(
+            [
+                _fmt(student.get("full_name")),
+                _fmt(student.get("class_name")),
+                _fmt(student.get("quarter1_total")),
+                _fmt(student.get("quarter2_total")),
+                _fmt(student.get("total_score_normalized")),
+                strengths,
+            ]
+        )
+    if len(top_table_data) == 1:
+        top_table_data.append(["-", "-", "-", "-", "-", "-"])
+    elements.append(_styled_table(top_table_data, col_widths=[130, 70, 45, 45, 45, 195]))
+    elements.append(Spacer(1, 10))
+
+    support_students = report.get("students_needing_support", []) or []
+    elements.append(Paragraph("Students Needing Support", section_style))
+    support_table_data = [["Student", "Class", "Q1", "Q2", "Performance", "Areas to Improve"]]
+    for student in support_students:
+        weak_areas = ", ".join(student.get("weak_areas") or []) or "-"
+        support_table_data.append(
+            [
+                _fmt(student.get("full_name")),
+                _fmt(student.get("class_name")),
+                _fmt(student.get("quarter1_total")),
+                _fmt(student.get("quarter2_total")),
+                _fmt(student.get("performance_label") or student.get("performance_level")),
+                weak_areas,
+            ]
+        )
+    if len(support_table_data) == 1:
+        support_table_data.append(["-", "-", "-", "-", "-", "-"])
+    elements.append(_styled_table(support_table_data, col_widths=[130, 70, 45, 45, 70, 170]))
 
     doc.build(elements)
     pdf_value = buffer.getvalue()

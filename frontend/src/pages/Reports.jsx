@@ -163,13 +163,6 @@ export default function Reports() {
               {t("download_pdf")}
             </Button>
             <Button
-              variant="secondary"
-              onClick={() => handleDownload("excel")}
-              data-testid="reports-download-excel-button"
-            >
-              {t("download_excel")}
-            </Button>
-            <Button
               onClick={handleSchedule}
               data-testid="reports-schedule-button"
             >
