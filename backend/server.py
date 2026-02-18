@@ -490,6 +490,50 @@ def compute_students_total_for_assessment(
     return round(min(max(0, avg_inclusive), 15), 2)
 
 
+def _safe_float_score(val: Any) -> float:
+    """Return float value or 0 if None/NaN."""
+    if val is None or (isinstance(val, float) and pd.isna(val)):
+        return 0.0
+    try:
+        return float(val)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def compute_inclusive_quiz_chapter_q1(
+    scores_by_week: Dict[int, Dict[str, Optional[float]]],
+) -> tuple:
+    """Avg quiz (max 5) and avg chapter (max 10) over weeks 1-9; empty weeks = 0. Returns (avg_quiz, avg_chapter)."""
+    n = 9
+    quiz_sum = 0.0
+    chapter_sum = 0.0
+    for w in range(1, 10):
+        s = scores_by_week.get(w) or {}
+        q1 = _safe_float_score(s.get("quiz1"))
+        q2 = _safe_float_score(s.get("quiz2"))
+        quiz_sum += min(max(q1, q2), 5.0)
+        ch = _safe_float_score(s.get("chapter_test1_practical"))
+        chapter_sum += min(ch, 10.0)
+    return (round(quiz_sum / n, 2), round(chapter_sum / n, 2))
+
+
+def compute_inclusive_quiz_chapter_q2(
+    scores_by_week: Dict[int, Dict[str, Optional[float]]],
+) -> tuple:
+    """Avg quiz (max 5) and avg chapter (max 10) over weeks 10-18; empty weeks = 0. Returns (avg_quiz, avg_chapter)."""
+    n = 9
+    quiz_sum = 0.0
+    chapter_sum = 0.0
+    for w in range(10, 19):
+        s = scores_by_week.get(w) or {}
+        q3 = _safe_float_score(s.get("quiz3"))
+        q4 = _safe_float_score(s.get("quiz4"))
+        quiz_sum += min(max(q3, q4), 5.0)
+        ch = _safe_float_score(s.get("chapter_test2_practical"))
+        chapter_sum += min(ch, 10.0)
+    return (round(quiz_sum / n, 2), round(chapter_sum / n, 2))
+
+
 # Students page total: attendance (2.5) + participation (2.5) + behavior (5) + homework (5) = 15 max.
 # Assessment Marks: Students total (15) + best(Quiz1, Quiz2)(5) + Chapter Test 1 Practical(10) = 30 max.
 # Final Exams: Assessment (30) + Quarter Practical(10) + Quarter Theory(10) = 50 max.
@@ -2906,13 +2950,18 @@ def build_summary(students: List[Dict[str, Any]], classes: List[Dict[str, Any]])
         counts[level] = counts.get(level, 0) + 1
         if student["total_score_normalized"] is not None:
             total_scores.append(student["total_score_normalized"])
-        if student.get("quiz1") is not None:
-            quiz_scores.append(student["quiz1"])
-        if student.get("quiz2") is not None:
-            quiz_scores.append(student["quiz2"])
-        if student.get("chapter_test1") is not None:
+        # Use inclusive (cumulative) quiz/chapter when set (Dashboard/Analytics) so empty weeks reduce averages
+        if student.get("avg_quiz_inclusive") is not None:
+            quiz_scores.append(student["avg_quiz_inclusive"])
+        elif student.get("quiz1") is not None or student.get("quiz2") is not None:
+            q1 = float(student["quiz1"]) if student.get("quiz1") is not None else 0
+            q2 = float(student["quiz2"]) if student.get("quiz2") is not None else 0
+            quiz_scores.append(max(q1, q2))
+        if student.get("avg_chapter_inclusive") is not None:
+            chapter_scores.append(student["avg_chapter_inclusive"])
+        elif student.get("chapter_test1") is not None:
             chapter_scores.append(student["chapter_test1"])
-        if student.get("chapter_test2") is not None:
+        elif student.get("chapter_test2") is not None:
             chapter_scores.append(student["chapter_test2"])
     total_with_data = len(enriched) - counts.get("no_data", 0)
     on_level_rate = round((counts.get("on_level", 0) / total_with_data) * 100, 1) if total_with_data else 0
@@ -2970,6 +3019,13 @@ async def get_analytics_summary(
             for student in students:
                 sw = scores_by_student.get(student["id"], {})
                 _enrich_student_single_quarter(student, sw, q)
+                # Inclusive (cumulative) quiz/chapter for Dashboard so empty weeks reduce averages
+                if q == 1:
+                    iq, ic = compute_inclusive_quiz_chapter_q1(sw)
+                else:
+                    iq, ic = compute_inclusive_quiz_chapter_q2(sw)
+                student["avg_quiz_inclusive"] = iq
+                student["avg_chapter_inclusive"] = ic
         return build_summary(students, classes)
     except Exception as e:
         logger.exception("Analytics summary failed")
