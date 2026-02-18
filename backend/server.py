@@ -429,6 +429,21 @@ def compute_avg_first_9_weeks(scores_by_week: Dict[int, Dict[str, Optional[float
     return round(sum(week_totals) / len(week_totals), 2)
 
 
+def compute_avg_first_9_weeks_inclusive(scores_by_week: Dict[int, Dict[str, Optional[float]]]) -> float:
+    """Average over all 9 weeks (1-9); weeks with no data count as 0. Makes totals cumulative so empty weeks reduce the score."""
+    n_weeks = 9
+    total_sum = 0.0
+    for week_num in range(1, 10):
+        score = scores_by_week.get(week_num) or {}
+        a, p, b, h = score.get("attendance"), score.get("participation"), score.get("behavior"), score.get("homework")
+        week_total = sum(
+            float(v) if v is not None and not (isinstance(v, float) and pd.isna(v)) else 0
+            for v in [a, p, b, h]
+        )
+        total_sum += min(week_total, TOTAL_SCORE_MAX)
+    return round(total_sum / n_weeks, 2)
+
+
 def compute_avg_weeks_10_18(scores_by_week: Dict[int, Dict[str, Optional[float]]]) -> Optional[float]:
     """Average of student's follow-up total (attendance+participation+behavior+homework, max 15) over weeks 10-18. Only includes weeks that have at least one non-null score; returns None if no such weeks."""
     week_totals: List[float] = []
@@ -447,28 +462,32 @@ def compute_avg_weeks_10_18(scores_by_week: Dict[int, Dict[str, Optional[float]]
     return round(sum(week_totals) / len(week_totals), 2)
 
 
+def compute_avg_weeks_10_18_inclusive(scores_by_week: Dict[int, Dict[str, Optional[float]]]) -> float:
+    """Average over all 9 weeks (10-18); weeks with no data count as 0. Makes totals cumulative."""
+    n_weeks = 9
+    total_sum = 0.0
+    for week_num in range(10, 19):
+        score = scores_by_week.get(week_num) or {}
+        a, p, b, h = score.get("attendance"), score.get("participation"), score.get("behavior"), score.get("homework")
+        week_total = sum(
+            float(v) if v is not None and not (isinstance(v, float) and pd.isna(v)) else 0
+            for v in [a, p, b, h]
+        )
+        total_sum += min(week_total, 15)
+    return round(total_sum / n_weeks, 2)
+
+
 def compute_students_total_for_assessment(
     scores_by_week: Dict[int, Dict[str, Optional[float]]],
     avg_first_9_weeks: Optional[float] = None,
     weeks_10_18: bool = False,
 ) -> float:
-    """Students total (max 15) for Assessment/Final: max(avg, best single week) so 15 in any one week counts as 15."""
+    """Students total (max 15) for Assessment/Final: average over all weeks in range, with empty weeks = 0 (cumulative)."""
     if weeks_10_18:
-        week_nums = list(range(10, 19))
-        avg = compute_avg_weeks_10_18(scores_by_week)
+        avg_inclusive = compute_avg_weeks_10_18_inclusive(scores_by_week)
     else:
-        week_nums = list(range(1, 10))
-        avg = compute_avg_first_9_weeks(scores_by_week)
-    best_week = 0.0
-    for w in week_nums:
-        s = scores_by_week.get(w) or {}
-        total = sum(
-            float(v) if v is not None and not (isinstance(v, float) and pd.isna(v)) else 0
-            for v in [s.get("attendance"), s.get("participation"), s.get("behavior"), s.get("homework")]
-        )
-        best_week = max(best_week, min(total, 15))
-    candidate = max(avg or 0, best_week)
-    return round(min(max(0, candidate), 15), 2)
+        avg_inclusive = compute_avg_first_9_weeks_inclusive(scores_by_week)
+    return round(min(max(0, avg_inclusive), 15), 2)
 
 
 # Students page total: attendance (2.5) + participation (2.5) + behavior (5) + homework (5) = 15 max.
@@ -1989,16 +2008,6 @@ async def get_students(
                 student["avg_weeks_10_18"] = avg_10_18
                 students_total_q1 = compute_students_total_for_assessment(sw, avg_first_9_weeks=avg_9, weeks_10_18=False)
                 students_total_q2 = compute_students_total_for_assessment(sw, weeks_10_18=True)
-                a, p, b, h = (
-                    student.get("attendance"), student.get("participation"),
-                    student.get("behavior"), student.get("homework"),
-                )
-                _cur = sum(
-                    float(v) if v is not None and not (isinstance(v, float) and pd.isna(v)) else 0
-                    for v in [a, p, b, h]
-                )
-                current_week_behavioral = round(min(max(0, _cur), 15), 2)
-                students_total_q1 = max(students_total_q1, current_week_behavioral)
                 scores_dict = {
                     "attendance": student.get("attendance"),
                     "participation": student.get("participation"),
