@@ -22,6 +22,7 @@ import pandas as pd
 import re
 import io
 import base64
+from xml.sax.saxutils import escape
 from zoneinfo import ZoneInfo
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
@@ -1013,8 +1014,27 @@ def create_distribution_chart(distribution: List[Dict[str, Any]]) -> io.BytesIO:
     chart_colors = [colors_map.get(item["level"], "#94a3b8") for item in distribution]
     if sum(sizes) == 0:
         sizes = [1 for _ in sizes]
-    fig, ax = plt.subplots(figsize=(4, 4))
-    ax.pie(sizes, labels=labels, colors=chart_colors, autopct="%1.0f%%")
+    fig, ax = plt.subplots(figsize=(5.0, 3.8))
+    wedges, _, _ = ax.pie(
+        sizes,
+        labels=None,  # use legend to avoid label overlaps on small segments
+        colors=chart_colors,
+        autopct=lambda pct: f"{pct:.0f}%" if pct >= 4 else "",
+        startangle=90,
+        counterclock=False,
+        textprops={"fontsize": 9},
+    )
+    legend_labels = [f"{label}: {count}" for label, count in zip(labels, sizes)]
+    ax.legend(
+        wedges,
+        legend_labels,
+        title="Levels",
+        loc="center left",
+        bbox_to_anchor=(1.0, 0.5),
+        frameon=False,
+        fontsize=8,
+        title_fontsize=9,
+    )
     ax.axis("equal")
     buffer = io.BytesIO()
     plt.tight_layout()
@@ -1027,10 +1047,12 @@ def create_distribution_chart(distribution: List[Dict[str, Any]]) -> io.BytesIO:
 def create_class_breakdown_chart(class_breakdown: List[Dict[str, Any]]) -> io.BytesIO:
     names = [item["class_name"] for item in class_breakdown]
     counts = [item["student_count"] for item in class_breakdown]
-    fig, ax = plt.subplots(figsize=(5, 3))
+    fig, ax = plt.subplots(figsize=(5.4, 3.2))
     ax.bar(names, counts, color="#1e3a8a")
     ax.set_ylabel("Students")
     ax.set_xlabel("Class")
+    ax.tick_params(axis="x", labelsize=8, rotation=20)
+    ax.tick_params(axis="y", labelsize=8)
     plt.tight_layout()
     buffer = io.BytesIO()
     plt.savefig(buffer, format="png", dpi=150)
@@ -1052,7 +1074,20 @@ def generate_report_pdf(report: Dict[str, Any], scope: Any) -> bytes:
         return f"{value}{suffix}"
 
     def _styled_table(data: List[List[Any]], col_widths: Optional[List[int]] = None, repeat_header: bool = True) -> Table:
-        tbl = Table(data, colWidths=col_widths, repeatRows=1 if repeat_header else 0, hAlign="LEFT")
+        wrapped_rows: List[List[Any]] = []
+        for row_idx, row in enumerate(data):
+            wrapped_row: List[Any] = []
+            for cell in row:
+                if isinstance(cell, Paragraph):
+                    wrapped_row.append(cell)
+                    continue
+                text = escape("" if cell is None else str(cell)).replace("\n", "<br/>")
+                if row_idx == 0:
+                    wrapped_row.append(Paragraph(text, table_header_style))
+                else:
+                    wrapped_row.append(Paragraph(text, table_body_style))
+            wrapped_rows.append(wrapped_row)
+        tbl = Table(wrapped_rows, colWidths=col_widths, repeatRows=1 if repeat_header else 0, hAlign="LEFT")
         tbl.setStyle(
             TableStyle(
                 [
@@ -1097,6 +1132,23 @@ def generate_report_pdf(report: Dict[str, Any], scope: Any) -> bytes:
         textColor=colors.HexColor("#0f766e"),
         spaceBefore=6,
         spaceAfter=6,
+    )
+    table_header_style = ParagraphStyle(
+        name="TableHeaderCell",
+        parent=styles["Normal"],
+        fontName="Helvetica-Bold",
+        fontSize=8.5,
+        textColor=colors.whitesmoke,
+        leading=10,
+        wordWrap="CJK",
+    )
+    table_body_style = ParagraphStyle(
+        name="TableBodyCell",
+        parent=styles["Normal"],
+        fontSize=8,
+        textColor=colors.HexColor("#111827"),
+        leading=10,
+        wordWrap="CJK",
     )
 
     doc = SimpleDocTemplate(buffer, pagesize=A4, leftMargin=28, rightMargin=28, topMargin=28, bottomMargin=28)
@@ -1151,7 +1203,7 @@ def generate_report_pdf(report: Dict[str, Any], scope: Any) -> bytes:
     class_breakdown = report.get("class_breakdown", []) or []
     class_chart = create_class_breakdown_chart(class_breakdown)
     chart_table = Table(
-        [[RLImage(distribution_chart, width=240, height=220), RLImage(class_chart, width=260, height=190)]],
+        [[RLImage(distribution_chart, width=250, height=200), RLImage(class_chart, width=250, height=190)]],
         colWidths=[260, 270],
         hAlign="LEFT",
     )
@@ -1196,7 +1248,7 @@ def generate_report_pdf(report: Dict[str, Any], scope: Any) -> bytes:
         )
     if len(top_table_data) == 1:
         top_table_data.append(["-", "-", "-", "-", "-", "-"])
-    elements.append(_styled_table(top_table_data, col_widths=[130, 70, 45, 45, 45, 195]))
+    elements.append(_styled_table(top_table_data, col_widths=[130, 58, 38, 38, 45, 220]))
     elements.append(Spacer(1, 10))
 
     support_students = report.get("students_needing_support", []) or []
@@ -1216,7 +1268,7 @@ def generate_report_pdf(report: Dict[str, Any], scope: Any) -> bytes:
         )
     if len(support_table_data) == 1:
         support_table_data.append(["-", "-", "-", "-", "-", "-"])
-    elements.append(_styled_table(support_table_data, col_widths=[130, 70, 45, 45, 70, 170]))
+    elements.append(_styled_table(support_table_data, col_widths=[130, 58, 38, 38, 65, 210]))
 
     doc.build(elements)
     pdf_value = buffer.getvalue()
