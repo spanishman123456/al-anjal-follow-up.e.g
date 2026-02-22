@@ -1570,72 +1570,43 @@ async def send_sms_notification(event_type: str, variables: Dict[str, Any]):
         await log_notification(event_type, message, to_number or "", "failed")
 
 
-def build_saudi_academic_year_events() -> List[Dict[str, Any]]:
-    now = datetime.now(timezone.utc)
-    start_year = now.year if now.month >= 8 else now.year - 1
-    end_year = start_year + 1
-    start_date = datetime(start_year, 8, 25, tzinfo=timezone.utc)
-    end_date = datetime(end_year, 6, 15, tzinfo=timezone.utc)
-    mid_break_start = datetime(end_year, 1, 5, tzinfo=timezone.utc)
-    mid_break_end = datetime(end_year, 1, 15, tzinfo=timezone.utc)
-    second_term_start = datetime(end_year, 1, 16, tzinfo=timezone.utc)
+def build_anjal_academic_calendar() -> List[Dict[str, Any]]:
+    """Returns Al Anjal National School academic calendar for 1447H (2025-2026)."""
+    SOURCE = "anjal-academic-calendar-1447H"
+    raw_events = [
+        # --- Preparation Week ---
+        ("أسبوع التهيئة / Preparation Week",              "2025-08-17T00:00:00+00:00"),
+        ("استقبال الروضة / KG Reception",                  "2025-08-19T00:00:00+00:00"),
+        ("استقبال المرحلة الابتدائية / Primary Reception", "2025-08-20T00:00:00+00:00"),
+        ("استقبال المرحلة المتوسطة والثانوية / Middle & Secondary Reception", "2025-08-21T00:00:00+00:00"),
+        # --- First Semester ---
+        ("بداية الفصل الدراسي الأول / First Semester Starts",   "2025-08-24T00:00:00+00:00"),
+        ("إجازة اليوم الوطني / National Day Holiday",            "2025-09-23T00:00:00+00:00"),
+        ("إجازة إضافية / Additional Holiday",                    "2025-10-12T00:00:00+00:00"),
+        ("بداية إجازة الخريف / Autumn Break Starts",             "2025-11-23T00:00:00+00:00"),
+        ("نهاية إجازة الخريف / Autumn Break Ends",               "2025-11-30T00:00:00+00:00"),
+        ("إجازة إضافية (الخميس) / Additional Holiday (Thu)",     "2025-12-11T00:00:00+00:00"),
+        ("إجازة إضافية (الأحد) / Additional Holiday (Sun)",      "2025-12-14T00:00:00+00:00"),
+        ("نهاية الفصل الدراسي الأول / First Semester Ends",      "2026-01-08T00:00:00+00:00"),
+        # --- Second Semester ---
+        ("بداية الفصل الدراسي الثاني / Second Semester Starts",  "2026-01-18T00:00:00+00:00"),
+        ("إجازة يوم التأسيس / Foundation Day Holiday",           "2026-02-22T00:00:00+00:00"),
+        ("بداية إجازة عيد الفطر / Eid Al-Fitr Break Starts",    "2026-03-05T00:00:00+00:00"),
+        ("العودة بعد إجازة عيد الفطر / Return from Eid Al-Fitr", "2026-03-29T00:00:00+00:00"),
+        ("بداية إجازة عيد الأضحى / Eid Al-Adha Break Starts",   "2026-05-21T00:00:00+00:00"),
+        ("العودة بعد إجازة عيد الأضحى / Return from Eid Al-Adha","2026-06-02T00:00:00+00:00"),
+        ("نهاية العام الدراسي للطلاب / Academic Year Ends",      "2026-06-25T00:00:00+00:00"),
+    ]
     events = [
-        CalendarEventRecord(
-            title="Academic year starts",
-            date=start_date.isoformat(),
-            details={"source": "default"},
-        ),
-        CalendarEventRecord(
-            title="Mid-year break",
-            date=mid_break_start.isoformat(),
-            details={"source": "default"},
-        ),
-        CalendarEventRecord(
-            title="Mid-year break ends",
-            date=mid_break_end.isoformat(),
-            details={"source": "default"},
-        ),
-        CalendarEventRecord(
-            title="Second term starts",
-            date=second_term_start.isoformat(),
-            details={"source": "default"},
-        ),
-        CalendarEventRecord(
-            title="Academic year ends",
-            date=end_date.isoformat(),
-            details={"source": "default"},
-        ),
+        CalendarEventRecord(title=title, date=date, details={"source": SOURCE})
+        for title, date in raw_events
     ]
     return [event.model_dump() for event in events]
 
 
 async def sync_moe_calendar() -> int:
-    url = "https://moe.gov.sa/ar/education/generaleducation/Pages/academicCalendar.aspx"
-    events: List[Dict[str, Any]] = []
-    try:
-        response = requests.get(url, timeout=30)
-        response.raise_for_status()
-        tables = pd.read_html(response.text)
-        if tables:
-            df = tables[0]
-            for _, row in df.iterrows():
-                row_dict = row.dropna().to_dict()
-                values = list(row_dict.values())
-                title = str(values[0]) if values else "Event"
-                date_value = str(values[1]) if len(values) > 1 else ""
-                event = CalendarEventRecord(
-                    title=title,
-                    date=date_value,
-                    details=row_dict,
-                )
-                events.append(event.model_dump())
-    except Exception as exc:
-        logger.warning("MOE calendar sync failed: %s", exc)
-
-    source_value = url
-    if not events:
-        events = build_saudi_academic_year_events()
-        source_value = "saudi-academic-year"
+    events = build_anjal_academic_calendar()
+    source_value = "anjal-academic-calendar-1447H"
 
     await db.calendar_events.delete_many({})
     if events:
