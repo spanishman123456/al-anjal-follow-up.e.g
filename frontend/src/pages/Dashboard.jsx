@@ -150,7 +150,7 @@ export default function Dashboard() {
       />
 
       <section
-        className="section-bg-alt-1 grid gap-4 rounded-xl border border-border/50 p-4 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5"
+        className="section-bg-alt-1 grid gap-4 rounded-xl border border-border/50 p-4 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7"
         data-testid="dashboard-metrics"
       >
         <Card data-testid="metric-total-students">
@@ -159,7 +159,7 @@ export default function Dashboard() {
               className="text-sm text-muted-foreground"
               data-testid="metric-total-students-label"
             >
-              {t("total_students")}
+              {t("total_enrolled_students")}
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -168,6 +168,30 @@ export default function Dashboard() {
               data-testid="metric-total-students-value"
             >
               {summary?.total_students ?? 0}
+            </div>
+          </CardContent>
+        </Card>
+        <Card data-testid="metric-assessed-students">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm text-muted-foreground">
+              {t("assessed_students")}
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-3xl font-bold text-sky-600" data-testid="metric-assessed-students-value">
+              {summary?.students_with_data ?? 0}
+            </div>
+          </CardContent>
+        </Card>
+        <Card data-testid="metric-no-data-students">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm text-muted-foreground">
+              {t("no_data_students")}
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-3xl font-bold text-slate-600" data-testid="metric-no-data-students-value">
+              {summary?.students_no_data ?? 0}
             </div>
           </CardContent>
         </Card>
@@ -244,6 +268,9 @@ export default function Dashboard() {
           </CardContent>
         </Card>
       </section>
+      <p className="text-xs text-muted-foreground" data-testid="dashboard-metrics-scope-note">
+        {t("dashboard_metrics_scope_note")}
+      </p>
 
       <section className="section-bg-alt-2 grid gap-6 rounded-xl border border-border/50 p-4 lg:grid-cols-3 animate-stagger" data-testid="dashboard-main">
         <Card className="lg:col-span-2 card-hover" data-testid="dashboard-distribution">
@@ -440,7 +467,7 @@ export default function Dashboard() {
               </span>
             </div>
             <div className="rounded-lg border border-border/60 p-3 text-sm text-muted-foreground" data-testid="thresholds-note">
-              Thresholds: Exceeding ≥ 47, Meeting ≥ 45, Approaching ≥ 43, Below &lt; 40 (normalized to 50).
+              {t("dashboard_thresholds_note")}
             </div>
           </CardContent>
         </Card>

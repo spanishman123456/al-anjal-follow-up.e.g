@@ -176,8 +176,10 @@ def average_values(values: List[Optional[float]]) -> float:
 
 
 def compute_quarter_totals(scores_by_week: Dict[int, Dict[str, Optional[float]]]) -> Dict[str, float]:
-    quarter1_weeks = [week for week in scores_by_week.keys() if week <= 10]
-    quarter2_weeks = [week for week in scores_by_week.keys() if week >= 11]
+    # Keep quarter boundaries aligned across the codebase:
+    # Q1 = weeks 1-9, Q2 = weeks 10-18
+    quarter1_weeks = [week for week in scores_by_week.keys() if week <= 9]
+    quarter2_weeks = [week for week in scores_by_week.keys() if week >= 10]
 
     def avg_field(weeks: List[int], field: str) -> float:
         return average_values([scores_by_week.get(week, {}).get(field) for week in weeks])
@@ -3140,6 +3142,7 @@ def build_summary(students: List[Dict[str, Any]], classes: List[Dict[str, Any]])
         elif student.get("chapter_test2") is not None:
             chapter_scores.append(student["chapter_test2"])
     total_with_data = len(enriched) - counts.get("no_data", 0)
+    total_no_data = counts.get("no_data", 0)
     on_level_rate = round((counts.get("on_level", 0) / total_with_data) * 100, 1) if total_with_data else 0
     students_needing_support = [s for s in enriched if s["performance_level"] in ["approach", "below"]]
     top_performers = sorted(
@@ -3162,6 +3165,8 @@ def build_summary(students: List[Dict[str, Any]], classes: List[Dict[str, Any]])
     ]
     return {
         "total_students": len(enriched),
+        "students_with_data": total_with_data,
+        "students_no_data": total_no_data,
         "classes_count": len(classes),
         "avg_quiz_score": average(quiz_scores),
         "avg_chapter_score": average(chapter_scores),
