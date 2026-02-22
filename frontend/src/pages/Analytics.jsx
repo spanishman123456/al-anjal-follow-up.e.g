@@ -13,6 +13,7 @@ import {
   Legend,
 } from "recharts";
 import { api, getApiErrorMessage } from "@/lib/api";
+import { buildAutoInsightsFromOverview } from "@/lib/insightAutofill";
 import { useTranslations } from "@/lib/i18n";
 import { sortByClassOrder } from "@/lib/utils";
 import { PageHeader } from "@/components/layout/PageHeader";
@@ -52,6 +53,21 @@ export default function Analytics() {
   const [analysisStandoutData, setAnalysisStandoutData] = useState("");
   const [analysisActions, setAnalysisActions] = useState("");
   const [analysisRecommendations, setAnalysisRecommendations] = useState("");
+
+  const applyGeneratedInsights = (generated) => {
+    if (!generated) return;
+    setAnalysisStrengths(generated.analysis_strengths || "");
+    setAnalysisWeaknesses(generated.analysis_weaknesses || "");
+    setAnalysisPerformance(generated.analysis_performance || "");
+    setAnalysisStandoutData(generated.analysis_standout_data || "");
+    setAnalysisActions(generated.analysis_actions || "");
+    setAnalysisRecommendations(generated.analysis_recommendations || "");
+  };
+
+  const autoFillInsights = () => {
+    if (!overview) return;
+    applyGeneratedInsights(buildAutoInsightsFromOverview(overview));
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -146,6 +162,11 @@ export default function Analytics() {
     loadAnalytics();
     return () => { cancelled = true; };
   }, [semesterNumber, quarter, selectedClassId]);
+
+  useEffect(() => {
+    if (!overview) return;
+    autoFillInsights();
+  }, [overview]);
 
   const q1 = overview?.quarter1 || {};
   const q2 = overview?.quarter2 || {};
@@ -266,6 +287,13 @@ export default function Analytics() {
               data-testid="analytics-download-excel"
             >
               {t("download_excel")}
+            </Button>
+            <Button
+              variant="outline"
+              onClick={autoFillInsights}
+              data-testid="analytics-autofill-insights"
+            >
+              Auto-fill AI comments
             </Button>
           </div>
         }

@@ -179,7 +179,7 @@ function App() {
       checkBackendHealth().then((ok) => {
         if (!cancelled) setBackendOk(ok);
       });
-    }, 8000);
+    }, 3000);
     return () => {
       cancelled = true;
       clearTimeout(safety);

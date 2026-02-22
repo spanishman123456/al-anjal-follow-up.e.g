@@ -12,6 +12,7 @@ import {
   Tooltip,
 } from "recharts";
 import { api } from "@/lib/api";
+import { buildAutoInsightsFromReport } from "@/lib/insightAutofill";
 import { useTranslations } from "@/lib/i18n";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -56,11 +57,31 @@ export default function Reports() {
   const [analysisActions, setAnalysisActions] = useState("");
   const [analysisRecommendations, setAnalysisRecommendations] = useState("");
 
+  const applyGeneratedInsights = (generated) => {
+    if (!generated) return;
+    setAnalysisStrengths(generated.analysis_strengths || "");
+    setAnalysisWeaknesses(generated.analysis_weaknesses || "");
+    setAnalysisPerformance(generated.analysis_performance || "");
+    setAnalysisStandoutData(generated.analysis_standout_data || "");
+    setAnalysisActions(generated.analysis_actions || "");
+    setAnalysisRecommendations(generated.analysis_recommendations || "");
+  };
+
+  const autoFillInsights = (reportData = report) => {
+    if (!reportData) {
+      toast.info("Generate the report first to auto-fill comments.");
+      return;
+    }
+    applyGeneratedInsights(buildAutoInsightsFromReport(reportData));
+  };
+
   const handleGenerate = async () => {
     const response = await api.get("/reports/grade", {
       params: { grade, semester: semesterNumber, quarter },
     });
-    setReport(response.data);
+    const reportData = response.data;
+    setReport(reportData);
+    applyGeneratedInsights(buildAutoInsightsFromReport(reportData));
   };
 
   const handlePrint = () => {
@@ -157,6 +178,13 @@ export default function Reports() {
             </Select>
             <Button onClick={handleGenerate} data-testid="reports-generate-button">
               {t("generate_report")}
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => autoFillInsights()}
+              data-testid="reports-autofill-insights-button"
+            >
+              Auto-fill AI comments
             </Button>
             <Button variant="outline" onClick={handlePrint} data-testid="reports-print-button">
               {t("print")}

@@ -19,6 +19,7 @@ export default function Login({
   const t = useTranslations(language);
   const navigate = useNavigate();
   const [form, setForm] = useState({ username: "", password: "" });
+  const [isSubmitting, setIsSubmitting] = useState(false);
   // Use app-level server status when provided (check starts as soon as you open the site); otherwise check when Login mounts
   const [localBackendOk, setLocalBackendOk] = useState(null);
   const backendOk = serverStatusProp !== undefined ? serverStatusProp : localBackendOk;
@@ -44,10 +45,37 @@ export default function Login({
     };
   }, [serverStatusProp]);
 
+  const waitForBackendReady = async ({ timeoutMs = 75000, intervalMs = 2500 } = {}) => {
+    const started = Date.now();
+    while (Date.now() - started < timeoutMs) {
+      const ok = await checkBackendHealth();
+      if (ok) return true;
+      await new Promise((resolve) => setTimeout(resolve, intervalMs));
+    }
+    return false;
+  };
+
   const handleLogin = async (event) => {
     event.preventDefault();
+    setIsSubmitting(true);
     try {
-      const response = await api.post("/auth/login", form);
+      let response;
+      try {
+        response = await api.post("/auth/login", form);
+      } catch (error) {
+        const isNetwork = !error.response;
+        if (isNetwork && isProductionBackendUrl) {
+          toast.info("Waking the server and retrying login automatically...");
+          const isReady = await waitForBackendReady();
+          if (isReady) {
+            response = await api.post("/auth/login", form);
+          } else {
+            throw error;
+          }
+        } else {
+          throw error;
+        }
+      }
       sessionStorage.setItem("auth_token", response.data.access_token);
       onLogin?.(response.data.access_token);
       navigate("/");
@@ -70,6 +98,8 @@ export default function Login({
         msg = detail;
       }
       toast.error(msg);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -192,12 +222,12 @@ export default function Login({
                 type="submit"
                 className="w-full h-11 bg-primary hover:bg-primary/90 text-white font-semibold shadow-md"
                 data-testid="login-submit"
-                disabled={backendOk === false && !isProductionBackendUrl}
+                disabled={isSubmitting || (backendOk === false && !isProductionBackendUrl)}
               >
-                {t("login")}
+                {isSubmitting ? "Signing in..." : t("login")}
               </Button>
               {backendOk === null && (
-                <p className="text-xs text-slate-500 mt-2">Checking server…</p>
+                <p className="text-xs text-slate-500 mt-2">Checking server status...</p>
               )}
               {backendOk === true && (
                 <p className="text-xs text-green-600 mt-2">Server connected</p>
@@ -205,7 +235,7 @@ export default function Login({
               {backendOk === false && (
                 <p className="text-xs text-amber-600 mt-2">
                   {isProductionBackendUrl
-                    ? "Server may be waking up (free hosting). You can try logging in; it may take up to a minute."
+                    ? "Server is waking up (free hosting). Press Login once and the app will retry automatically."
                     : "Server not connected. Run Start_App.bat and keep its window open."}
                 </p>
               )}
