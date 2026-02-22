@@ -21,6 +21,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import {
   Select,
   SelectContent,
@@ -28,6 +29,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Sparkles, TrendingUp, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 
 const PERFORMANCE_COLORS = {
@@ -35,6 +37,20 @@ const PERFORMANCE_COLORS = {
   approach: "#f59e0b",
   below: "#ef4444",
   no_data: "#94a3b8",
+};
+
+const AnalyticsTooltip = ({ active, payload, label }) => {
+  if (!active || !payload?.length) return null;
+  return (
+    <div className="rounded-lg border border-border/70 bg-background/95 px-3 py-2 text-xs shadow-lg backdrop-blur-sm">
+      <p className="font-semibold">{label}</p>
+      {payload.map((entry, idx) => (
+        <p key={`${entry.name}-${idx}`} className="text-muted-foreground">
+          {entry.name}: <span className="font-semibold text-foreground">{entry.value}</span>
+        </p>
+      ))}
+    </div>
+  );
 };
 
 export default function Analytics() {
@@ -213,6 +229,47 @@ export default function Analytics() {
       avg: item.count ? Number((item.total / item.count).toFixed(2)) : 0,
     }));
   }, [classSummary]);
+
+  const aiInsightRows = useMemo(() => {
+    const q1Rate = Number(q1.on_level_rate ?? 0);
+    const q2Rate = Number(q2.on_level_rate ?? 0);
+    const rateDelta = q2Rate - q1Rate;
+    const q1Avg = q1.avg_total ?? null;
+    const q2Avg = q2.avg_total ?? null;
+    const avgDelta = q1Avg != null && q2Avg != null ? Number((q2Avg - q1Avg).toFixed(2)) : null;
+
+    const weakestClass = [...classSummary]
+      .filter((c) => c.avg_total_score != null)
+      .sort((a, b) => (a.avg_total_score ?? 999) - (b.avg_total_score ?? 999))[0];
+
+    const strongestClass = [...classSummary]
+      .filter((c) => c.avg_total_score != null)
+      .sort((a, b) => (b.avg_total_score ?? -1) - (a.avg_total_score ?? -1))[0];
+
+    return [
+      {
+        icon: TrendingUp,
+        tone: "text-emerald-600 dark:text-emerald-400",
+        text: `Trend: On-level rate changed by ${rateDelta >= 0 ? "+" : ""}${rateDelta.toFixed(1)} points from Q1 to Q2.`,
+      },
+      {
+        icon: Sparkles,
+        tone: "text-sky-600 dark:text-sky-400",
+        text:
+          q1Avg != null && q2Avg != null
+            ? `Performance: Average quarter total moved from ${q1Avg} to ${q2Avg} (${avgDelta >= 0 ? "+" : ""}${avgDelta}).`
+            : "Performance: Waiting for more scored records to compute quarter average trend.",
+      },
+      {
+        icon: AlertTriangle,
+        tone: "text-amber-600 dark:text-amber-400",
+        text:
+          weakestClass && strongestClass
+            ? `Focus: ${weakestClass.class_name} is currently the lowest average class, while ${strongestClass.class_name} leads the cohort.`
+            : "Focus: Class-level contrast insight will appear once class averages are available.",
+      },
+    ];
+  }, [q1.on_level_rate, q2.on_level_rate, q1.avg_total, q2.avg_total, classSummary]);
 
   const handleDownload = async (format) => {
     try {
@@ -400,13 +457,44 @@ export default function Analytics() {
         </Card>
       </section>
 
+      <Card className="border-primary/20 bg-gradient-to-r from-primary/5 via-primary/10 to-primary/5" data-testid="analytics-ai-panel">
+        <CardHeader className="pb-2">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Sparkles className="h-4 w-4 text-primary" />
+              AI Analytics Studio
+            </CardTitle>
+            <Badge variant="secondary" className="font-normal">
+              Auto-updated by selected filters
+            </Badge>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {aiInsightRows.map((item, idx) => {
+            const Icon = item.icon;
+            return (
+              <div
+                key={idx}
+                className="rounded-lg border border-border/60 bg-background/70 px-3 py-2 text-sm"
+                data-testid={`analytics-ai-insight-${idx}`}
+              >
+                <p className="flex items-start gap-2">
+                  <Icon className={`mt-0.5 h-4 w-4 shrink-0 ${item.tone}`} />
+                  <span>{item.text}</span>
+                </p>
+              </div>
+            );
+          })}
+        </CardContent>
+      </Card>
+
       <div className="section-bg-alt-2 rounded-xl border border-border/50 p-4">
       <Tabs
         value={activeTab}
         onValueChange={setActiveTab}
         data-testid="analytics-tabs"
       >
-        <TabsList className="flex flex-wrap h-auto gap-1" data-testid="analytics-tabs-list">
+        <TabsList className="flex h-auto flex-wrap gap-1 rounded-xl bg-muted/60 p-1" data-testid="analytics-tabs-list">
           <TabsTrigger value="overview" data-testid="analytics-tab-overview">
             {t("overview")}
           </TabsTrigger>
@@ -431,9 +519,12 @@ export default function Analytics() {
         </TabsList>
 
         <TabsContent value="overview" className="mt-6" data-testid="analytics-overview-content">
-          <Card>
+          <Card className="border-primary/20 shadow-sm">
             <CardHeader>
-              <CardTitle>{t("performance_distribution")} — {t("quarter_1")} vs {t("quarter_2")}</CardTitle>
+              <CardTitle className="flex items-center gap-2">
+                <Sparkles className="h-4 w-4 text-primary" />
+                {t("performance_distribution")} — {t("quarter_1")} vs {t("quarter_2")}
+              </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="grid gap-8 md:grid-cols-2">
@@ -442,7 +533,7 @@ export default function Analytics() {
                     <BarChart data={comparisonBarData} barCategoryGap="20%" barGap={4}>
                       <XAxis dataKey="level" />
                       <YAxis />
-                      <Tooltip />
+                      <Tooltip content={<AnalyticsTooltip />} />
                       <Legend />
                       <Bar dataKey={t("quarter_1")} radius={[4, 4, 0, 0]}>
                         {comparisonBarData.map((entry, index) => (
@@ -467,7 +558,7 @@ export default function Analytics() {
                             <Cell key={entry.level} fill={PERFORMANCE_COLORS[entry.level]} />
                           ))}
                         </Pie>
-                        <Tooltip />
+                        <Tooltip content={<AnalyticsTooltip />} />
                       </PieChart>
                     </ResponsiveContainer>
                   </div>
@@ -480,7 +571,7 @@ export default function Analytics() {
                             <Cell key={entry.level} fill={PERFORMANCE_COLORS[entry.level]} />
                           ))}
                         </Pie>
-                        <Tooltip />
+                        <Tooltip content={<AnalyticsTooltip />} />
                       </PieChart>
                     </ResponsiveContainer>
                   </div>
@@ -491,7 +582,7 @@ export default function Analytics() {
         </TabsContent>
 
         <TabsContent value="quarter1" className="mt-6" data-testid="analytics-quarter1-content">
-          <Card>
+          <Card className="border-primary/20 shadow-sm">
             <CardHeader>
               <CardTitle>{t("quarter_1")} — {t("performance_distribution")}</CardTitle>
             </CardHeader>
@@ -504,7 +595,7 @@ export default function Analytics() {
                         <Cell key={entry.level} fill={PERFORMANCE_COLORS[entry.level]} />
                       ))}
                     </Pie>
-                    <Tooltip />
+                    <Tooltip content={<AnalyticsTooltip />} />
                   </PieChart>
                 </ResponsiveContainer>
               </div>
@@ -524,7 +615,7 @@ export default function Analytics() {
         </TabsContent>
 
         <TabsContent value="quarter2" className="mt-6" data-testid="analytics-quarter2-content">
-          <Card>
+          <Card className="border-primary/20 shadow-sm">
             <CardHeader>
               <CardTitle>{t("quarter_2")} — {t("performance_distribution")}</CardTitle>
             </CardHeader>
@@ -537,7 +628,7 @@ export default function Analytics() {
                         <Cell key={entry.level} fill={PERFORMANCE_COLORS[entry.level]} />
                       ))}
                     </Pie>
-                    <Tooltip />
+                    <Tooltip content={<AnalyticsTooltip />} />
                   </PieChart>
                 </ResponsiveContainer>
               </div>
@@ -689,7 +780,7 @@ export default function Analytics() {
         </TabsContent>
 
         <TabsContent value="classes" className="mt-6" data-testid="analytics-classes-content">
-          <Card>
+          <Card className="border-primary/20 shadow-sm">
             <CardHeader>
               <CardTitle>{t("students_per_class")}</CardTitle>
             </CardHeader>
@@ -700,7 +791,7 @@ export default function Analytics() {
                     <BarChart data={classChartData} barSize={28}>
                       <XAxis dataKey="name" />
                       <YAxis />
-                      <Tooltip />
+                      <Tooltip content={<AnalyticsTooltip />} />
                       <Bar dataKey="score" fill="#1e3a8a" radius={[8, 8, 0, 0]} />
                     </BarChart>
                   </ResponsiveContainer>
@@ -711,7 +802,7 @@ export default function Analytics() {
         </TabsContent>
 
         <TabsContent value="grades" className="mt-6" data-testid="analytics-grades-content">
-          <Card>
+          <Card className="border-primary/20 shadow-sm">
             <CardHeader>
               <CardTitle>{t("grade")}</CardTitle>
             </CardHeader>
@@ -722,7 +813,7 @@ export default function Analytics() {
                     <BarChart data={gradeSummary} barSize={32}>
                       <XAxis dataKey="grade" />
                       <YAxis />
-                      <Tooltip />
+                      <Tooltip content={<AnalyticsTooltip />} />
                       <Bar dataKey="avg" fill="#10b981" radius={[8, 8, 0, 0]} />
                     </BarChart>
                   </ResponsiveContainer>
