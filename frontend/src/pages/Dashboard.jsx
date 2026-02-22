@@ -109,6 +109,7 @@ export default function Dashboard() {
   }));
 
   const classData = sortByClassOrder(summary?.students_per_class || []);
+  const totalFromClasses = classData.reduce((sum, item) => sum + (Number(item.count) || 0), 0);
   const supportCount = summary
     ? (summary.counts?.approach || 0) + (summary.counts?.below || 0)
     : 0;
@@ -368,6 +369,9 @@ export default function Dashboard() {
                 </BarChart>
               </ResponsiveContainer>
             </div>
+            <p className="mt-3 text-xs text-muted-foreground" data-testid="dashboard-class-total-from-breakdown">
+              {t("total_from_classes")}: <span className="font-semibold text-foreground">{totalFromClasses}</span>
+            </p>
           </CardContent>
         </Card>
         <Card className="card-hover" data-testid="dashboard-support-list">
