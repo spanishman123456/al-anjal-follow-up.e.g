@@ -186,7 +186,7 @@ def normalize_reward_performance(value: Optional[str]) -> str:
 CERTIFICATES_DIR = ROOT_DIR / "certificates"
 CERTIFICATES_DIR.mkdir(parents=True, exist_ok=True)
 FRONTEND_PUBLIC_DIR = ROOT_DIR.parent / "frontend" / "public"
-AL_ANJAL_LOGO_PATH = FRONTEND_PUBLIC_DIR / "logo-al-anjal.png"
+AL_ANJAL_LOGO_PATH = FRONTEND_PUBLIC_DIR / "logo.png"
 COGNIA_LOGO_PATH = FRONTEND_PUBLIC_DIR / "logo-cognia.png"
 
 
