@@ -42,7 +42,7 @@ export default function Dashboard() {
   const semesterNumber = semester === "semester2" ? 2 : 1;
   const isTeacher = profile?.role_name === "Teacher";
   const [summary, setSummary] = useState(null);
-  const [missedQuiz, setMissedQuiz] = useState(null);
+  const [missedAssessments, setMissedAssessments] = useState(null);
   const [loading, setLoading] = useState(false);
   const fileInputRef = useRef(null);
   const lastMissedCountRef = useRef(null);
@@ -55,15 +55,23 @@ export default function Dashboard() {
       const params = { semester: semesterNumber, quarter };
       const [summaryRes, missedRes] = await Promise.all([
         api.get("/analytics/summary", { params }),
-        api.get("/analytics/missed-quizzes", { params }),
+        api.get("/analytics/missed-assessments", { params }),
       ]);
       setSummary(summaryRes.data);
-      setMissedQuiz(missedRes.data);
+      setMissedAssessments(missedRes.data);
 
-      const missedCount = Number(missedRes?.data?.missed_count || 0);
+      const groups = missedRes?.data?.groups || {};
+      const missedCount =
+        Number(groups?.quiz?.missed_count || 0) +
+        Number(groups?.chapter_test?.missed_count || 0) +
+        Number(groups?.final_practical?.missed_count || 0) +
+        Number(groups?.final_theory?.missed_count || 0);
       if (missedCount > 0 && lastMissedCountRef.current !== missedCount) {
-        const quizLabel = quarter === 2 ? "Quiz 3/4" : "Quiz 1/2";
-        toast.warning(`${missedCount} students have missing ${quizLabel} marks.`);
+        toast.warning(
+          t("missed_assessment_toast")
+            .replace("{count}", String(missedCount))
+            .replace("{quarter}", String(quarter)),
+        );
       }
       lastMissedCountRef.current = missedCount;
     } catch (error) {
@@ -287,41 +295,75 @@ export default function Dashboard() {
 
       <Card
         className={`border ${
-          (missedQuiz?.missed_count || 0) > 0
+          [
+            "quiz",
+            "chapter_test",
+            "final_practical",
+            "final_theory",
+          ].some((key) => Number(missedAssessments?.groups?.[key]?.missed_count || 0) > 0)
             ? "border-amber-300 bg-amber-50/70 dark:border-amber-700/40 dark:bg-amber-950/20"
             : "border-emerald-300 bg-emerald-50/70 dark:border-emerald-700/40 dark:bg-emerald-950/20"
         }`}
-        data-testid="dashboard-missed-quiz-alert"
+        data-testid="dashboard-missed-assessment-alert"
       >
         <CardHeader className="pb-2">
-          <CardTitle className="text-base">{t("missed_quiz_alert_title")}</CardTitle>
+          <CardTitle className="text-base">{t("missed_assessment_alert_title")}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-2">
-          <p className="text-sm text-muted-foreground">
-            {(missedQuiz?.missed_count || 0) > 0
-              ? t("missed_quiz_alert_desc")
-                  .replace("{count}", String(missedQuiz?.missed_count || 0))
-                  .replace("{submitted}", String(missedQuiz?.submitted_count || 0))
-              : t("no_missed_quiz_alert")}
-          </p>
-          {(missedQuiz?.missed_count || 0) > 0 && (
-            <>
-              <div className="flex flex-wrap gap-2">
-                {(missedQuiz?.students || []).slice(0, 8).map((student) => (
-                  <Badge key={student.id} variant="outline">
-                    {student.full_name} ({student.class_name})
-                  </Badge>
-                ))}
+          {[
+            {
+              key: "quiz",
+              title: t("assessment_quiz"),
+              link: quarter === 2 ? "/assessment-marks-q2" : "/assessment-marks",
+            },
+            {
+              key: "chapter_test",
+              title: t("assessment_chapter_test"),
+              link: quarter === 2 ? "/assessment-marks-q2" : "/assessment-marks",
+            },
+            {
+              key: "final_practical",
+              title: t("assessment_final_practical"),
+              link: quarter === 2 ? "/final-exams-assessment-q2" : "/final-exams-assessment",
+            },
+            {
+              key: "final_theory",
+              title: t("assessment_final_theory"),
+              link: quarter === 2 ? "/final-exams-assessment-q2" : "/final-exams-assessment",
+            },
+          ].map((item) => {
+            const group = missedAssessments?.groups?.[item.key];
+            const missedCount = Number(group?.missed_count || 0);
+            const submittedCount = Number(group?.submitted_count || 0);
+            return (
+              <div key={item.key} className="rounded-lg border border-border/60 p-3">
+                <p className="text-sm font-semibold">{item.title}</p>
+                <p className="text-sm text-muted-foreground">
+                  {missedCount > 0
+                    ? t("missed_assessment_alert_desc")
+                        .replace("{count}", String(missedCount))
+                        .replace("{submitted}", String(submittedCount))
+                    : t("no_missed_assessment_alert")}
+                </p>
+                {missedCount > 0 && (
+                  <>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {(group?.students || []).slice(0, 8).map((student) => (
+                        <Badge key={student.id} variant="outline">
+                          {student.full_name} ({student.class_name})
+                        </Badge>
+                      ))}
+                    </div>
+                    <div className="mt-2">
+                      <Button asChild size="sm" variant="outline">
+                        <Link to={item.link}>{t("view_missing_assessment_students")}</Link>
+                      </Button>
+                    </div>
+                  </>
+                )}
               </div>
-              <div>
-                <Button asChild size="sm" variant="outline" data-testid="dashboard-missed-quiz-view-button">
-                  <Link to={quarter === 2 ? "/assessment-marks-q2" : "/assessment-marks"}>
-                    {t("view_missed_quiz_students")}
-                  </Link>
-                </Button>
-              </div>
-            </>
-          )}
+            );
+          })}
         </CardContent>
       </Card>
 
