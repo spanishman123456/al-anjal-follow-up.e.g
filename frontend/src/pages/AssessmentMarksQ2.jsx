@@ -125,6 +125,7 @@ export default function AssessmentMarksQ2() {
   const [bulkScores, setBulkScores] = useState({});
   const [bulkConfirmOpen, setBulkConfirmOpen] = useState(false);
   const [clearScoresOpen, setClearScoresOpen] = useState(false);
+  const [clearAllScoresOpen, setClearAllScoresOpen] = useState(false);
   const [fillValues, setFillValues] = useState({ quiz3: "", quiz4: "", chapter_test2_practical: "" });
   const bulkFileInputRef = useRef(null);
 
@@ -313,6 +314,33 @@ export default function AssessmentMarksQ2() {
     }
   };
 
+  const handleClearAllScores = async () => {
+    setClearAllScoresOpen(false);
+    if (!activeWeekId) {
+      toast.error(t("select_week_before_import") || "Please select a week first.");
+      return;
+    }
+    const updates = students.map((student) => ({
+      id: student.id,
+      quiz3: null,
+      quiz4: null,
+      chapter_test2_practical: null,
+    }));
+    if (!updates.length) {
+      toast.error(t("no_data"));
+      return;
+    }
+    try {
+      await api.post("/students/bulk-scores", { updates, week_id: activeWeekId }, { timeout: BULK_SAVE_TIMEOUT_MS });
+      await loadData(activeWeekId);
+      setBulkEditMode(false);
+      setBulkScores({});
+      toast.success(t("scores_cleared_all_classes") || "Scores cleared for all classes in the selected week.");
+    } catch (error) {
+      toast.error(getApiErrorMessage(error) || t("student_update_failed"));
+    }
+  };
+
   const handleDownloadTemplate = async () => {
     try {
       const response = await api.get("/students/import-template", {
@@ -415,6 +443,9 @@ export default function AssessmentMarksQ2() {
                 </Button>
                 <Button variant="outline" onClick={() => setClearScoresOpen(true)} data-testid="assessment-q2-clear-scores">
                   {t("clear_scores")}
+                </Button>
+                <Button variant="destructive" onClick={() => setClearAllScoresOpen(true)} data-testid="assessment-q2-clear-all-scores">
+                  {t("clear_scores_all_classes") || "Clear All Classes"}
                 </Button>
               </>
             )}
@@ -718,6 +749,24 @@ export default function AssessmentMarksQ2() {
               {t("cancel")}
             </Button>
             <Button variant="destructive" onClick={handleClearScores} data-testid="assessment-q2-clear-confirm">
+              {t("clear_scores")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={clearAllScoresOpen} onOpenChange={setClearAllScoresOpen}>
+        <DialogContent data-testid="assessment-q2-clear-all-dialog">
+          <DialogHeader>
+            <DialogTitle>{t("clear_scores_all_classes") || "Clear Scores for All Classes"}</DialogTitle>
+            <DialogDescription>
+              {t("clear_scores_all_classes_confirm") || "This will clear assessment scores for every class in the selected week. This action cannot be undone."}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setClearAllScoresOpen(false)}>
+              {t("cancel")}
+            </Button>
+            <Button variant="destructive" onClick={handleClearAllScores} data-testid="assessment-q2-clear-all-confirm">
               {t("clear_scores")}
             </Button>
           </DialogFooter>
