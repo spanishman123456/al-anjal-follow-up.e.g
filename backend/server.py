@@ -1,6 +1,6 @@
 from fastapi import FastAPI, APIRouter, UploadFile, File, HTTPException, Query, Depends, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, FileResponse
 from fastapi.middleware.gzip import GZipMiddleware
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
@@ -23,6 +23,7 @@ import pandas as pd
 import re
 import io
 import base64
+import random
 from xml.sax.saxutils import escape
 from zoneinfo import ZoneInfo
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -153,6 +154,123 @@ scheduler = AsyncIOScheduler(timezone=REPORT_TIMEZONE)
 
 def iso_now() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+CERTIFICATES_DIR = ROOT_DIR / "certificates"
+CERTIFICATES_DIR.mkdir(parents=True, exist_ok=True)
+
+
+def normalize_reward_performance(value: Optional[str]) -> str:
+    raw = (value or "").strip().lower()
+    compact = re.sub(r"[\s_\-]+", "", raw)
+    if not compact:
+        return "needs_support"
+
+    advanced_tokens = [
+        "advanced", "exceeding", "excellent", "top", "متقدم", "ممتاز", "متفوق"
+    ]
+    on_level_tokens = [
+        "onlevel", "on_level", "meeting", "good", "علىالمستوى", "على", "محقق", "جيد"
+    ]
+    support_tokens = [
+        "needssupport", "support", "approach", "below", "nodata", "بحاجةلدعم", "ضعيف", "منخفض", "قريب"
+    ]
+
+    if any(token in compact for token in [t.replace("_", "") for t in advanced_tokens]):
+        return "advanced"
+    if any(token in compact for token in [t.replace("_", "") for t in on_level_tokens]):
+        return "on_level"
+    if any(token in compact for token in [t.replace("_", "") for t in support_tokens]):
+        return "needs_support"
+    return "on_level" if "on" in compact else "needs_support"
+
+
+def choose_prize_index(performance: Optional[str], prizes: List[str]) -> int:
+    if not prizes:
+        return 0
+
+    normalized_prizes = [str(p or "").strip().lower() for p in prizes]
+    normalized_perf = normalize_reward_performance(performance)
+    preference_map = {
+        "advanced": ["platinum_badge", "cert_top", "points_50", "gold_badge"],
+        "on_level": ["gold_badge", "cert_excellence", "points_20", "silver_badge"],
+        "needs_support": ["cert_progress", "encourage_badge", "effort_badge", "points_10", "points_5"],
+    }
+    preferred = preference_map.get(normalized_perf, [])
+
+    weighted_indices: List[int] = []
+    for score, prize_key in enumerate(preferred[::-1], start=1):
+        for idx, p in enumerate(normalized_prizes):
+            if p == prize_key:
+                weighted_indices.extend([idx] * (score + 1))
+
+    if weighted_indices:
+        return random.choice(weighted_indices)
+    return 0
+
+
+def build_certificate_pdf(student_name: str, performance: str, prize: str) -> str:
+    safe_name = re.sub(r"[^A-Za-z0-9\-_.]+", "-", (student_name or "student")).strip("-") or "student"
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")
+    filename = f"certificate-{safe_name}-{timestamp}.pdf"
+    target_path = CERTIFICATES_DIR / filename
+
+    doc = SimpleDocTemplate(
+        str(target_path),
+        pagesize=A4,
+        rightMargin=50,
+        leftMargin=50,
+        topMargin=70,
+        bottomMargin=70,
+    )
+    styles = getSampleStyleSheet()
+    title_style = ParagraphStyle(
+        "CertificateTitle",
+        parent=styles["Title"],
+        fontSize=28,
+        textColor=colors.HexColor("#0F172A"),
+        alignment=1,
+        spaceAfter=22,
+    )
+    body_style = ParagraphStyle(
+        "CertificateBody",
+        parent=styles["BodyText"],
+        fontSize=14,
+        leading=22,
+        alignment=1,
+        textColor=colors.HexColor("#1F2937"),
+    )
+    accent_style = ParagraphStyle(
+        "CertificateAccent",
+        parent=styles["BodyText"],
+        fontSize=18,
+        leading=26,
+        alignment=1,
+        textColor=colors.HexColor("#1D4ED8"),
+        spaceAfter=14,
+    )
+
+    normalized_performance = normalize_reward_performance(performance).replace("_", " ").title()
+    pretty_prize = str(prize).replace("_", " ").title()
+
+    story = [
+        Spacer(1, 36),
+        Paragraph("Certificate of Achievement", title_style),
+        Paragraph("This certificate is proudly presented to", body_style),
+        Spacer(1, 12),
+        Paragraph(f"<b>{escape(student_name)}</b>", accent_style),
+        Spacer(1, 10),
+        Paragraph(
+            f"For excellent effort and progress. Performance level: <b>{escape(normalized_performance)}</b>.",
+            body_style,
+        ),
+        Spacer(1, 8),
+        Paragraph(f"Recognized reward: <b>{escape(pretty_prize)}</b>.", body_style),
+        Spacer(1, 38),
+        Paragraph(f"Issued on {datetime.now(REPORT_TIMEZONE).strftime('%Y-%m-%d')}", body_style),
+    ]
+    doc.build(story)
+    return filename
 
 
 def normalize_score(value: Any) -> Optional[float]:
@@ -1955,6 +2073,28 @@ class RewardPlanUpdate(BaseModel):
     steps: Optional[List[PlanStep]] = None
 
 
+class RewardSpinRequest(BaseModel):
+    student_id: str
+    performance: Optional[str] = None
+    prizes: List[str] = []
+
+
+class RewardSpinResponse(BaseModel):
+    prize_index: int
+
+
+class RewardApplyRequest(BaseModel):
+    student_id: str
+    student_name: str
+    performance: Optional[str] = None
+    prize: str
+
+
+class RewardApplyResponse(BaseModel):
+    ok: bool = True
+    certificate_url: Optional[str] = None
+
+
 class ReportSettings(BaseModel):
     grade: int = 4
     report_type: str = "full"
@@ -3111,6 +3251,46 @@ async def update_reward(reward_id: str, payload: RewardPlanUpdate):
 async def delete_reward(reward_id: str):
     await db.rewards.delete_one({"id": reward_id})
     return {"status": "deleted"}
+
+
+@api_router.post("/rewards/spin", response_model=RewardSpinResponse)
+async def reward_spin(payload: RewardSpinRequest):
+    prizes = [str(p or "").strip() for p in payload.prizes if str(p or "").strip()]
+    prize_index = choose_prize_index(payload.performance, prizes) if prizes else 0
+    return RewardSpinResponse(prize_index=prize_index)
+
+
+@api_router.post("/rewards/apply", response_model=RewardApplyResponse)
+async def reward_apply(payload: RewardApplyRequest):
+    prize_value = str(payload.prize or "").strip()
+    normalized_perf = normalize_reward_performance(payload.performance)
+    event = {
+        "id": str(uuid.uuid4()),
+        "student_id": payload.student_id,
+        "student_name": payload.student_name,
+        "performance": normalized_perf,
+        "prize": prize_value,
+        "created_at": iso_now(),
+    }
+    await db.reward_events.insert_one(event)
+
+    certificate_url = None
+    if prize_value.lower().startswith("cert_"):
+        filename = build_certificate_pdf(payload.student_name, normalized_perf, prize_value)
+        certificate_url = f"/api/certificates/{filename}"
+
+    return RewardApplyResponse(ok=True, certificate_url=certificate_url)
+
+
+@app.get("/api/certificates/{filename}")
+async def get_certificate_file(filename: str):
+    safe_name = os.path.basename(filename)
+    target_path = (CERTIFICATES_DIR / safe_name).resolve()
+    if target_path.parent != CERTIFICATES_DIR.resolve():
+        raise HTTPException(status_code=400, detail="Invalid certificate path")
+    if not target_path.exists():
+        raise HTTPException(status_code=404, detail="Certificate not found")
+    return FileResponse(str(target_path), media_type="application/pdf", filename=safe_name)
 
 
 def build_summary(students: List[Dict[str, Any]], classes: List[Dict[str, Any]]) -> Dict[str, Any]:

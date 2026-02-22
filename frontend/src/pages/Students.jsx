@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useOutletContext } from "react-router-dom";
 import { toast } from "sonner";
-import { api, getApiErrorMessage, BULK_SAVE_TIMEOUT_MS } from "@/lib/api";
+import { api, getApiErrorMessage, BULK_SAVE_TIMEOUT_MS, BACKEND_ROOT_URL } from "@/lib/api";
 import { useTranslations } from "@/lib/i18n";
 import { getRewardSetsFromStorage, setStudentReward } from "@/lib/studentRewardsStorage";
 import { sortByClassOrder } from "@/lib/utils";
@@ -40,8 +40,9 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { MoreHorizontal, Award, FileText, MessageCircle, PartyPopper } from "lucide-react";
+import { MoreHorizontal, Award, FileText, MessageCircle, PartyPopper, X } from "lucide-react";
 import { AssessmentPageFooter } from "@/components/AssessmentPageFooter";
+import "@/reward-modal.css";
 
 const levelStyles = {
   on_level: "bg-emerald-100 text-emerald-700",
@@ -49,6 +50,35 @@ const levelStyles = {
   below: "bg-rose-100 text-rose-700",
   no_data: "bg-slate-100 text-slate-600",
 };
+
+const REWARD_PRIZE_SETS = {
+  advanced: ["platinum_badge", "cert_top", "points_50", "gold_badge", "vip_pass", "star_trophy"],
+  on_level: ["gold_badge", "cert_excellence", "points_20", "silver_badge", "homework_pass", "leader_token"],
+  needs_support: ["cert_progress", "encourage_badge", "effort_badge", "points_10", "points_5", "mentor_note"],
+};
+
+const normalizeRewardPerformance = (value) => {
+  const compact = String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[\s_-]+/g, "");
+  if (!compact) return "needs_support";
+  if (["advanced", "exceeding", "excellent", "top", "متقدم", "ممتاز", "متفوق"].some((token) => compact.includes(token))) {
+    return "advanced";
+  }
+  if (["onlevel", "meeting", "good", "علىالمستوى", "محقق", "جيد"].some((token) => compact.includes(token))) {
+    return "on_level";
+  }
+  if (["needssupport", "support", "approach", "below", "nodata", "ضعيف", "قريب", "بحاجةلدعم"].some((token) => compact.includes(token))) {
+    return "needs_support";
+  }
+  return compact.includes("on") ? "on_level" : "needs_support";
+};
+
+const prettyPrizeLabel = (value) =>
+  String(value || "")
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (char) => char.toUpperCase());
 
 const formatScore = (value, suffix = "") => {
   if (value === null || value === undefined) {
@@ -143,6 +173,113 @@ function CertificateDialog({ reward, open, onOpenChange }) {
   );
 }
 
+function RewardWheelModal({
+  open,
+  onOpenChange,
+  student,
+  prizes,
+  wheelRotation,
+  isSpinning,
+  spinResult,
+  isApplying,
+  onSpin,
+  onApply,
+}) {
+  const canvasRef = useRef(null);
+
+  useEffect(() => {
+    if (!open || !canvasRef.current || !prizes?.length) return;
+    const canvas = canvasRef.current;
+    const size = 720;
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    const center = size / 2;
+    const radius = size / 2 - 14;
+    const segAngle = (Math.PI * 2) / prizes.length;
+    const colors = ["#7c3aed", "#2563eb", "#0891b2", "#16a34a", "#ca8a04", "#db2777", "#9333ea", "#0f766e"];
+
+    ctx.clearRect(0, 0, size, size);
+    prizes.forEach((prize, idx) => {
+      const start = idx * segAngle;
+      const end = start + segAngle;
+      ctx.beginPath();
+      ctx.moveTo(center, center);
+      ctx.arc(center, center, radius, start, end);
+      ctx.closePath();
+      ctx.fillStyle = colors[idx % colors.length];
+      ctx.fill();
+      ctx.strokeStyle = "rgba(255,255,255,0.75)";
+      ctx.lineWidth = 2;
+      ctx.stroke();
+
+      const label = prettyPrizeLabel(prize);
+      ctx.save();
+      ctx.translate(center, center);
+      ctx.rotate(start + segAngle / 2);
+      ctx.textAlign = "right";
+      ctx.fillStyle = "#ffffff";
+      ctx.font = "700 24px Inter, Arial, sans-serif";
+      const text = label.length > 18 ? `${label.slice(0, 16)}..` : label;
+      ctx.fillText(text, radius - 28, 8);
+      ctx.restore();
+    });
+  }, [open, prizes]);
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="reward-modal-panel reward-modal-overlay max-w-3xl p-0 overflow-hidden">
+        <div className="p-5 md:p-7 space-y-5">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-xs uppercase tracking-[0.2em] text-primary/80">Student Reward</p>
+              <h3 className="text-xl font-semibold">Spin Reward Wheel</h3>
+              <p className="text-sm text-muted-foreground">
+                {student?.name || "Student"} - {student?.performanceLabel || "Performance"}
+              </p>
+            </div>
+            <Button type="button" size="icon" variant="ghost" onClick={() => onOpenChange(false)}>
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+
+          <div className="reward-wheel-wrap">
+            <div className="reward-wheel-pointer" />
+            <canvas
+              ref={canvasRef}
+              className="reward-wheel-canvas"
+              style={{ transform: `rotate(${wheelRotation}deg)` }}
+            />
+            <div className="reward-wheel-center">SPIN</div>
+          </div>
+
+          <div className="rounded-xl border border-border/70 bg-card/40 p-3">
+            <p className="text-sm text-muted-foreground">
+              {spinResult
+                ? `Result: ${prettyPrizeLabel(spinResult)}`
+                : "Press SPIN to draw a server-driven reward."}
+            </p>
+          </div>
+
+          <div className="flex flex-wrap justify-end gap-2">
+            <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isSpinning || isApplying}>
+              Close
+            </Button>
+            <Button onClick={onSpin} disabled={isSpinning || isApplying}>
+              {isSpinning ? "Spinning..." : "SPIN"}
+            </Button>
+            <Button onClick={onApply} disabled={!spinResult || isSpinning || isApplying}>
+              {isApplying ? "Applying..." : "Apply Reward"}
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export default function Students() {
   const { language, semester, quarter, profile, classes: contextClasses, classesLoaded } = useOutletContext();
   const t = useTranslations(language);
@@ -177,6 +314,138 @@ export default function Students() {
   const [badgeStudentIds, setBadgeStudentIds] = useState(() => getRewardSetsFromStorage().badge);
   const [certificateStudentIds, setCertificateStudentIds] = useState(() => getRewardSetsFromStorage().certificate);
   const [commentStudentIds, setCommentStudentIds] = useState(() => getRewardSetsFromStorage().comment);
+  const [rewardModalOpen, setRewardModalOpen] = useState(false);
+  const [rewardStudent, setRewardStudent] = useState(null);
+  const [rewardPrizes, setRewardPrizes] = useState([]);
+  const [wheelRotation, setWheelRotation] = useState(0);
+  const [isRewardSpinning, setIsRewardSpinning] = useState(false);
+  const [rewardResult, setRewardResult] = useState("");
+  const [isApplyingReward, setIsApplyingReward] = useState(false);
+  const [badgeGlowStudentIds, setBadgeGlowStudentIds] = useState(new Set());
+  const rewardOriginRef = useRef(null);
+
+  const triggerRewardCelebration = () => {
+    const confettiFn = window?.confetti;
+    const origin = rewardOriginRef.current || { x: 0.5, y: 0.3 };
+    if (typeof confettiFn === "function") {
+      confettiFn({
+        particleCount: 130,
+        spread: 76,
+        startVelocity: 43,
+        origin,
+      });
+    }
+    const audioEl = document.getElementById("reward-sound");
+    if (audioEl?.play) {
+      audioEl.currentTime = 0;
+      audioEl.play().catch(() => null);
+    }
+    if (navigator?.vibrate) {
+      navigator.vibrate([80, 40, 120]);
+    }
+  };
+
+  const openRewardModal = (student, performanceKey, performanceLabel, buttonElement) => {
+    const normalized = normalizeRewardPerformance(performanceKey || performanceLabel);
+    const prizes = REWARD_PRIZE_SETS[normalized] || REWARD_PRIZE_SETS.needs_support;
+    setRewardStudent({
+      id: String(student.id),
+      name: student.full_name,
+      performance: normalized,
+      performanceLabel,
+      buttonElement,
+    });
+    setRewardPrizes(prizes);
+    setRewardResult("");
+    setRewardModalOpen(true);
+    if (buttonElement?.getBoundingClientRect) {
+      const rect = buttonElement.getBoundingClientRect();
+      rewardOriginRef.current = {
+        x: (rect.left + rect.width / 2) / window.innerWidth,
+        y: (rect.top + rect.height / 2) / window.innerHeight,
+      };
+    } else {
+      rewardOriginRef.current = { x: 0.5, y: 0.3 };
+    }
+  };
+
+  const handleSpinReward = async () => {
+    if (!rewardStudent || !rewardPrizes.length || isRewardSpinning) return;
+    setIsRewardSpinning(true);
+    setRewardResult("");
+    let prizeIndex = Math.floor(Math.random() * rewardPrizes.length);
+    try {
+      const response = await api.post("/rewards/spin", {
+        student_id: rewardStudent.id,
+        performance: rewardStudent.performance,
+        prizes: rewardPrizes,
+      });
+      const serverIndex = Number(response?.data?.prize_index);
+      if (Number.isInteger(serverIndex) && serverIndex >= 0 && serverIndex < rewardPrizes.length) {
+        prizeIndex = serverIndex;
+      }
+    } catch {
+      // local fallback on server failure
+      prizeIndex = Math.floor(Math.random() * rewardPrizes.length);
+    }
+
+    const segment = 360 / rewardPrizes.length;
+    const currentNorm = ((wheelRotation % 360) + 360) % 360;
+    const targetNorm = ((-90 - (prizeIndex * segment + segment / 2)) % 360 + 360) % 360;
+    const delta = ((targetNorm - currentNorm) % 360 + 360) % 360;
+    const totalDelta = 6 * 360 + delta;
+    setWheelRotation((prev) => prev + totalDelta);
+
+    window.setTimeout(() => {
+      const winner = rewardPrizes[prizeIndex];
+      setRewardResult(winner);
+      setIsRewardSpinning(false);
+      triggerRewardCelebration();
+    }, 4900);
+  };
+
+  const handleApplyReward = async () => {
+    if (!rewardStudent || !rewardResult || isApplyingReward) return;
+    try {
+      setIsApplyingReward(true);
+      const response = await api.post("/rewards/apply", {
+        student_id: rewardStudent.id,
+        student_name: rewardStudent.name,
+        performance: rewardStudent.performance,
+        prize: rewardResult,
+      });
+
+      setStudentReward(rewardStudent.id, "badge", true);
+      setBadgeStudentIds((prev) => new Set([...prev, rewardStudent.id]));
+      setBadgeGlowStudentIds((prev) => new Set([...prev, rewardStudent.id]));
+      window.setTimeout(() => {
+        setBadgeGlowStudentIds((prev) => {
+          const next = new Set(prev);
+          next.delete(rewardStudent.id);
+          return next;
+        });
+      }, 2200);
+
+      if (String(rewardResult).toLowerCase().startsWith("cert_")) {
+        setStudentReward(rewardStudent.id, "certificate", true);
+        setCertificateStudentIds((prev) => new Set([...prev, rewardStudent.id]));
+      }
+
+      const certificateUrl = response?.data?.certificate_url;
+      if (certificateUrl) {
+        const absolute = certificateUrl.startsWith("http")
+          ? certificateUrl
+          : `${BACKEND_ROOT_URL}${certificateUrl}`;
+        window.open(absolute, "_blank", "noopener,noreferrer");
+      }
+      toast.success(`${rewardStudent.name} rewarded: ${prettyPrizeLabel(rewardResult)}`);
+      setRewardModalOpen(false);
+    } catch (error) {
+      toast.error(getApiErrorMessage(error) || "Failed to apply reward");
+    } finally {
+      setIsApplyingReward(false);
+    }
+  };
 
   const loadData = async (weekId = activeWeekId) => {
     try {
@@ -1127,15 +1396,25 @@ export default function Students() {
                       <TableCell data-testid={`student-name-${student.id}`}>
                         <span className="inline-flex flex-wrap items-center gap-2">
                           {student.full_name}
-                          {badgeStudentIds.has(String(student.id)) && (
-                            <span
-                              className="badge-party-popper group inline-flex items-center gap-1.5 rounded-full border-2 border-amber-400/60 bg-gradient-to-r from-amber-200 via-amber-100 to-rose-200 px-2.5 py-1 text-xs font-semibold text-amber-900 shadow-sm transition-all duration-200 hover:scale-105 hover:shadow-md hover:border-amber-500/80 dark:from-amber-700/40 dark:via-amber-600/30 dark:to-rose-700/40 dark:text-amber-100 dark:border-amber-500/50"
-                              title={t("badge") || "Badge"}
-                            >
-                              <PartyPopper className="h-4 w-4 shrink-0 transition-transform duration-200 group-hover:animate-wiggle" />
-                              <span>{t("badge") || "Badge"}</span>
-                            </span>
-                          )}
+                          <button
+                            type="button"
+                            className={`badge-btn reward-badge-btn group inline-flex items-center gap-1.5 rounded-full border-2 border-amber-400/60 bg-gradient-to-r from-amber-200 via-amber-100 to-rose-200 px-2.5 py-1 text-xs font-semibold text-amber-900 shadow-sm transition-all duration-200 hover:scale-105 hover:shadow-md hover:border-amber-500/80 dark:from-amber-700/40 dark:via-amber-600/30 dark:to-rose-700/40 dark:text-amber-100 dark:border-amber-500/50 ${badgeGlowStudentIds.has(String(student.id)) ? "reward-glow" : ""}`}
+                            title="Reward"
+                            data-student-id={student.id}
+                            data-student-name={student.full_name}
+                            data-performance={computePerformanceLevel(bulkScores[student.id] || student)}
+                            onClick={(event) =>
+                              openRewardModal(
+                                student,
+                                computePerformanceLevel(bulkScores[student.id] || student),
+                                t(computePerformanceLevel(bulkScores[student.id] || student)),
+                                event.currentTarget,
+                              )
+                            }
+                          >
+                            <PartyPopper className="h-4 w-4 shrink-0 transition-transform duration-200 group-hover:animate-wiggle" />
+                            <span>{badgeStudentIds.has(String(student.id)) ? "Rewarded" : "Reward"}</span>
+                          </button>
                           {certificateStudentIds.has(String(student.id)) && (
                             <span className="inline-flex items-center gap-1 rounded bg-sky-100 px-2 py-0.5 text-xs font-medium text-sky-700 dark:bg-sky-900/50 dark:text-sky-300">
                               <FileText className="h-3.5 w-3.5" />
@@ -1242,24 +1521,17 @@ export default function Students() {
                           <DropdownMenuContent align="end">
                             <DropdownMenuItem
                               onClick={() => {
-                                const key = String(student.id);
-                                const adding = !badgeStudentIds.has(key);
-                                setStudentReward(student.id, "badge", adding);
-                                setBadgeStudentIds((prev) => {
-                                  const next = new Set(prev);
-                                  if (adding) {
-                                    next.add(key);
-                                    toast.success(`${student.full_name} ${t("rewarded") || "rewarded"}!`);
-                                  } else next.delete(key);
-                                  return next;
-                                });
+                                openRewardModal(
+                                  student,
+                                  computePerformanceLevel(bulkScores[student.id] || student),
+                                  t(computePerformanceLevel(bulkScores[student.id] || student)),
+                                  null,
+                                );
                               }}
                               data-testid={`student-action-badge-${student.id}`}
                             >
                               <Award className="mr-2 h-4 w-4" />
-                              {badgeStudentIds.has(String(student.id))
-                                ? (t("remove_badge") || "Remove badge")
-                                : (t("badge") || "Badge")}
+                              {"Spin Reward"}
                             </DropdownMenuItem>
                             <DropdownMenuItem
                               onClick={() => {
@@ -1722,6 +1994,19 @@ export default function Students() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <RewardWheelModal
+        open={rewardModalOpen}
+        onOpenChange={setRewardModalOpen}
+        student={rewardStudent}
+        prizes={rewardPrizes}
+        wheelRotation={wheelRotation}
+        isSpinning={isRewardSpinning}
+        spinResult={rewardResult}
+        isApplying={isApplyingReward}
+        onSpin={handleSpinReward}
+        onApply={handleApplyReward}
+      />
 
       <CertificateDialog
         reward={certificateFor}
