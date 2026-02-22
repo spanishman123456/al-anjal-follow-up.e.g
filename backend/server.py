@@ -1,6 +1,6 @@
 from fastapi import FastAPI, APIRouter, UploadFile, File, HTTPException, Query, Depends, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, FileResponse
 from fastapi.middleware.gzip import GZipMiddleware
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
@@ -35,6 +35,9 @@ from reportlab.lib.pagesizes import A4
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image as RLImage, PageBreak
 from reportlab.lib import colors
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.utils import ImageReader
+from reportlab.pdfgen import canvas
+import random
 from sendgrid import SendGridAPIClient
 from sendgrid.helpers.mail import (
     Mail,
@@ -178,6 +181,126 @@ def normalize_reward_performance(value: Optional[str]) -> str:
     if any(token in compact for token in [t.replace("_", "") for t in support_tokens]):
         return "needs_support"
     return "on_level" if "on" in compact else "needs_support"
+
+
+CERTIFICATES_DIR = ROOT_DIR / "certificates"
+CERTIFICATES_DIR.mkdir(parents=True, exist_ok=True)
+FRONTEND_PUBLIC_DIR = ROOT_DIR.parent / "frontend" / "public"
+AL_ANJAL_LOGO_PATH = FRONTEND_PUBLIC_DIR / "logo-al-anjal.png"
+COGNIA_LOGO_PATH = FRONTEND_PUBLIC_DIR / "logo-cognia.png"
+
+
+def build_branded_certificate_pdf(
+    student_name: str,
+    performance: str,
+    award: str = "Badge Award",
+) -> str:
+    safe_name = re.sub(r"[^A-Za-z0-9\-_.]+", "-", (student_name or "student")).strip("-") or "student"
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")
+    filename = f"certificate-{safe_name}-{timestamp}.pdf"
+    file_path = CERTIFICATES_DIR / filename
+
+    width, height = A4
+    c = canvas.Canvas(str(file_path), pagesize=A4)
+
+    # Branded login-like soft gradient (slate -> white).
+    top_color = colors.HexColor("#f8fafc")
+    bottom_color = colors.HexColor("#ffffff")
+    steps = 70
+    for i in range(steps):
+        ratio = i / (steps - 1)
+        r = top_color.red + (bottom_color.red - top_color.red) * ratio
+        g = top_color.green + (bottom_color.green - top_color.green) * ratio
+        b = top_color.blue + (bottom_color.blue - top_color.blue) * ratio
+        c.setFillColor(colors.Color(r, g, b))
+        y = height * (i / steps)
+        c.rect(0, y, width, height / steps + 1, stroke=0, fill=1)
+
+    # Subtle confetti/glitter background (light, non-distracting).
+    rng = random.Random(f"{student_name}-{timestamp}")
+    confetti_palette = ["#14b8a6", "#22c55e", "#f59e0b", "#ec4899", "#38bdf8", "#a78bfa"]
+    for _ in range(180):
+        x = rng.uniform(24, width - 24)
+        y = rng.uniform(40, height - 40)
+        radius = rng.uniform(0.8, 2.1)
+        c.setFillColor(colors.HexColor(confetti_palette[rng.randint(0, len(confetti_palette) - 1)]))
+        c.circle(x, y, radius, stroke=0, fill=1)
+
+    # Frame and header accent.
+    c.setStrokeColor(colors.HexColor("#d1d5db"))
+    c.setLineWidth(1.8)
+    c.roundRect(28, 28, width - 56, height - 56, 16, stroke=1, fill=0)
+    c.setFillColor(colors.HexColor("#0f766e"))
+    c.roundRect(44, height - 70, width - 88, 10, 5, stroke=0, fill=1)
+
+    # Top corner logos.
+    logo_height = 58
+    logo_y = height - 120
+    if AL_ANJAL_LOGO_PATH.exists():
+        c.drawImage(
+            ImageReader(str(AL_ANJAL_LOGO_PATH)),
+            42,
+            logo_y,
+            width=140,
+            height=logo_height,
+            preserveAspectRatio=True,
+            mask="auto",
+        )
+    if COGNIA_LOGO_PATH.exists():
+        c.drawImage(
+            ImageReader(str(COGNIA_LOGO_PATH)),
+            width - 182,
+            logo_y,
+            width=140,
+            height=logo_height,
+            preserveAspectRatio=True,
+            mask="auto",
+        )
+
+    # Typography and layout.
+    normalized_perf = normalize_reward_performance(performance).replace("_", " ").title()
+    issue_date = datetime.now(REPORT_TIMEZONE).strftime("%Y-%m-%d")
+
+    c.setFillColor(colors.HexColor("#0f766e"))
+    c.setFont("Helvetica-Bold", 30)
+    c.drawCentredString(width / 2, height - 180, "Certificate of Achievement")
+
+    c.setFillColor(colors.HexColor("#1f2937"))
+    c.setFont("Helvetica", 15)
+    c.drawCentredString(width / 2, height - 218, "This certificate is proudly presented to")
+
+    c.setFont("Helvetica-Bold", 28)
+    c.drawCentredString(width / 2, height - 276, student_name)
+
+    c.setStrokeColor(colors.HexColor("#9ca3af"))
+    c.setLineWidth(1)
+    c.line(width / 2 - 220, height - 286, width / 2 + 220, height - 286)
+
+    c.setFillColor(colors.HexColor("#374151"))
+    c.setFont("Helvetica", 14)
+    c.drawCentredString(width / 2, height - 328, f"Performance Level: {normalized_perf}")
+    c.drawCentredString(width / 2, height - 356, f"Award / Badge: {award}")
+    c.drawCentredString(width / 2, height - 384, f"Date: {issue_date}")
+
+    c.setFillColor(colors.HexColor("#4b5563"))
+    c.setFont("Helvetica-Oblique", 12)
+    c.drawCentredString(
+        width / 2,
+        height - 430,
+        "has demonstrated outstanding effort, consistency, and commitment to learning.",
+    )
+
+    # Signature line.
+    sig_y = 118
+    c.setStrokeColor(colors.HexColor("#6b7280"))
+    c.line(width - 250, sig_y, width - 70, sig_y)
+    c.setFillColor(colors.HexColor("#6b7280"))
+    c.setFont("Helvetica", 10)
+    c.drawString(width - 242, sig_y - 16, "Signature")
+
+    c.showPage()
+    c.save()
+    return filename
 
 
 def normalize_score(value: Any) -> Optional[float]:
@@ -1992,6 +2115,7 @@ class RewardBadgeRemoveRequest(BaseModel):
 
 class RewardBadgeResponse(BaseModel):
     ok: bool = True
+    certificate_url: Optional[str] = None
 
 
 class ReportSettings(BaseModel):
@@ -3169,7 +3293,15 @@ async def reward_award_badge(payload: RewardBadgeRequest):
         "created_at": iso_now(),
     }
     await db.reward_events.insert_one(event)
-    return RewardBadgeResponse(ok=True)
+    certificate_filename = build_branded_certificate_pdf(
+        student_name=payload.student_name or "Student",
+        performance=normalized_perf,
+        award="Excellence Badge" if normalized_perf == "advanced" else "Achievement Badge",
+    )
+    return RewardBadgeResponse(
+        ok=True,
+        certificate_url=f"/api/certificates/{certificate_filename}",
+    )
 
 
 @api_router.post("/rewards/remove-badge", response_model=RewardBadgeResponse)
@@ -3182,6 +3314,17 @@ async def reward_remove_badge(payload: RewardBadgeRemoveRequest):
     }
     await db.reward_events.insert_one(event)
     return RewardBadgeResponse(ok=True)
+
+
+@app.get("/api/certificates/{filename}")
+async def get_certificate_file(filename: str):
+    safe_name = os.path.basename(filename)
+    target_path = (CERTIFICATES_DIR / safe_name).resolve()
+    if target_path.parent != CERTIFICATES_DIR.resolve():
+        raise HTTPException(status_code=400, detail="Invalid certificate path")
+    if not target_path.exists():
+        raise HTTPException(status_code=404, detail="Certificate not found")
+    return FileResponse(str(target_path), media_type="application/pdf", filename=safe_name)
 
 
 def build_summary(students: List[Dict[str, Any]], classes: List[Dict[str, Any]]) -> Dict[str, Any]:

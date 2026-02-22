@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useOutletContext } from "react-router-dom";
 import { toast } from "sonner";
-import { api, getApiErrorMessage, BULK_SAVE_TIMEOUT_MS } from "@/lib/api";
+import { api, getApiErrorMessage, BULK_SAVE_TIMEOUT_MS, BACKEND_ROOT_URL } from "@/lib/api";
 import { useTranslations } from "@/lib/i18n";
 import { getRewardSetsFromStorage, setStudentReward } from "@/lib/studentRewardsStorage";
 import { sortByClassOrder } from "@/lib/utils";
@@ -308,7 +308,7 @@ export default function Students() {
     if (!rewardStudent || isRewardSubmitting) return;
     try {
       setIsRewardSubmitting(true);
-      await api.post("/rewards/award-badge", {
+      const response = await api.post("/rewards/award-badge", {
         student_id: rewardStudent.id,
         student_name: rewardStudent.name,
         performance: rewardStudent.performance,
@@ -324,6 +324,13 @@ export default function Students() {
           return next;
         });
       }, 2200);
+      const certificateUrl = response?.data?.certificate_url;
+      if (certificateUrl) {
+        const absolute = certificateUrl.startsWith("http")
+          ? certificateUrl
+          : `${BACKEND_ROOT_URL}${certificateUrl}`;
+        window.open(absolute, "_blank", "noopener,noreferrer");
+      }
       toast.success(`${rewardStudent.name} badge awarded`);
       setRewardModalOpen(false);
     } catch (error) {
