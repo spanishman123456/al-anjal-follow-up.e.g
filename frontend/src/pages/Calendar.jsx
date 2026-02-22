@@ -40,6 +40,14 @@ export default function Calendar() {
     loadEvents();
   }, []);
 
+  const formatEventDate = (value) => {
+    if (!value) return "—";
+    if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}T/.test(value)) {
+      return value.slice(0, 10);
+    }
+    return value;
+  };
+
   return (
     <div className="space-y-6" data-testid="calendar-page">
       <PageHeader
@@ -71,7 +79,7 @@ export default function Calendar() {
               <CardContent className="pt-6">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <p className="font-semibold">{event.title}</p>
-                  <span className="text-sm text-muted-foreground">{event.date}</span>
+                  <span className="text-sm text-muted-foreground">{formatEventDate(event.date)}</span>
                 </div>
               </CardContent>
             </Card>
