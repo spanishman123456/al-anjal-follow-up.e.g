@@ -203,9 +203,9 @@ def build_branded_certificate_pdf(
     width, height = A4
     c = canvas.Canvas(str(file_path), pagesize=A4)
 
-    # Branded login-like soft gradient (slate -> white).
-    top_color = colors.HexColor("#f8fafc")
-    bottom_color = colors.HexColor("#ffffff")
+    # Branded login-like soft gradient, slightly darkened for better white-logo contrast.
+    top_color = colors.HexColor("#e9eef4")
+    bottom_color = colors.HexColor("#f5f7fa")
     steps = 70
     for i in range(steps):
         ratio = i / (steps - 1)
@@ -269,7 +269,12 @@ def build_branded_certificate_pdf(
     c.setFont("Helvetica", 15)
     c.drawCentredString(width / 2, height - 218, "This certificate is proudly presented to")
 
-    c.setFont("Helvetica-Bold", 28)
+    # Keep the name prominent but balanced; auto-shrink long names.
+    name_font_size = 24
+    max_name_width = width - 120
+    while name_font_size > 18 and c.stringWidth(student_name, "Helvetica-Bold", name_font_size) > max_name_width:
+        name_font_size -= 1
+    c.setFont("Helvetica-Bold", name_font_size)
     c.drawCentredString(width / 2, height - 276, student_name)
 
     c.setStrokeColor(colors.HexColor("#9ca3af"))
