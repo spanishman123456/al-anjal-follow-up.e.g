@@ -261,14 +261,28 @@ export default function Students() {
 
   const triggerRewardCelebration = () => {
     const confettiFn = window?.confetti;
-    const origin = rewardOriginRef.current || { x: 0.5, y: 0.3 };
     if (typeof confettiFn === "function") {
-      confettiFn({
-        particleCount: 130,
-        spread: 76,
-        startVelocity: 43,
-        origin,
-      });
+      const durationMs = 1300;
+      const endAt = Date.now() + durationMs;
+      const defaults = {
+        origin: { x: 0.5, y: 0.5 },
+        spread: 360,
+        startVelocity: 52,
+        ticks: 96,
+        scalar: 1.05,
+      };
+
+      const frame = () => {
+        const timeLeft = endAt - Date.now();
+        if (timeLeft <= 0) return;
+        const intensity = Math.max(0.35, timeLeft / durationMs);
+        confettiFn({
+          ...defaults,
+          particleCount: Math.floor(26 * intensity),
+        });
+        requestAnimationFrame(frame);
+      };
+      frame();
     }
     const audioEl = document.getElementById("reward-sound");
     if (audioEl?.play) {
