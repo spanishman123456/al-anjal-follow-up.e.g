@@ -42,10 +42,11 @@ export default function Calendar() {
 
   const formatEventDate = (value) => {
     if (!value) return "—";
-    if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}T/.test(value)) {
-      return value.slice(0, 10);
+    const stringValue = String(value).trim();
+    if (stringValue.includes("T")) {
+      return stringValue.split("T")[0];
     }
-    return value;
+    return stringValue;
   };
 
   return (
