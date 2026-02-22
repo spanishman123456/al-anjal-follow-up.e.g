@@ -3213,6 +3213,97 @@ async def get_analytics_summary(
         raise HTTPException(status_code=500, detail=f"Failed to load analytics summary: {str(e)}")
 
 
+@api_router.get("/analytics/missed-quizzes")
+async def get_missed_quiz_students(
+    class_id: Optional[str] = Query(default=None),
+    semester: Optional[int] = Query(default=1),
+    quarter: Optional[int] = Query(default=1),
+):
+    """
+    Returns students who have no quiz attempt recorded for the target quiz week in the selected (semester, quarter).
+    Q1 -> week 4, fields quiz1/quiz2
+    Q2 -> week 16, fields quiz3/quiz4
+    """
+    sem = semester or 1
+    q = quarter or 1
+    student_query = {"class_id": class_id} if class_id else {}
+    class_query = {"id": class_id} if class_id else {}
+    students = await db.students.find(
+        student_query, {"_id": 0, "id": 1, "full_name": 1, "class_id": 1, "class_name": 1}
+    ).to_list(5000)
+    classes = await db.classes.find(class_query, {"_id": 0, "id": 1, "name": 1}).to_list(200)
+    class_id_to_name = {c["id"]: c.get("name", c["id"]) for c in classes}
+    for s in students:
+        s["class_name"] = s.get("class_name") or class_id_to_name.get(s.get("class_id"), "")
+
+    target_week_number = 16 if q == 2 else 4
+    quiz_fields = ("quiz3", "quiz4") if q == 2 else ("quiz1", "quiz2")
+    week_doc = await db.weeks.find_one(
+        {"semester": sem, "quarter": q, "number": target_week_number},
+        {"_id": 0, "id": 1, "number": 1, "label": 1},
+    )
+    if not week_doc:
+        # Fallback for older week data that may miss quarter field.
+        week_doc = await db.weeks.find_one(
+            {"semester": sem, "number": target_week_number},
+            {"_id": 0, "id": 1, "number": 1, "label": 1},
+        )
+    if not week_doc:
+        return {
+            "semester": sem,
+            "quarter": q,
+            "quiz_fields": list(quiz_fields),
+            "week": None,
+            "total_students": len(students),
+            "submitted_count": 0,
+            "missed_count": 0,
+            "students": [],
+        }
+
+    student_ids = [s["id"] for s in students]
+    score_docs = await db.student_scores.find(
+        {"week_id": week_doc["id"], "student_id": {"$in": student_ids}},
+        {"_id": 0, "student_id": 1, quiz_fields[0]: 1, quiz_fields[1]: 1},
+    ).to_list(5000)
+    score_map = {d["student_id"]: d for d in score_docs}
+
+    def _has_quiz_attempt(doc: Optional[Dict[str, Any]]) -> bool:
+        if not doc:
+            return False
+        for key in quiz_fields:
+            value = doc.get(key)
+            if value is None or (isinstance(value, float) and pd.isna(value)):
+                continue
+            return True
+        return False
+
+    missed_students = []
+    for s in students:
+        score_doc = score_map.get(s["id"])
+        if _has_quiz_attempt(score_doc):
+            continue
+        missed_students.append(
+            {
+                "id": s["id"],
+                "full_name": s.get("full_name", ""),
+                "class_id": s.get("class_id"),
+                "class_name": s.get("class_name", ""),
+            }
+        )
+
+    submitted_count = len(students) - len(missed_students)
+    return {
+        "semester": sem,
+        "quarter": q,
+        "quiz_fields": list(quiz_fields),
+        "week": week_doc,
+        "total_students": len(students),
+        "submitted_count": submitted_count,
+        "missed_count": len(missed_students),
+        "students": missed_students,
+    }
+
+
 @api_router.get("/analytics/overview")
 async def get_analytics_overview(
     class_id: Optional[str] = Query(default=None),

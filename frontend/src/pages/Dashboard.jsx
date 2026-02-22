@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { useOutletContext } from "react-router-dom";
+import { Link, useOutletContext } from "react-router-dom";
 import {
   PieChart,
   Pie,
@@ -42,18 +42,30 @@ export default function Dashboard() {
   const semesterNumber = semester === "semester2" ? 2 : 1;
   const isTeacher = profile?.role_name === "Teacher";
   const [summary, setSummary] = useState(null);
+  const [missedQuiz, setMissedQuiz] = useState(null);
   const [loading, setLoading] = useState(false);
   const fileInputRef = useRef(null);
+  const lastMissedCountRef = useRef(null);
   const [schedule, setSchedule] = useState({});
   const [savingSchedule, setSavingSchedule] = useState(false);
 
   const fetchSummary = async () => {
     setLoading(true);
     try {
-      const response = await api.get("/analytics/summary", {
-        params: { semester: semesterNumber, quarter },
-      });
-      setSummary(response.data);
+      const params = { semester: semesterNumber, quarter };
+      const [summaryRes, missedRes] = await Promise.all([
+        api.get("/analytics/summary", { params }),
+        api.get("/analytics/missed-quizzes", { params }),
+      ]);
+      setSummary(summaryRes.data);
+      setMissedQuiz(missedRes.data);
+
+      const missedCount = Number(missedRes?.data?.missed_count || 0);
+      if (missedCount > 0 && lastMissedCountRef.current !== missedCount) {
+        const quizLabel = quarter === 2 ? "Quiz 3/4" : "Quiz 1/2";
+        toast.warning(`${missedCount} students have missing ${quizLabel} marks.`);
+      }
+      lastMissedCountRef.current = missedCount;
     } catch (error) {
       toast.error(getApiErrorMessage(error) || "Failed to load dashboard data");
     } finally {
@@ -272,6 +284,46 @@ export default function Dashboard() {
       <p className="text-xs text-muted-foreground" data-testid="dashboard-metrics-scope-note">
         {t("dashboard_metrics_scope_note")}
       </p>
+
+      <Card
+        className={`border ${
+          (missedQuiz?.missed_count || 0) > 0
+            ? "border-amber-300 bg-amber-50/70 dark:border-amber-700/40 dark:bg-amber-950/20"
+            : "border-emerald-300 bg-emerald-50/70 dark:border-emerald-700/40 dark:bg-emerald-950/20"
+        }`}
+        data-testid="dashboard-missed-quiz-alert"
+      >
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base">{t("missed_quiz_alert_title")}</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          <p className="text-sm text-muted-foreground">
+            {(missedQuiz?.missed_count || 0) > 0
+              ? t("missed_quiz_alert_desc")
+                  .replace("{count}", String(missedQuiz?.missed_count || 0))
+                  .replace("{submitted}", String(missedQuiz?.submitted_count || 0))
+              : t("no_missed_quiz_alert")}
+          </p>
+          {(missedQuiz?.missed_count || 0) > 0 && (
+            <>
+              <div className="flex flex-wrap gap-2">
+                {(missedQuiz?.students || []).slice(0, 8).map((student) => (
+                  <Badge key={student.id} variant="outline">
+                    {student.full_name} ({student.class_name})
+                  </Badge>
+                ))}
+              </div>
+              <div>
+                <Button asChild size="sm" variant="outline" data-testid="dashboard-missed-quiz-view-button">
+                  <Link to={quarter === 2 ? "/assessment-marks-q2" : "/assessment-marks"}>
+                    {t("view_missed_quiz_students")}
+                  </Link>
+                </Button>
+              </div>
+            </>
+          )}
+        </CardContent>
+      </Card>
 
       <section className="section-bg-alt-2 grid gap-6 rounded-xl border border-border/50 p-4 lg:grid-cols-3 animate-stagger" data-testid="dashboard-main">
         <Card className="lg:col-span-2 card-hover" data-testid="dashboard-distribution">
