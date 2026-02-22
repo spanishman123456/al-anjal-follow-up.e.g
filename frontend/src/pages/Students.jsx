@@ -309,6 +309,15 @@ export default function Students() {
     });
   }, [students, filterClass, searchTerm, performanceFilter, scoreMin, scoreMax]);
 
+  const classStudentCounts = useMemo(() => {
+    const counts = {};
+    students.forEach((student) => {
+      if (!student?.class_id) return;
+      counts[student.class_id] = (counts[student.class_id] || 0) + 1;
+    });
+    return counts;
+  }, [students]);
+
   const visibleWeeks = weeks;
   const activeWeek = weeks.find((week) => week.id === activeWeekId);
   const isWeek4 = activeWeek?.number === 4;
@@ -873,7 +882,7 @@ export default function Students() {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all" data-testid="students-filter-all">
-                {t("all_classes")}
+                {t("all_classes")} ({students.length})
               </SelectItem>
               {sortByClassOrder(classesForFilter).map((cls) => (
                 <SelectItem
@@ -881,7 +890,7 @@ export default function Students() {
                   value={cls.id}
                   data-testid={`students-filter-${cls.id}`}
                 >
-                  {cls.name}
+                  {cls.name} ({classStudentCounts[cls.id] || 0})
                 </SelectItem>
               ))}
             </SelectContent>
