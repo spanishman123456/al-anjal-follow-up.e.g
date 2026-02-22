@@ -164,6 +164,7 @@ export default function Students() {
   const [bulkScores, setBulkScores] = useState({});
   const [bulkConfirmOpen, setBulkConfirmOpen] = useState(false);
   const [clearScoresOpen, setClearScoresOpen] = useState(false);
+  const [clearAllScoresOpen, setClearAllScoresOpen] = useState(false);
   const [deleteWeekOpen, setDeleteWeekOpen] = useState(false);
   const [promotionEnabled, setPromotionEnabled] = useState(false);
   const [promoteOpen, setPromoteOpen] = useState(false);
@@ -669,6 +670,37 @@ export default function Students() {
     }
   };
 
+  const handleClearAllScores = async () => {
+    setClearAllScoresOpen(false);
+    if (!activeWeekId || !weeks.some((w) => w.id === activeWeekId)) {
+      toast.error(t("select_week_from_current_semester") || "Please select a week from the current semester.");
+      return;
+    }
+    const updates = students.map((student) => ({
+      id: student.id,
+      attendance: null,
+      participation: null,
+      behavior: null,
+      homework: null,
+    }));
+    if (!updates.length) {
+      toast.error(t("no_data"));
+      return;
+    }
+    try {
+      await api.post("/students/bulk-scores", {
+        updates,
+        week_id: activeWeekId || undefined,
+      }, { timeout: BULK_SAVE_TIMEOUT_MS });
+      await loadData(activeWeekId);
+      setBulkEditMode(false);
+      setBulkScores({});
+      toast.success(t("scores_cleared_all_classes"));
+    } catch (error) {
+      toast.error(getApiErrorMessage(error) || t("student_update_failed"));
+    }
+  };
+
   return (
     <div className="space-y-8" data-testid="students-page">
       <PageHeader
@@ -710,6 +742,13 @@ export default function Students() {
                   >
                     {t("clear_scores")}
                   </Button>
+                  <Button
+                    variant="destructive"
+                    onClick={() => setClearAllScoresOpen(true)}
+                    data-testid="clear-all-scores-button"
+                  >
+                    {t("clear_scores_all_classes")}
+                  </Button>
                 </>
               )}
             </div>
@@ -746,6 +785,13 @@ export default function Students() {
                     data-testid="clear-scores-button"
                   >
                     {t("clear_scores")}
+                  </Button>
+                  <Button
+                    variant="destructive"
+                    onClick={() => setClearAllScoresOpen(true)}
+                    data-testid="clear-all-scores-button"
+                  >
+                    {t("clear_scores_all_classes")}
                   </Button>
                   <Button
                     onClick={() => setIsAddOpen(true)}
@@ -1628,6 +1674,23 @@ export default function Students() {
               {t("cancel")}
             </Button>
             <Button variant="destructive" onClick={handleClearScores} data-testid="clear-scores-confirm">
+              {t("clear_scores")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={clearAllScoresOpen} onOpenChange={setClearAllScoresOpen}>
+        <DialogContent data-testid="clear-all-scores-dialog">
+          <DialogHeader>
+            <DialogTitle>{t("clear_scores_all_classes")}</DialogTitle>
+            <DialogDescription>{t("clear_scores_all_classes_confirm")}</DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setClearAllScoresOpen(false)} data-testid="clear-all-scores-cancel">
+              {t("cancel")}
+            </Button>
+            <Button variant="destructive" onClick={handleClearAllScores} data-testid="clear-all-scores-confirm">
               {t("clear_scores")}
             </Button>
           </DialogFooter>
