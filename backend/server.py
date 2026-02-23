@@ -995,17 +995,16 @@ _SCORE_VALUE_KEYS = (
 
 
 def _is_meaningful_score(v: Any) -> bool:
-    """True if value counts as 'entered' (non-null, non-NaN, and non-zero). Avoids treating all-zero/blank as 'has data'."""
+    """True only if value is a number strictly greater than 0. Avoids counting missing/zero/default as 'submitted'."""
     if v is None:
         return False
     if isinstance(v, float) and pd.isna(v):
         return False
     try:
-        if float(v) == 0:
-            return False
+        n = float(v)
+        return n > 0
     except (TypeError, ValueError):
         return False
-    return True
 
 
 def _has_any_scores(scores_by_week: Dict[int, Dict[str, Optional[float]]]) -> bool:

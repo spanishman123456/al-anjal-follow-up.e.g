@@ -129,6 +129,7 @@ export default function FinalExamsAssessment() {
   const [bulkScores, setBulkScores] = useState({});
   const [bulkConfirmOpen, setBulkConfirmOpen] = useState(false);
   const [clearScoresOpen, setClearScoresOpen] = useState(false);
+  const [clearAllScoresOpen, setClearAllScoresOpen] = useState(false);
   const [fillValues, setFillValues] = useState({ quarter1_practical: "", quarter1_theory: "" });
   const bulkFileInputRef = useRef(null);
   const latestLoadRequestIdRef = useRef(0);
@@ -312,6 +313,32 @@ export default function FinalExamsAssessment() {
     }
   };
 
+  const handleClearAllScores = async () => {
+    setClearAllScoresOpen(false);
+    if (!activeWeekId) {
+      toast.error(t("select_week_before_import") || "Please select a week first.");
+      return;
+    }
+    const updates = students.map((student) => ({
+      id: student.id,
+      quarter1_practical: null,
+      quarter1_theory: null,
+    }));
+    if (!updates.length) {
+      toast.error(t("no_data"));
+      return;
+    }
+    try {
+      await api.post("/students/bulk-scores", { updates, week_id: activeWeekId }, { timeout: BULK_SAVE_TIMEOUT_MS });
+      await loadData(activeWeekId);
+      setBulkEditMode(false);
+      setBulkScores({});
+      toast.success(t("scores_cleared_all_classes") || "Scores cleared for all classes in the selected week.");
+    } catch (error) {
+      toast.error(getApiErrorMessage(error) || t("student_update_failed"));
+    }
+  };
+
   const handleDownloadTemplate = async () => {
     try {
       const response = await api.get("/students/import-template", {
@@ -403,6 +430,9 @@ export default function FinalExamsAssessment() {
               <>
                 <Button variant="outline" onClick={startBulkEdit} data-testid="final-exams-edit-scores">{t("edit_scores")}</Button>
                 <Button variant="outline" onClick={() => setClearScoresOpen(true)} data-testid="final-exams-clear-scores">{t("clear_scores")}</Button>
+                <Button variant="destructive" onClick={() => setClearAllScoresOpen(true)} data-testid="final-exams-clear-all-scores">
+                  {t("clear_scores_all_classes") || "Clear All Classes"}
+                </Button>
               </>
             )}
           </div>
@@ -568,6 +598,23 @@ export default function FinalExamsAssessment() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setClearScoresOpen(false)}>{t("cancel")}</Button>
             <Button variant="destructive" onClick={handleClearScores}>{t("clear_scores")}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={clearAllScoresOpen} onOpenChange={setClearAllScoresOpen}>
+        <DialogContent data-testid="final-exams-clear-all-dialog">
+          <DialogHeader>
+            <DialogTitle>{t("clear_scores_all_classes") || "Clear Scores for All Classes"}</DialogTitle>
+            <DialogDescription>
+              {t("clear_scores_all_classes_confirm") || "This will clear final exam scores for every class in the selected week. This action cannot be undone."}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setClearAllScoresOpen(false)}>{t("cancel")}</Button>
+            <Button variant="destructive" onClick={handleClearAllScores} data-testid="final-exams-clear-all-confirm">
+              {t("clear_scores")}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
