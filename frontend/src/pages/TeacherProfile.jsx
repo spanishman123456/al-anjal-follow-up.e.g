@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useOutletContext, useParams, useNavigate, Navigate } from "react-router-dom";
-import { api } from "@/lib/api";
+import { api, getApiErrorMessage } from "@/lib/api";
 import { useTranslations } from "@/lib/i18n";
 import { sortByClassOrder } from "@/lib/utils";
 import { PageHeader } from "@/components/layout/PageHeader";
@@ -27,21 +27,20 @@ export default function TeacherProfile() {
     schedule: {},
     avatar_base64: "",
   });
+  const latestLoadRequestIdRef = useRef(0);
 
   if (!teacherId) {
     return <Navigate to="/teachers" replace />;
   }
 
   const loadData = async () => {
+    const requestId = ++latestLoadRequestIdRef.current;
     setLoading(true);
     setLoadError(false);
     try {
-      const [teacherRes, classesRes] = await Promise.all([
-        api.get(`/teachers/${teacherId}`),
-        api.get("/classes"),
-      ]);
+      const teacherRes = await api.get(`/teachers/${teacherId}`);
+      if (latestLoadRequestIdRef.current !== requestId) return;
       setTeacherData(teacherRes.data);
-      setClasses(classesRes.data);
       const teacher = teacherRes.data.teacher;
       setForm({
         phone: teacher.phone || "",
@@ -50,11 +49,22 @@ export default function TeacherProfile() {
         schedule: teacher.schedule || {},
         avatar_base64: teacher.avatar_base64 || "",
       });
+
+      api
+        .get("/classes")
+        .then((classesRes) => {
+          if (latestLoadRequestIdRef.current !== requestId) return;
+          setClasses(classesRes.data || []);
+        })
+        .catch(() => null);
     } catch (error) {
-      toast.error(t("teacher_profile_failed"));
+      if (latestLoadRequestIdRef.current !== requestId) return;
+      toast.error(getApiErrorMessage(error) || t("teacher_profile_failed"));
       setLoadError(true);
     } finally {
-      setLoading(false);
+      if (latestLoadRequestIdRef.current === requestId) {
+        setLoading(false);
+      }
     }
   };
 

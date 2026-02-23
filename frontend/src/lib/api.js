@@ -30,6 +30,15 @@ export async function checkBackendHealth() {
   }
 }
 
+/** Fire-and-forget warm-up ping to reduce cold-start delays. */
+export function warmBackendInBackground() {
+  return fetch(`${BACKEND_ROOT}/health`, {
+    method: "GET",
+    cache: "no-store",
+    keepalive: true,
+  }).catch(() => null);
+}
+
 export const isProductionBackendUrl = isProductionBackend;
 
 api.interceptors.request.use((config) => {

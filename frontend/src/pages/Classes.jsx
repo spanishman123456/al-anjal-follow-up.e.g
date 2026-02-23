@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useOutletContext, Link } from "react-router-dom";
 import { toast } from "sonner";
 import { api, getApiErrorMessage } from "@/lib/api";
@@ -29,38 +29,58 @@ export default function Classes() {
   const [selectedClass, setSelectedClass] = useState(null);
   const [clearScoresDialogOpen, setClearScoresDialogOpen] = useState(false);
   const [classToClear, setClassToClear] = useState(null);
+  const latestLoadRequestIdRef = useRef(0);
+
+  const filterTeacherClasses = (data) => {
+    if (!isTeacher || !profile?.assigned_class_ids?.length) return data;
+    const ids = new Set(profile.assigned_class_ids);
+    return data.filter((c) => ids.has(c.class_id));
+  };
 
   const loadClasses = async () => {
+    const requestId = ++latestLoadRequestIdRef.current;
     try {
-      const response = await api.get("/classes/summary", {
-        params: { semester: semesterNumber, quarter },
-      });
-      let data = response.data;
-      if (!data.length) {
-        const baseClasses = await api.get("/classes");
-        data = baseClasses.data.map((cls) => ({
-          class_id: cls.id,
-          class_name: cls.name,
-          grade: cls.grade,
-          section: cls.section,
-          student_count: 0,
-          avg_total_score: null,
-          distribution: { on_level: 0, approach: 0, below: 0, no_data: 0 },
-          quarter1_on_level_rate: 0,
-          quarter2_on_level_rate: 0,
-          quarter1_avg_total: null,
-          quarter2_avg_total: null,
-          students_needing_support_count: 0,
-          top_performers_count: 0,
-        }));
-      }
-      if (isTeacher && profile?.assigned_class_ids?.length) {
-        const ids = new Set(profile.assigned_class_ids);
-        data = data.filter((c) => ids.has(c.class_id));
-      }
-      setClasses(data);
+      const baseClassesRes = await api.get("/classes");
+      if (latestLoadRequestIdRef.current !== requestId) return;
+      const baseClasses = (baseClassesRes.data || []).map((cls) => ({
+        class_id: cls.id,
+        class_name: cls.name,
+        grade: cls.grade,
+        section: cls.section,
+        student_count: 0,
+        avg_total_score: null,
+        distribution: { on_level: 0, approach: 0, below: 0, no_data: 0 },
+        quarter1_on_level_rate: 0,
+        quarter2_on_level_rate: 0,
+        quarter1_avg_total: null,
+        quarter2_avg_total: null,
+        students_needing_support_count: 0,
+        top_performers_count: 0,
+      }));
+      setClasses(filterTeacherClasses(baseClasses));
+
+      api
+        .get("/classes/summary", { params: { semester: semesterNumber, quarter } })
+        .then((response) => {
+          if (latestLoadRequestIdRef.current !== requestId) return;
+          const summaryData = response.data || [];
+          if (!summaryData.length) return;
+          setClasses(filterTeacherClasses(summaryData));
+        })
+        .catch(() => null);
     } catch (error) {
-      toast.error(getApiErrorMessage(error) || "Failed to load classes");
+      if (latestLoadRequestIdRef.current !== requestId) return;
+      try {
+        const response = await api.get("/classes/summary", {
+          params: { semester: semesterNumber, quarter },
+        });
+        if (latestLoadRequestIdRef.current !== requestId) return;
+        const summaryData = response.data || [];
+        setClasses(filterTeacherClasses(summaryData));
+      } catch {
+        if (latestLoadRequestIdRef.current !== requestId) return;
+        toast.error(getApiErrorMessage(error) || "Failed to load classes");
+      }
     }
   };
 

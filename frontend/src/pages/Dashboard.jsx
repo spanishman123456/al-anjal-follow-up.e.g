@@ -46,39 +46,49 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(false);
   const fileInputRef = useRef(null);
   const lastMissedCountRef = useRef(null);
+  const latestRequestIdRef = useRef(0);
   const [schedule, setSchedule] = useState({});
   const [savingSchedule, setSavingSchedule] = useState(false);
 
   const fetchSummary = async () => {
+    const requestId = ++latestRequestIdRef.current;
     setLoading(true);
+    const params = { semester: semesterNumber, quarter };
     try {
-      const params = { semester: semesterNumber, quarter };
-      const [summaryRes, missedRes] = await Promise.all([
-        api.get("/analytics/summary", { params }),
-        api.get("/analytics/missed-assessments", { params }),
-      ]);
+      const summaryRes = await api.get("/analytics/summary", { params });
+      if (latestRequestIdRef.current !== requestId) return;
       setSummary(summaryRes.data);
-      setMissedAssessments(missedRes.data);
-
-      const groups = missedRes?.data?.groups || {};
-      const missedCount =
-        Number(groups?.quiz?.missed_count || 0) +
-        Number(groups?.chapter_test?.missed_count || 0) +
-        Number(groups?.final_practical?.missed_count || 0) +
-        Number(groups?.final_theory?.missed_count || 0);
-      if (missedCount > 0 && lastMissedCountRef.current !== missedCount) {
-        toast.warning(
-          t("missed_assessment_toast")
-            .replace("{count}", String(missedCount))
-            .replace("{quarter}", String(quarter)),
-        );
-      }
-      lastMissedCountRef.current = missedCount;
     } catch (error) {
+      if (latestRequestIdRef.current !== requestId) return;
       toast.error(getApiErrorMessage(error) || "Failed to load dashboard data");
     } finally {
-      setLoading(false);
+      if (latestRequestIdRef.current === requestId) {
+        setLoading(false);
+      }
     }
+
+    api
+      .get("/analytics/missed-assessments", { params })
+      .then((missedRes) => {
+        if (latestRequestIdRef.current !== requestId) return;
+        setMissedAssessments(missedRes.data);
+
+        const groups = missedRes?.data?.groups || {};
+        const missedCount =
+          Number(groups?.quiz?.missed_count || 0) +
+          Number(groups?.chapter_test?.missed_count || 0) +
+          Number(groups?.final_practical?.missed_count || 0) +
+          Number(groups?.final_theory?.missed_count || 0);
+        if (missedCount > 0 && lastMissedCountRef.current !== missedCount) {
+          toast.warning(
+            t("missed_assessment_toast")
+              .replace("{count}", String(missedCount))
+              .replace("{quarter}", String(quarter)),
+          );
+        }
+        lastMissedCountRef.current = missedCount;
+      })
+      .catch(() => null);
   };
 
   useEffect(() => {

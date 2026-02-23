@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useOutletContext } from "react-router-dom";
 import { toast } from "sonner";
-import { api } from "@/lib/api";
+import { api, getApiErrorMessage } from "@/lib/api";
 import { useTranslations } from "@/lib/i18n";
 import { getRewardSetsFromStorage, setStudentReward } from "@/lib/studentRewardsStorage";
 import { PageHeader } from "@/components/layout/PageHeader";
@@ -82,17 +82,21 @@ export default function Rewards() {
   const { language } = useOutletContext();
   const t = useTranslations(language);
   const [students, setStudents] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [badgeRewardIds, setBadgeRewardIds] = useState(() => getRewardSetsFromStorage().badge);
   const [certificateRewardIds, setCertificateRewardIds] = useState(() => getRewardSetsFromStorage().certificate);
   const [commentRewardIds, setCommentRewardIds] = useState(() => getRewardSetsFromStorage().comment);
   const [certificateFor, setCertificateFor] = useState(null);
 
   const loadData = async () => {
+    setLoading(true);
     try {
       const studentsRes = await api.get("/students");
-      setStudents(studentsRes.data);
+      setStudents(studentsRes.data || []);
     } catch (error) {
-      toast.error("Failed to load students");
+      toast.error(getApiErrorMessage(error) || "Failed to load students");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -106,6 +110,23 @@ export default function Rewards() {
       certificateRewardIds.has(String(s.id)) ||
       commentRewardIds.has(String(s.id))
   );
+
+  if (loading && !students.length) {
+    return (
+      <div className="space-y-8" data-testid="rewards-page">
+        <PageHeader
+          title={t("rewards")}
+          subtitle={t("overview")}
+          testIdPrefix="rewards"
+        />
+        <Card>
+          <CardContent className="pt-6">
+            <p className="text-sm text-muted-foreground">{t("refresh_data")}...</p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   const handleBadge = (student) => {
     const key = String(student.id);

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useOutletContext } from "react-router-dom";
 import {
   PieChart,
@@ -69,6 +69,7 @@ export default function Analytics() {
   const [analysisStandoutData, setAnalysisStandoutData] = useState("");
   const [analysisActions, setAnalysisActions] = useState("");
   const [analysisRecommendations, setAnalysisRecommendations] = useState("");
+  const latestRequestIdRef = useRef(0);
 
   const applyGeneratedInsights = (generated) => {
     if (!generated) return;
@@ -86,38 +87,25 @@ export default function Analytics() {
   };
 
   useEffect(() => {
-    let cancelled = false;
     const loadAnalytics = async () => {
+      const requestId = ++latestRequestIdRef.current;
       setLoading(true);
+      const params = {
+        semester: semesterNumber,
+        quarter,
+        ...(selectedClassId !== "all" ? { class_id: selectedClassId } : {}),
+      };
+      const classSummaryParams = { semester: semesterNumber, quarter };
+
       try {
-        const params = {
-          semester: semesterNumber,
-          quarter,
-          ...(selectedClassId !== "all" ? { class_id: selectedClassId } : {}),
-        };
-        const [overviewRes, classRes, classesRes] = await Promise.all([
-          api.get("/analytics/overview", { params }),
-          api.get("/classes/summary", { params: { semester: semesterNumber, quarter } }),
-          api.get("/classes"),
-        ]);
-        if (cancelled) return;
+        const overviewRes = await api.get("/analytics/overview", { params });
+        if (latestRequestIdRef.current !== requestId) return;
         setOverview(overviewRes.data);
-        setClassSummary(classRes.data);
-        setClassOptions(classesRes.data);
       } catch (error) {
-        if (cancelled) return;
+        if (latestRequestIdRef.current !== requestId) return;
         try {
-          const params = {
-            semester: semesterNumber,
-            quarter,
-            ...(selectedClassId !== "all" ? { class_id: selectedClassId } : {}),
-          };
-          const [summaryRes, classRes, classesRes] = await Promise.all([
-            api.get("/analytics/summary", { params }),
-            api.get("/classes/summary", { params: { semester: semesterNumber, quarter } }),
-            api.get("/classes"),
-          ]);
-          if (cancelled) return;
+          const summaryRes = await api.get("/analytics/summary", { params });
+          if (latestRequestIdRef.current !== requestId) return;
           const s = summaryRes.data;
           const dist = s?.distribution || [
             { level: "on_level", count: 0 },
@@ -164,19 +152,39 @@ export default function Analytics() {
             })),
             students_per_class: s?.students_per_class ?? [],
           });
-          setClassSummary(classRes.data);
-          setClassOptions(classesRes.data);
         } catch (fallbackError) {
+          if (latestRequestIdRef.current !== requestId) return;
           setOverview(null);
           setClassSummary([]);
           toast.error(getApiErrorMessage(fallbackError) || t("analytics_failed"));
         }
       } finally {
-        if (!cancelled) setLoading(false);
+        if (latestRequestIdRef.current === requestId) setLoading(false);
       }
+
+      api
+        .get("/classes/summary", { params: classSummaryParams })
+        .then((res) => {
+          if (latestRequestIdRef.current !== requestId) return;
+          setClassSummary(res.data || []);
+        })
+        .catch(() => {
+          if (latestRequestIdRef.current !== requestId) return;
+          setClassSummary([]);
+        });
+
+      api
+        .get("/classes")
+        .then((res) => {
+          if (latestRequestIdRef.current !== requestId) return;
+          setClassOptions(res.data || []);
+        })
+        .catch(() => {
+          if (latestRequestIdRef.current !== requestId) return;
+          setClassOptions([]);
+        });
     };
     loadAnalytics();
-    return () => { cancelled = true; };
   }, [semesterNumber, quarter, selectedClassId]);
 
   useEffect(() => {

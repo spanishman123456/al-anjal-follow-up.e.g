@@ -258,6 +258,7 @@ export default function Students() {
   const [isRewardSubmitting, setIsRewardSubmitting] = useState(false);
   const [badgeGlowStudentIds, setBadgeGlowStudentIds] = useState(new Set());
   const rewardOriginRef = useRef(null);
+  const latestLoadRequestIdRef = useRef(0);
 
   const triggerRewardCelebration = () => {
     const confettiFn = window?.confetti;
@@ -377,20 +378,38 @@ export default function Students() {
   };
 
   const loadData = async (weekId = activeWeekId) => {
+    const requestId = ++latestLoadRequestIdRef.current;
     try {
-      const requests = [
-        api.get("/students", { params: weekId ? { week_id: weekId } : {} }),
-        api.get("/settings/promotion"),
-      ];
-      if (!classesLoaded || !contextClasses?.length) requests.push(api.get("/classes"));
-      const results = await Promise.all(requests);
-      setStudents(results[0].data);
-      setPromotionEnabled(Boolean(results[1].data?.enabled));
-      const classesFromApi = results[2]?.data;
-      if (classesLoaded && contextClasses?.length) setClasses(contextClasses || []);
-      else if (classesFromApi?.length) setClasses(classesFromApi);
-      else setClasses(contextClasses || []);
+      const studentRes = await api.get("/students", { params: weekId ? { week_id: weekId } : {} });
+      if (latestLoadRequestIdRef.current !== requestId) return;
+      setStudents(studentRes.data || []);
+
+      if (classesLoaded && contextClasses?.length) {
+        setClasses(contextClasses || []);
+      }
+
+      api.get("/settings/promotion")
+        .then((res) => {
+          if (latestLoadRequestIdRef.current !== requestId) return;
+          setPromotionEnabled(Boolean(res.data?.enabled));
+        })
+        .catch(() => null);
+
+      if (!classesLoaded || !contextClasses?.length) {
+        api.get("/classes")
+          .then((res) => {
+            if (latestLoadRequestIdRef.current !== requestId) return;
+            const classesFromApi = res.data;
+            if (classesFromApi?.length) setClasses(classesFromApi);
+            else setClasses(contextClasses || []);
+          })
+          .catch(() => {
+            if (latestLoadRequestIdRef.current !== requestId) return;
+            setClasses(contextClasses || []);
+          });
+      }
     } catch (error) {
+      if (latestLoadRequestIdRef.current !== requestId) return;
       toast.error(getApiErrorMessage(error) || "Failed to load students");
     }
   };

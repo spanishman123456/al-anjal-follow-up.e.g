@@ -128,19 +128,32 @@ export default function AssessmentMarksQ2() {
   const [clearAllScoresOpen, setClearAllScoresOpen] = useState(false);
   const [fillValues, setFillValues] = useState({ quiz3: "", quiz4: "", chapter_test2_practical: "" });
   const bulkFileInputRef = useRef(null);
+  const latestLoadRequestIdRef = useRef(0);
 
   const loadData = async (weekId = activeWeekId) => {
+    const requestId = ++latestLoadRequestIdRef.current;
     try {
-      const requests = [api.get("/students", { params: weekId ? { week_id: weekId } : {} })];
-      // Always fetch classes if context is empty so Classes dropdown and Class column show
-      if (!classesLoaded || !contextClasses?.length) requests.push(api.get("/classes"));
-      const results = await Promise.all(requests);
-      setStudents(results[0].data);
-      const classesFromApi = results[1]?.data;
-      if (classesLoaded && contextClasses?.length) setClasses(contextClasses || []);
-      else if (classesFromApi?.length) setClasses(classesFromApi);
-      else setClasses(contextClasses || []);
+      const studentRes = await api.get("/students", { params: weekId ? { week_id: weekId } : {} });
+      if (latestLoadRequestIdRef.current !== requestId) return;
+      setStudents(studentRes.data || []);
+
+      if (classesLoaded && contextClasses?.length) {
+        setClasses(contextClasses || []);
+      } else {
+        api.get("/classes")
+          .then((res) => {
+            if (latestLoadRequestIdRef.current !== requestId) return;
+            const classesFromApi = res.data;
+            if (classesFromApi?.length) setClasses(classesFromApi);
+            else setClasses(contextClasses || []);
+          })
+          .catch(() => {
+            if (latestLoadRequestIdRef.current !== requestId) return;
+            setClasses(contextClasses || []);
+          });
+      }
     } catch (error) {
+      if (latestLoadRequestIdRef.current !== requestId) return;
       toast.error(getApiErrorMessage(error) || "Failed to load data");
     }
   };

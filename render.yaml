@@ -18,3 +18,17 @@ services:
         value: school_db
       - key: CORS_ORIGINS
         value: "*"
+
+  # Optional: external keep-awake ping so backend stays warm even when no user has the app open.
+  # Enable via Render Blueprint if desired.
+  - type: cron
+    name: al-anjal-backend-keepawake
+    runtime: python
+    rootDir: backend
+    schedule: "*/10 * * * *"
+    buildCommand: pip install -r requirements.txt
+    startCommand: python -c "import os, urllib.request; urllib.request.urlopen((os.environ.get('BACKEND_HEALTH_URL') or '').strip(), timeout=20).read()"
+    envVars:
+      - key: BACKEND_HEALTH_URL
+        # Example: https://al-anjal-follow-up-e-g.onrender.com/health
+        sync: false

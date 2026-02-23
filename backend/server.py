@@ -3547,74 +3547,119 @@ async def get_missed_assessment_students(
 
     student_ids = [s["id"] for s in students]
 
-    async def _resolve_week_docs(target_numbers: List[int]) -> List[Dict[str, Any]]:
+    group_configs = {
+        "quiz": {
+            "fields": ["quiz3", "quiz4"] if q == 2 else ["quiz1", "quiz2"],
+            "target_numbers": [16] if q == 2 else [4],
+        },
+        "chapter_test": {
+            "fields": ["chapter_test2_practical"] if q == 2 else ["chapter_test1_practical"],
+            "target_numbers": [16] if q == 2 else [4],
+        },
+        "final_practical": {
+            "fields": ["quarter2_practical"] if q == 2 else ["quarter1_practical"],
+            "target_numbers": [17] if q == 2 else [9],
+        },
+        # Q1 theory may be recorded on week 10 or week 9 (fallback compatibility).
+        "final_theory": {
+            "fields": ["quarter2_theory"] if q == 2 else ["quarter1_theory"],
+            "target_numbers": [18] if q == 2 else [10, 9],
+        },
+    }
+
+    target_numbers = sorted({n for config in group_configs.values() for n in config["target_numbers"]})
+    primary_week_docs = await db.weeks.find(
+        {"semester": sem, "quarter": q, "number": {"$in": target_numbers}},
+        {"_id": 0, "id": 1, "number": 1, "label": 1},
+    ).to_list(50)
+
+    weeks_by_number: Dict[int, List[Dict[str, Any]]] = {}
+    seen_week_ids = set()
+    for doc in primary_week_docs:
+        if doc["id"] in seen_week_ids:
+            continue
+        seen_week_ids.add(doc["id"])
+        weeks_by_number.setdefault(doc["number"], []).append(doc)
+
+    missing_numbers = [number for number in target_numbers if number not in weeks_by_number]
+    if missing_numbers:
+        # Backward-compat for older week documents without quarter.
+        fallback_docs = await db.weeks.find(
+            {"semester": sem, "number": {"$in": missing_numbers}},
+            {"_id": 0, "id": 1, "number": 1, "label": 1},
+        ).to_list(50)
+        for doc in fallback_docs:
+            if doc["id"] in seen_week_ids:
+                continue
+            seen_week_ids.add(doc["id"])
+            weeks_by_number.setdefault(doc["number"], []).append(doc)
+
+    group_weeks: Dict[str, List[Dict[str, Any]]] = {}
+    for name, config in group_configs.items():
         docs: List[Dict[str, Any]] = []
-        seen = set()
-        for number in target_numbers:
-            week_doc = await db.weeks.find_one(
-                {"semester": sem, "quarter": q, "number": number},
-                {"_id": 0, "id": 1, "number": 1, "label": 1},
-            )
-            if not week_doc:
-                # Backward-compat for older week documents.
-                week_doc = await db.weeks.find_one(
-                    {"semester": sem, "number": number},
-                    {"_id": 0, "id": 1, "number": 1, "label": 1},
-                )
-            if week_doc and week_doc["id"] not in seen:
-                docs.append(week_doc)
-                seen.add(week_doc["id"])
-        return docs
+        for number in config["target_numbers"]:
+            docs.extend(weeks_by_number.get(number, []))
+        # Preserve order while avoiding duplicates.
+        ordered_unique_docs: List[Dict[str, Any]] = []
+        ordered_seen_ids = set()
+        for doc in docs:
+            if doc["id"] in ordered_seen_ids:
+                continue
+            ordered_seen_ids.add(doc["id"])
+            ordered_unique_docs.append(doc)
+        group_weeks[name] = ordered_unique_docs
 
-    async def _build_missed_group(name: str, fields: List[str], target_numbers: List[int]) -> Dict[str, Any]:
-        week_docs = await _resolve_week_docs(target_numbers)
-        if not week_docs:
-            return {
-                "name": name,
-                "fields": fields,
-                "weeks": [],
-                "submitted_count": 0,
-                "missed_count": 0,
-                "students": [],
-            }
+    all_week_ids = sorted({doc["id"] for docs in group_weeks.values() for doc in docs})
+    all_fields = sorted({field for config in group_configs.values() for field in config["fields"]})
+    projection = {"_id": 0, "student_id": 1, "week_id": 1}
+    for field in all_fields:
+        projection[field] = 1
 
-        week_ids = [w["id"] for w in week_docs]
-        projection = {"_id": 0, "student_id": 1}
-        for f in fields:
-            projection[f] = 1
+    docs: List[Dict[str, Any]] = []
+    if all_week_ids and student_ids:
         docs = await db.student_scores.find(
-            {"week_id": {"$in": week_ids}, "student_id": {"$in": student_ids}},
+            {"week_id": {"$in": all_week_ids}, "student_id": {"$in": student_ids}},
             projection,
         ).to_list(5000)
 
-        by_student: Dict[str, List[Dict[str, Any]]] = {}
-        for d in docs:
-            by_student.setdefault(d["student_id"], []).append(d)
+    scores_by_student_week: Dict[str, Dict[str, Dict[str, Any]]] = {}
+    for doc in docs:
+        scores_by_student_week.setdefault(doc["student_id"], {})[doc["week_id"]] = doc
 
-        def _has_attempt(student_id: str) -> bool:
-            for d in by_student.get(student_id, []):
-                for f in fields:
-                    value = d.get(f)
-                    if value is None or (isinstance(value, float) and pd.isna(value)):
-                        continue
-                    return True
-            return False
+    def _has_attempt(student_id: str, week_ids: List[str], fields: List[str]) -> bool:
+        student_docs = scores_by_student_week.get(student_id, {})
+        for week_id in week_ids:
+            doc = student_docs.get(week_id)
+            if not doc:
+                continue
+            for field in fields:
+                value = doc.get(field)
+                if value is None or (isinstance(value, float) and pd.isna(value)):
+                    continue
+                return True
+        return False
+
+    groups: Dict[str, Dict[str, Any]] = {}
+    for name, config in group_configs.items():
+        week_docs = group_weeks[name]
+        week_ids = [w["id"] for w in week_docs]
+        fields = config["fields"]
 
         missed_students = []
-        for s in students:
-            if _has_attempt(s["id"]):
+        for student in students:
+            if _has_attempt(student["id"], week_ids, fields):
                 continue
             missed_students.append(
                 {
-                    "id": s["id"],
-                    "full_name": s.get("full_name", ""),
-                    "class_id": s.get("class_id"),
-                    "class_name": s.get("class_name", ""),
+                    "id": student["id"],
+                    "full_name": student.get("full_name", ""),
+                    "class_id": student.get("class_id"),
+                    "class_name": student.get("class_name", ""),
                 }
             )
 
         submitted_count = len(students) - len(missed_students)
-        return {
+        groups[name] = {
             "name": name,
             "fields": fields,
             "weeks": week_docs,
@@ -3623,27 +3668,7 @@ async def get_missed_assessment_students(
             "students": missed_students,
         }
 
-    quiz_group = await _build_missed_group(
-        "quiz",
-        ["quiz3", "quiz4"] if q == 2 else ["quiz1", "quiz2"],
-        [16] if q == 2 else [4],
-    )
-    chapter_group = await _build_missed_group(
-        "chapter_test",
-        ["chapter_test2_practical"] if q == 2 else ["chapter_test1_practical"],
-        [16] if q == 2 else [4],
-    )
-    final_practical_group = await _build_missed_group(
-        "final_practical",
-        ["quarter2_practical"] if q == 2 else ["quarter1_practical"],
-        [17] if q == 2 else [9],
-    )
-    # Q1 theory may be recorded on week 10 or week 9 (fallback compatibility).
-    final_theory_group = await _build_missed_group(
-        "final_theory",
-        ["quarter2_theory"] if q == 2 else ["quarter1_theory"],
-        [18] if q == 2 else [10, 9],
-    )
+    quiz_group = groups["quiz"]
 
     # Backward-compatible top-level quiz shape for existing consumers.
     return {
@@ -3655,12 +3680,7 @@ async def get_missed_assessment_students(
         "submitted_count": quiz_group["submitted_count"],
         "missed_count": quiz_group["missed_count"],
         "students": quiz_group["students"],
-        "groups": {
-            "quiz": quiz_group,
-            "chapter_test": chapter_group,
-            "final_practical": final_practical_group,
-            "final_theory": final_theory_group,
-        },
+        "groups": groups,
     }
 
 

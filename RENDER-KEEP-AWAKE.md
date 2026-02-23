@@ -4,7 +4,13 @@ On **Render’s free tier**, your backend **spins down after about 15 minutes** 
 
 ## Built-in keep-alive (no setup)
 
-While **someone has the app open and is logged in**, the frontend **pings the backend every 10 minutes**. That keeps the server awake so your next action (save marks, import, etc.) is fast instead of waiting for a cold start. So:
+While **someone has the app open and is logged in**, the frontend keeps the backend warm automatically:
+
+- interval ping every **8 minutes**
+- extra wake ping when the tab becomes visible / focused / comes back online
+- throttling to avoid request spam
+
+That keeps the server awake so your next action (save marks, import, etc.) is fast instead of waiting for a cold start. So:
 
 - If you or a colleague keep the app open during the school day, the backend stays awake and the site stays fast.
 - If nobody has the app open for more than ~15 minutes, the next person to open it may still see one slow first load; then the keep-alive starts again.
@@ -16,9 +22,27 @@ While **someone has the app open and is logged in**, the frontend **pings the ba
 
 So the site should work even when the server was sleeping; you may just need to wait once after a long idle time.
 
-## Optional: keep the server awake so it’s always fast
+## Optional: keep the server awake so it’s always fast (even with no users online)
 
-If you want to **avoid** the 50-second wait (e.g. at school), you can ping the backend every 10–14 minutes so Render never spins it down.
+If you want to **avoid** the 50-second wait (e.g. at school), use one of these:
+
+### Option A (recommended): Render Cron from `render.yaml`
+
+`render.yaml` now includes an optional cron service:
+- service name: `al-anjal-backend-keepawake`
+- schedule: every 10 minutes
+- action: calls your `/health` URL
+
+Setup:
+1. In Render, go to **Blueprint** for this repo (or redeploy blueprint).
+2. Enable the cron service `al-anjal-backend-keepawake`.
+3. Set env var `BACKEND_HEALTH_URL` to your backend health endpoint, for example:
+   - `https://al-anjal-follow-up-e-g.onrender.com/health`
+4. Deploy.
+
+### Option B: UptimeRobot (external monitor)
+
+Ping the backend every 5-10 minutes from an external monitor.
 
 1. Go to **[uptimerobot.com](https://uptimerobot.com)** (free).
 2. Create a **Monitor**:
@@ -27,4 +51,4 @@ If you want to **avoid** the 50-second wait (e.g. at school), you can ping the b
    - **Monitoring Interval:** 5 minutes (or 10 minutes if you prefer)
 3. Save. UptimeRobot will call your backend every 5 minutes, so it stays awake and the site stays fast.
 
-No code changes needed; this is optional and only for better speed.
+Both options are optional and only for better speed.

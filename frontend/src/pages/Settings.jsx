@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useLocation, useOutletContext } from "react-router-dom";
 import { toast } from "sonner";
-import { api } from "@/lib/api";
+import { api, getApiErrorMessage } from "@/lib/api";
 import { useTranslations } from "@/lib/i18n";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -83,6 +83,7 @@ export default function Settings() {
   const [permissionDraft, setPermissionDraft] = useState([]);
   const [resetDialogOpen, setResetDialogOpen] = useState(false);
   const [resetPassword, setResetPassword] = useState("");
+  const latestLoadRequestIdRef = useRef(0);
 
   const getPermissionLabel = (key) => {
     const found = PERMISSIONS.find((item) => item.key === key);
@@ -90,8 +91,10 @@ export default function Settings() {
   };
 
   const loadData = async () => {
+    const requestId = ++latestLoadRequestIdRef.current;
     try {
       const profileRes = await api.get("/users/profile");
+      if (latestLoadRequestIdRef.current !== requestId) return;
       const p = profileRes.data;
       setProfile(p);
       setProfileForm({
@@ -102,20 +105,39 @@ export default function Settings() {
         username: p?.username ?? "",
         password: "",
       });
-      if (p?.role_name === "Teacher") return;
-      const [rolesRes, usersRes, promotionRes] = await Promise.all([
-        api.get("/roles"),
-        api.get("/users"),
-        api.get("/settings/promotion"),
-      ]);
-      setRoles(rolesRes.data);
-      setUsers(usersRes.data);
-      setPromotionEnabled(Boolean(promotionRes.data?.enabled));
+      if (p?.role_name === "Teacher") {
+        setRoles([]);
+        setUsers([]);
+        setPromotionEnabled(false);
+        return;
+      }
+
+      api
+        .get("/roles")
+        .then((rolesRes) => {
+          if (latestLoadRequestIdRef.current !== requestId) return;
+          setRoles(rolesRes.data || []);
+        })
+        .catch(() => null);
+
+      api
+        .get("/users")
+        .then((usersRes) => {
+          if (latestLoadRequestIdRef.current !== requestId) return;
+          setUsers(usersRes.data || []);
+        })
+        .catch(() => null);
+
+      api
+        .get("/settings/promotion")
+        .then((promotionRes) => {
+          if (latestLoadRequestIdRef.current !== requestId) return;
+          setPromotionEnabled(Boolean(promotionRes.data?.enabled));
+        })
+        .catch(() => null);
     } catch (error) {
-      const msg = error?.response?.status === 401
-        ? "Please log in again to load settings."
-        : "Failed to load settings. Check that the backend is running.";
-      toast.error(msg);
+      if (latestLoadRequestIdRef.current !== requestId) return;
+      toast.error(getApiErrorMessage(error) || "Failed to load settings. Check that the backend is running.");
     }
   };
 

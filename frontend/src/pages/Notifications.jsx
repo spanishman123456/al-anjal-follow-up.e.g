@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useOutletContext } from "react-router-dom";
-import { api } from "@/lib/api";
+import { api, getApiErrorMessage } from "@/lib/api";
 import { useTranslations } from "@/lib/i18n";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Card, CardContent } from "@/components/ui/card";
@@ -23,6 +23,7 @@ export default function Notifications() {
   const t = useTranslations(language);
   const [logs, setLogs] = useState([]);
   const [filterType, setFilterType] = useState("all");
+  const [loading, setLoading] = useState(true);
 
   const getEventLabel = (value) => {
     const match = EVENT_TYPES.find((type) => type.value === value);
@@ -30,13 +31,16 @@ export default function Notifications() {
   };
 
   const loadLogs = async (type = filterType) => {
+    setLoading(true);
     try {
       const response = await api.get("/notifications", {
         params: type === "all" ? {} : { event_type: type },
       });
-      setLogs(response.data);
+      setLogs(response.data || []);
     } catch (error) {
-      toast.error(t("notifications_failed"));
+      toast.error(getApiErrorMessage(error) || t("notifications_failed"));
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -74,9 +78,26 @@ export default function Notifications() {
       const count = res?.data?.deleted_count ?? 0;
       toast.success(count ? `Cleared ${count} notification(s).` : "Notifications cleared.");
     } catch (error) {
-      toast.error("Failed to clear notifications.");
+      toast.error(getApiErrorMessage(error) || "Failed to clear notifications.");
     }
   };
+
+  if (loading && !logs.length) {
+    return (
+      <div className="space-y-6" data-testid="notifications-page">
+        <PageHeader
+          title={t("notifications")}
+          subtitle={t("overview")}
+          testIdPrefix="notifications"
+        />
+        <Card>
+          <CardContent className="pt-6">
+            <p className="text-sm text-muted-foreground">{t("refresh_data")}...</p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6" data-testid="notifications-page">

@@ -19,7 +19,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useTranslations } from "@/lib/i18n";
-import { api, BACKEND_ROOT_URL, isProductionBackendUrl } from "@/lib/api";
+import { api, BACKEND_ROOT_URL, isProductionBackendUrl, warmBackendInBackground } from "@/lib/api";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -104,16 +104,38 @@ export const AppShell = ({
     loadNotifications();
   }, []);
 
-  // Keep backend awake on Render free tier: ping every 10 min while app is open so it doesn't spin down
+  // Keep backend warm on hosted/free tiers: interval ping + quick wake on tab focus/visibility.
   useEffect(() => {
     if (!isProductionBackendUrl || !BACKEND_ROOT_URL) return;
-    const ping = () => {
-      fetch(`${BACKEND_ROOT_URL}/health`, { method: "GET" }).catch(() => {});
+    const INTERVAL_MS = 8 * 60 * 1000; // Stay below common 15m idle sleep thresholds.
+    const MIN_GAP_MS = 60 * 1000; // Throttle burst events (focus/visibility/online).
+    let lastPingAt = 0;
+
+    const ping = (force = false) => {
+      if (!navigator.onLine) return;
+      const now = Date.now();
+      if (!force && now - lastPingAt < MIN_GAP_MS) return;
+      lastPingAt = now;
+      warmBackendInBackground();
     };
-    ping();
-    const intervalMs = 10 * 60 * 1000;
-    const id = setInterval(ping, intervalMs);
-    return () => clearInterval(id);
+
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") ping();
+    };
+    const onFocus = () => ping();
+    const onOnline = () => ping(true);
+
+    ping(true);
+    const id = setInterval(() => ping(true), INTERVAL_MS);
+    document.addEventListener("visibilitychange", onVisibility);
+    window.addEventListener("focus", onFocus);
+    window.addEventListener("online", onOnline);
+    return () => {
+      clearInterval(id);
+      document.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener("focus", onFocus);
+      window.removeEventListener("online", onOnline);
+    };
   }, []);
 
   const handleLogout = () => {
