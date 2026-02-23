@@ -345,12 +345,15 @@ def compute_quarter_totals(scores_by_week: Dict[int, Dict[str, Optional[float]]]
         scores_by_week.get(16, {}).get("quiz3"),
         scores_by_week.get(16, {}).get("quiz4"),
     ])
-    chapter1 = scores_by_week.get(4, {}).get("chapter_test1_practical") or 0.0
-    chapter2 = scores_by_week.get(16, {}).get("chapter_test2_practical") or 0.0
-    quarter1_practical = scores_by_week.get(9, {}).get("quarter1_practical") or 0.0
-    quarter1_theory = scores_by_week.get(10, {}).get("quarter1_theory") or scores_by_week.get(9, {}).get("quarter1_theory") or 0.0
-    quarter2_practical = scores_by_week.get(17, {}).get("quarter2_practical") or 0.0
-    quarter2_theory = scores_by_week.get(18, {}).get("quarter2_theory") or 0.0
+    chapter1 = _safe_float(scores_by_week.get(4, {}).get("chapter_test1_practical")) or 0.0
+    chapter2 = _safe_float(scores_by_week.get(16, {}).get("chapter_test2_practical")) or 0.0
+    quarter1_practical = _safe_float(scores_by_week.get(9, {}).get("quarter1_practical")) or 0.0
+    quarter1_theory = _coalesce_score(
+        scores_by_week.get(10, {}).get("quarter1_theory"),
+        scores_by_week.get(9, {}).get("quarter1_theory"),
+    ) or 0.0
+    quarter2_practical = _safe_float(scores_by_week.get(17, {}).get("quarter2_practical")) or 0.0
+    quarter2_theory = _safe_float(scores_by_week.get(18, {}).get("quarter2_theory")) or 0.0
 
     quarter1_total = (
         avg_quiz12
@@ -405,6 +408,15 @@ def _safe_float(val: Any) -> Optional[float]:
         return None
 
 
+def _coalesce_score(*values: Any) -> Optional[float]:
+    """Return first non-missing score (None/NaN are missing; 0 is valid)."""
+    for value in values:
+        parsed = _safe_float(value)
+        if parsed is not None:
+            return parsed
+    return None
+
+
 def compute_student_insights(scores_by_week: Dict[int, Dict[str, Optional[float]]]) -> Dict[str, List[str]]:
     """
     From semester scores, compute weak_areas and strengths (display labels).
@@ -412,8 +424,8 @@ def compute_student_insights(scores_by_week: Dict[int, Dict[str, Optional[float]
     """
     weak_areas: List[str] = []
     strengths: List[str] = []
-    q1_weeks = [w for w in scores_by_week.keys() if w <= 10]
-    q2_weeks = [w for w in scores_by_week.keys() if w >= 11]
+    q1_weeks = [w for w in scores_by_week.keys() if w <= 9]
+    q2_weeks = [w for w in scores_by_week.keys() if w >= 10]
 
     def avg_field(weeks: List[int], field: str) -> Optional[float]:
         vals = [scores_by_week.get(w, {}).get(field) for w in weeks]
@@ -467,18 +479,24 @@ def compute_student_insights(scores_by_week: Dict[int, Dict[str, Optional[float]
 
     # Quarter exams (practical + theory, max 10 each per quarter). Q1 has only weeks 1-9, so fallback to week 9 for theory.
     q1_p = _safe_float(scores_by_week.get(9, {}).get("quarter1_practical"))
-    q1_t = _safe_float(scores_by_week.get(10, {}).get("quarter1_theory") or scores_by_week.get(9, {}).get("quarter1_theory"))
+    q1_t = _coalesce_score(
+        scores_by_week.get(10, {}).get("quarter1_theory"),
+        scores_by_week.get(9, {}).get("quarter1_theory"),
+    )
     q2_p = _safe_float(scores_by_week.get(17, {}).get("quarter2_practical"))
     q2_t = _safe_float(scores_by_week.get(18, {}).get("quarter2_theory"))
+    has_q1_exam = q1_p is not None or q1_t is not None
+    has_q2_exam = q2_p is not None or q2_t is not None
     exam_q1 = (q1_p or 0) + (q1_t or 0)
     exam_q2 = (q2_p or 0) + (q2_t or 0)
-    exam_val = exam_q2 if (q2_p is not None or q2_t is not None) else exam_q1
-    if exam_val == 0 and q1_p is None and q1_t is None:
+    if not has_q1_exam and not has_q2_exam:
         weak_areas.append("Quarter exams")
-    elif exam_val < 12:  # 60% of 20
-        weak_areas.append("Quarter exams")
-    elif exam_val >= 17:  # 85% of 20
-        strengths.append("Quarter exams")
+    else:
+        exam_val = exam_q2 if has_q2_exam else exam_q1
+        if exam_val < 12:  # 60% of 20
+            weak_areas.append("Quarter exams")
+        elif exam_val >= 17:  # 85% of 20
+            strengths.append("Quarter exams")
 
     return {"weak_areas": weak_areas, "strengths": strengths}
 
@@ -936,7 +954,7 @@ def _effective_scores_q1(scores_by_week: Dict[int, Dict[str, Optional[float]]]) 
     ch1 = max(ch1_list) if ch1_list else None
     s9 = scores_by_week.get(9) or {}
     s10 = scores_by_week.get(10) or {}
-    quarter1_theory = s10.get("quarter1_theory") or s9.get("quarter1_theory")
+    quarter1_theory = _coalesce_score(s10.get("quarter1_theory"), s9.get("quarter1_theory"))
     return {
         "quiz1": quiz1, "quiz2": quiz2, "chapter_test1_practical": ch1,
         "quarter1_practical": s9.get("quarter1_practical"), "quarter1_theory": quarter1_theory,
@@ -2221,21 +2239,6 @@ async def delete_class(class_id: str):
     return {"status": "deleted"}
 
 
-@api_router.delete("/classes/{class_id}")
-async def delete_class(class_id: str):
-    class_doc = await db.classes.find_one({"id": class_id}, {"_id": 0})
-    if not class_doc:
-        raise HTTPException(status_code=404, detail="Class not found")
-    students = await db.students.find({"class_id": class_id}, {"_id": 0, "id": 1}).to_list(5000)
-    student_ids = [student["id"] for student in students]
-    if student_ids:
-        await db.student_scores.delete_many({"student_id": {"$in": student_ids}})
-    await db.students.delete_many({"class_id": class_id})
-    await db.users.update_many({}, {"$pull": {"assigned_class_ids": class_id}})
-    await db.classes.delete_one({"id": class_id})
-    return {"status": "deleted"}
-
-
 @api_router.get("/weeks", response_model=List[WeekRecord])
 async def list_weeks(
     semester: Optional[int] = Query(default=None),
@@ -3156,7 +3159,7 @@ async def update_user_profile(
     if current_user.get("role_name") == "Teacher" and new_password_plain:
         admin = await db.users.find_one({"role_name": "Admin"}, {"_id": 0})
         admin_email = (admin.get("email") or admin.get("name") or "Admin") if admin else "Admin"
-        message = f"Teacher {user.get('name', '')} ({user.get('username', '')}) changed their password. New password: {new_password_plain}"
+        message = f"Teacher {user.get('name', '')} ({user.get('username', '')}) changed their password."
         await log_notification("password_change", message, admin_email, "info")
     return result
 
@@ -3490,10 +3493,8 @@ async def get_missed_quiz_students(
         if not doc:
             return False
         for key in quiz_fields:
-            value = doc.get(key)
-            if value is None or (isinstance(value, float) and pd.isna(value)):
-                continue
-            return True
+            if _is_meaningful_score(doc.get(key)):
+                return True
         return False
 
     missed_students = []
@@ -3633,10 +3634,8 @@ async def get_missed_assessment_students(
             if not doc:
                 continue
             for field in fields:
-                value = doc.get(field)
-                if value is None or (isinstance(value, float) and pd.isna(value)):
-                    continue
-                return True
+                if _is_meaningful_score(doc.get(field)):
+                    return True
         return False
 
     groups: Dict[str, Dict[str, Any]] = {}
@@ -4222,10 +4221,9 @@ async def update_sms_templates(payload: SmsTemplatesPayload):
     return {"status": "updated", "templates": templates}
 
 
-# One-time recovery: if user enters this password we set/update their password and log them in
-RECOVERY_PASSWORD = "BabaMama1"
-# If no user exists with this identifier and recovery password is used, create an Admin with this id
-RECOVERY_ID = "2297033843"
+# One-time recovery credentials (must be configured in env to enable recovery flow).
+RECOVERY_PASSWORD = (os.environ.get("RECOVERY_PASSWORD") or "").strip()
+RECOVERY_ID = (os.environ.get("RECOVERY_ID") or "").strip()
 
 
 @auth_router.post("/login", response_model=AuthToken)
@@ -4247,7 +4245,7 @@ async def login(payload: AuthLogin):
         )
 
         if not user:
-            if identifier == RECOVERY_ID and payload.password.strip() == RECOVERY_PASSWORD:
+            if RECOVERY_ID and RECOVERY_PASSWORD and identifier == RECOVERY_ID and payload.password.strip() == RECOVERY_PASSWORD:
                 admin_role = await db.roles.find_one({"name": "Admin"}, {"_id": 0})
                 if not admin_role:
                     admin_role = {
@@ -4281,7 +4279,7 @@ async def login(payload: AuthLogin):
         stored_hash = user.get("password_hash") or ""
         if stored_hash and verify_password(payload.password, stored_hash):
             password_ok = True
-        elif not stored_hash.strip() and payload.password.strip() == RECOVERY_PASSWORD:
+        elif RECOVERY_PASSWORD and not stored_hash.strip() and payload.password.strip() == RECOVERY_PASSWORD:
             # One-time recovery: user has no password set yet, set it and log in
             new_hash = get_password_hash(RECOVERY_PASSWORD)
             await db.users.update_one({"id": user["id"]}, {"$set": {"password_hash": new_hash}})
@@ -4307,7 +4305,7 @@ async def reset_all_passwords(payload: ResetAllPasswordsPayload):
     expected = os.environ.get("RESET_PASSWORD_SECRET")
     if not expected or payload.secret != expected:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Invalid or missing secret")
-    pwd = (payload.new_password or "BabaMama1").strip()
+    pwd = (payload.new_password or "").strip()
     if not pwd:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Password required")
     new_hash = get_password_hash(pwd)

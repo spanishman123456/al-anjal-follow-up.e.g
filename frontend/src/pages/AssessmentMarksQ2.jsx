@@ -171,8 +171,10 @@ export default function AssessmentMarksQ2() {
   };
 
   useEffect(() => {
+    setWeeks([]);
+    setActiveWeekId("");
     loadWeeks();
-  }, []);
+  }, [semesterNumber, quarter]);
 
   useEffect(() => {
     if (!activeWeekId || !weeks.length) return;
