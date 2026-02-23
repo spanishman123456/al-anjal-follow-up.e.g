@@ -2304,6 +2304,25 @@ async def delete_week(
     return {"status": "deleted"}
 
 
+@api_router.delete("/weeks")
+async def delete_all_weeks(
+    semester: int = Query(..., ge=1, le=2),
+    quarter: int = Query(..., ge=1, le=2),
+):
+    """Delete all weeks for the given (semester, quarter) and their scores."""
+    query = {"semester": semester, "quarter": quarter}
+    quarter_weeks = await db.weeks.find(query, {"_id": 0, "id": 1}).to_list(200)
+    if not quarter_weeks:
+        all_sem = await db.weeks.find({"semester": semester}, {"_id": 0, "id": 1, "number": 1, "quarter": 1}).to_list(200)
+        quarter_weeks = [w for w in all_sem if _week_quarter(w) == quarter]
+    week_ids = [w["id"] for w in quarter_weeks]
+    if not week_ids:
+        return {"status": "deleted", "weeks_deleted": 0, "scores_deleted": 0, "message": "No weeks for this semester/quarter"}
+    scores_result = await db.student_scores.delete_many({"week_id": {"$in": week_ids}})
+    weeks_result = await db.weeks.delete_many({"id": {"$in": week_ids}})
+    return {"status": "deleted", "weeks_deleted": weeks_result.deleted_count, "scores_deleted": scores_result.deleted_count}
+
+
 @api_router.delete("/classes/{class_id}/quarter-scores")
 async def clear_class_quarter_scores(
     class_id: str,

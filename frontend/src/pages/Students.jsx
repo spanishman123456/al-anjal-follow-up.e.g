@@ -242,6 +242,7 @@ export default function Students() {
   const [clearScoresOpen, setClearScoresOpen] = useState(false);
   const [clearAllScoresOpen, setClearAllScoresOpen] = useState(false);
   const [deleteWeekOpen, setDeleteWeekOpen] = useState(false);
+  const [deleteAllWeeksOpen, setDeleteAllWeeksOpen] = useState(false);
   const [promotionEnabled, setPromotionEnabled] = useState(false);
   const [promoteOpen, setPromoteOpen] = useState(false);
   const [promoteFrom, setPromoteFrom] = useState("");
@@ -461,6 +462,23 @@ export default function Students() {
       sessionStorage.setItem(weekStorageKey, firstId);
     } catch (error) {
       toast.error(t("week_delete_failed"));
+    }
+  };
+
+  const handleDeleteAllWeeks = async () => {
+    setDeleteAllWeeksOpen(false);
+    try {
+      const res = await api.delete("/weeks", {
+        params: { semester: semesterNumber, quarter },
+      });
+      const weeksDeleted = res.data?.weeks_deleted ?? 0;
+      toast.success(t("all_weeks_deleted") || `All weeks deleted (${weeksDeleted} week(s)).`);
+      setWeeks([]);
+      setActiveWeekId("");
+      sessionStorage.removeItem(weekStorageKey);
+      loadWeeks();
+    } catch (error) {
+      toast.error(error?.response?.data?.detail || t("week_delete_failed"));
     }
   };
 
@@ -1072,6 +1090,14 @@ export default function Students() {
                 disabled={!activeWeekId}
               >
                 {t("delete_week")}
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={() => setDeleteAllWeeksOpen(true)}
+                data-testid="delete-all-weeks-button"
+                disabled={!weeks.length}
+              >
+                {t("delete_all_weeks") || "Delete All Weeks"}
               </Button>
             </div>
           )}
@@ -1928,6 +1954,25 @@ export default function Students() {
             </Button>
             <Button variant="destructive" onClick={handleDeleteWeek} data-testid="delete-week-confirm">
               {t("delete_week")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={deleteAllWeeksOpen} onOpenChange={setDeleteAllWeeksOpen}>
+        <DialogContent data-testid="delete-all-weeks-dialog">
+          <DialogHeader>
+            <DialogTitle>{t("delete_all_weeks") || "Delete All Weeks"}</DialogTitle>
+            <DialogDescription>
+              {t("delete_all_weeks_confirm") || "This will delete all weeks and their scores for the selected semester and quarter. This action cannot be undone."}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteAllWeeksOpen(false)} data-testid="delete-all-weeks-cancel">
+              {t("cancel")}
+            </Button>
+            <Button variant="destructive" onClick={handleDeleteAllWeeks} data-testid="delete-all-weeks-confirm">
+              {t("delete_all_weeks") || "Delete All Weeks"}
             </Button>
           </DialogFooter>
         </DialogContent>
