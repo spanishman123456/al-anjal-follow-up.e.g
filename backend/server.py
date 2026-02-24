@@ -1714,6 +1714,14 @@ async def log_notification(event_type: str, message: str, recipient: str, status
     await db.notification_logs.insert_one(log.model_dump())
 
 
+async def log_user_action(current_user: Dict[str, Any], action_type: str, message: str):
+    """Log a user/teacher action for transparency and accountability. Records who performed what and when."""
+    actor_name = current_user.get("name") or current_user.get("username") or current_user.get("email") or "Unknown"
+    actor_role = current_user.get("role_name") or "User"
+    full_message = f"{message} — Performed by {actor_name} ({actor_role})"
+    await log_notification(f"action_{action_type}", full_message, actor_name, actor_role)
+
+
 async def send_sms_notification(event_type: str, variables: Dict[str, Any]):
     templates = await get_sms_templates()
     template_set = templates.get(event_type, {})
@@ -2197,7 +2205,7 @@ async def get_classes(current_user: Dict[str, Any] = Depends(get_current_user)):
 
 
 @api_router.post("/classes", response_model=ClassRecord)
-async def create_class(payload: ClassBase):
+async def create_class(payload: ClassBase, current_user: Dict[str, Any] = Depends(get_current_user)):
     data = payload.model_dump()
     if not data.get("grade") or not data.get("section"):
         parsed = parse_class_name(payload.name)
@@ -2205,6 +2213,7 @@ async def create_class(payload: ClassBase):
         data["section"] = data.get("section") or parsed.get("section")
     class_record = ClassRecord(**data)
     await db.classes.insert_one(class_record.model_dump())
+    await log_user_action(current_user, "class_add", f"Added class {class_record.name}")
     return class_record
 
 
@@ -2224,7 +2233,7 @@ async def update_class(class_id: str, payload: ClassUpdate):
 
 
 @api_router.delete("/classes/{class_id}")
-async def delete_class(class_id: str):
+async def delete_class(class_id: str, current_user: Dict[str, Any] = Depends(get_current_user)):
     class_doc = await db.classes.find_one({"id": class_id}, {"_id": 0})
     if not class_doc:
         raise HTTPException(status_code=404, detail="Class not found")
@@ -2235,6 +2244,8 @@ async def delete_class(class_id: str):
     await db.students.delete_many({"class_id": class_id})
     await db.users.update_many({}, {"$pull": {"assigned_class_ids": class_id}})
     await db.classes.delete_one({"id": class_id})
+    class_name = class_doc.get("name", class_id)
+    await log_user_action(current_user, "class_delete", f"Deleted class {class_name}")
     return {"status": "deleted"}
 
 
@@ -2263,7 +2274,7 @@ async def list_weeks(
 
 
 @api_router.post("/weeks", response_model=WeekRecord)
-async def create_week(payload: WeekCreate):
+async def create_week(payload: WeekCreate, current_user: Dict[str, Any] = Depends(get_current_user)):
     """Create week in (semester, quarter). Q1 = numbers 1-9, Q2 = numbers 10-18; each (semester, quarter) is independent."""
     q = payload.quarter if payload.quarter in (1, 2) else 1
     query = {"semester": payload.semester, "quarter": q}
@@ -2277,6 +2288,7 @@ async def create_week(payload: WeekCreate):
     label = payload.label or f"Week {next_number}"
     week = WeekRecord(semester=payload.semester, quarter=q, number=next_number, label=label)
     await db.weeks.insert_one(week.model_dump())
+    await log_user_action(current_user, "week_add", f"Added {label} (Semester {payload.semester}, Q{q})")
     return week
 
 
@@ -2285,6 +2297,7 @@ async def delete_week(
     week_id: str,
     semester: Optional[int] = Query(default=None),
     quarter: Optional[int] = Query(default=None),
+    current_user: Dict[str, Any] = Depends(get_current_user),
 ):
     """Delete a week only if it belongs to the given (semester, quarter). Prevents deleting a week from another quarter."""
     week_doc = await db.weeks.find_one({"id": week_id}, {"_id": 0, "semester": 1, "quarter": 1, "number": 1})
@@ -2301,6 +2314,8 @@ async def delete_week(
             )
     await db.weeks.delete_one({"id": week_id})
     await db.student_scores.delete_many({"week_id": week_id})
+    wk_num = week_doc.get("number", "?")
+    await log_user_action(current_user, "week_delete", f"Deleted week {wk_num}")
     return {"status": "deleted"}
 
 
@@ -2308,6 +2323,7 @@ async def delete_week(
 async def delete_all_weeks(
     semester: int = Query(..., ge=1, le=2),
     quarter: int = Query(..., ge=1, le=2),
+    current_user: Dict[str, Any] = Depends(get_current_user),
 ):
     """Delete all weeks for the given (semester, quarter) and their scores."""
     query = {"semester": semester, "quarter": quarter}
@@ -2320,6 +2336,7 @@ async def delete_all_weeks(
         return {"status": "deleted", "weeks_deleted": 0, "scores_deleted": 0, "message": "No weeks for this semester/quarter"}
     scores_result = await db.student_scores.delete_many({"week_id": {"$in": week_ids}})
     weeks_result = await db.weeks.delete_many({"id": {"$in": week_ids}})
+    await log_user_action(current_user, "weeks_delete_all", f"Deleted all weeks (S{semester} Q{quarter}): {weeks_result.deleted_count} weeks, {scores_result.deleted_count} score records")
     return {"status": "deleted", "weeks_deleted": weeks_result.deleted_count, "scores_deleted": scores_result.deleted_count}
 
 
@@ -2353,6 +2370,8 @@ async def clear_class_quarter_scores(
     result = await db.student_scores.delete_many(
         {"student_id": {"$in": student_ids}, "week_id": {"$in": week_ids}}
     )
+    class_name = class_doc.get("name", class_id)
+    await log_user_action(current_user, "class_clear_scores", f"Cleared quarter scores for class {class_name} (S{semester} Q{quarter}): {result.deleted_count} records")
     return {"status": "cleared", "deleted": result.deleted_count}
 
 
@@ -2491,7 +2510,7 @@ async def get_students(
 
 
 @api_router.post("/students")
-async def create_student(payload: StudentCreate):
+async def create_student(payload: StudentCreate, current_user: Dict[str, Any] = Depends(get_current_user)):
     class_doc = await db.classes.find_one({"id": payload.class_id}, {"_id": 0})
     if not class_doc:
         raise HTTPException(status_code=404, detail="Class not found")
@@ -2541,11 +2560,12 @@ async def create_student(payload: StudentCreate):
             quarter2_theory=student_record.quarter2_theory,
         )
         await db.student_scores.insert_one(score.model_dump())
+    await log_user_action(current_user, "student_add", f"Added student {student_record.full_name} to {class_doc.get('name', payload.class_id)}")
     return enrich_student(student_record.model_dump())
 
 
 @api_router.put("/students/{student_id}")
-async def update_student(student_id: str, payload: StudentUpdate):
+async def update_student(student_id: str, payload: StudentUpdate, current_user: Dict[str, Any] = Depends(get_current_user)):
     update_data = {k: v for k, v in payload.model_dump(exclude_unset=True).items()}
     week_id = update_data.pop("week_id", None)
     if "class_id" in update_data:
@@ -2621,11 +2641,13 @@ async def update_student(student_id: str, payload: StudentUpdate):
         if not result:
             raise HTTPException(status_code=404, detail="Student not found")
     result.pop("_id", None)
+    name = result.get("full_name", student_id)
+    await log_user_action(current_user, "student_update", f"Updated student {name}")
     return enrich_student(result)
 
 
 @api_router.post("/students/bulk-scores")
-async def bulk_update_scores(payload: BulkScoresPayload):
+async def bulk_update_scores(payload: BulkScoresPayload, current_user: Dict[str, Any] = Depends(get_current_user)):
     """Bulk update scores in one DB round-trip for speed (no per-student round-trips)."""
     score_field_names = {
         "attendance", "participation", "behavior", "homework",
@@ -2685,6 +2707,8 @@ async def bulk_update_scores(payload: BulkScoresPayload):
     collection = db.student_scores if payload.week_id else db.students
     result = await collection.bulk_write(operations)
     updated = (result.upserted_count or 0) + (result.modified_count or 0)
+    scope = "week scores" if payload.week_id else "student records"
+    await log_user_action(current_user, "scores_bulk_update", f"Bulk updated {updated} {scope}")
     return {"status": "updated", "updated": updated}
 
 
@@ -2970,7 +2994,7 @@ async def export_students_marks(
 
 
 @api_router.post("/students/{student_id}/transfer")
-async def transfer_student(student_id: str, payload: StudentTransferRequest):
+async def transfer_student(student_id: str, payload: StudentTransferRequest, current_user: Dict[str, Any] = Depends(get_current_user)):
     class_doc = await db.classes.find_one({"id": payload.class_id}, {"_id": 0})
     if not class_doc:
         raise HTTPException(status_code=404, detail="Class not found")
@@ -2989,11 +3013,12 @@ async def transfer_student(student_id: str, payload: StudentTransferRequest):
         "student_transfer",
         {"student_name": result["full_name"], "class_name": class_doc["name"]},
     )
+    await log_user_action(current_user, "student_transfer", f"Transferred {result['full_name']} to {class_doc['name']}")
     return enrich_student(result)
 
 
 @api_router.post("/students/promote")
-async def promote_students(payload: PromotionRequest):
+async def promote_students(payload: PromotionRequest, current_user: Dict[str, Any] = Depends(get_current_user)):
     source_class = await db.classes.find_one({"id": payload.from_class_id}, {"_id": 0})
     target_class = await db.classes.find_one({"id": payload.to_class_id}, {"_id": 0})
     if not source_class or not target_class:
@@ -3006,11 +3031,12 @@ async def promote_students(payload: PromotionRequest):
         "promotion",
         {"count": result.modified_count, "class_name": target_class["name"]},
     )
+    await log_user_action(current_user, "promotion", f"Promoted {result.modified_count} students from {source_class['name']} to {target_class['name']}")
     return {"status": "promoted", "updated": result.modified_count}
 
 
 @api_router.delete("/students")
-async def delete_all_students():
+async def delete_all_students(current_user: Dict[str, Any] = Depends(get_current_user)):
     """Delete all students and their score records."""
     students = await db.students.find({}, {"_id": 0, "id": 1}).to_list(50000)
     student_ids = [s["id"] for s in students]
@@ -3018,11 +3044,12 @@ async def delete_all_students():
         return {"status": "deleted", "students_deleted": 0, "scores_deleted": 0, "message": "No students to delete"}
     scores_result = await db.student_scores.delete_many({"student_id": {"$in": student_ids}})
     students_result = await db.students.delete_many({})
+    await log_user_action(current_user, "students_delete_all", f"Deleted all students: {students_result.deleted_count} students, {scores_result.deleted_count} score records")
     return {"status": "deleted", "students_deleted": students_result.deleted_count, "scores_deleted": scores_result.deleted_count}
 
 
 @api_router.delete("/students/{student_id}")
-async def delete_student(student_id: str):
+async def delete_student(student_id: str, current_user: Dict[str, Any] = Depends(get_current_user)):
     student = await db.students.find_one({"id": student_id}, {"_id": 0})
     await db.students.delete_one({"id": student_id})
     await db.student_scores.delete_many({"student_id": student_id})
@@ -3034,6 +3061,7 @@ async def delete_student(student_id: str):
                 "class_name": student.get("class_name", "class"),
             },
         )
+        await log_user_action(current_user, "student_delete", f"Deleted student {student['full_name']} ({student.get('class_name', '')})")
     return {"status": "deleted"}
 
 
@@ -3186,6 +3214,7 @@ async def update_user_profile(
     if not result:
         raise HTTPException(status_code=404, detail="User not found")
     await log_audit("Profile updated", result)
+    await log_user_action(current_user, "profile_update", "Updated profile/schedule")
     if current_user.get("role_name") == "Teacher" and new_password_plain:
         admin = await db.users.find_one({"role_name": "Admin"}, {"_id": 0})
         admin_email = (admin.get("email") or admin.get("name") or "Admin") if admin else "Admin"
@@ -4439,7 +4468,11 @@ async def export_classes_summary(
 
 
 @api_router.post("/import/excel")
-async def import_excel(file: UploadFile = File(...), week_id: Optional[str] = Query(default=None)):
+async def import_excel(
+    file: UploadFile = File(...),
+    week_id: Optional[str] = Query(default=None),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+):
     if not file.filename:
         raise HTTPException(status_code=400, detail="No file provided")
     content = await file.read()
@@ -4819,6 +4852,11 @@ async def import_excel(file: UploadFile = File(...), week_id: Optional[str] = Qu
             status_code=400,
             detail="No students were imported. Please use an Excel file with one column for student names and one for class (e.g. 4A, 5B, 6A). Columns can be in any order.",
         )
+    await log_user_action(
+        current_user,
+        "import_excel",
+        f"Imported Excel: {created_students} created, {updated_students} updated, {created_classes} classes created",
+    )
     return {
         "created_students": created_students,
         "updated_students": updated_students,

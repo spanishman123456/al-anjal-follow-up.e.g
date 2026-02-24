@@ -16,6 +16,19 @@ const EVENT_TYPES = [
   { value: "student_transfer", labelKey: "transfer_student" },
   { value: "student_delete", labelKey: "delete_student" },
   { value: "password_change", labelKey: "password_change" },
+  { value: "action_student_add", labelKey: "action_student_add" },
+  { value: "action_student_update", labelKey: "action_student_update" },
+  { value: "action_student_delete", labelKey: "action_student_delete" },
+  { value: "action_students_delete_all", labelKey: "action_students_delete_all" },
+  { value: "action_scores_bulk_update", labelKey: "action_scores_bulk_update" },
+  { value: "action_class_add", labelKey: "action_class_add" },
+  { value: "action_class_delete", labelKey: "action_class_delete" },
+  { value: "action_class_clear_scores", labelKey: "action_class_clear_scores" },
+  { value: "action_week_add", labelKey: "action_week_add" },
+  { value: "action_week_delete", labelKey: "action_week_delete" },
+  { value: "action_weeks_delete_all", labelKey: "action_weeks_delete_all" },
+  { value: "action_import_excel", labelKey: "action_import_excel" },
+  { value: "action_profile_update", labelKey: "action_profile_update" },
 ];
 
 export default function Notifications() {
