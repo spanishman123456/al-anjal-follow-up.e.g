@@ -260,13 +260,11 @@ export default function Analytics() {
     const q2Avg = q2.avg_total ?? null;
     const avgDelta = q1Avg != null && q2Avg != null ? Number((q2Avg - q1Avg).toFixed(2)) : null;
 
-    const weakestClass = [...classSummary]
-      .filter((c) => c.avg_total_score != null)
-      .sort((a, b) => (a.avg_total_score ?? 999) - (b.avg_total_score ?? 999))[0];
-
-    const strongestClass = [...classSummary]
-      .filter((c) => c.avg_total_score != null)
-      .sort((a, b) => (b.avg_total_score ?? -1) - (a.avg_total_score ?? -1))[0];
+    const classesWithAvg = [...classSummary].filter((c) => c.avg_total_score != null);
+    const byAscendingAvg = [...classesWithAvg].sort((a, b) => (a.avg_total_score ?? 999) - (b.avg_total_score ?? 999));
+    const weakestClass = byAscendingAvg[0] ?? null;
+    const strongestClass = byAscendingAvg.length > 0 ? byAscendingAvg[byAscendingAvg.length - 1] : null;
+    const hasContrast = weakestClass && strongestClass && weakestClass.class_id !== strongestClass.class_id;
 
     return [
       {
@@ -285,9 +283,10 @@ export default function Analytics() {
       {
         icon: AlertTriangle,
         tone: "text-amber-600 dark:text-amber-400",
-        text:
-          weakestClass && strongestClass
-            ? `Focus: ${weakestClass.class_name} is currently the lowest average class, while ${strongestClass.class_name} leads the cohort.`
+        text: hasContrast
+          ? `Focus: ${weakestClass.class_name} is currently the lowest average class, while ${strongestClass.class_name} leads the cohort.`
+          : classesWithAvg.length
+            ? "Focus: Add more classes with scored data to see lowest vs leading class contrast."
             : "Focus: Class-level contrast insight will appear once class averages are available.",
       },
     ];
