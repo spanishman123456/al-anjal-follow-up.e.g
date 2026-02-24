@@ -3009,6 +3009,18 @@ async def promote_students(payload: PromotionRequest):
     return {"status": "promoted", "updated": result.modified_count}
 
 
+@api_router.delete("/students")
+async def delete_all_students():
+    """Delete all students and their score records."""
+    students = await db.students.find({}, {"_id": 0, "id": 1}).to_list(50000)
+    student_ids = [s["id"] for s in students]
+    if not student_ids:
+        return {"status": "deleted", "students_deleted": 0, "scores_deleted": 0, "message": "No students to delete"}
+    scores_result = await db.student_scores.delete_many({"student_id": {"$in": student_ids}})
+    students_result = await db.students.delete_many({})
+    return {"status": "deleted", "students_deleted": students_result.deleted_count, "scores_deleted": scores_result.deleted_count}
+
+
 @api_router.delete("/students/{student_id}")
 async def delete_student(student_id: str):
     student = await db.students.find_one({"id": student_id}, {"_id": 0})

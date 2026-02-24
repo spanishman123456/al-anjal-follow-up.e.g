@@ -243,6 +243,7 @@ export default function Students() {
   const [clearAllScoresOpen, setClearAllScoresOpen] = useState(false);
   const [deleteWeekOpen, setDeleteWeekOpen] = useState(false);
   const [deleteAllWeeksOpen, setDeleteAllWeeksOpen] = useState(false);
+  const [deleteAllStudentsOpen, setDeleteAllStudentsOpen] = useState(false);
   const [promotionEnabled, setPromotionEnabled] = useState(false);
   const [promoteOpen, setPromoteOpen] = useState(false);
   const [promoteFrom, setPromoteFrom] = useState("");
@@ -646,6 +647,18 @@ export default function Students() {
       loadData(activeWeekId);
     } catch (error) {
       toast.error(t("delete_failed"));
+    }
+  };
+
+  const handleDeleteAllStudents = async () => {
+    setDeleteAllStudentsOpen(false);
+    try {
+      const res = await api.delete("/students");
+      const studentsDeleted = res.data?.students_deleted ?? 0;
+      toast.success(t("all_students_deleted") || `All students deleted (${studentsDeleted}).`);
+      loadData(activeWeekId);
+    } catch (error) {
+      toast.error(error?.response?.data?.detail || t("delete_failed"));
     }
   };
 
@@ -1091,13 +1104,21 @@ export default function Students() {
               >
                 {t("delete_week")}
               </Button>
-              <Button
+                  <Button
                 variant="destructive"
                 onClick={() => setDeleteAllWeeksOpen(true)}
                 data-testid="delete-all-weeks-button"
                 disabled={!weeks.length}
               >
                 {t("delete_all_weeks") || "Delete All Weeks"}
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={() => setDeleteAllStudentsOpen(true)}
+                data-testid="delete-all-students-button"
+                disabled={!students.length}
+              >
+                {t("delete_all_students") || "Delete All Students"}
               </Button>
             </div>
           )}
@@ -1973,6 +1994,25 @@ export default function Students() {
             </Button>
             <Button variant="destructive" onClick={handleDeleteAllWeeks} data-testid="delete-all-weeks-confirm">
               {t("delete_all_weeks") || "Delete All Weeks"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={deleteAllStudentsOpen} onOpenChange={setDeleteAllStudentsOpen}>
+        <DialogContent data-testid="delete-all-students-dialog">
+          <DialogHeader>
+            <DialogTitle>{t("delete_all_students") || "Delete All Students"}</DialogTitle>
+            <DialogDescription>
+              {t("delete_all_students_confirm") || "This will delete all students and their scores. This action cannot be undone."}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteAllStudentsOpen(false)} data-testid="delete-all-students-cancel">
+              {t("cancel")}
+            </Button>
+            <Button variant="destructive" onClick={handleDeleteAllStudents} data-testid="delete-all-students-confirm">
+              {t("delete_all_students") || "Delete All Students"}
             </Button>
           </DialogFooter>
         </DialogContent>
