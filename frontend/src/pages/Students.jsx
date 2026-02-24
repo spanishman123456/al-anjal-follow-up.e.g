@@ -242,6 +242,9 @@ export default function Students() {
   const [clearScoresOpen, setClearScoresOpen] = useState(false);
   const [clearAllScoresOpen, setClearAllScoresOpen] = useState(false);
   const [deleteWeekOpen, setDeleteWeekOpen] = useState(false);
+  const [addWeekDialogOpen, setAddWeekDialogOpen] = useState(false);
+  const [addWeekLabel, setAddWeekLabel] = useState("");
+  const [addWeekPosition, setAddWeekPosition] = useState("end");
   const [deleteAllWeeksOpen, setDeleteAllWeeksOpen] = useState(false);
   const [deleteAllStudentsOpen, setDeleteAllStudentsOpen] = useState(false);
   const [promotionEnabled, setPromotionEnabled] = useState(false);
@@ -430,19 +433,37 @@ export default function Students() {
   const weekStorageKey = `app_selected_week_id_s${semesterNumber}_q${quarter}`;
   const classStorageKey = `app_selected_class_id_s${semesterNumber}_q${quarter}`;
 
+  const openAddWeekDialog = () => {
+    const minNum = quarter === 2 ? 10 : 1;
+    const nextNum = weeks.length
+      ? Math.max(...weeks.map((w) => w.number), minNum - 1) + 1
+      : minNum;
+    setAddWeekLabel(`Week ${nextNum}`);
+    setAddWeekPosition("end");
+    setAddWeekDialogOpen(true);
+  };
+
   const handleAddWeek = async () => {
+    const payload = {
+      semester: semesterNumber,
+      quarter,
+      label: addWeekLabel.trim() || undefined,
+    };
+    if (addWeekPosition !== "end") {
+      const num = Number(addWeekPosition);
+      if (!Number.isNaN(num)) payload.number = num;
+    }
     try {
-      const response = await api.post("/weeks", {
-        semester: semesterNumber,
-        quarter,
-      });
-      setWeeks((prev) => [...prev, response.data]);
+      const response = await api.post("/weeks", payload);
+      const list = await api.get("/weeks", { params: { semester: semesterNumber, quarter } }).then((r) => r.data || []);
+      setWeeks(list);
       const newId = response.data.id;
       setActiveWeekId(newId);
       sessionStorage.setItem(weekStorageKey, newId);
+      setAddWeekDialogOpen(false);
       toast.success(t("week_added"));
     } catch (error) {
-      toast.error(t("week_add_failed"));
+      toast.error(getApiErrorMessage(error) || t("week_add_failed"));
     }
   };
 
@@ -1085,7 +1106,7 @@ export default function Students() {
                     value={week.id}
                     data-testid={`week-option-${week.number}`}
                   >
-                    {t("week")} {week.number}
+                    {week.label || `${t("week")} ${week.number}`}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -1093,7 +1114,7 @@ export default function Students() {
           </div>
           {!isTeacher && (
             <div className="flex flex-wrap gap-2">
-              <Button variant="outline" onClick={handleAddWeek} data-testid="add-week-button">
+              <Button variant="outline" onClick={openAddWeekDialog} data-testid="add-week-button">
                 {t("add_week")}
               </Button>
               <Button
@@ -1962,6 +1983,61 @@ export default function Students() {
             </Button>
             <Button variant="destructive" onClick={handleClearAllScores} data-testid="clear-all-scores-confirm">
               {t("clear_scores")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={addWeekDialogOpen} onOpenChange={setAddWeekDialogOpen}>
+        <DialogContent data-testid="add-week-dialog">
+          <DialogHeader>
+            <DialogTitle>{t("add_week")}</DialogTitle>
+            <DialogDescription>{t("add_week_description")}</DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-2">
+            <div className="space-y-2">
+              <label className="text-sm font-medium" htmlFor="add-week-label">
+                {t("week_label")}
+              </label>
+              <Input
+                id="add-week-label"
+                value={addWeekLabel}
+                onChange={(e) => setAddWeekLabel(e.target.value)}
+                placeholder={t("week_label_placeholder")}
+                data-testid="add-week-label-input"
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium" htmlFor="add-week-position">
+                {t("week_position")}
+              </label>
+              <Select value={String(addWeekPosition)} onValueChange={(v) => setAddWeekPosition(v === "end" ? "end" : Number(v))}>
+                <SelectTrigger id="add-week-position" data-testid="add-week-position-select">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="end" data-testid="add-week-position-end">
+                    {t("week_position_end")}
+                  </SelectItem>
+                  {weeks.map((week) => (
+                    <SelectItem
+                      key={week.id}
+                      value={String(week.number + 1)}
+                      data-testid={`add-week-position-after-${week.number}`}
+                    >
+                      {t("week_position_after")} {week.number}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAddWeekDialogOpen(false)} data-testid="add-week-cancel">
+              {t("cancel")}
+            </Button>
+            <Button onClick={handleAddWeek} data-testid="add-week-confirm">
+              {t("add_week")}
             </Button>
           </DialogFooter>
         </DialogContent>

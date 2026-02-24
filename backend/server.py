@@ -1914,6 +1914,7 @@ class WeekRecord(BaseModel):
 
 class WeekCreate(BaseModel):
     label: Optional[str] = None
+    number: Optional[int] = None  # if set, insert at this position (shifts existing weeks)
     semester: int = 1
     quarter: int = 1  # 1 or 2
 
@@ -2300,17 +2301,35 @@ async def list_weeks(
 
 @api_router.post("/weeks", response_model=WeekRecord)
 async def create_week(payload: WeekCreate, current_user: Dict[str, Any] = Depends(get_current_user)):
-    """Create week in (semester, quarter). Q1 = numbers 1-9, Q2 = numbers 10-18; each (semester, quarter) is independent."""
+    """Create week in (semester, quarter). Q1 = numbers 1-9, Q2 = numbers 10-18. Optional number = insert at position (shifts existing)."""
     q = payload.quarter if payload.quarter in (1, 2) else 1
     query = {"semester": payload.semester, "quarter": q}
-    last_week = await db.weeks.find(query, {"_id": 0}).sort("number", -1).to_list(1)
-    if q == 1:
-        next_number = (last_week[0]["number"] + 1) if last_week else 1
-        next_number = min(max(next_number, 1), 9)
+    max_number = 9 if q == 1 else 18
+    min_number = 1 if q == 1 else 10
+
+    if payload.number is not None:
+        # Insert at specific position: validate range and shift existing weeks
+        insert_num = min(max(payload.number, min_number), max_number)
+        to_shift = await db.weeks.find({**query, "number": {"$gte": insert_num}}, {"_id": 0, "id": 1, "number": 1}).to_list(50)
+        for w in sorted(to_shift, key=lambda x: x["number"], reverse=True):
+            new_num = w["number"] + 1
+            if new_num > max_number:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Cannot insert at position {insert_num}: would exceed max week number {max_number} for this quarter.",
+                )
+            await db.weeks.update_one({"id": w["id"]}, {"$set": {"number": new_num}})
+        next_number = insert_num
     else:
-        next_number = (last_week[0]["number"] + 1) if last_week and last_week[0].get("number", 0) >= 10 else 10
-        next_number = min(max(next_number, 10), 18)
-    label = payload.label or f"Week {next_number}"
+        last_week = await db.weeks.find(query, {"_id": 0}).sort("number", -1).to_list(1)
+        if q == 1:
+            next_number = (last_week[0]["number"] + 1) if last_week else 1
+            next_number = min(max(next_number, 1), 9)
+        else:
+            next_number = (last_week[0]["number"] + 1) if last_week and last_week[0].get("number", 0) >= 10 else 10
+            next_number = min(max(next_number, 10), 18)
+
+    label = (payload.label or "").strip() or f"Week {next_number}"
     week = WeekRecord(semester=payload.semester, quarter=q, number=next_number, label=label)
     await db.weeks.insert_one(week.model_dump())
     await log_user_action(current_user, "week_add", f"Added {label} (Semester {payload.semester}, Q{q})")
