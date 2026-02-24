@@ -146,6 +146,14 @@ export default function Settings() {
   }, []);
 
   useEffect(() => {
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") loadData();
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => document.removeEventListener("visibilitychange", onVisibility);
+  }, []);
+
+  useEffect(() => {
     if (location.search.includes("section=profile")) {
       profileRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
     }

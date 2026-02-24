@@ -290,6 +290,7 @@ export default function AssessmentMarksQ2() {
       toast.success(t("student_updated"));
       setBulkEditMode(false);
       setBulkConfirmOpen(false);
+      window.dispatchEvent(new CustomEvent("students-updated"));
       loadData(activeWeekId);
     } catch (error) {
       toast.error(getApiErrorMessage(error) || t("student_update_failed"));
@@ -320,10 +321,11 @@ export default function AssessmentMarksQ2() {
     }
     try {
       await api.post("/students/bulk-scores", { updates, week_id: activeWeekId }, { timeout: BULK_SAVE_TIMEOUT_MS });
-      await loadData(activeWeekId);
       setBulkEditMode(false);
       setBulkScores({});
       toast.success(t("scores_cleared"));
+      window.dispatchEvent(new CustomEvent("students-updated"));
+      loadData(activeWeekId);
     } catch (error) {
       toast.error(getApiErrorMessage(error) || t("student_update_failed"));
     }
@@ -347,10 +349,11 @@ export default function AssessmentMarksQ2() {
     }
     try {
       await api.post("/students/bulk-scores", { updates, week_id: activeWeekId }, { timeout: BULK_SAVE_TIMEOUT_MS });
-      await loadData(activeWeekId);
       setBulkEditMode(false);
       setBulkScores({});
       toast.success(t("scores_cleared_all_classes") || "Scores cleared for all classes in the selected week.");
+      window.dispatchEvent(new CustomEvent("students-updated"));
+      loadData(activeWeekId);
     } catch (error) {
       toast.error(getApiErrorMessage(error) || t("student_update_failed"));
     }
@@ -428,11 +431,20 @@ export default function AssessmentMarksQ2() {
       toast.success(t("bulk_import_completed") || "Bulk import completed");
       sessionStorage.setItem(`app_selected_week_id_s${semesterNumber}_q${quarter}`, activeWeekId);
       if (bulkFileInputRef.current) bulkFileInputRef.current.value = "";
+      window.dispatchEvent(new CustomEvent("students-updated"));
       loadData(activeWeekId);
     } catch (error) {
       toast.error(error?.response?.data?.detail || t("bulk_import_failed") || "Bulk import failed");
     }
   };
+
+  useEffect(() => {
+    const onVisibility = () => {
+      if (document.visibilityState === "visible" && activeWeekId) loadData(activeWeekId);
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => document.removeEventListener("visibilitychange", onVisibility);
+  }, [activeWeekId]);
 
   return (
     <div className="space-y-8" data-testid="assessment-q2-marks-q2-page">

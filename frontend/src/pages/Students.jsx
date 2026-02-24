@@ -630,8 +630,8 @@ export default function Students() {
       sessionStorage.setItem(weekStorageKey, activeWeekId);
       setBulkFile(null);
       if (bulkFileInputRef.current) bulkFileInputRef.current.value = "";
-      loadData(activeWeekId);
       window.dispatchEvent(new CustomEvent("students-updated"));
+      loadData(activeWeekId);
     } catch (error) {
       toast.error(getApiErrorMessage(error) || t("marks_import_failed"));
     }
@@ -648,9 +648,14 @@ export default function Students() {
       await api.post(`/students/${transferStudent.id}/transfer`, {
         class_id: transferClass,
       });
-      toast.success(t("student_transferred"));
+      const targetClassName = classes.find((c) => c.id === transferClass)?.name ?? transferStudent.class_name;
+      setStudents((prev) =>
+        prev.map((s) =>
+          s.id === transferStudent.id ? { ...s, class_id: transferClass, class_name: targetClassName } : s
+        )
+      );
       setTransferStudent(null);
-      loadData(activeWeekId);
+      toast.success(t("student_transferred"));
       window.dispatchEvent(new CustomEvent("students-updated"));
     } catch (error) {
       toast.error(t("transfer_failed"));
@@ -663,11 +668,12 @@ export default function Students() {
 
   const handleDelete = async () => {
     if (!deleteStudent) return;
+    const idToRemove = deleteStudent.id;
     try {
-      await api.delete(`/students/${deleteStudent.id}`);
-      toast.success(t("student_deleted"));
+      await api.delete(`/students/${idToRemove}`);
+      setStudents((prev) => prev.filter((s) => s.id !== idToRemove));
       setDeleteStudent(null);
-      loadData(activeWeekId);
+      toast.success(t("student_deleted"));
       window.dispatchEvent(new CustomEvent("students-updated"));
     } catch (error) {
       toast.error(t("delete_failed"));
@@ -679,8 +685,8 @@ export default function Students() {
     try {
       const res = await api.delete("/students");
       const studentsDeleted = res.data?.students_deleted ?? 0;
+      setStudents([]);
       toast.success(t("all_students_deleted") || `All students deleted (${studentsDeleted}).`);
-      loadData(activeWeekId);
       window.dispatchEvent(new CustomEvent("students-updated"));
     } catch (error) {
       toast.error(error?.response?.data?.detail || t("delete_failed"));
@@ -689,16 +695,21 @@ export default function Students() {
 
   const handlePromote = async () => {
     if (!promoteFrom || !promoteTo) return;
+    const targetClassName = classes.find((c) => c.id === promoteTo)?.name;
     try {
       await api.post("/students/promote", {
         from_class_id: promoteFrom,
         to_class_id: promoteTo,
       });
-      toast.success(t("promotion_success"));
+      setStudents((prev) =>
+        prev.map((s) =>
+          s.class_id === promoteFrom ? { ...s, class_id: promoteTo, class_name: targetClassName ?? s.class_name } : s
+        )
+      );
       setPromoteOpen(false);
       setPromoteFrom("");
       setPromoteTo("");
-      loadData(activeWeekId);
+      toast.success(t("promotion_success"));
       window.dispatchEvent(new CustomEvent("students-updated"));
     } catch (error) {
       toast.error(t("promotion_fail"));
@@ -755,7 +766,7 @@ export default function Students() {
 
   const handleCreate = async () => {
     try {
-      await api.post("/students", {
+      const response = await api.post("/students", {
         full_name: form.full_name,
         class_id: form.class_id,
         attendance: parseScore(form.attendance),
@@ -774,10 +785,15 @@ export default function Students() {
         quarter2_theory: parseScore(form.quarter2_theory),
         week_id: activeWeekId || undefined,
       });
+      const newStudent = response.data;
+      if (newStudent?.id) {
+        setStudents((prev) => [...prev, newStudent]);
+      } else {
+        loadData(activeWeekId);
+      }
       toast.success("Student added");
       setIsAddOpen(false);
       setForm(emptyForm);
-      loadData(activeWeekId);
       window.dispatchEvent(new CustomEvent("students-updated"));
     } catch (error) {
       toast.error("Failed to add student");
@@ -913,8 +929,8 @@ export default function Students() {
       toast.success(t("student_updated"));
       setBulkEditMode(false);
       setBulkConfirmOpen(false);
-      loadData(activeWeekId);
       window.dispatchEvent(new CustomEvent("students-updated"));
+      loadData(activeWeekId);
     } catch (error) {
       toast.error(getApiErrorMessage(error) || t("student_update_failed"));
     }
@@ -948,9 +964,9 @@ export default function Students() {
         updates,
         week_id: activeWeekId || undefined,
       }, { timeout: BULK_SAVE_TIMEOUT_MS });
-      await loadData(activeWeekId);
       toast.success(t("scores_cleared"));
       window.dispatchEvent(new CustomEvent("students-updated"));
+      loadData(activeWeekId);
     } catch (error) {
       toast.error(getApiErrorMessage(error) || t("student_update_failed"));
     }
@@ -978,11 +994,11 @@ export default function Students() {
         updates,
         week_id: activeWeekId || undefined,
       }, { timeout: BULK_SAVE_TIMEOUT_MS });
-      await loadData(activeWeekId);
       setBulkEditMode(false);
       setBulkScores({});
       toast.success(t("scores_cleared_all_classes"));
       window.dispatchEvent(new CustomEvent("students-updated"));
+      loadData(activeWeekId);
     } catch (error) {
       toast.error(getApiErrorMessage(error) || t("student_update_failed"));
     }

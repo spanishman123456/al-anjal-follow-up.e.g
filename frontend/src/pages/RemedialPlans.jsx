@@ -104,6 +104,18 @@ export default function RemedialPlans() {
     }
   };
 
+  useEffect(() => {
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") loadData();
+    };
+    window.addEventListener("students-updated", loadData);
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      window.removeEventListener("students-updated", loadData);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, [semesterNumber, quarter]);
+
   const activePlans = plans.filter((plan) => plan.status === "active");
   const completedPlans = plans.filter((plan) => plan.status === "completed");
   const successRate = plans.length

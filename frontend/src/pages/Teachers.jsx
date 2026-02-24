@@ -26,6 +26,14 @@ export default function Teachers() {
     loadTeachers();
   }, []);
 
+  useEffect(() => {
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") loadTeachers();
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => document.removeEventListener("visibilitychange", onVisibility);
+  }, []);
+
   return (
     <div className="space-y-6" data-testid="teachers-page">
       <PageHeader title={t("teachers")} subtitle={t("overview")} testIdPrefix="teachers" />

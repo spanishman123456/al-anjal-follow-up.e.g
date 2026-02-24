@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useOutletContext, Link } from "react-router-dom";
 import {
   PieChart,
@@ -56,6 +56,7 @@ export default function Reports() {
   const [analysisStandoutData, setAnalysisStandoutData] = useState("");
   const [analysisActions, setAnalysisActions] = useState("");
   const [analysisRecommendations, setAnalysisRecommendations] = useState("");
+  const fetchReportRef = useRef(() => {});
 
   const applyGeneratedInsights = (generated) => {
     if (!generated) return;
@@ -75,6 +76,19 @@ export default function Reports() {
     applyGeneratedInsights(buildAutoInsightsFromReport(reportData));
   };
 
+  const fetchReport = () => {
+    if (!grade) return;
+    api
+      .get("/reports/grade", { params: { grade, semester: semesterNumber, quarter } })
+      .then((res) => {
+        const reportData = res.data;
+        setReport(reportData);
+        applyGeneratedInsights(buildAutoInsightsFromReport(reportData));
+      })
+      .catch(() => {});
+  };
+  fetchReportRef.current = fetchReport;
+
   const handleGenerate = async () => {
     const response = await api.get("/reports/grade", {
       params: { grade, semester: semesterNumber, quarter },
@@ -83,6 +97,19 @@ export default function Reports() {
     setReport(reportData);
     applyGeneratedInsights(buildAutoInsightsFromReport(reportData));
   };
+
+  useEffect(() => {
+    const onVisibility = () => {
+      if (document.visibilityState === "visible" && grade) fetchReportRef.current();
+    };
+    const onStudentsUpdated = () => fetchReportRef.current();
+    document.addEventListener("visibilitychange", onVisibility);
+    window.addEventListener("students-updated", onStudentsUpdated);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener("students-updated", onStudentsUpdated);
+    };
+  }, []);
 
   const handlePrint = () => {
     window.print();

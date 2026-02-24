@@ -40,6 +40,14 @@ export default function Calendar() {
     loadEvents();
   }, []);
 
+  useEffect(() => {
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") loadEvents();
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => document.removeEventListener("visibilitychange", onVisibility);
+  }, []);
+
   const formatEventDate = (value) => {
     if (!value) return "—";
     const stringValue = String(value).trim();

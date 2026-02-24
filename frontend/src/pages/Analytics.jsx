@@ -62,6 +62,7 @@ export default function Analytics() {
   const [activeTab, setActiveTab] = useState("overview");
   const [classOptions, setClassOptions] = useState([]);
   const [selectedClassId, setSelectedClassId] = useState("all");
+  const [refreshKey, setRefreshKey] = useState(0);
   const [loading, setLoading] = useState(true);
   const [analysisStrengths, setAnalysisStrengths] = useState("");
   const [analysisWeaknesses, setAnalysisWeaknesses] = useState("");
@@ -185,7 +186,20 @@ export default function Analytics() {
         });
     };
     loadAnalytics();
-  }, [semesterNumber, quarter, selectedClassId]);
+  }, [semesterNumber, quarter, selectedClassId, refreshKey]);
+
+  useEffect(() => {
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") setRefreshKey((k) => k + 1);
+    };
+    const onStudentsUpdated = () => setRefreshKey((k) => k + 1);
+    document.addEventListener("visibilitychange", onVisibility);
+    window.addEventListener("students-updated", onStudentsUpdated);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener("students-updated", onStudentsUpdated);
+    };
+  }, []);
 
   useEffect(() => {
     if (!overview) return;

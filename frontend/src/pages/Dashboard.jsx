@@ -126,11 +126,25 @@ export default function Dashboard() {
         headers: { "Content-Type": "multipart/form-data" },
       });
       toast.success("Excel data imported successfully");
+      window.dispatchEvent(new CustomEvent("students-updated"));
       fetchSummary();
     } catch (error) {
       toast.error(getApiErrorMessage(error) || "Import failed. Please check the file format.");
     }
   };
+
+  useEffect(() => {
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") fetchSummary();
+    };
+    const onStudentsUpdated = () => fetchSummary();
+    document.addEventListener("visibilitychange", onVisibility);
+    window.addEventListener("students-updated", onStudentsUpdated);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener("students-updated", onStudentsUpdated);
+    };
+  }, [semesterNumber, quarter]);
 
   const distributionData = (summary?.distribution || []).map((item) => ({
     name: t(item.level),

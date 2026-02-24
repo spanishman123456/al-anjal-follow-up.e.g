@@ -62,6 +62,14 @@ export default function Notifications() {
     loadLogs();
   }, []);
 
+  useEffect(() => {
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") loadLogs();
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => document.removeEventListener("visibilitychange", onVisibility);
+  }, []);
+
   const handleFilterChange = (value) => {
     setFilterType(value);
     loadLogs(value);

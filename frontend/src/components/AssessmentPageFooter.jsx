@@ -11,15 +11,20 @@ export function AssessmentPageFooter({ language }) {
   const t = useTranslations(language);
   const [classSummary, setClassSummary] = useState([]);
 
-  useEffect(() => {
-    let cancelled = false;
+  const fetchSummary = () => {
     api
       .get("/classes/summary")
       .then((res) => {
-        if (!cancelled && Array.isArray(res.data)) setClassSummary(res.data);
+        if (Array.isArray(res?.data)) setClassSummary(res.data);
       })
       .catch(() => {});
-    return () => { cancelled = true; };
+  };
+
+  useEffect(() => {
+    fetchSummary();
+    const onStudentsUpdated = () => fetchSummary();
+    window.addEventListener("students-updated", onStudentsUpdated);
+    return () => window.removeEventListener("students-updated", onStudentsUpdated);
   }, []);
 
   if (!classSummary.length) return null;

@@ -104,6 +104,19 @@ export default function Rewards() {
     loadData();
   }, []);
 
+  useEffect(() => {
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") loadData();
+    };
+    const onStudentsUpdated = () => loadData();
+    document.addEventListener("visibilitychange", onVisibility);
+    window.addEventListener("students-updated", onStudentsUpdated);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener("students-updated", onStudentsUpdated);
+    };
+  }, []);
+
   const rewardedStudents = students.filter(
     (s) =>
       badgeRewardIds.has(String(s.id)) ||

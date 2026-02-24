@@ -110,6 +110,14 @@ export default function TeacherProfile() {
     }
   };
 
+  useEffect(() => {
+    const onVisibility = () => {
+      if (document.visibilityState === "visible" && teacherId) loadData();
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => document.removeEventListener("visibilitychange", onVisibility);
+  }, [teacherId]);
+
   if (loading && !teacherData) {
     return (
       <div className="space-y-6" data-testid="teacher-profile-page">
