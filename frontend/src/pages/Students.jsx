@@ -1565,19 +1565,23 @@ export default function Students() {
                                 ? (t("remove_comment") || "Remove comment")
                                 : (t("comment") || "Comment")}
                             </DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem
-                              onClick={() => openTransferDialog(student)}
-                              data-testid={`student-action-transfer-${student.id}`}
-                            >
-                              {t("transfer_student")}
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
-                              onClick={() => confirmDelete(student)}
-                              data-testid={`student-action-delete-${student.id}`}
-                            >
-                              {t("delete_student")}
-                            </DropdownMenuItem>
+                            {!isTeacher && (
+                              <>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem
+                                  onClick={() => openTransferDialog(student)}
+                                  data-testid={`student-action-transfer-${student.id}`}
+                                >
+                                  {t("transfer_student")}
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  onClick={() => confirmDelete(student)}
+                                  data-testid={`student-action-delete-${student.id}`}
+                                >
+                                  {t("delete_student")}
+                                </DropdownMenuItem>
+                              </>
+                            )}
                           </DropdownMenuContent>
                         </DropdownMenu>
                       </TableCell>
