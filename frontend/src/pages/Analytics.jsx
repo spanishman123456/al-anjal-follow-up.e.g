@@ -264,7 +264,13 @@ export default function Analytics() {
     const byAscendingAvg = [...classesWithAvg].sort((a, b) => (a.avg_total_score ?? 999) - (b.avg_total_score ?? 999));
     const weakestClass = byAscendingAvg[0] ?? null;
     const strongestClass = byAscendingAvg.length > 0 ? byAscendingAvg[byAscendingAvg.length - 1] : null;
-    const hasContrast = weakestClass && strongestClass && weakestClass.class_id !== strongestClass.class_id;
+    const weakestAvg = Number(weakestClass?.avg_total_score ?? 0);
+    const strongestAvg = Number(strongestClass?.avg_total_score ?? 0);
+    const hasContrast =
+      weakestClass &&
+      strongestClass &&
+      weakestClass.class_id !== strongestClass.class_id &&
+      weakestAvg < strongestAvg;
 
     return [
       {
@@ -286,7 +292,7 @@ export default function Analytics() {
         text: hasContrast
           ? `Focus: ${weakestClass.class_name} is currently the lowest average class, while ${strongestClass.class_name} leads the cohort.`
           : classesWithAvg.length
-            ? "Focus: Add more classes with scored data to see lowest vs leading class contrast."
+            ? "Focus: Class averages are currently tied or only one class has data; more scored records will show a clear lowest vs leading contrast."
             : "Focus: Class-level contrast insight will appear once class averages are available.",
       },
     ];
