@@ -23,6 +23,7 @@ const EVENT_TYPES = [
   { value: "action_scores_bulk_update", labelKey: "action_scores_bulk_update" },
   { value: "action_class_add", labelKey: "action_class_add" },
   { value: "action_class_delete", labelKey: "action_class_delete" },
+  { value: "action_classes_delete_all", labelKey: "action_classes_delete_all" },
   { value: "action_class_clear_scores", labelKey: "action_class_clear_scores" },
   { value: "action_week_add", labelKey: "action_week_add" },
   { value: "action_week_delete", labelKey: "action_week_delete" },

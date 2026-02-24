@@ -2249,6 +2249,31 @@ async def delete_class(class_id: str, current_user: Dict[str, Any] = Depends(get
     return {"status": "deleted"}
 
 
+@api_router.delete("/classes")
+async def delete_all_classes(current_user: Dict[str, Any] = Depends(get_current_user)):
+    """Delete all classes and their students/score records. Clears assigned_class_ids from users."""
+    students = await db.students.find({}, {"_id": 0, "id": 1}).to_list(50000)
+    student_ids = [s["id"] for s in students]
+    scores_deleted = 0
+    if student_ids:
+        scores_result = await db.student_scores.delete_many({"student_id": {"$in": student_ids}})
+        scores_deleted = scores_result.deleted_count
+    students_result = await db.students.delete_many({})
+    await db.users.update_many({}, {"$set": {"assigned_class_ids": []}})
+    classes_result = await db.classes.delete_many({})
+    await log_user_action(
+        current_user,
+        "classes_delete_all",
+        f"Deleted all classes: {classes_result.deleted_count} classes, {students_result.deleted_count} students, {scores_deleted} score records",
+    )
+    return {
+        "status": "deleted",
+        "classes_deleted": classes_result.deleted_count,
+        "students_deleted": students_result.deleted_count,
+        "scores_deleted": scores_deleted,
+    }
+
+
 @api_router.get("/weeks", response_model=List[WeekRecord])
 async def list_weeks(
     semester: Optional[int] = Query(default=None),

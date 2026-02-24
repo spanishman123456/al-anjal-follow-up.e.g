@@ -26,6 +26,7 @@ export default function Classes() {
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [form, setForm] = useState({ name: "", grade: "", section: "" });
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [deleteAllDialogOpen, setDeleteAllDialogOpen] = useState(false);
   const [selectedClass, setSelectedClass] = useState(null);
   const [clearScoresDialogOpen, setClearScoresDialogOpen] = useState(false);
   const [classToClear, setClassToClear] = useState(null);
@@ -164,6 +165,17 @@ export default function Classes() {
     }
   };
 
+  const handleDeleteAllClasses = async () => {
+    try {
+      await api.delete("/classes");
+      toast.success(t("all_classes_deleted"));
+      setDeleteAllDialogOpen(false);
+      loadClasses();
+    } catch (error) {
+      toast.error(getApiErrorMessage(error) || t("delete_all_classes_failed"));
+    }
+  };
+
   return (
     <div className="space-y-8" data-testid="classes-page">
       <PageHeader
@@ -187,9 +199,18 @@ export default function Classes() {
               {t("download_excel")}
             </Button>
             {!isTeacher && (
-              <Button onClick={() => setIsAddOpen(true)} data-testid="add-class-button">
-                {t("add_class")}
-              </Button>
+              <>
+                <Button onClick={() => setIsAddOpen(true)} data-testid="add-class-button">
+                  {t("add_class")}
+                </Button>
+                <Button
+                  variant="destructive"
+                  onClick={() => setDeleteAllDialogOpen(true)}
+                  data-testid="delete-all-classes-button"
+                >
+                  {t("delete_all_classes")}
+                </Button>
+              </>
             )}
           </div>
         }
@@ -333,6 +354,23 @@ export default function Classes() {
             </Button>
             <Button variant="success" onClick={handleCreate} data-testid="add-class-submit">
               {t("create")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={deleteAllDialogOpen} onOpenChange={setDeleteAllDialogOpen}>
+        <DialogContent data-testid="delete-all-classes-dialog">
+          <DialogHeader>
+            <DialogTitle>{t("delete_all_classes")}</DialogTitle>
+            <DialogDescription>{t("delete_all_classes_confirm")}</DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteAllDialogOpen(false)} data-testid="delete-all-classes-cancel">
+              {t("cancel")}
+            </Button>
+            <Button variant="destructive" onClick={handleDeleteAllClasses} data-testid="delete-all-classes-confirm">
+              {t("delete_all_classes")}
             </Button>
           </DialogFooter>
         </DialogContent>
