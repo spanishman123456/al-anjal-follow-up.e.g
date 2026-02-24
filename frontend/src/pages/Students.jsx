@@ -631,6 +631,7 @@ export default function Students() {
       setBulkFile(null);
       if (bulkFileInputRef.current) bulkFileInputRef.current.value = "";
       loadData(activeWeekId);
+      window.dispatchEvent(new CustomEvent("students-updated"));
     } catch (error) {
       toast.error(getApiErrorMessage(error) || t("marks_import_failed"));
     }
@@ -650,6 +651,7 @@ export default function Students() {
       toast.success(t("student_transferred"));
       setTransferStudent(null);
       loadData(activeWeekId);
+      window.dispatchEvent(new CustomEvent("students-updated"));
     } catch (error) {
       toast.error(t("transfer_failed"));
     }
@@ -666,6 +668,7 @@ export default function Students() {
       toast.success(t("student_deleted"));
       setDeleteStudent(null);
       loadData(activeWeekId);
+      window.dispatchEvent(new CustomEvent("students-updated"));
     } catch (error) {
       toast.error(t("delete_failed"));
     }
@@ -678,6 +681,7 @@ export default function Students() {
       const studentsDeleted = res.data?.students_deleted ?? 0;
       toast.success(t("all_students_deleted") || `All students deleted (${studentsDeleted}).`);
       loadData(activeWeekId);
+      window.dispatchEvent(new CustomEvent("students-updated"));
     } catch (error) {
       toast.error(error?.response?.data?.detail || t("delete_failed"));
     }
@@ -695,6 +699,7 @@ export default function Students() {
       setPromoteFrom("");
       setPromoteTo("");
       loadData(activeWeekId);
+      window.dispatchEvent(new CustomEvent("students-updated"));
     } catch (error) {
       toast.error(t("promotion_fail"));
     }
@@ -773,6 +778,7 @@ export default function Students() {
       setIsAddOpen(false);
       setForm(emptyForm);
       loadData(activeWeekId);
+      window.dispatchEvent(new CustomEvent("students-updated"));
     } catch (error) {
       toast.error("Failed to add student");
     }
@@ -908,6 +914,7 @@ export default function Students() {
       setBulkEditMode(false);
       setBulkConfirmOpen(false);
       loadData(activeWeekId);
+      window.dispatchEvent(new CustomEvent("students-updated"));
     } catch (error) {
       toast.error(getApiErrorMessage(error) || t("student_update_failed"));
     }
@@ -943,6 +950,7 @@ export default function Students() {
       }, { timeout: BULK_SAVE_TIMEOUT_MS });
       await loadData(activeWeekId);
       toast.success(t("scores_cleared"));
+      window.dispatchEvent(new CustomEvent("students-updated"));
     } catch (error) {
       toast.error(getApiErrorMessage(error) || t("student_update_failed"));
     }
@@ -974,6 +982,7 @@ export default function Students() {
       setBulkEditMode(false);
       setBulkScores({});
       toast.success(t("scores_cleared_all_classes"));
+      window.dispatchEvent(new CustomEvent("students-updated"));
     } catch (error) {
       toast.error(getApiErrorMessage(error) || t("student_update_failed"));
     }

@@ -1120,6 +1120,16 @@ def parse_class_name(name: str) -> Dict[str, Optional[Any]]:
     return {"grade": grade, "section": section}
 
 
+def _normalize_class_name_for_uniqueness(name: str) -> str:
+    """Normalize class name for duplicate check: '5A', '5 A', '5a' -> same key."""
+    if not name or not isinstance(name, str):
+        return ""
+    s = re.sub(r"\s+", "", str(name).strip().upper())
+    if s.startswith("G"):
+        s = s[1:]
+    return s or name.strip()
+
+
 def _class_sort_key(class_name: str) -> tuple:
     """Sort key for class names: (grade, section) so 6A before 6B, 7A before 7B."""
     parsed = parse_class_name(class_name)
@@ -2212,6 +2222,17 @@ async def create_class(payload: ClassBase, current_user: Dict[str, Any] = Depend
         parsed = parse_class_name(payload.name)
         data["grade"] = data.get("grade") or parsed.get("grade")
         data["section"] = data.get("section") or parsed.get("section")
+    # Prevent duplicate: class with same normalized name (e.g. 5A, 5 A, 5a) already exists
+    norm_name = _normalize_class_name_for_uniqueness(payload.name)
+    if norm_name:
+        all_classes = await db.classes.find({}, {"_id": 0, "id": 1, "name": 1}).to_list(500)
+        for c in all_classes:
+            if _normalize_class_name_for_uniqueness(c.get("name", "")) == norm_name:
+                raise HTTPException(
+                    status_code=409,
+                    detail="class_already_exists",
+                    headers={"X-Existing-Class-Id": c["id"], "X-Existing-Class-Name": c.get("name", "")},
+                )
     class_record = ClassRecord(**data)
     await db.classes.insert_one(class_record.model_dump())
     await log_user_action(current_user, "class_add", f"Added class {class_record.name}")

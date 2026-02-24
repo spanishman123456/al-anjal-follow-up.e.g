@@ -18,7 +18,7 @@ import { Input } from "@/components/ui/input";
 import { Trash2 } from "lucide-react";
 
 export default function Classes() {
-  const { language, profile, semester, quarter } = useOutletContext();
+  const { language, profile, semester, quarter, loadClasses: refreshGlobalClasses } = useOutletContext();
   const semesterNumber = semester === "semester2" ? 2 : 1;
   const isTeacher = profile?.role_name === "Teacher";
   const t = useTranslations(language);
@@ -112,6 +112,20 @@ export default function Classes() {
     loadClasses();
   }, [semesterNumber, quarter]);
 
+  // Refetch when user returns to this tab so class/student counts stay in sync with Assessment page
+  useEffect(() => {
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") loadClasses();
+    };
+    const onStudentsUpdated = () => loadClasses();
+    document.addEventListener("visibilitychange", onVisibility);
+    window.addEventListener("students-updated", onStudentsUpdated);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener("students-updated", onStudentsUpdated);
+    };
+  }, [semesterNumber, quarter]);
+
   const handleCreate = async () => {
     try {
       await api.post("/classes", {
@@ -119,12 +133,21 @@ export default function Classes() {
         grade: form.grade ? Number(form.grade) : undefined,
         section: form.section || undefined,
       });
-      toast.success("Class added");
+      toast.success(t("class_added"));
       setIsAddOpen(false);
       setForm({ name: "", grade: "", section: "" });
       loadClasses();
+      if (typeof refreshGlobalClasses === "function") refreshGlobalClasses();
     } catch (error) {
-      toast.error("Failed to add class");
+      const status = error?.response?.status;
+      const detail = error?.response?.data?.detail;
+      if (status === 409 || detail === "class_already_exists") {
+        toast.error(t("class_already_exists"));
+        loadClasses();
+        if (typeof refreshGlobalClasses === "function") refreshGlobalClasses();
+      } else {
+        toast.error(getApiErrorMessage(error) || t("class_add_failed"));
+      }
     }
   };
 
@@ -160,8 +183,9 @@ export default function Classes() {
       toast.success(t("class_deleted"));
       setDeleteDialogOpen(false);
       loadClasses();
+      if (typeof refreshGlobalClasses === "function") refreshGlobalClasses();
     } catch (error) {
-      toast.error(t("class_delete_failed"));
+      toast.error(getApiErrorMessage(error) || t("class_delete_failed"));
     }
   };
 
@@ -171,6 +195,7 @@ export default function Classes() {
       toast.success(t("all_classes_deleted"));
       setDeleteAllDialogOpen(false);
       loadClasses();
+      if (typeof refreshGlobalClasses === "function") refreshGlobalClasses();
     } catch (error) {
       toast.error(getApiErrorMessage(error) || t("delete_all_classes_failed"));
     }
