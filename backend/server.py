@@ -2235,7 +2235,8 @@ async def get_classes(current_user: Dict[str, Any] = Depends(get_current_user)):
 
 
 @api_router.post("/classes", response_model=ClassRecord)
-async def create_class(payload: ClassBase, current_user: Dict[str, Any] = Depends(get_current_user)):
+async def create_class(payload: ClassBase, current_user: Dict[str, Any] = Depends(require_admin)):
+    """Only Admin can create classes. Teachers only see and work with classes assigned to them."""
     data = payload.model_dump()
     if not data.get("grade") or not data.get("section"):
         parsed = parse_class_name(payload.name)
@@ -2595,6 +2596,10 @@ async def get_students(
 
 @api_router.post("/students")
 async def create_student(payload: StudentCreate, current_user: Dict[str, Any] = Depends(get_current_user)):
+    if current_user.get("role_name") == "Teacher":
+        assigned = current_user.get("assigned_class_ids") or []
+        if payload.class_id not in assigned:
+            raise HTTPException(status_code=403, detail="You can only add students to classes assigned to you.")
     class_doc = await db.classes.find_one({"id": payload.class_id}, {"_id": 0})
     if not class_doc:
         raise HTTPException(status_code=404, detail="Class not found")

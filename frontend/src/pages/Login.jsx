@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { api, checkBackendHealth, isProductionBackendUrl } from "@/lib/api";
 import { Button } from "@/components/ui/button";
-import { Globe, MessageCircle } from "lucide-react";
+import { Globe, MessageCircle, Mail } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useTranslations } from "@/lib/i18n";
@@ -79,6 +79,17 @@ export default function Login({
     },
     [onLogin, navigate, t]
   );
+
+  const handleGmailButtonClick = useCallback(() => {
+    if (!GOOGLE_CLIENT_ID) {
+      toast.info(t("gmail_not_configured") || "Gmail sign-in is not configured yet. Contact your administrator to enable it. You can use username and password to sign in.");
+      return;
+    }
+    if (!window.google?.accounts?.id) {
+      toast.info(t("gmail_loading") || "Google sign-in is loading. Please wait a moment and try again.");
+      return;
+    }
+  }, [GOOGLE_CLIENT_ID, t]);
 
   useEffect(() => {
     if (!GOOGLE_CLIENT_ID) return;
@@ -298,21 +309,31 @@ export default function Login({
               >
                 {isSubmitting ? "Signing in..." : t("login")}
               </Button>
-              {GOOGLE_CLIENT_ID && (
-                <>
-                  <div className="relative my-4">
-                    <div className="absolute inset-0 flex items-center">
-                      <span className="w-full border-t border-slate-200" />
-                    </div>
-                    <div className="relative flex justify-center text-xs text-slate-500">
-                      <span className="bg-white px-2">{t("or_sign_in_with_gmail")}</span>
-                    </div>
-                  </div>
-                  <div ref={googleButtonRef} className="flex justify-center min-h-[44px]" data-testid="google-signin-container" />
-                  {isGoogleLoading && (
-                    <p className="text-xs text-slate-500 mt-2 text-center">Signing in with Google...</p>
-                  )}
-                </>
+              <div className="relative my-4">
+                <div className="absolute inset-0 flex items-center">
+                  <span className="w-full border-t border-slate-200" />
+                </div>
+                <div className="relative flex justify-center text-xs text-slate-500">
+                  <span className="bg-white px-2">{t("or_sign_in_with_gmail")}</span>
+                </div>
+              </div>
+              {GOOGLE_CLIENT_ID && gsiReady ? (
+                <div ref={googleButtonRef} className="flex justify-center min-h-[44px]" data-testid="google-signin-container" />
+              ) : (
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full h-11 border-slate-300 text-slate-700 hover:bg-slate-50 font-medium"
+                  onClick={handleGmailButtonClick}
+                  disabled={isGoogleLoading}
+                  data-testid="login-gmail-button"
+                >
+                  <Mail className="mr-2 h-5 w-5" />
+                  {t("sign_in_with_gmail") || "Sign in with Gmail"}
+                </Button>
+              )}
+              {isGoogleLoading && (
+                <p className="text-xs text-slate-500 mt-2 text-center">Signing in with Google...</p>
               )}
               {backendOk === null && (
                 <p className="text-xs text-slate-500 mt-2">Checking server status...</p>
