@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { api, checkBackendHealth, isProductionBackendUrl } from "@/lib/api";
 import { Button } from "@/components/ui/button";
@@ -10,6 +10,8 @@ import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { SocialLinks } from "@/components/SocialLinks";
 
+const GOOGLE_CLIENT_ID = process.env.REACT_APP_GOOGLE_CLIENT_ID || "";
+
 export default function Login({
   language = "en",
   onLogin,
@@ -20,6 +22,9 @@ export default function Login({
   const navigate = useNavigate();
   const [form, setForm] = useState({ username: "", password: "" });
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isGoogleLoading, setIsGoogleLoading] = useState(false);
+  const [gsiReady, setGsiReady] = useState(false);
+  const googleButtonRef = useRef(null);
   // Use app-level server status when provided (check starts as soon as you open the site); otherwise check when Login mounts
   const [localBackendOk, setLocalBackendOk] = useState(null);
   const backendOk = serverStatusProp !== undefined ? serverStatusProp : localBackendOk;
@@ -54,6 +59,73 @@ export default function Login({
     }
     return false;
   };
+
+  const handleGoogleSignIn = useCallback(
+    async (credential) => {
+      if (!credential) return;
+      setIsGoogleLoading(true);
+      try {
+        const response = await api.post("auth/google", { id_token: credential });
+        sessionStorage.setItem("auth_token", response.data.access_token);
+        onLogin?.(response.data.access_token);
+        navigate("/");
+      } catch (error) {
+        const detail = error?.response?.data?.detail;
+        const msg = typeof detail === "string" ? detail : t("login_failed");
+        toast.error(msg);
+      } finally {
+        setIsGoogleLoading(false);
+      }
+    },
+    [onLogin, navigate, t]
+  );
+
+  useEffect(() => {
+    if (!GOOGLE_CLIENT_ID) return;
+    let cancelled = false;
+    const check = () => {
+      if (cancelled) return;
+      if (window.google?.accounts?.id) {
+        setGsiReady(true);
+        return true;
+      }
+      return false;
+    };
+    if (check()) return;
+    const t = setInterval(() => {
+      if (check()) clearInterval(t);
+    }, 200);
+    return () => {
+      cancelled = true;
+      clearInterval(t);
+    };
+  }, [GOOGLE_CLIENT_ID]);
+
+  useEffect(() => {
+    if (!GOOGLE_CLIENT_ID || !gsiReady || !googleButtonRef.current) return;
+    if (!window.google?.accounts?.id) return;
+    const el = googleButtonRef.current;
+    const cleanup = () => {
+      if (el?.firstChild) el.innerHTML = "";
+    };
+    try {
+      window.google.accounts.id.initialize({
+        client_id: GOOGLE_CLIENT_ID,
+        callback: (response) => handleGoogleSignIn(response.credential),
+        auto_select: false,
+      });
+      window.google.accounts.id.renderButton(el, {
+        type: "standard",
+        theme: "outline",
+        size: "large",
+        width: 320,
+        text: "signin_with",
+      });
+    } catch (e) {
+      cleanup();
+    }
+    return cleanup;
+  }, [GOOGLE_CLIENT_ID, gsiReady, handleGoogleSignIn]);
 
   const handleLogin = async (event) => {
     event.preventDefault();
@@ -226,6 +298,22 @@ export default function Login({
               >
                 {isSubmitting ? "Signing in..." : t("login")}
               </Button>
+              {GOOGLE_CLIENT_ID && (
+                <>
+                  <div className="relative my-4">
+                    <div className="absolute inset-0 flex items-center">
+                      <span className="w-full border-t border-slate-200" />
+                    </div>
+                    <div className="relative flex justify-center text-xs text-slate-500">
+                      <span className="bg-white px-2">{t("or_sign_in_with_gmail")}</span>
+                    </div>
+                  </div>
+                  <div ref={googleButtonRef} className="flex justify-center min-h-[44px]" data-testid="google-signin-container" />
+                  {isGoogleLoading && (
+                    <p className="text-xs text-slate-500 mt-2 text-center">Signing in with Google...</p>
+                  )}
+                </>
+              )}
               {backendOk === null && (
                 <p className="text-xs text-slate-500 mt-2">Checking server status...</p>
               )}

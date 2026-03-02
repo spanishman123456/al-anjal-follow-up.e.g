@@ -84,6 +84,7 @@ This guide walks you through hosting the app so you can use it from anywhere (sc
    - `JWT_SECRET` — a long random string (e.g. generate one at [randomkeygen.com](https://randomkeygen.com)). **Secret.**
    - `DB_NAME` — e.g. `school_db` (same as in your `.env`).
    - `CORS_ORIGINS` — your frontend URL. You will set this **after** deploying the frontend (e.g. `https://your-app.vercel.app`). Until then you can use `*` to test, then change to the real URL.
+   - **Optional (teachers sign in with Gmail):** `GOOGLE_CLIENT_ID` — your Google OAuth 2.0 Web client ID from [Google Cloud Console](https://console.cloud.google.com/apis/credentials). Add the same value in Vercel as `REACT_APP_GOOGLE_CLIENT_ID`. If not set, the "Sign in with Google" button is hidden.
 6. Click **Create Web Service**. Wait for the first deploy to finish.
 7. Copy your backend URL from the top of the dashboard (e.g. `https://al-anjal-backend.onrender.com`). You will use it in the next step and in `CORS_ORIGINS`.
 
@@ -106,6 +107,7 @@ This guide walks you through hosting the app so you can use it from anywhere (sc
    - **Value**: Your **backend URL from Render** **without** `/api` at the end.  
      Example: `https://al-anjal-backend.onrender.com`  
      The app will call `REACT_APP_BACKEND_URL/api/...` and `REACT_APP_BACKEND_URL/health`.
+   - **Optional (teachers sign in with Gmail):** `REACT_APP_GOOGLE_CLIENT_ID` — same Google OAuth 2.0 Web client ID as `GOOGLE_CLIENT_ID` on the backend.
 6. Click **Deploy**. Wait for the build to finish.
 7. Copy your frontend URL (e.g. `https://al-anjal-school-app.vercel.app`).
 

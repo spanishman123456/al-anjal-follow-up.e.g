@@ -55,6 +55,13 @@ import jwt
 from passlib.context import CryptContext
 import re
 
+try:
+    from google.oauth2 import id_token as google_id_token
+    from google.auth.transport import requests as google_requests
+    _GOOGLE_AUTH_AVAILABLE = True
+except ImportError:
+    _GOOGLE_AUTH_AVAILABLE = False
+
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -129,6 +136,13 @@ async def get_current_user(credentials: Optional[HTTPAuthorizationCredentials] =
     if not user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
     return user
+
+
+async def require_admin(current_user: Dict[str, Any] = Depends(get_current_user)):
+    """Restrict route to Admin only. Teachers cannot modify admin settings or manage users/roles."""
+    if (current_user.get("role_name") or "").strip() != "Admin":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
+    return current_user
 
 
 app = FastAPI()
@@ -2071,6 +2085,11 @@ class AuthLogin(BaseModel):
     password: str
 
 
+class AuthGooglePayload(BaseModel):
+    """Google ID token from frontend (e.g. Sign in with Google)."""
+    id_token: str
+
+
 class AuthToken(BaseModel):
     access_token: str
     token_type: str = "bearer"
@@ -2272,7 +2291,7 @@ async def delete_class(class_id: str, current_user: Dict[str, Any] = Depends(get
 
 
 @api_router.delete("/classes")
-async def delete_all_classes(current_user: Dict[str, Any] = Depends(get_current_user)):
+async def delete_all_classes(current_user: Dict[str, Any] = Depends(require_admin)):
     """Delete all classes and their students/score records. Clears assigned_class_ids from users."""
     students = await db.students.find({}, {"_id": 0, "id": 1}).to_list(50000)
     student_ids = [s["id"] for s in students]
@@ -3101,7 +3120,7 @@ async def promote_students(payload: PromotionRequest, current_user: Dict[str, An
 
 
 @api_router.delete("/students")
-async def delete_all_students(current_user: Dict[str, Any] = Depends(get_current_user)):
+async def delete_all_students(current_user: Dict[str, Any] = Depends(require_admin)):
     """Delete all students and their score records."""
     students = await db.students.find({}, {"_id": 0, "id": 1}).to_list(50000)
     student_ids = [s["id"] for s in students]
@@ -3131,20 +3150,20 @@ async def delete_student(student_id: str, current_user: Dict[str, Any] = Depends
 
 
 @api_router.get("/roles", response_model=List[RoleRecord])
-async def get_roles():
+async def get_roles(current_user: Dict[str, Any] = Depends(require_admin)):
     roles = await db.roles.find({}, {"_id": 0}).sort("name", 1).to_list(200)
     return roles
 
 
 @api_router.post("/roles", response_model=RoleRecord)
-async def create_role(payload: RoleBase):
+async def create_role(payload: RoleBase, current_user: Dict[str, Any] = Depends(require_admin)):
     role = RoleRecord(**payload.model_dump())
     await db.roles.insert_one(role.model_dump())
     return role
 
 
 @api_router.put("/roles/{role_id}", response_model=RoleRecord)
-async def update_role(role_id: str, payload: RoleUpdate):
+async def update_role(role_id: str, payload: RoleUpdate, current_user: Dict[str, Any] = Depends(require_admin)):
     update_data = {k: v for k, v in payload.model_dump(exclude_unset=True).items() if v is not None}
     update_data["updated_at"] = iso_now()
     result = await db.roles.find_one_and_update({"id": role_id}, {"$set": update_data}, return_document=True)
@@ -3155,19 +3174,19 @@ async def update_role(role_id: str, payload: RoleUpdate):
 
 
 @api_router.delete("/roles/{role_id}")
-async def delete_role(role_id: str):
+async def delete_role(role_id: str, current_user: Dict[str, Any] = Depends(require_admin)):
     await db.roles.delete_one({"id": role_id})
     return {"status": "deleted"}
 
 
 @api_router.get("/users", response_model=List[UserRecord])
-async def get_users():
+async def get_users(current_user: Dict[str, Any] = Depends(require_admin)):
     users = await db.users.find({}, {"_id": 0}).sort("name", 1).to_list(500)
     return users
 
 
 @api_router.post("/users", response_model=UserRecord)
-async def create_user(payload: UserCreate):
+async def create_user(payload: UserCreate, current_user: Dict[str, Any] = Depends(require_admin)):
     role_doc = await db.roles.find_one({"id": payload.role_id}, {"_id": 0})
     if not role_doc:
         raise HTTPException(status_code=404, detail="Role not found")
@@ -3191,7 +3210,7 @@ async def create_user(payload: UserCreate):
 
 
 @api_router.put("/users/{user_id}", response_model=UserRecord)
-async def update_user(user_id: str, payload: UserUpdate):
+async def update_user(user_id: str, payload: UserUpdate, current_user: Dict[str, Any] = Depends(require_admin)):
     update_data = {k: v for k, v in payload.model_dump(exclude_unset=True).items() if v is not None}
     if "password" in update_data:
         update_data["password_hash"] = get_password_hash(update_data.pop("password"))
@@ -3214,13 +3233,13 @@ async def update_user(user_id: str, payload: UserUpdate):
 
 
 @api_router.delete("/users/{user_id}")
-async def delete_user(user_id: str):
+async def delete_user(user_id: str, current_user: Dict[str, Any] = Depends(require_admin)):
     await db.users.delete_one({"id": user_id})
     return {"status": "deleted"}
 
 
 @api_router.get("/users/{user_id}/audit", response_model=List[AuditLogRecord])
-async def get_user_audit_logs(user_id: str):
+async def get_user_audit_logs(user_id: str, current_user: Dict[str, Any] = Depends(require_admin)):
     logs = await db.audit_logs.find({"target_user_id": user_id}, {"_id": 0}).sort("timestamp", -1).to_list(200)
     return logs
 
@@ -3289,7 +3308,7 @@ async def update_user_profile(
 
 
 @api_router.get("/teachers")
-async def list_teachers():
+async def list_teachers(current_user: Dict[str, Any] = Depends(require_admin)):
     teachers = await db.users.find({"role_name": "Teacher"}, {"_id": 0}).to_list(200)
     for teacher in teachers:
         teacher["schedule"] = normalize_schedule(teacher.get("schedule"))
@@ -3297,7 +3316,7 @@ async def list_teachers():
 
 
 @api_router.get("/teachers/{teacher_id}")
-async def get_teacher_profile(teacher_id: str):
+async def get_teacher_profile(teacher_id: str, current_user: Dict[str, Any] = Depends(require_admin)):
     teacher = await db.users.find_one({"id": teacher_id}, {"_id": 0})
     if not teacher:
         raise HTTPException(status_code=404, detail="Teacher not found")
@@ -3314,7 +3333,7 @@ async def get_teacher_profile(teacher_id: str):
 
 
 @api_router.put("/teachers/{teacher_id}")
-async def update_teacher_profile(teacher_id: str, payload: TeacherProfileUpdate):
+async def update_teacher_profile(teacher_id: str, payload: TeacherProfileUpdate, current_user: Dict[str, Any] = Depends(require_admin)):
     teacher = await db.users.find_one({"id": teacher_id}, {"_id": 0})
     if not teacher:
         raise HTTPException(status_code=404, detail="Teacher not found")
@@ -3358,7 +3377,7 @@ async def update_remedial_plan(plan_id: str, payload: RemedialPlanUpdate):
 
 
 @api_router.put("/users/{user_id}/password", response_model=UserRecord)
-async def reset_user_password(user_id: str, payload: PasswordUpdate):
+async def reset_user_password(user_id: str, payload: PasswordUpdate, current_user: Dict[str, Any] = Depends(require_admin)):
     if not payload.password:
         raise HTTPException(status_code=400, detail="Password is required")
     result = await db.users.find_one_and_update(
@@ -4268,7 +4287,7 @@ async def fetch_promotion_settings():
 
 
 @api_router.post("/settings/promotion")
-async def update_promotion_settings(payload: Dict[str, bool]):
+async def update_promotion_settings(payload: Dict[str, bool], current_user: Dict[str, Any] = Depends(require_admin)):
     enabled = bool(payload.get("enabled"))
     settings = {"id": "promotion", "enabled": enabled, "updated_at": iso_now()}
     await db.app_settings.update_one({"id": "promotion"}, {"$set": settings}, upsert=True)
@@ -4276,19 +4295,19 @@ async def update_promotion_settings(payload: Dict[str, bool]):
 
 
 @api_router.get("/calendar/events", response_model=List[CalendarEventRecord])
-async def get_calendar_events():
+async def get_calendar_events(current_user: Dict[str, Any] = Depends(require_admin)):
     events = await db.calendar_events.find({}, {"_id": 0}).to_list(500)
     return events
 
 
 @api_router.get("/calendar/status")
-async def get_calendar_status():
+async def get_calendar_status(current_user: Dict[str, Any] = Depends(require_admin)):
     status = await db.app_settings.find_one({"id": "calendar_sync"}, {"_id": 0})
     return status or {"id": "calendar_sync", "synced_at": None}
 
 
 @api_router.post("/calendar/sync")
-async def sync_calendar_events():
+async def sync_calendar_events(current_user: Dict[str, Any] = Depends(require_admin)):
     count = await sync_moe_calendar()
     await send_sms_notification(
         "calendar_sync",
@@ -4298,7 +4317,7 @@ async def sync_calendar_events():
 
 
 @api_router.get("/notifications", response_model=List[NotificationLogRecord])
-async def get_notifications(event_type: Optional[str] = Query(None)):
+async def get_notifications(event_type: Optional[str] = Query(None), current_user: Dict[str, Any] = Depends(require_admin)):
     query: Dict[str, Any] = {}
     if event_type:
         query["event_type"] = event_type
@@ -4307,14 +4326,14 @@ async def get_notifications(event_type: Optional[str] = Query(None)):
 
 
 @api_router.delete("/notifications")
-async def remove_all_notifications():
+async def remove_all_notifications(current_user: Dict[str, Any] = Depends(require_admin)):
     """Remove all notification logs."""
     result = await db.notification_logs.delete_many({})
     return {"status": "ok", "deleted_count": result.deleted_count}
 
 
 @api_router.get("/notifications/export")
-async def export_notifications(format: str = Query("pdf"), event_type: Optional[str] = Query(None)):
+async def export_notifications(format: str = Query("pdf"), event_type: Optional[str] = Query(None), current_user: Dict[str, Any] = Depends(require_admin)):
     query: Dict[str, Any] = {}
     if event_type:
         query["event_type"] = event_type
@@ -4332,13 +4351,13 @@ async def export_notifications(format: str = Query("pdf"), event_type: Optional[
 
 
 @api_router.get("/notifications/templates")
-async def fetch_sms_templates():
+async def fetch_sms_templates(current_user: Dict[str, Any] = Depends(require_admin)):
     templates = await get_sms_templates()
     return {"templates": templates}
 
 
 @api_router.post("/notifications/templates")
-async def update_sms_templates(payload: SmsTemplatesPayload):
+async def update_sms_templates(payload: SmsTemplatesPayload, current_user: Dict[str, Any] = Depends(require_admin)):
     templates = payload.templates
     settings = {"id": "sms_templates", "templates": templates, "updated_at": iso_now()}
     await db.app_settings.update_one({"id": "sms_templates"}, {"$set": settings}, upsert=True)
@@ -4421,6 +4440,84 @@ async def login(payload: AuthLogin):
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Database or server temporarily unavailable. Keep Start_App.bat open and try again in a moment.",
         )
+
+
+@auth_router.post("/google", response_model=AuthToken)
+async def login_google(payload: AuthGooglePayload):
+    """
+    Sign in with Google (Gmail). Teachers can log in using their Gmail account.
+    If the email is not yet in the system, a new user is created with Teacher role and Teacher permissions.
+    """
+    if not _GOOGLE_AUTH_AVAILABLE:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Google sign-in is not configured. Install google-auth and set GOOGLE_CLIENT_ID.",
+        )
+    client_id = (os.environ.get("GOOGLE_CLIENT_ID") or "").strip()
+    if not client_id:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Google sign-in is not configured. Set GOOGLE_CLIENT_ID in the server environment.",
+        )
+    id_token_str = (payload.id_token or "").strip()
+    if not id_token_str:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="id_token is required")
+    try:
+        idinfo = google_id_token.verify_oauth2_token(
+            id_token_str, google_requests.Request(), client_id
+        )
+    except Exception as e:
+        logger.warning("Google token verification failed: %s", e)
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid Google sign-in token")
+    email = (idinfo.get("email") or "").strip().lower()
+    if not email:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Google account has no email")
+    name = (idinfo.get("name") or email.split("@")[0] or "Teacher").strip()
+    google_sub = idinfo.get("sub") or ""
+
+    user = await db.users.find_one(
+        {"$or": [{"email": {"$regex": f"^{re.escape(email)}$", "$options": "i"}}, {"username": email}]},
+        {"_id": 0},
+    )
+    if user:
+        token = create_access_token({"sub": user["id"], "role": user["role_name"]})
+        return AuthToken(access_token=token)
+    teacher_role = await db.roles.find_one({"name": "Teacher"}, {"_id": 0})
+    if not teacher_role:
+        teacher_role = {
+            "id": str(uuid.uuid4()),
+            "name": "Teacher",
+            "description": "Manage classes and students",
+            "permissions": ["students:view", "scores:edit", "remedial:manage", "reports:view", "timetable:manage"],
+        }
+        await db.roles.insert_one(teacher_role)
+    teacher_permissions = teacher_role.get("permissions", ["students:view", "scores:edit", "remedial:manage", "reports:view", "timetable:manage"])
+    new_id = str(uuid.uuid4())
+    username = email.split("@")[0][:50] or f"teacher_{new_id[:8]}"
+    existing = await db.users.find_one({"username": username}, {"_id": 0})
+    if existing:
+        username = f"{username}_{new_id[:8]}"
+    new_user = {
+        "id": new_id,
+        "name": name,
+        "email": email,
+        "username": username,
+        "role_id": teacher_role["id"],
+        "role_name": "Teacher",
+        "active": True,
+        "permissions": teacher_permissions,
+        "password_hash": None,
+        "created_at": iso_now(),
+        "updated_at": iso_now(),
+        "avatar_base64": None,
+        "phone": None,
+        "subjects": [],
+        "assigned_class_ids": [],
+        "schedule": default_schedule(),
+    }
+    await db.users.insert_one(new_user)
+    token = create_access_token({"sub": new_user["id"], "role": new_user["role_name"]})
+    return AuthToken(access_token=token)
 
 
 @auth_router.post("/reset-all-passwords")
