@@ -870,6 +870,48 @@ export default function Students() {
     updateBulkScore(studentId, field, value);
   };
 
+  const saveScoreOnBlur = async (student, field, newVal) => {
+    const origVal = parseScore(student[field]);
+    if (newVal === origVal) return;
+    if (!activeWeekId || !weeks.some((w) => w.id === activeWeekId)) {
+      toast.error(t("select_week_from_current_semester") || "Please select a week from the current semester.");
+      return;
+    }
+    try {
+      await api.post("/students/bulk-scores", {
+        updates: [{ id: student.id, [field]: newVal }],
+        week_id: activeWeekId,
+      }, { timeout: BULK_SAVE_TIMEOUT_MS });
+      setBulkScores((prev) => {
+        const next = { ...prev };
+        delete next[student.id];
+        return next;
+      });
+      window.dispatchEvent(new CustomEvent("students-updated"));
+      loadData(activeWeekId);
+      toast.success(t("student_updated"));
+    } catch (error) {
+      toast.error(getApiErrorMessage(error) || t("student_update_failed"));
+    }
+  };
+
+  const handleAttendanceBlur = async (student) => {
+    const current = bulkScores[student.id] || student;
+    await saveScoreOnBlur(student, "attendance", parseScore(current.attendance));
+  };
+  const handleParticipationBlur = async (student) => {
+    const current = bulkScores[student.id] || student;
+    await saveScoreOnBlur(student, "participation", parseScore(current.participation));
+  };
+  const handleBehaviorBlur = async (student) => {
+    const current = bulkScores[student.id] || student;
+    await saveScoreOnBlur(student, "behavior", parseScore(current.behavior));
+  };
+  const handleHomeworkBlur = async (student) => {
+    const current = bulkScores[student.id] || student;
+    await saveScoreOnBlur(student, "homework", parseScore(current.homework));
+  };
+
   const [fillValues, setFillValues] = useState({
     attendance: "",
     participation: "",
@@ -1464,68 +1506,60 @@ export default function Students() {
                         {student.class_name}
                       </TableCell>
                       <TableCell data-testid={`student-attendance-${student.id}`} className="text-center">
-                        {bulkEditMode ? (
-                          <Input
-                            type="number"
-                            min={0}
-                            max={2.5}
-                            step={0.5}
-                            className="text-center"
-                            value={currentScores.attendance}
-                            onChange={(event) => handleScoreChange(student.id, "attendance", event.target.value)}
-                            data-testid={`student-bulk-attendance-${student.id}`}
-                          />
-                        ) : (
-                          formatScore(student.attendance)
-                        )}
+                        <Input
+                          type="number"
+                          min={0}
+                          max={2.5}
+                          step={0.5}
+                          className="text-center w-14"
+                          value={currentScores.attendance ?? ""}
+                          onChange={(event) => handleScoreChange(student.id, "attendance", event.target.value)}
+                          onBlur={() => handleAttendanceBlur(student)}
+                          placeholder="0–2.5"
+                          data-testid={`student-bulk-attendance-${student.id}`}
+                        />
                       </TableCell>
                       <TableCell data-testid={`student-participation-${student.id}`} className="text-center">
-                        {bulkEditMode ? (
-                          <Input
-                            type="number"
-                            min={0}
-                            max={2.5}
-                            step={0.5}
-                            className="text-center"
-                            value={currentScores.participation}
-                            onChange={(event) => handleScoreChange(student.id, "participation", event.target.value)}
-                            data-testid={`student-bulk-participation-${student.id}`}
-                          />
-                        ) : (
-                          formatScore(student.participation)
-                        )}
+                        <Input
+                          type="number"
+                          min={0}
+                          max={2.5}
+                          step={0.5}
+                          className="text-center w-14"
+                          value={currentScores.participation ?? ""}
+                          onChange={(event) => handleScoreChange(student.id, "participation", event.target.value)}
+                          onBlur={() => handleParticipationBlur(student)}
+                          placeholder="0–2.5"
+                          data-testid={`student-bulk-participation-${student.id}`}
+                        />
                       </TableCell>
                       <TableCell data-testid={`student-behavior-${student.id}`} className="text-center">
-                        {bulkEditMode ? (
-                          <Input
-                            type="number"
-                            min={0}
-                            max={5}
-                            step={0.5}
-                            className="text-center"
-                            value={currentScores.behavior}
-                            onChange={(event) => handleScoreChange(student.id, "behavior", event.target.value)}
-                            data-testid={`student-bulk-behavior-${student.id}`}
-                          />
-                        ) : (
-                          formatScore(student.behavior)
-                        )}
+                        <Input
+                          type="number"
+                          min={0}
+                          max={5}
+                          step={0.5}
+                          className="text-center w-14"
+                          value={currentScores.behavior ?? ""}
+                          onChange={(event) => handleScoreChange(student.id, "behavior", event.target.value)}
+                          onBlur={() => handleBehaviorBlur(student)}
+                          placeholder="0–5"
+                          data-testid={`student-bulk-behavior-${student.id}`}
+                        />
                       </TableCell>
                       <TableCell data-testid={`student-homework-${student.id}`} className="text-center">
-                        {bulkEditMode ? (
-                          <Input
-                            type="number"
-                            min={0}
-                            max={5}
-                            step={0.5}
-                            className="text-center"
-                            value={currentScores.homework}
-                            onChange={(event) => handleScoreChange(student.id, "homework", event.target.value)}
-                            data-testid={`student-bulk-homework-${student.id}`}
-                          />
-                        ) : (
-                          formatScore(student.homework)
-                        )}
+                        <Input
+                          type="number"
+                          min={0}
+                          max={5}
+                          step={0.5}
+                          className="text-center w-14"
+                          value={currentScores.homework ?? ""}
+                          onChange={(event) => handleScoreChange(student.id, "homework", event.target.value)}
+                          onBlur={() => handleHomeworkBlur(student)}
+                          placeholder="0–5"
+                          data-testid={`student-bulk-homework-${student.id}`}
+                        />
                       </TableCell>
                       <TableCell data-testid={`student-total-${student.id}`} className="text-center">
                         {formatScore(computeTotalScore(bulkScores[student.id] || student), "/15")}
