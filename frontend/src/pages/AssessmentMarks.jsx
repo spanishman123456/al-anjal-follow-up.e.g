@@ -252,6 +252,46 @@ export default function AssessmentMarks() {
     updateBulkScore(studentId, field, value);
   };
 
+  const saveScoreOnBlur = async (student, field, newVal) => {
+    const origVal = parseScore(student[field]);
+    if (newVal === origVal) return;
+    if (!activeWeekId) {
+      toast.error(t("select_week_before_import") || "Please select a week first.");
+      return;
+    }
+    try {
+      await api.post("/students/bulk-scores", {
+        updates: [{ id: student.id, [field]: newVal }],
+        week_id: activeWeekId,
+      }, { timeout: BULK_SAVE_TIMEOUT_MS });
+      setBulkScores((prev) => {
+        const next = { ...prev };
+        delete next[student.id];
+        return next;
+      });
+      window.dispatchEvent(new CustomEvent("students-updated"));
+      loadData(activeWeekId);
+      toast.success(t("student_updated"));
+    } catch (error) {
+      toast.error(getApiErrorMessage(error) || t("student_update_failed"));
+    }
+  };
+
+  const handleChapterTest1Blur = async (student) => {
+    const current = bulkScores[student.id] || student;
+    await saveScoreOnBlur(student, "chapter_test1_practical", parseScore(current.chapter_test1_practical));
+  };
+
+  const handleQuiz1Blur = async (student) => {
+    const current = bulkScores[student.id] || student;
+    await saveScoreOnBlur(student, "quiz1", parseScore(current.quiz1));
+  };
+
+  const handleQuiz2Blur = async (student) => {
+    const current = bulkScores[student.id] || student;
+    await saveScoreOnBlur(student, "quiz2", parseScore(current.quiz2));
+  };
+
   const handleFillColumn = (field, max) => {
     const raw = fillValues[field];
     if (raw === "" || raw === null || raw === undefined) {
@@ -679,52 +719,46 @@ export default function AssessmentMarks() {
                       <TableCell>{student.full_name}</TableCell>
                       <TableCell>{student.class_name}</TableCell>
                       <TableCell className="text-center">
-                        {bulkEditMode ? (
-                          <Input
-                            type="number"
-                            min={0}
-                            max={5}
-                            step={0.5}
-                            className="text-center"
-                            value={current.quiz1 ?? ""}
-                            onChange={(e) => handleScoreChange(student.id, "quiz1", e.target.value, 5)}
-                            data-testid={`assessment-quiz1-${student.id}`}
-                          />
-                        ) : (
-                          formatScore(student.quiz1)
-                        )}
+                        <Input
+                          type="number"
+                          min={0}
+                          max={5}
+                          step={0.5}
+                          className="text-center w-14"
+                          value={current.quiz1 ?? ""}
+                          onChange={(e) => handleScoreChange(student.id, "quiz1", e.target.value, 5)}
+                          onBlur={() => handleQuiz1Blur(student)}
+                          placeholder="0–5"
+                          data-testid={`assessment-quiz1-${student.id}`}
+                        />
                       </TableCell>
                       <TableCell className="text-center">
-                        {bulkEditMode ? (
-                          <Input
-                            type="number"
-                            min={0}
-                            max={5}
-                            step={0.5}
-                            className="text-center"
-                            value={current.quiz2 ?? ""}
-                            onChange={(e) => handleScoreChange(student.id, "quiz2", e.target.value, 5)}
-                            data-testid={`assessment-quiz2-${student.id}`}
-                          />
-                        ) : (
-                          formatScore(student.quiz2)
-                        )}
+                        <Input
+                          type="number"
+                          min={0}
+                          max={5}
+                          step={0.5}
+                          className="text-center w-14"
+                          value={current.quiz2 ?? ""}
+                          onChange={(e) => handleScoreChange(student.id, "quiz2", e.target.value, 5)}
+                          onBlur={() => handleQuiz2Blur(student)}
+                          placeholder="0–5"
+                          data-testid={`assessment-quiz2-${student.id}`}
+                        />
                       </TableCell>
                       <TableCell className="text-center">
-                        {bulkEditMode ? (
-                          <Input
-                            type="number"
-                            min={0}
-                            max={10}
-                            step={0.5}
-                            className="text-center"
-                            value={current.chapter_test1_practical ?? ""}
-                            onChange={(e) => handleScoreChange(student.id, "chapter_test1_practical", e.target.value, 10)}
-                            data-testid={`assessment-practical-${student.id}`}
-                          />
-                        ) : (
-                          formatScore(student.chapter_test1_practical)
-                        )}
+                        <Input
+                          type="number"
+                          min={0}
+                          max={10}
+                          step={0.5}
+                          className="text-center w-16"
+                          value={current.chapter_test1_practical ?? ""}
+                          onChange={(e) => handleScoreChange(student.id, "chapter_test1_practical", e.target.value, 10)}
+                          onBlur={() => handleChapterTest1Blur(student)}
+                          placeholder="0–10"
+                          data-testid={`assessment-practical-${student.id}`}
+                        />
                       </TableCell>
                       <TableCell className="text-center" data-testid={`assessment-total-${student.id}`}>
                         {formatScore(total, "/30")}

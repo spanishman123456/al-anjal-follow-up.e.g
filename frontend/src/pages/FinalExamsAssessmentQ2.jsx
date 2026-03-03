@@ -240,6 +240,41 @@ export default function FinalExamsAssessmentQ2() {
     updateBulkScore(studentId, field, value);
   };
 
+  const saveScoreOnBlur = async (student, field, newVal) => {
+    const origVal = parseScore(student[field]);
+    if (newVal === origVal) return;
+    if (!activeWeekId) {
+      toast.error(t("select_week_before_import") || "Please select a week first.");
+      return;
+    }
+    try {
+      await api.post("/students/bulk-scores", {
+        updates: [{ id: student.id, [field]: newVal }],
+        week_id: activeWeekId,
+      }, { timeout: BULK_SAVE_TIMEOUT_MS });
+      setBulkScores((prev) => {
+        const next = { ...prev };
+        delete next[student.id];
+        return next;
+      });
+      window.dispatchEvent(new CustomEvent("students-updated"));
+      loadData(activeWeekId);
+      toast.success(t("student_updated"));
+    } catch (error) {
+      toast.error(getApiErrorMessage(error) || t("student_update_failed"));
+    }
+  };
+
+  const handleQuarter2PracticalBlur = async (student) => {
+    const current = bulkScores[student.id] || student;
+    await saveScoreOnBlur(student, "quarter2_practical", parseScore(current.quarter2_practical));
+  };
+
+  const handleQuarter2TheoryBlur = async (student) => {
+    const current = bulkScores[student.id] || student;
+    await saveScoreOnBlur(student, "quarter2_theory", parseScore(current.quarter2_theory));
+  };
+
   const handleFillColumn = (field, max) => {
     const raw = fillValues[field];
     if (raw === "" || raw == null) {
@@ -557,16 +592,30 @@ export default function FinalExamsAssessmentQ2() {
                       <TableCell>{student.full_name}</TableCell>
                       <TableCell>{student.class_name}</TableCell>
                       <TableCell className="text-center">
-                        {bulkEditMode ? (
-                          <Input type="number" min={0} max={10} step={0.5} className="text-center"
-                            value={current.quarter2_practical ?? ""} onChange={(e) => handleScoreChange(student.id, "quarter2_practical", e.target.value, 10)} />
-                        ) : formatScore(student.quarter2_practical)}
+                        <Input
+                          type="number"
+                          min={0}
+                          max={10}
+                          step={0.5}
+                          className="text-center w-16"
+                          value={current.quarter2_practical ?? ""}
+                          onChange={(e) => handleScoreChange(student.id, "quarter2_practical", e.target.value, 10)}
+                          onBlur={() => handleQuarter2PracticalBlur(student)}
+                          placeholder="0–10"
+                        />
                       </TableCell>
                       <TableCell className="text-center">
-                        {bulkEditMode ? (
-                          <Input type="number" min={0} max={10} step={0.5} className="text-center"
-                            value={current.quarter2_theory ?? ""} onChange={(e) => handleScoreChange(student.id, "quarter2_theory", e.target.value, 10)} />
-                        ) : formatScore(student.quarter2_theory)}
+                        <Input
+                          type="number"
+                          min={0}
+                          max={10}
+                          step={0.5}
+                          className="text-center w-16"
+                          value={current.quarter2_theory ?? ""}
+                          onChange={(e) => handleScoreChange(student.id, "quarter2_theory", e.target.value, 10)}
+                          onBlur={() => handleQuarter2TheoryBlur(student)}
+                          placeholder="0–10"
+                        />
                       </TableCell>
                       <TableCell className="text-center" data-testid={`final-exams-total-${student.id}`}>
                         {formatScore(total, `/${FINAL_TOTAL_MAX}`)}
