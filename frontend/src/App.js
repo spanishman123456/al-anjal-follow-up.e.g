@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, lazy, Suspense, Component } from "react";
+import { useCallback, useEffect, useState, useRef, lazy, Suspense, Component } from "react";
 import { flushSync } from "react-dom";
 import "@/App.css";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
@@ -68,6 +68,9 @@ function App() {
   const [theme, setTheme] = useState("light");
   const [token, setToken] = useState(() => sessionStorage.getItem("auth_token"));
   const [authReady, setAuthReady] = useState(() => (sessionStorage.getItem("auth_token") ? null : true));
+  /** Overlap login + app briefly for crossfade after sign-in. */
+  const [loginLeaving, setLoginLeaving] = useState(false);
+  const loginCrossfadeTimerRef = useRef(null);
   const [semester, setSemester] = useState(
     () => localStorage.getItem("semester") || "semester1",
   );
@@ -123,6 +126,7 @@ function App() {
         if (err?.response?.status === 401 || err?.code === "ECONNABORTED" || err?.message === "Network Error") {
           sessionStorage.removeItem("auth_token");
           setToken(null);
+          setLoginLeaving(false);
         }
         setAuthReady(true);
       });
@@ -133,6 +137,7 @@ function App() {
     const handler = () => {
       setToken(null);
       setAuthReady(true);
+      setLoginLeaving(false);
     };
     window.addEventListener("auth-logout", handler);
     return () => window.removeEventListener("auth-logout", handler);
@@ -191,17 +196,75 @@ function App() {
     };
   }, [token]);
 
+  useEffect(() => {
+    return () => {
+      if (loginCrossfadeTimerRef.current) {
+        window.clearTimeout(loginCrossfadeTimerRef.current);
+      }
+    };
+  }, []);
+
   const handleLogin = useCallback((newToken) => {
-    // Commit auth state in one synchronous paint to avoid a flash of login → blank → shell.
     flushSync(() => {
       setToken(newToken);
       setAuthReady(true);
+      setLoginLeaving(true);
     });
+    if (loginCrossfadeTimerRef.current) {
+      window.clearTimeout(loginCrossfadeTimerRef.current);
+    }
+    loginCrossfadeTimerRef.current = window.setTimeout(() => {
+      setLoginLeaving(false);
+      loginCrossfadeTimerRef.current = null;
+    }, 360);
   }, []);
 
   // Single BrowserRouter for the whole app — avoids tearing down/remounting the router on login (major flicker).
   const authChecking = Boolean(token && authReady === null);
-  const showLogin = !token;
+  const showLoginOnly = !token;
+  const showCrossfade = Boolean(token && loginLeaving);
+
+  const authenticatedRoutes = (
+    <Routes>
+      <Route
+        path="/"
+        element={
+          <AppShell
+            key={language}
+            language={language}
+            setLanguage={setLanguage}
+            theme={theme}
+            setTheme={setTheme}
+            semester={semester}
+            setSemester={setSemester}
+            quarter={quarter}
+            setQuarter={setQuarter}
+            academicYear={academicYear}
+            classes={classes}
+            classesLoaded={classesLoaded}
+            loadClasses={loadClasses}
+          />
+        }
+      >
+        <Route index element={<Dashboard />} />
+        <Route path="students" element={<Suspense fallback={<PageFallback />}><Students /></Suspense>} />
+        <Route path="assessment-marks" element={<Suspense fallback={<PageFallback />}><AssessmentMarks /></Suspense>} />
+        <Route path="final-exams-assessment" element={<Suspense fallback={<PageFallback />}><FinalExamsAssessment /></Suspense>} />
+        <Route path="assessment-marks-q2" element={<Suspense fallback={<PageFallback />}><AssessmentMarksQ2 /></Suspense>} />
+        <Route path="final-exams-assessment-q2" element={<Suspense fallback={<PageFallback />}><FinalExamsAssessmentQ2 /></Suspense>} />
+        <Route path="teachers" element={<Suspense fallback={<PageFallback />}><Teachers /></Suspense>} />
+        <Route path="teachers/:teacherId" element={<Suspense fallback={<PageFallback />}><TeacherProfile /></Suspense>} />
+        <Route path="classes" element={<Suspense fallback={<PageFallback />}><Classes /></Suspense>} />
+        <Route path="analytics" element={<Suspense fallback={<PageFallback />}><Analytics /></Suspense>} />
+        <Route path="remedial-plans" element={<Suspense fallback={<PageFallback />}><RemedialPlans /></Suspense>} />
+        <Route path="rewards" element={<Suspense fallback={<PageFallback />}><Rewards /></Suspense>} />
+        <Route path="reports" element={<Suspense fallback={<PageFallback />}><Reports /></Suspense>} />
+        <Route path="notifications" element={<Suspense fallback={<PageFallback />}><Notifications /></Suspense>} />
+        <Route path="calendar" element={<Suspense fallback={<PageFallback />}><Calendar /></Suspense>} />
+        <Route path="settings" element={<Suspense fallback={<PageFallback />}><Settings /></Suspense>} />
+      </Route>
+    </Routes>
+  );
 
   return (
     <AppErrorBoundary>
@@ -211,53 +274,32 @@ function App() {
             <div className="flex min-h-screen items-center justify-center bg-background">
               <span className="text-muted-foreground animate-pulse">Checking session…</span>
             </div>
-          ) : showLogin ? (
+          ) : showLoginOnly ? (
             <Login
               language={language}
               onLogin={handleLogin}
               onLanguageChange={setLanguage}
               serverStatus={backendOk}
             />
+          ) : showCrossfade ? (
+            <div
+              className="relative min-h-[100dvh] overflow-hidden bg-background"
+              aria-hidden={false}
+            >
+              <div className="auth-crossfade-app absolute inset-0 z-[1] min-h-[100dvh]">
+                {authenticatedRoutes}
+              </div>
+              <div className="auth-crossfade-login absolute inset-0 z-[2] min-h-[100dvh] pointer-events-none">
+                <Login
+                  language={language}
+                  onLogin={handleLogin}
+                  onLanguageChange={setLanguage}
+                  serverStatus={backendOk}
+                />
+              </div>
+            </div>
           ) : (
-            <Routes>
-              <Route
-                path="/"
-                element={
-                  <AppShell
-                    key={language}
-                    language={language}
-                    setLanguage={setLanguage}
-                    theme={theme}
-                    setTheme={setTheme}
-                    semester={semester}
-                    setSemester={setSemester}
-                    quarter={quarter}
-                    setQuarter={setQuarter}
-                    academicYear={academicYear}
-                    classes={classes}
-                    classesLoaded={classesLoaded}
-                    loadClasses={loadClasses}
-                  />
-                }
-              >
-                <Route index element={<Dashboard />} />
-                <Route path="students" element={<Suspense fallback={<PageFallback />}><Students /></Suspense>} />
-                <Route path="assessment-marks" element={<Suspense fallback={<PageFallback />}><AssessmentMarks /></Suspense>} />
-                <Route path="final-exams-assessment" element={<Suspense fallback={<PageFallback />}><FinalExamsAssessment /></Suspense>} />
-                <Route path="assessment-marks-q2" element={<Suspense fallback={<PageFallback />}><AssessmentMarksQ2 /></Suspense>} />
-                <Route path="final-exams-assessment-q2" element={<Suspense fallback={<PageFallback />}><FinalExamsAssessmentQ2 /></Suspense>} />
-                <Route path="teachers" element={<Suspense fallback={<PageFallback />}><Teachers /></Suspense>} />
-                <Route path="teachers/:teacherId" element={<Suspense fallback={<PageFallback />}><TeacherProfile /></Suspense>} />
-                <Route path="classes" element={<Suspense fallback={<PageFallback />}><Classes /></Suspense>} />
-                <Route path="analytics" element={<Suspense fallback={<PageFallback />}><Analytics /></Suspense>} />
-                <Route path="remedial-plans" element={<Suspense fallback={<PageFallback />}><RemedialPlans /></Suspense>} />
-                <Route path="rewards" element={<Suspense fallback={<PageFallback />}><Rewards /></Suspense>} />
-                <Route path="reports" element={<Suspense fallback={<PageFallback />}><Reports /></Suspense>} />
-                <Route path="notifications" element={<Suspense fallback={<PageFallback />}><Notifications /></Suspense>} />
-                <Route path="calendar" element={<Suspense fallback={<PageFallback />}><Calendar /></Suspense>} />
-                <Route path="settings" element={<Suspense fallback={<PageFallback />}><Settings /></Suspense>} />
-              </Route>
-            </Routes>
+            authenticatedRoutes
           )}
         </BrowserRouter>
         <Toaster richColors position="top-right" />
