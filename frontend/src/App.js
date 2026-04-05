@@ -194,77 +194,66 @@ function App() {
     setAuthReady(true);
   }, []);
 
-  if (!token || (token && authReady === null)) {
-    if (token && authReady === null) {
-      return (
-        <AppErrorBoundary>
-          <div className="App flex min-h-screen items-center justify-center bg-background">
-            <span className="text-muted-foreground animate-pulse">Checking session…</span>
-            <Toaster richColors position="top-right" />
-          </div>
-        </AppErrorBoundary>
-      );
-    }
-    return (
-      <AppErrorBoundary>
-        <div className="App">
-          <BrowserRouter>
+  // Single BrowserRouter for the whole app — avoids tearing down/remounting the router on login (major flicker).
+  const authChecking = Boolean(token && authReady === null);
+  const showLogin = !token;
+
+  return (
+    <AppErrorBoundary>
+      <div className="App">
+        <BrowserRouter>
+          {authChecking ? (
+            <div className="flex min-h-screen items-center justify-center bg-background">
+              <span className="text-muted-foreground animate-pulse">Checking session…</span>
+            </div>
+          ) : showLogin ? (
             <Login
               language={language}
               onLogin={handleLogin}
               onLanguageChange={setLanguage}
               serverStatus={backendOk}
             />
-          </BrowserRouter>
-          <Toaster richColors position="top-right" />
-        </div>
-      </AppErrorBoundary>
-    );
-  }
-
-  return (
-    <AppErrorBoundary>
-      <div className="App">
-        <BrowserRouter>
-          <Routes>
-          <Route
-            path="/"
-            element={
-              <AppShell
-                key={language}
-                language={language}
-                setLanguage={setLanguage}
-                theme={theme}
-                setTheme={setTheme}
-                semester={semester}
-                setSemester={setSemester}
-                quarter={quarter}
-                setQuarter={setQuarter}
-                academicYear={academicYear}
-                classes={classes}
-                classesLoaded={classesLoaded}
-                loadClasses={loadClasses}
-              />
-            }
-          >
-            <Route index element={<Suspense fallback={<PageFallback />}><Dashboard /></Suspense>} />
-            <Route path="students" element={<Suspense fallback={<PageFallback />}><Students /></Suspense>} />
-            <Route path="assessment-marks" element={<Suspense fallback={<PageFallback />}><AssessmentMarks /></Suspense>} />
-            <Route path="final-exams-assessment" element={<Suspense fallback={<PageFallback />}><FinalExamsAssessment /></Suspense>} />
-            <Route path="assessment-marks-q2" element={<Suspense fallback={<PageFallback />}><AssessmentMarksQ2 /></Suspense>} />
-            <Route path="final-exams-assessment-q2" element={<Suspense fallback={<PageFallback />}><FinalExamsAssessmentQ2 /></Suspense>} />
-            <Route path="teachers" element={<Suspense fallback={<PageFallback />}><Teachers /></Suspense>} />
-            <Route path="teachers/:teacherId" element={<Suspense fallback={<PageFallback />}><TeacherProfile /></Suspense>} />
-            <Route path="classes" element={<Suspense fallback={<PageFallback />}><Classes /></Suspense>} />
-            <Route path="analytics" element={<Suspense fallback={<PageFallback />}><Analytics /></Suspense>} />
-            <Route path="remedial-plans" element={<Suspense fallback={<PageFallback />}><RemedialPlans /></Suspense>} />
-            <Route path="rewards" element={<Suspense fallback={<PageFallback />}><Rewards /></Suspense>} />
-            <Route path="reports" element={<Suspense fallback={<PageFallback />}><Reports /></Suspense>} />
-            <Route path="notifications" element={<Suspense fallback={<PageFallback />}><Notifications /></Suspense>} />
-            <Route path="calendar" element={<Suspense fallback={<PageFallback />}><Calendar /></Suspense>} />
-            <Route path="settings" element={<Suspense fallback={<PageFallback />}><Settings /></Suspense>} />
-          </Route>
-          </Routes>
+          ) : (
+            <Routes>
+              <Route
+                path="/"
+                element={
+                  <AppShell
+                    key={language}
+                    language={language}
+                    setLanguage={setLanguage}
+                    theme={theme}
+                    setTheme={setTheme}
+                    semester={semester}
+                    setSemester={setSemester}
+                    quarter={quarter}
+                    setQuarter={setQuarter}
+                    academicYear={academicYear}
+                    classes={classes}
+                    classesLoaded={classesLoaded}
+                    loadClasses={loadClasses}
+                  />
+                }
+              >
+                <Route index element={<Suspense fallback={<PageFallback />}><Dashboard /></Suspense>} />
+                <Route path="students" element={<Suspense fallback={<PageFallback />}><Students /></Suspense>} />
+                <Route path="assessment-marks" element={<Suspense fallback={<PageFallback />}><AssessmentMarks /></Suspense>} />
+                <Route path="final-exams-assessment" element={<Suspense fallback={<PageFallback />}><FinalExamsAssessment /></Suspense>} />
+                <Route path="assessment-marks-q2" element={<Suspense fallback={<PageFallback />}><AssessmentMarksQ2 /></Suspense>} />
+                <Route path="final-exams-assessment-q2" element={<Suspense fallback={<PageFallback />}><FinalExamsAssessmentQ2 /></Suspense>} />
+                <Route path="teachers" element={<Suspense fallback={<PageFallback />}><Teachers /></Suspense>} />
+                <Route path="teachers/:teacherId" element={<Suspense fallback={<PageFallback />}><TeacherProfile /></Suspense>} />
+                <Route path="classes" element={<Suspense fallback={<PageFallback />}><Classes /></Suspense>} />
+                <Route path="analytics" element={<Suspense fallback={<PageFallback />}><Analytics /></Suspense>} />
+                <Route path="remedial-plans" element={<Suspense fallback={<PageFallback />}><RemedialPlans /></Suspense>} />
+                <Route path="rewards" element={<Suspense fallback={<PageFallback />}><Rewards /></Suspense>} />
+                <Route path="reports" element={<Suspense fallback={<PageFallback />}><Reports /></Suspense>} />
+                <Route path="notifications" element={<Suspense fallback={<PageFallback />}><Notifications /></Suspense>} />
+                <Route path="calendar" element={<Suspense fallback={<PageFallback />}><Calendar /></Suspense>} />
+                <Route path="settings" element={<Suspense fallback={<PageFallback />}><Settings /></Suspense>} />
+              </Route>
+            </Routes>
+          )}
         </BrowserRouter>
         <Toaster richColors position="top-right" />
       </div>
