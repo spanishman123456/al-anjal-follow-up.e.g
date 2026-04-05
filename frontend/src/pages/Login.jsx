@@ -68,7 +68,7 @@ export default function Login({
         const response = await api.post("auth/google", { id_token: credential });
         sessionStorage.setItem("auth_token", response.data.access_token);
         onLogin?.(response.data.access_token);
-        navigate("/");
+        navigate("/", { replace: true });
       } catch (error) {
         const detail = error?.response?.data?.detail;
         const msg = typeof detail === "string" ? detail : t("login_failed");
@@ -161,7 +161,7 @@ export default function Login({
       }
       sessionStorage.setItem("auth_token", response.data.access_token);
       onLogin?.(response.data.access_token);
-      navigate("/");
+      navigate("/", { replace: true });
     } catch (error) {
       const status = error?.response?.status;
       const detail = error?.response?.data?.detail;

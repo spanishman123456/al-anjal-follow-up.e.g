@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useState, lazy, Suspense, Component } from "react";
+import { flushSync } from "react-dom";
 import "@/App.css";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AppShell } from "@/components/layout/AppShell";
 import { api, checkBackendHealth, isProductionBackendUrl } from "@/lib/api";
 import Login from "@/pages/Login";
+import Dashboard from "@/pages/Dashboard";
 import { Toaster } from "@/components/ui/sonner";
 
-const Dashboard = lazy(() => import("@/pages/Dashboard"));
+// Dashboard is eager-loaded so first paint after login does not flash Suspense fallback (major flicker source).
 const Students = lazy(() => import("@/pages/Students"));
 const AssessmentMarks = lazy(() => import("@/pages/AssessmentMarks"));
 const FinalExamsAssessment = lazy(() => import("@/pages/FinalExamsAssessment"));
@@ -24,7 +26,7 @@ const Calendar = lazy(() => import("@/pages/Calendar"));
 const Notifications = lazy(() => import("@/pages/Notifications"));
 
 const PageFallback = () => (
-  <div className="flex min-h-[200px] items-center justify-center text-muted-foreground">
+  <div className="flex min-h-screen w-full items-center justify-center bg-background text-muted-foreground">
     <span className="animate-pulse">Loading…</span>
   </div>
 );
@@ -190,8 +192,11 @@ function App() {
   }, [token]);
 
   const handleLogin = useCallback((newToken) => {
-    setToken(newToken);
-    setAuthReady(true);
+    // Commit auth state in one synchronous paint to avoid a flash of login → blank → shell.
+    flushSync(() => {
+      setToken(newToken);
+      setAuthReady(true);
+    });
   }, []);
 
   // Single BrowserRouter for the whole app — avoids tearing down/remounting the router on login (major flicker).
@@ -235,7 +240,7 @@ function App() {
                   />
                 }
               >
-                <Route index element={<Suspense fallback={<PageFallback />}><Dashboard /></Suspense>} />
+                <Route index element={<Dashboard />} />
                 <Route path="students" element={<Suspense fallback={<PageFallback />}><Students /></Suspense>} />
                 <Route path="assessment-marks" element={<Suspense fallback={<PageFallback />}><AssessmentMarks /></Suspense>} />
                 <Route path="final-exams-assessment" element={<Suspense fallback={<PageFallback />}><FinalExamsAssessment /></Suspense>} />

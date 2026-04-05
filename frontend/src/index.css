@@ -303,3 +303,13 @@ html.dark .page-content-bg {
         border-bottom-color: inherit;
     }
 }
+
+/* After theme tokens exist: same surface as AppShell to reduce white flash on login → dashboard. */
+body {
+    background-color: hsl(var(--background));
+}
+
+#root {
+    min-height: 100dvh;
+    background-color: hsl(var(--background));
+}
