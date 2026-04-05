@@ -4389,6 +4389,10 @@ RECOVERY_ID = (os.environ.get("RECOVERY_ID") or "").strip()
 @auth_router.post("/login", response_model=AuthToken)
 async def login(payload: AuthLogin):
     try:
+        # Read at request time (Render/env updates always visible; avoids stale module-level cache).
+        recovery_id = (os.environ.get("RECOVERY_ID") or "").strip()
+        recovery_password = (os.environ.get("RECOVERY_PASSWORD") or "").strip()
+
         identifier = payload.username.strip()
         if not identifier:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Username required")
@@ -4405,7 +4409,7 @@ async def login(payload: AuthLogin):
         )
 
         if not user:
-            if RECOVERY_ID and RECOVERY_PASSWORD and identifier == RECOVERY_ID and payload.password.strip() == RECOVERY_PASSWORD:
+            if recovery_id and recovery_password and identifier == recovery_id and payload.password.strip() == recovery_password:
                 admin_role = await db.roles.find_one({"name": "Admin"}, {"_id": 0})
                 if not admin_role:
                     admin_role = {
@@ -4416,15 +4420,15 @@ async def login(payload: AuthLogin):
                     }
                     await db.roles.insert_one(admin_role)
                 new_user = {
-                    "id": RECOVERY_ID,
+                    "id": recovery_id,
                     "name": "Administrator",
-                    "email": f"{RECOVERY_ID}@school.local",
-                    "username": RECOVERY_ID,
+                    "email": f"{recovery_id}@school.local",
+                    "username": recovery_id,
                     "role_id": admin_role["id"],
                     "role_name": admin_role["name"],
                     "active": True,
                     "permissions": admin_role.get("permissions", ["all"]),
-                    "password_hash": get_password_hash(RECOVERY_PASSWORD),
+                    "password_hash": get_password_hash(recovery_password),
                     "created_at": iso_now(),
                     "updated_at": iso_now(),
                 }
@@ -4436,18 +4440,31 @@ async def login(payload: AuthLogin):
         # Only verify against stored password. Do not overwrite with recovery password
         # when the user has already set a password (e.g. via profile settings).
         password_ok = False
-        stored_hash = user.get("password_hash") or ""
-        if stored_hash and verify_password(payload.password, stored_hash):
-            password_ok = True
-        elif RECOVERY_PASSWORD and not stored_hash.strip() and payload.password.strip() == RECOVERY_PASSWORD:
+        raw_hash = user.get("password_hash")
+        stored_hash = raw_hash.strip() if isinstance(raw_hash, str) else (str(raw_hash).strip() if raw_hash is not None else "")
+        try:
+            if stored_hash and verify_password(payload.password, stored_hash):
+                password_ok = True
+        except Exception:
+            logger.warning("Password verify failed for user id=%s (malformed hash?)", user.get("id"))
+            password_ok = False
+        if not password_ok and recovery_password and not stored_hash and payload.password.strip() == recovery_password:
             # One-time recovery: user has no password set yet, set it and log in
-            new_hash = get_password_hash(RECOVERY_PASSWORD)
+            new_hash = get_password_hash(recovery_password)
             await db.users.update_one({"id": user["id"]}, {"$set": {"password_hash": new_hash}})
             password_ok = True
 
         if not password_ok:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
-        token = create_access_token({"sub": user["id"], "role": user["role_name"]})
+        uid = user.get("id")
+        role_name = (user.get("role_name") or "").strip()
+        if not uid or not role_name:
+            logger.warning("Login user missing id or role_name: keys=%s", list(user.keys()))
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Account profile is incomplete. Contact an administrator.",
+            )
+        token = create_access_token({"sub": uid, "role": role_name})
         return AuthToken(access_token=token)
     except HTTPException:
         raise
