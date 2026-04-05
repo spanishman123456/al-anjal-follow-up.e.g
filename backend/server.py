@@ -6,6 +6,7 @@ from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 import os
+import asyncio
 import logging
 from pathlib import Path
 
@@ -152,7 +153,18 @@ api_router = APIRouter(prefix="/api", dependencies=[Depends(get_current_user)])
 
 @app.get("/health")
 async def health_check():
-    return {"status": "ok"}
+    """
+    Verifies the API process and MongoDB. Login needs the database; /health previously
+    only confirmed the process was up, which hid Atlas/network issues from the UI.
+    """
+    try:
+        await asyncio.wait_for(client.admin.command("ping"), timeout=8.0)
+    except Exception:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Database unreachable. Check MongoDB Atlas Network Access (your IP) and that the cluster is not paused.",
+        )
+    return {"status": "ok", "database": "connected"}
 
 PERFORMANCE_THRESHOLDS = {
     "exceeding": 47,
@@ -4441,9 +4453,18 @@ async def login(payload: AuthLogin):
         raise
     except Exception as e:
         logger.exception("Login failed: %s", e)
+        if os.environ.get("RENDER"):
+            detail = (
+                "Login temporarily unavailable. Check Render logs, MongoDB Atlas (Network Access, MONGO_URL), "
+                "and that RECOVERY_ID/RECOVERY_PASSWORD are set on Render if the database has no users yet."
+            )
+        else:
+            detail = (
+                "Database or server temporarily unavailable. Keep Start_App.bat open and try again in a moment."
+            )
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Database or server temporarily unavailable. Keep Start_App.bat open and try again in a moment.",
+            detail=detail,
         )
 
 

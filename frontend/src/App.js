@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState, lazy, Suspense, Component } from "rea
 import "@/App.css";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AppShell } from "@/components/layout/AppShell";
-import { api, checkBackendHealth } from "@/lib/api";
+import { api, checkBackendHealth, isProductionBackendUrl } from "@/lib/api";
 import Login from "@/pages/Login";
 import { Toaster } from "@/components/ui/sonner";
 
@@ -164,7 +164,7 @@ function App() {
   }, [quarter]);
 
   // Start backend health check as soon as app loads (when not logged in).
-  // Short timeout so "Checking server" doesn't block for minutes; login can still be tried.
+  // Avoid polling every 3s on Render: cold /health often >10s and causes backendOk to flip → flickering UI.
   const [backendOk, setBackendOk] = useState(null);
   useEffect(() => {
     if (token) return;
@@ -172,14 +172,16 @@ function App() {
     checkBackendHealth().then((ok) => {
       if (!cancelled) setBackendOk(ok);
     });
+    const safetyMs = isProductionBackendUrl ? 95000 : 12000;
+    const pollMs = isProductionBackendUrl ? 45000 : 8000;
     const safety = setTimeout(() => {
       if (!cancelled) setBackendOk((v) => (v === null ? false : v));
-    }, 12000);
+    }, safetyMs);
     const interval = setInterval(() => {
       checkBackendHealth().then((ok) => {
         if (!cancelled) setBackendOk(ok);
       });
-    }, 3000);
+    }, pollMs);
     return () => {
       cancelled = true;
       clearTimeout(safety);

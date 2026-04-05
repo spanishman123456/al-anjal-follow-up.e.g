@@ -339,13 +339,13 @@ export default function Login({
                 <p className="text-xs text-slate-500 mt-2">Checking server status...</p>
               )}
               {backendOk === true && (
-                <p className="text-xs text-green-600 mt-2">Server connected</p>
+                <p className="text-xs text-green-600 mt-2">Server and database connected</p>
               )}
               {backendOk === false && (
                 <p className="text-xs text-amber-600 mt-2">
                   {isProductionBackendUrl
                     ? "Server is waking up (free hosting). Press Login once and the app will retry automatically."
-                    : "Server not connected. Run Start_App.bat and keep its window open."}
+                    : "Backend or database not reachable. Run Start_App.bat (keep it open). If this persists, open MongoDB Atlas → Network Access and allow your current IP (or 0.0.0.0/0 for testing), and ensure the cluster is not paused."}
                 </p>
               )}
             </form>
