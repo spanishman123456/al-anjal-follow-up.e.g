@@ -88,7 +88,7 @@ function computeAssessmentPartTotal(baseStudent, currentStudent = baseStudent) {
 
 // Final total (2nd quarter) = Assessment part (30) + 2nd Quarter Practical (10) + 2nd Quarter Theory (10) = 50.
 function computeFinalTotal(baseStudent, currentStudent = baseStudent) {
-  const assessmentPart = computeAssessmentPartTotal(baseStudent, baseStudent);
+  const assessmentPart = computeAssessmentPartTotal(baseStudent, currentStudent);
   const qp = Number(currentStudent?.quarter2_practical) ?? 0;
   const qt = Number(currentStudent?.quarter2_theory) ?? 0;
   const quarterSum = (Number.isNaN(qp) ? 0 : qp) + (Number.isNaN(qt) ? 0 : qt);

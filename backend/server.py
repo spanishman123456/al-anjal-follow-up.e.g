@@ -927,7 +927,6 @@ def compute_final_exams_combined(
             students_total_override=students_total_override,
         )
     assessment_part = assessment_result.get("combined_total") or 0
-    students_total = assessment_result.get("students_total") or 0
     if quarter == 2:
         qp = float(scores.get("quarter2_practical")) if scores.get("quarter2_practical") is not None and not (isinstance(scores.get("quarter2_practical"), float) and pd.isna(scores.get("quarter2_practical"))) else 0
         qt = float(scores.get("quarter2_theory")) if scores.get("quarter2_theory") is not None and not (isinstance(scores.get("quarter2_theory"), float) and pd.isna(scores.get("quarter2_theory"))) else 0
@@ -937,11 +936,9 @@ def compute_final_exams_combined(
         qt = float(scores.get("quarter1_theory")) if scores.get("quarter1_theory") is not None and not (isinstance(scores.get("quarter1_theory"), float) and pd.isna(scores.get("quarter1_theory"))) else 0
         quarter_fields = [scores.get("quarter1_practical"), scores.get("quarter1_theory")]
     quarter_sum = round(min(max(0, qp + qt), 20), 2)
-    # When quarter exam scores are cleared, show only students/follow-up part (15/50), matching Assessment Marks (15/30).
-    if quarter_sum == 0:
-        combined = round(min(students_total, 50), 2)
-    else:
-        combined = round(min(assessment_part + quarter_sum, 50), 2)
+    # Full Quizzes & Chapter Test cumulative (assessment_part, max 30) + quarter exams (max 20) = max 50.
+    # When quarter exams are not entered yet, show assessment part only (e.g. 29/50), not just weekly subtotal (15).
+    combined = round(min(assessment_part + quarter_sum, 50), 2)
     has_any = (
         assessment_result.get("combined_total") is not None
         or any(
@@ -2592,7 +2589,7 @@ async def get_students(
                     student["assessment_q2_performance_level"] = None
                     student["assessment_q2_performance_label"] = None
                     effective_q1 = _effective_scores_q1(sw)
-                    # Use current week's quarter exam values only (no fallback to week 9) so cleared scores show 15/50.
+                    # Use current week's quarter exam values only (no fallback to week 9).
                     effective_q1_edit = {
                         **effective_q1,
                         "quarter1_practical": student.get("quarter1_practical"),
@@ -2618,7 +2615,7 @@ async def get_students(
                     student["assessment_q2_performance_level"] = res_q2.get("performance_level")
                     student["assessment_q2_performance_label"] = res_q2.get("performance_label")
                     effective_q2 = _effective_scores_q2(sw)
-                    # Use current week's quarter exam values only so cleared scores show 15/50.
+                    # Use current week's quarter exam values only (no cross-week fallback for quarter fields).
                     effective_q2_edit = {
                         **effective_q2,
                         "quarter2_practical": student.get("quarter2_practical"),
