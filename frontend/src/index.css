@@ -431,8 +431,11 @@ html:not(.dark) .login-top-sky {
     }
 
     /* Tight fixed width: enough for decimals (e.g. 3.5, 10.5) without spinners eating space */
+    /* inline-block + centered td so inputs sit in the middle of the column (not stretched by display:flex) */
     .score-table-input-5 {
         @apply shrink-0 text-center tabular-nums;
+        display: inline-block !important;
+        vertical-align: middle;
         box-sizing: border-box;
         width: 5.25rem;
         min-width: 5.25rem;
@@ -442,6 +445,8 @@ html:not(.dark) .login-top-sky {
     }
     .score-table-input-5-fill {
         @apply h-8 shrink-0 text-center text-sm tabular-nums;
+        display: inline-block !important;
+        vertical-align: middle;
         box-sizing: border-box;
         width: 5.25rem;
         min-width: 5.25rem;
@@ -451,6 +456,8 @@ html:not(.dark) .login-top-sky {
     }
     .score-table-input-10 {
         @apply shrink-0 text-center tabular-nums;
+        display: inline-block !important;
+        vertical-align: middle;
         box-sizing: border-box;
         width: 6.25rem;
         min-width: 6.25rem;
@@ -460,6 +467,8 @@ html:not(.dark) .login-top-sky {
     }
     .score-table-input-10-fill {
         @apply h-8 shrink-0 text-center text-sm tabular-nums;
+        display: inline-block !important;
+        vertical-align: middle;
         box-sizing: border-box;
         width: 6.25rem;
         min-width: 6.25rem;
@@ -467,6 +476,15 @@ html:not(.dark) .login-top-sky {
         padding-left: 0.35rem !important;
         padding-right: 0.35rem !important;
     }
+}
+
+/* Center score cells (direct input or input inside fill-row flex wrapper) */
+table td:has(input.score-table-input-5),
+table td:has(input.score-table-input-5-fill),
+table td:has(input.score-table-input-10),
+table td:has(input.score-table-input-10-fill) {
+    text-align: center !important;
+    vertical-align: middle !important;
 }
 
 body {

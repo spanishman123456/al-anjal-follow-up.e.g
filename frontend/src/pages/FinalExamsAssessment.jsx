@@ -297,7 +297,19 @@ export default function FinalExamsAssessment() {
     toast.success(t("fill_applied") || "Value applied");
   };
 
+  const openBulkSaveConfirm = () => {
+    if (!activeWeekId) {
+      toast.error(t("select_week_before_import") || "Please select a week first.");
+      return;
+    }
+    setBulkConfirmOpen(true);
+  };
+
   const handleBulkSave = async () => {
+    if (!activeWeekId) {
+      toast.error(t("select_week_before_import") || "Please select a week first.");
+      return;
+    }
     try {
       const updates = filteredStudents.map((student) => {
         const current = bulkScores[student.id] || student;
@@ -307,7 +319,7 @@ export default function FinalExamsAssessment() {
           quarter1_theory: parseScore(current.quarter1_theory),
         };
       });
-      await api.post("/students/bulk-scores", { updates, week_id: activeWeekId || undefined }, { timeout: BULK_SAVE_TIMEOUT_MS });
+      await api.post("/students/bulk-scores", { updates, week_id: activeWeekId }, { timeout: BULK_SAVE_TIMEOUT_MS });
       toast.success(t("student_updated"));
       setBulkEditMode(false);
       setBulkConfirmOpen(false);
@@ -468,11 +480,11 @@ export default function FinalExamsAssessment() {
         testIdPrefix="final-exams-assessment"
         action={
           <div className="flex flex-wrap gap-2">
+            <Button type="button" onClick={openBulkSaveConfirm} data-testid="final-exams-bulk-save">
+              {t("save_all_scores")}
+            </Button>
             {bulkEditMode ? (
-              <>
-                <Button onClick={() => setBulkConfirmOpen(true)} data-testid="final-exams-bulk-save">{t("save_all_scores")}</Button>
-                <Button variant="outline" onClick={() => setBulkEditMode(false)}>{t("cancel")}</Button>
-              </>
+              <Button variant="outline" onClick={() => setBulkEditMode(false)}>{t("cancel")}</Button>
             ) : (
               <>
                 <Button variant="outline" onClick={startBulkEdit} data-testid="final-exams-edit-scores">{t("edit_scores")}</Button>
@@ -541,6 +553,16 @@ export default function FinalExamsAssessment() {
           <Button variant="outline" onClick={resetFilters}>{t("reset_filters")}</Button>
         </CardContent>
       </Card>
+
+      <div
+        className="flex flex-col gap-3 rounded-xl border-2 border-primary/25 bg-primary/5 p-4 sm:flex-row sm:items-center sm:justify-between"
+        data-testid="final-exams-save-banner"
+      >
+        <p className="text-sm text-foreground">{t("save_scores_banner_final_exams")}</p>
+        <Button type="button" onClick={openBulkSaveConfirm} className="shrink-0" size="lg" data-testid="final-exams-bulk-save-banner">
+          {t("save_all_scores")}
+        </Button>
+      </div>
 
       <Card data-testid="final-exams-table-card">
         <CardContent className="pt-6">

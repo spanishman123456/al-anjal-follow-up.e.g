@@ -152,6 +152,8 @@ export const translations = {
       "Out of 30: up to 15 from weekly work (average of weeks 10–18 from the Assessment page, or this week’s attendance + participation + behavior + homework), plus up to 15 from the higher quiz score plus the chapter practical test.",
     save_scores_banner:
       "After you enter or change quiz and chapter test scores, tap Save All Scores so they are stored for the week you selected.",
+    save_scores_banner_final_exams:
+      "After you enter or change final exam scores, tap Save All Scores so they are stored for the week you selected.",
     performance_level: "Performance Level",
     actions: "Actions",
     create: "Create",
@@ -502,6 +504,8 @@ export const translations = {
       "من 30: حتى 15 من الأعمال الأسبوعية (متوسط الأسابيع 10–18 من صفحة التقييم، أو حقول هذا الأسبوع)، زائد حتى 15 من أعلى درجة اختبار قصير + اختبار الفصل العملي.",
     save_scores_banner:
       "بعد إدخال أو تعديل درجات الاختبارات واختبار الفصل، اضغط «حفظ جميع الدرجات» لحفظها للأسبوع المحدد.",
+    save_scores_banner_final_exams:
+      "بعد إدخال أو تعديل درجات الاختبارات النهائية، اضغط «حفظ جميع الدرجات» لحفظها للأسبوع المحدد.",
     performance_level: "مستوى الأداء",
     actions: "الإجراءات",
     create: "إنشاء",
