@@ -329,18 +329,23 @@ export default function Analytics() {
   const handleDownload = async (format) => {
     try {
       const response = await api.get("/analytics/summary/export", {
-        params: { format, semester: apiSemester, quarter: apiQuarter },
+        params: {
+          format,
+          semester: apiSemester,
+          quarter: apiQuarter,
+          ...(selectedClassId !== "all" ? { class_id: selectedClassId } : {}),
+        },
         responseType: "blob",
       });
       const url = window.URL.createObjectURL(new Blob([response.data]));
       const link = document.createElement("a");
       link.href = url;
-      const sLabel = apiSemester === 2 ? "S2" : "S1";
-      const qLabel = `Q${apiQuarter}`;
-      link.setAttribute(
-        "download",
-        `analytics_summary_${sLabel}_${qLabel}.${format === "excel" ? "xlsx" : "pdf"}`,
-      );
+      const fnBase = `analytics_s${apiSemester}_q${apiQuarter}${
+        selectedClassId !== "all"
+          ? `_${selectedClassId.replace(/[^a-zA-Z0-9]/g, "").slice(0, 24)}`
+          : ""
+      }`;
+      link.setAttribute("download", `${fnBase}.${format === "excel" ? "xlsx" : "pdf"}`);
       document.body.appendChild(link);
       link.click();
       link.remove();

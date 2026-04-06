@@ -1410,7 +1410,7 @@ def generate_report_pdf(
         ["Scope", scope_label],
         ["Total Students", _fmt(report.get("total_students"))],
         ["Average Total Score", _fmt(report.get("avg_total_score"))],
-        ["On Level (Both Quarters)", _fmt(report.get("exceeding_rate"), "%")],
+        ["On Level % (focus quarter)", _fmt(report.get("exceeding_rate"), "%")],
         ["Quarter 1 On Level", _fmt(q1.get("on_level_rate"), "%")],
         ["Quarter 1 Avg Total", _fmt(q1.get("avg_total"))],
         ["Quarter 2 On Level", _fmt(q2.get("on_level_rate"), "%")],
@@ -4031,6 +4031,57 @@ async def get_analytics_overview(
     }
 
 
+def overview_to_pdf_report(overview: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Map get_analytics_overview payload to the shape expected by generate_report_pdf / generate_report_excel
+    so exports match the Analytics page (same semester, quarter, and optional class scope).
+    """
+    q = overview.get("quarter") or 1
+    q1 = overview.get("quarter1") or {}
+    q2 = overview.get("quarter2") or {}
+    selected = q1 if q == 1 else q2
+    dist = list(selected.get("distribution") or [])
+
+    def map_top(s: Dict[str, Any]) -> Dict[str, Any]:
+        return {
+            "full_name": s.get("full_name"),
+            "class_name": s.get("class_name"),
+            "quarter1_total": s.get("quarter1_total"),
+            "quarter2_total": s.get("quarter2_total"),
+            "total_score_normalized": (s.get("quarter2_total") if q == 2 else s.get("quarter1_total")),
+            "strengths": s.get("strengths") or [],
+        }
+
+    def map_support(s: Dict[str, Any]) -> Dict[str, Any]:
+        pl = s.get("performance_level_q1") if q == 1 else s.get("performance_level_q2")
+        return {
+            "full_name": s.get("full_name"),
+            "class_name": s.get("class_name"),
+            "quarter1_total": s.get("quarter1_total"),
+            "quarter2_total": s.get("quarter2_total"),
+            "performance_level": pl,
+            "performance_label": pl,
+            "weak_areas": s.get("weak_areas") or [],
+        }
+
+    class_breakdown = [
+        {"class_name": row["class_name"], "student_count": row["count"]}
+        for row in (overview.get("students_per_class") or [])
+    ]
+
+    return {
+        "total_students": overview.get("total_students", 0),
+        "avg_total_score": selected.get("avg_total"),
+        "exceeding_rate": selected.get("on_level_rate"),
+        "distribution": dist,
+        "quarter1": q1,
+        "quarter2": q2,
+        "class_breakdown": class_breakdown,
+        "top_performers": [map_top(s) for s in (overview.get("excelling_students") or [])],
+        "students_needing_support": [map_support(s) for s in (overview.get("struggling_students") or [])],
+    }
+
+
 def _empty_quarter_summary() -> Dict[str, Any]:
     return {
         "distribution": [
@@ -4669,31 +4720,33 @@ async def export_analytics_summary(
     format: str = Query("pdf"),
     semester: Optional[int] = Query(default=1),
     quarter: Optional[int] = Query(default=1),
+    class_id: Optional[str] = Query(default=None),
 ):
+    """
+    PDF/Excel aligned with GET /analytics/overview (same semester, quarter, optional class filter).
+    """
     sem = semester or 1
     q = quarter or 1
-    students = await db.students.find({}, {"_id": 0}).to_list(5000)
-    classes = await db.classes.find({}, {"_id": 0}).to_list(200)
-    if students:
-        scores_by_student = await build_quarter_score_map([s["id"] for s in students], sem, q)
-        for student in students:
-            sw = scores_by_student.get(student["id"], {})
-            _enrich_student_single_quarter(student, sw, q)
-    summary = build_summary(students, classes)
-    summary["class_breakdown"] = [
-        {
-            "class_name": c["name"],
-            "student_count": len([s for s in students if s["class_id"] == c["id"]])
-        }
-        for c in classes
-    ]
+    overview = await get_analytics_overview(class_id=class_id, semester=semester, quarter=quarter)
+    summary = overview_to_pdf_report(overview)
+
+    scope_label = f"Analytics · Semester {sem} · Q{q}"
+    if class_id:
+        cls = await db.classes.find_one({"id": class_id}, {"_id": 0, "name": 1})
+        cname = (cls or {}).get("name") or class_id
+        scope_label = f"{scope_label} · {cname}"
+
+    fn_base = f"analytics_s{sem}_q{q}"
+    if class_id:
+        cid = "".join(c for c in class_id if c.isalnum())[:24] or "class"
+        fn_base = f"{fn_base}_{cid}"
     if format == "excel":
-        content = generate_report_excel(summary, "All Grades")
-        filename = "analytics_summary.xlsx"
+        content = generate_report_excel(summary, scope_label)
+        filename = f"{fn_base}.xlsx"
         media_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     else:
-        content = generate_report_pdf(summary, "All Grades")
-        filename = "analytics_summary.pdf"
+        content = generate_report_pdf(summary, scope_label)
+        filename = f"{fn_base}.pdf"
         media_type = "application/pdf"
     headers = {"Content-Disposition": f"attachment; filename={filename}"}
     return StreamingResponse(io.BytesIO(content), media_type=media_type, headers=headers)
