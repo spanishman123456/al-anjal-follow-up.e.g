@@ -77,14 +77,18 @@ function computeAssessmentTotal(student) {
   return Math.min(ASSESSMENT_TOTAL_MAX, Math.round(sum * 100) / 100);
 }
 
-// Combined total (2nd quarter) = avg of weeks 10-18 (max 15) + best(Quiz 1, Quiz 2) + Chapter Test (max 15), total max 30.
+function computeWeeklySubtotalQ2(baseStudent) {
+  const avgWeeks10_18 = baseStudent?.avg_weeks_10_18;
+  if (avgWeeks10_18 != null && !Number.isNaN(Number(avgWeeks10_18))) {
+    return Math.min(STUDENTS_TOTAL_MAX, Math.round(Number(avgWeeks10_18) * 100) / 100);
+  }
+  return computeStudentsTotal(baseStudent);
+}
+
+// Combined total (2nd quarter) = weekly part (max 15) + best(Quiz 3, Quiz 4) + Chapter Test 2 (max 15), total max 30.
 const COMBINED_TOTAL_MAX = 30;
 function computeCombinedTotal(baseStudent, currentStudent = baseStudent) {
-  const avgWeeks10_18 = baseStudent?.avg_weeks_10_18;
-  const studentsTotal =
-    avgWeeks10_18 != null && !Number.isNaN(Number(avgWeeks10_18))
-      ? Math.min(STUDENTS_TOTAL_MAX, Math.round(Number(avgWeeks10_18) * 100) / 100)
-      : computeStudentsTotal(baseStudent);
+  const studentsTotal = computeWeeklySubtotalQ2(baseStudent);
   const assessmentTotal = computeAssessmentTotal(currentStudent);
   return Math.min(COMBINED_TOTAL_MAX, Math.round((studentsTotal + assessmentTotal) * 100) / 100);
 }
@@ -314,7 +318,19 @@ export default function AssessmentMarksQ2() {
     toast.success(t("fill_applied") || "Value applied to all students in this column");
   };
 
+  const openBulkSaveConfirm = () => {
+    if (!activeWeekId) {
+      toast.error(t("select_week_before_import") || "Please select a week first.");
+      return;
+    }
+    setBulkConfirmOpen(true);
+  };
+
   const handleBulkSave = async () => {
+    if (!activeWeekId) {
+      toast.error(t("select_week_before_import") || "Please select a week first.");
+      return;
+    }
     try {
       // 2nd quarter: save quiz3, quiz4, chapter_test2_practical (separate from Q1's quiz1/quiz2/chapter_test1)
       const updates = filteredStudents.map((student) => {
@@ -326,7 +342,7 @@ export default function AssessmentMarksQ2() {
           chapter_test2_practical: parseScore(current.chapter_test2_practical),
         };
       });
-      await api.post("/students/bulk-scores", { updates, week_id: activeWeekId || undefined }, { timeout: BULK_SAVE_TIMEOUT_MS });
+      await api.post("/students/bulk-scores", { updates, week_id: activeWeekId }, { timeout: BULK_SAVE_TIMEOUT_MS });
       toast.success(t("student_updated"));
       setBulkEditMode(false);
       setBulkConfirmOpen(false);
@@ -494,15 +510,13 @@ export default function AssessmentMarksQ2() {
         testIdPrefix="assessment-marks-q2"
         action={
           <div className="flex flex-wrap gap-2">
+            <Button onClick={openBulkSaveConfirm} data-testid="assessment-q2-bulk-save">
+              {t("save_all_scores")}
+            </Button>
             {bulkEditMode ? (
-              <>
-                <Button onClick={() => setBulkConfirmOpen(true)} data-testid="assessment-q2-bulk-save">
-                  {t("save_all_scores")}
-                </Button>
-                <Button variant="outline" onClick={() => setBulkEditMode(false)} data-testid="assessment-q2-bulk-cancel">
-                  {t("cancel")}
-                </Button>
-              </>
+              <Button variant="outline" onClick={() => setBulkEditMode(false)} data-testid="assessment-q2-bulk-cancel">
+                {t("cancel")}
+              </Button>
             ) : (
               <>
                 <Button variant="outline" onClick={startBulkEdit} data-testid="assessment-q2-edit-scores">
@@ -604,6 +618,16 @@ export default function AssessmentMarksQ2() {
         </CardContent>
       </Card>
 
+      <div
+        className="flex flex-col gap-3 rounded-xl border-2 border-primary/25 bg-primary/5 p-4 sm:flex-row sm:items-center sm:justify-between"
+        data-testid="assessment-q2-save-banner"
+      >
+        <p className="text-sm text-foreground">{t("save_scores_banner")}</p>
+        <Button type="button" onClick={openBulkSaveConfirm} className="shrink-0" size="lg" data-testid="assessment-q2-bulk-save-banner">
+          {t("save_all_scores")}
+        </Button>
+      </div>
+
       <Card data-testid="assessment-q2-table-card">
         <CardContent className="pt-6">
           <Table data-testid="assessment-q2-marks-table">
@@ -614,7 +638,9 @@ export default function AssessmentMarksQ2() {
                 <TableHead className="text-center">{t("quiz3")} (5)</TableHead>
                 <TableHead className="text-center">{t("quiz4")} (5)</TableHead>
                 <TableHead className="text-center">{t("chapter_test2_practical")} (10)</TableHead>
-                <TableHead className="text-center">{t("total_score")}</TableHead>
+                <TableHead className="text-center" title={t("total_score_tooltip_q2")}>
+                  {t("total_score")}
+                </TableHead>
                 <TableHead className="text-center">{t("performance_level")}</TableHead>
               </TableRow>
             </TableHeader>
@@ -630,8 +656,8 @@ export default function AssessmentMarksQ2() {
                       min={0}
                       max={5}
                       step={0.5}
-                      className="w-14 h-8 text-center text-sm"
-                      placeholder="0–5"
+                      className="score-table-input-5-fill"
+                      aria-label={t("quiz3")}
                       value={fillValues.quiz3}
                       onChange={(e) => setFillValues((prev) => ({ ...prev, quiz3: e.target.value }))}
                       data-testid="assessment-q2-fill-quiz3"
@@ -655,8 +681,8 @@ export default function AssessmentMarksQ2() {
                       min={0}
                       max={5}
                       step={0.5}
-                      className="w-14 h-8 text-center text-sm"
-                      placeholder="0–5"
+                      className="score-table-input-5-fill"
+                      aria-label={t("quiz4")}
                       value={fillValues.quiz4}
                       onChange={(e) => setFillValues((prev) => ({ ...prev, quiz4: e.target.value }))}
                       data-testid="assessment-q2-fill-quiz4"
@@ -680,8 +706,8 @@ export default function AssessmentMarksQ2() {
                       min={0}
                       max={10}
                       step={0.5}
-                      className="w-14 h-8 text-center text-sm"
-                      placeholder="0–10"
+                      className="score-table-input-10-fill"
+                      aria-label={t("chapter_test2_practical")}
                       value={fillValues.chapter_test2_practical}
                       onChange={(e) => setFillValues((prev) => ({ ...prev, chapter_test2_practical: e.target.value }))}
                       data-testid="assessment-q2-fill-practical"
@@ -703,6 +729,8 @@ export default function AssessmentMarksQ2() {
               {filteredStudents.length ? (
                 filteredStudents.map((student) => {
                   const current = bulkScores[student.id] || student;
+                  const weeklyPart = computeWeeklySubtotalQ2(student);
+                  const marksPart = computeAssessmentTotal(current);
                   const total =
                     !bulkEditMode &&
                     student.assessment_q2_combined_total != null &&
@@ -713,6 +741,9 @@ export default function AssessmentMarksQ2() {
                     !bulkEditMode && student.assessment_q2_performance_level
                       ? student.assessment_q2_performance_level
                       : computeAssessmentPerformanceLevel(student, current);
+                  const partsLine = t("combined_total_parts")
+                    .replace("{weekly}", String(weeklyPart))
+                    .replace("{marks}", String(marksPart));
                   return (
                     <TableRow key={student.id} data-testid={`assessment-row-${student.id}`}>
                       <TableCell>{student.full_name}</TableCell>
@@ -723,11 +754,11 @@ export default function AssessmentMarksQ2() {
                           min={0}
                           max={5}
                           step={0.5}
-                          className="text-center w-14"
+                          className="score-table-input-5"
                           value={current.quiz3 ?? ""}
                           onChange={(e) => handleScoreChange(student.id, "quiz3", e.target.value, 5)}
                           onBlur={() => handleQuiz3Blur(student)}
-                          placeholder="0–5"
+                          aria-label={t("quiz3")}
                           data-testid={`assessment-quiz3-${student.id}`}
                         />
                       </TableCell>
@@ -737,11 +768,11 @@ export default function AssessmentMarksQ2() {
                           min={0}
                           max={5}
                           step={0.5}
-                          className="text-center w-14"
+                          className="score-table-input-5"
                           value={current.quiz4 ?? ""}
                           onChange={(e) => handleScoreChange(student.id, "quiz4", e.target.value, 5)}
                           onBlur={() => handleQuiz4Blur(student)}
-                          placeholder="0–5"
+                          aria-label={t("quiz4")}
                           data-testid={`assessment-quiz4-${student.id}`}
                         />
                       </TableCell>
@@ -751,16 +782,21 @@ export default function AssessmentMarksQ2() {
                           min={0}
                           max={10}
                           step={0.5}
-                          className="text-center w-16"
+                          className="score-table-input-10"
                           value={current.chapter_test2_practical ?? ""}
                           onChange={(e) => handleScoreChange(student.id, "chapter_test2_practical", e.target.value, 10)}
                           onBlur={() => handleChapterTest2Blur(student)}
-                          placeholder="0–10"
+                          aria-label={t("chapter_test2_practical")}
                           data-testid={`assessment-practical-${student.id}`}
                         />
                       </TableCell>
-                      <TableCell className="text-center" data-testid={`assessment-total-${student.id}`}>
-                        {formatScore(total, "/30")}
+                      <TableCell
+                        className="text-center"
+                        data-testid={`assessment-total-${student.id}`}
+                        title={t("total_score_tooltip_q2")}
+                      >
+                        <div className="font-semibold tabular-nums">{formatScore(total, "/30")}</div>
+                        <div className="mt-0.5 text-[10px] leading-tight text-muted-foreground tabular-nums">{partsLine}</div>
                       </TableCell>
                       <TableCell className="text-center">
                         <Badge variant="outline" className={levelStyles[perfLevel] ?? levelStyles.no_data} data-testid={`assessment-perf-${student.id}`}>

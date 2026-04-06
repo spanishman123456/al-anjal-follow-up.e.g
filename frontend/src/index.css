@@ -407,6 +407,77 @@ html:not(.dark) .login-top-sky {
     }
 }
 
+@layer components {
+    /*
+     * Grade table inputs: override Input `w-full` (utilities win over this layer without !important).
+     * Hide spinners so decimals (e.g. 2.5) stay visible on Chrome/Edge/Safari.
+     */
+    .score-table-input-5,
+    .score-table-input-5-fill,
+    .score-table-input-10,
+    .score-table-input-10-fill {
+        -moz-appearance: textfield;
+    }
+    input.score-table-input-5::-webkit-outer-spin-button,
+    input.score-table-input-5::-webkit-inner-spin-button,
+    input.score-table-input-5-fill::-webkit-outer-spin-button,
+    input.score-table-input-5-fill::-webkit-inner-spin-button,
+    input.score-table-input-10::-webkit-outer-spin-button,
+    input.score-table-input-10::-webkit-inner-spin-button,
+    input.score-table-input-10-fill::-webkit-outer-spin-button,
+    input.score-table-input-10-fill::-webkit-inner-spin-button {
+        -webkit-appearance: none;
+        margin: 0;
+    }
+
+    .score-table-input-5 {
+        @apply shrink-0 text-center tabular-nums;
+        box-sizing: border-box;
+        width: 11rem;
+        min-width: 11rem;
+        max-width: none;
+        padding-left: 0.5rem;
+        padding-right: 0.5rem;
+    }
+    .score-table-input-5-fill {
+        @apply h-8 shrink-0 text-center text-sm tabular-nums;
+        box-sizing: border-box;
+        width: 11rem;
+        min-width: 11rem;
+        max-width: none;
+        padding-left: 0.5rem;
+        padding-right: 0.5rem;
+    }
+    .score-table-input-10 {
+        @apply shrink-0 text-center tabular-nums;
+        box-sizing: border-box;
+        width: 12.5rem;
+        min-width: 12.5rem;
+        max-width: none;
+        padding-left: 0.5rem;
+        padding-right: 0.5rem;
+    }
+    .score-table-input-10-fill {
+        @apply h-8 shrink-0 text-center text-sm tabular-nums;
+        box-sizing: border-box;
+        width: 12.5rem;
+        min-width: 12.5rem;
+        max-width: none;
+        padding-left: 0.5rem;
+        padding-right: 0.5rem;
+    }
+}
+
+/* Let table columns grow so score inputs are not squeezed (automatic table layout). */
+table td:has(input.score-table-input-5),
+table td:has(input.score-table-input-5-fill) {
+    min-width: 11rem;
+}
+table td:has(input.score-table-input-10),
+table td:has(input.score-table-input-10-fill) {
+    min-width: 12.5rem;
+}
+
 body {
     background-color: hsl(var(--background));
 }

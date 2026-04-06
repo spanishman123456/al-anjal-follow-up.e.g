@@ -1376,7 +1376,7 @@ export default function Students() {
                       min={0}
                       max={2.5}
                       step={0.5}
-                      className="w-14 h-8 text-center text-sm"
+                      className="score-table-input-5-fill"
                       placeholder="0–2.5"
                       value={fillValues.attendance}
                       onChange={(e) => setFillValues((prev) => ({ ...prev, attendance: e.target.value }))}
@@ -1401,7 +1401,7 @@ export default function Students() {
                       min={0}
                       max={2.5}
                       step={0.5}
-                      className="w-14 h-8 text-center text-sm"
+                      className="score-table-input-5-fill"
                       placeholder="0–2.5"
                       value={fillValues.participation}
                       onChange={(e) => setFillValues((prev) => ({ ...prev, participation: e.target.value }))}
@@ -1426,7 +1426,7 @@ export default function Students() {
                       min={0}
                       max={5}
                       step={0.5}
-                      className="w-14 h-8 text-center text-sm"
+                      className="score-table-input-5-fill"
                       placeholder="0–5"
                       value={fillValues.behavior}
                       onChange={(e) => setFillValues((prev) => ({ ...prev, behavior: e.target.value }))}
@@ -1451,7 +1451,7 @@ export default function Students() {
                       min={0}
                       max={5}
                       step={0.5}
-                      className="w-14 h-8 text-center text-sm"
+                      className="score-table-input-5-fill"
                       placeholder="0–5"
                       value={fillValues.homework}
                       onChange={(e) => setFillValues((prev) => ({ ...prev, homework: e.target.value }))}
@@ -1511,7 +1511,7 @@ export default function Students() {
                           min={0}
                           max={2.5}
                           step={0.5}
-                          className="text-center w-14"
+                          className="score-table-input-5"
                           value={currentScores.attendance ?? ""}
                           onChange={(event) => handleScoreChange(student.id, "attendance", event.target.value)}
                           onBlur={() => handleAttendanceBlur(student)}
@@ -1525,7 +1525,7 @@ export default function Students() {
                           min={0}
                           max={2.5}
                           step={0.5}
-                          className="text-center w-14"
+                          className="score-table-input-5"
                           value={currentScores.participation ?? ""}
                           onChange={(event) => handleScoreChange(student.id, "participation", event.target.value)}
                           onBlur={() => handleParticipationBlur(student)}
@@ -1539,7 +1539,7 @@ export default function Students() {
                           min={0}
                           max={5}
                           step={0.5}
-                          className="text-center w-14"
+                          className="score-table-input-5"
                           value={currentScores.behavior ?? ""}
                           onChange={(event) => handleScoreChange(student.id, "behavior", event.target.value)}
                           onBlur={() => handleBehaviorBlur(student)}
@@ -1553,7 +1553,7 @@ export default function Students() {
                           min={0}
                           max={5}
                           step={0.5}
-                          className="text-center w-14"
+                          className="score-table-input-5"
                           value={currentScores.homework ?? ""}
                           onChange={(event) => handleScoreChange(student.id, "homework", event.target.value)}
                           onBlur={() => handleHomeworkBlur(student)}

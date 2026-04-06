@@ -145,6 +145,13 @@ export const translations = {
     chapter_test1_practical: "Chapter Test 1 (Practical)",
     chapter_test2_practical: "Chapter Test 2 (Practical)",
     total_score: "Total Score",
+    combined_total_parts: "{weekly}/15 + {marks}/15",
+    total_score_tooltip_q1:
+      "Out of 30: up to 15 from weekly work (average of the first 9 weeks from the Assessment page, or this week’s attendance + participation + behavior + homework), plus up to 15 from the higher quiz score plus the chapter practical test.",
+    total_score_tooltip_q2:
+      "Out of 30: up to 15 from weekly work (average of weeks 10–18 from the Assessment page, or this week’s attendance + participation + behavior + homework), plus up to 15 from the higher quiz score plus the chapter practical test.",
+    save_scores_banner:
+      "After you enter or change quiz and chapter test scores, tap Save All Scores so they are stored for the week you selected.",
     performance_level: "Performance Level",
     actions: "Actions",
     create: "Create",
@@ -488,6 +495,13 @@ export const translations = {
     chapter_test1_practical: "اختبار فصل 1 عملي",
     chapter_test2_practical: "اختبار فصل 2 عملي",
     total_score: "المجموع",
+    combined_total_parts: "{weekly}/15 + {marks}/15",
+    total_score_tooltip_q1:
+      "من 30: حتى 15 من الأعمال الأسبوعية (متوسط أول 9 أسابيع من صفحة التقييم، أو حضور + مشاركة + سلوك + واجبات لهذا الأسبوع)، زائد حتى 15 من أعلى درجة اختبار قصير + اختبار الفصل العملي.",
+    total_score_tooltip_q2:
+      "من 30: حتى 15 من الأعمال الأسبوعية (متوسط الأسابيع 10–18 من صفحة التقييم، أو حقول هذا الأسبوع)، زائد حتى 15 من أعلى درجة اختبار قصير + اختبار الفصل العملي.",
+    save_scores_banner:
+      "بعد إدخال أو تعديل درجات الاختبارات واختبار الفصل، اضغط «حفظ جميع الدرجات» لحفظها للأسبوع المحدد.",
     performance_level: "مستوى الأداء",
     actions: "الإجراءات",
     create: "إنشاء",

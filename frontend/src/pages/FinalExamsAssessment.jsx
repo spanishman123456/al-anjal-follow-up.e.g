@@ -560,14 +560,14 @@ export default function FinalExamsAssessment() {
                 <TableCell colSpan={2} className="text-muted-foreground text-sm py-2">{t("fill_column")}:</TableCell>
                 <TableCell className="text-center py-2">
                   <div className="flex items-center justify-center gap-1">
-                    <Input type="number" min={0} max={10} step={0.5} className="w-14 h-8 text-center text-sm" placeholder="0–10"
+                    <Input type="number" min={0} max={10} step={0.5} className="score-table-input-10-fill" placeholder="0–10"
                       value={fillValues.quarter1_practical} onChange={(e) => setFillValues((prev) => ({ ...prev, quarter1_practical: e.target.value }))} />
                     <Button type="button" variant="outline" size="sm" className="h-8" onClick={() => handleFillColumn("quarter1_practical", 10)}>{t("fill_column")}</Button>
                   </div>
                 </TableCell>
                 <TableCell className="text-center py-2">
                   <div className="flex items-center justify-center gap-1">
-                    <Input type="number" min={0} max={10} step={0.5} className="w-14 h-8 text-center text-sm" placeholder="0–10"
+                    <Input type="number" min={0} max={10} step={0.5} className="score-table-input-10-fill" placeholder="0–10"
                       value={fillValues.quarter1_theory} onChange={(e) => setFillValues((prev) => ({ ...prev, quarter1_theory: e.target.value }))} />
                     <Button type="button" variant="outline" size="sm" className="h-8" onClick={() => handleFillColumn("quarter1_theory", 10)}>{t("fill_column")}</Button>
                   </div>
@@ -598,7 +598,7 @@ export default function FinalExamsAssessment() {
                           min={0}
                           max={10}
                           step={0.5}
-                          className="text-center w-16"
+                          className="score-table-input-10"
                           value={current.quarter1_practical ?? ""}
                           onChange={(e) => handleScoreChange(student.id, "quarter1_practical", e.target.value, 10)}
                           onBlur={() => handleQuarter1PracticalBlur(student)}
@@ -611,7 +611,7 @@ export default function FinalExamsAssessment() {
                           min={0}
                           max={10}
                           step={0.5}
-                          className="text-center w-16"
+                          className="score-table-input-10"
                           value={current.quarter1_theory ?? ""}
                           onChange={(e) => handleScoreChange(student.id, "quarter1_theory", e.target.value, 10)}
                           onBlur={() => handleQuarter1TheoryBlur(student)}
