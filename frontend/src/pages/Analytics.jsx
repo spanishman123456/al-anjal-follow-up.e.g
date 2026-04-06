@@ -11,6 +11,7 @@ import {
   YAxis,
   Tooltip,
   Legend,
+  CartesianGrid,
 } from "recharts";
 import { api, getApiErrorMessage } from "@/lib/api";
 import {
@@ -36,6 +37,16 @@ import {
 } from "@/components/ui/select";
 import { Sparkles, TrendingUp, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
+import {
+  BOARD,
+  BoardShell,
+  BoardPanel,
+  BoardHighlightsCard,
+  ClassAverageBarChart,
+  PassSplitDonut,
+  QuarterOnLevelTrend,
+  ClassScoreArea,
+} from "@/components/dashboard/VisualBoard";
 
 const PERFORMANCE_COLORS = {
   on_level: "#10b981",
@@ -221,6 +232,10 @@ export default function Analytics() {
 
   const q1 = overview?.quarter1 || {};
   const q2 = overview?.quarter2 || {};
+  const selectedQuarterDistribution = useMemo(
+    () => (apiQuarter === 1 ? q1.distribution || [] : q2.distribution || []),
+    [apiQuarter, q1.distribution, q2.distribution],
+  );
   const q1Distribution = (q1.distribution || []).map((item) => ({
     name: t(item.level),
     value: item.count,
@@ -415,62 +430,65 @@ export default function Analytics() {
         {t("analytics_term_scope_hint")}
       </p>
 
-      {/* Key insights strip */}
-      {overview && totalStudents > 0 && (
-        <Card className="border-primary/20 bg-gradient-to-r from-primary/5 to-primary/10 dark:from-primary/10 dark:to-primary/5">
-          <CardContent className="py-4">
-            <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-              {t("key_insights")}
-            </h3>
-            <div className="mb-3 text-sm font-medium text-foreground">
-              {t("analytics_term_scope")}: {t(`term_${termScopeId}`)} ·{" "}
-              <span className="font-normal text-muted-foreground">{t("analytics_focus_quarter")}:</span>{" "}
-              {apiQuarter === 1 ? t("quarter_1") : t("quarter_2")}
+      <BoardShell
+        sidebar={
+          overview && totalStudents > 0 ? (
+            <>
+              <BoardHighlightsCard title={t("visual_board_key_highlights")}>
+                <div>
+                  <p className="text-xs font-medium text-muted-foreground">{t("analytics_term_scope")}</p>
+                  <p className="font-medium text-foreground">{t(`term_${termScopeId}`)}</p>
+                </div>
+                <div className="rounded-lg border border-border/60 bg-background/80 px-3 py-2">
+                  <p className="text-xs text-muted-foreground">{t("analytics_focus_quarter")}</p>
+                  <p className="text-lg font-semibold tabular-nums text-primary">
+                    {apiQuarter === 1 ? q1.on_level_rate ?? 0 : q2.on_level_rate ?? 0}%
+                    <span className="ml-1 text-sm font-normal text-muted-foreground">{t("on_level")}</span>
+                  </p>
+                </div>
+                <ul className="space-y-2 border-t border-border/50 pt-2 text-xs text-muted-foreground">
+                  <li>
+                    <span className="font-medium text-foreground">{totalStudents}</span> {t("total_students").toLowerCase()}
+                  </li>
+                  <li>
+                    <span className="font-medium text-foreground">{classesCount}</span> {t("classes").toLowerCase()}
+                  </li>
+                  {overview.struggling_students?.length > 0 && (
+                    <li className="text-amber-700 dark:text-amber-400">
+                      {overview.struggling_students.length} {t("struggling_students").toLowerCase()}
+                    </li>
+                  )}
+                  {overview.excelling_students?.length > 0 && (
+                    <li className="text-emerald-700 dark:text-emerald-400">
+                      {overview.excelling_students.length} {t("excelling_students").toLowerCase()}
+                    </li>
+                  )}
+                </ul>
+              </BoardHighlightsCard>
+              <BoardHighlightsCard title={t("key_insights")}>
+                <p>
+                  <span className="font-medium text-foreground">{t("quarter_1")}:</span>{" "}
+                  {q1.on_level_rate ?? 0}% {t("on_level")}
+                  {q1.avg_total != null && (
+                    <span className="text-muted-foreground"> · {t("avg_quarter_total")}: {q1.avg_total}</span>
+                  )}
+                </p>
+                <p>
+                  <span className="font-medium text-foreground">{t("quarter_2")}:</span>{" "}
+                  {q2.on_level_rate ?? 0}% {t("on_level")}
+                  {q2.avg_total != null && (
+                    <span className="text-muted-foreground"> · {t("avg_quarter_total")}: {q2.avg_total}</span>
+                  )}
+                </p>
+              </BoardHighlightsCard>
+            </>
+          ) : (
+            <div className="rounded-xl border border-dashed border-border/70 p-4 text-sm text-muted-foreground">
+              {t("refresh_data")}…
             </div>
-            <div className="flex flex-wrap items-center gap-6 text-sm">
-              <span
-                className={
-                  apiQuarter === 1
-                    ? "rounded-md bg-primary/15 px-2 py-1 ring-1 ring-primary/30"
-                    : ""
-                }
-              >
-                <strong>{t("quarter_1")}:</strong> {q1.on_level_rate ?? 0}% {t("on_level")}
-                {q1.avg_total != null && (
-                  <span className="ml-1 text-muted-foreground">
-                    ({t("avg_quarter_total")}: {q1.avg_total})
-                  </span>
-                )}
-              </span>
-              <span
-                className={
-                  apiQuarter === 2
-                    ? "rounded-md bg-primary/15 px-2 py-1 ring-1 ring-primary/30"
-                    : ""
-                }
-              >
-                <strong>{t("quarter_2")}:</strong> {q2.on_level_rate ?? 0}% {t("on_level")}
-                {q2.avg_total != null && (
-                  <span className="ml-1 text-muted-foreground">
-                    ({t("avg_quarter_total")}: {q2.avg_total})
-                  </span>
-                )}
-              </span>
-              {overview.struggling_students?.length > 0 && (
-                <span className="text-amber-600 dark:text-amber-400">
-                  {overview.struggling_students.length} {t("struggling_students").toLowerCase()}
-                </span>
-              )}
-              {overview.excelling_students?.length > 0 && (
-                <span className="text-emerald-600 dark:text-emerald-400">
-                  {overview.excelling_students.length} {t("excelling_students").toLowerCase()}
-                </span>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
+          )
+        }
+      >
       {/* Metric cards */}
       <section className="section-bg-alt-1 grid gap-4 rounded-xl border border-border/50 p-4 md:grid-cols-2 lg:grid-cols-4" data-testid="analytics-metrics">
         <Card data-testid="analytics-total-students">
@@ -539,6 +557,52 @@ export default function Analytics() {
         </Card>
       </section>
 
+      {overview && totalStudents > 0 && (
+        <div className="grid gap-4 md:grid-cols-2" data-testid="analytics-visual-board-grid">
+          <BoardPanel
+            title={t("visual_board_chart_class_avg")}
+            subtitle={t("visual_board_chart_class_avg_sub")}
+            testId="analytics-board-class-avg"
+          >
+            <ClassAverageBarChart data={classChartData} height={260} />
+          </BoardPanel>
+          <BoardPanel
+            title={t("visual_board_chart_pass_split")}
+            subtitle={t("visual_board_chart_pass_split_sub")}
+            testId="analytics-board-donut"
+          >
+            <PassSplitDonut
+              distribution={selectedQuarterDistribution}
+              onLevelLabel={t("on_level")}
+              restLabel={t("visual_board_rest_categories")}
+              centerCaption={t("on_level")}
+              height={260}
+            />
+          </BoardPanel>
+          <BoardPanel
+            title={t("visual_board_chart_q_trend")}
+            subtitle={t("visual_board_chart_q_trend_sub")}
+            testId="analytics-board-q-trend"
+          >
+            <QuarterOnLevelTrend
+              q1Rate={q1.on_level_rate}
+              q2Rate={q2.on_level_rate}
+              labelQ1={t("quarter_1")}
+              labelQ2={t("quarter_2")}
+              lineName={t("visual_board_line_cohort")}
+              height={240}
+            />
+          </BoardPanel>
+          <BoardPanel
+            title={t("visual_board_chart_class_curve")}
+            subtitle={t("visual_board_chart_class_curve_sub")}
+            testId="analytics-board-class-area"
+          >
+            <ClassScoreArea data={classChartData} height={240} />
+          </BoardPanel>
+        </div>
+      )}
+
       <Card className="border-primary/20 bg-gradient-to-r from-primary/5 via-primary/10 to-primary/5" data-testid="analytics-ai-panel">
         <CardHeader className="pb-2">
           <div className="flex flex-wrap items-center justify-between gap-3">
@@ -601,71 +665,39 @@ export default function Analytics() {
         </TabsList>
 
         <TabsContent value="overview" className="mt-6" data-testid="analytics-overview-content">
-          <Card className="border-primary/20 shadow-sm">
-            <CardHeader>
-              <CardTitle className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
-                <span className="flex items-center gap-2">
-                  <Sparkles className="h-4 w-4 text-primary" />
-                  {t("performance_distribution")} — {t("analytics_compare_same_semester")}
-                </span>
-                <Badge variant="outline" className="w-fit font-normal">
+          <BoardPanel
+            title={`${t("performance_distribution")} — ${t("analytics_compare_same_semester")}`}
+            subtitle={
+              <span className="inline-flex items-center gap-2">
+                <Sparkles className="h-3.5 w-3.5 text-primary" />
+                <Badge variant="outline" className="font-normal">
                   {t(apiSemester === 1 ? "semester_one" : "semester_two")} · {t("analytics_charts_semester_badge")}
                 </Badge>
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="grid gap-8 md:grid-cols-2">
-                <div className="h-72" data-testid="analytics-overview-bar">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={comparisonBarData} barCategoryGap="20%" barGap={4}>
-                      <XAxis dataKey="level" />
-                      <YAxis />
-                      <Tooltip content={<AnalyticsTooltip />} />
-                      <Legend />
-                      <Bar dataKey={t("quarter_1")} radius={[4, 4, 0, 0]}>
-                        {comparisonBarData.map((entry, index) => (
-                          <Cell key={`q1-${index}`} fill={PERFORMANCE_COLORS[entry.levelKey]} />
-                        ))}
-                      </Bar>
-                      <Bar dataKey={t("quarter_2")} radius={[4, 4, 0, 0]}>
-                        {comparisonBarData.map((entry, index) => (
-                          <Cell key={`q2-${index}`} fill={PERFORMANCE_COLORS[entry.levelKey]} />
-                        ))}
-                      </Bar>
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-                <div className="grid gap-6 sm:grid-cols-2">
-                  <div className="h-64">
-                    <p className="mb-2 text-sm font-medium text-muted-foreground">{t("quarter_1")}</p>
-                    <ResponsiveContainer width="100%" height="90%">
-                      <PieChart>
-                        <Pie data={q1Distribution} dataKey="value" innerRadius={40} outerRadius={70}>
-                          {q1Distribution.map((entry) => (
-                            <Cell key={entry.level} fill={PERFORMANCE_COLORS[entry.level]} />
-                          ))}
-                        </Pie>
-                        <Tooltip content={<AnalyticsTooltip />} />
-                      </PieChart>
-                    </ResponsiveContainer>
-                  </div>
-                  <div className="h-64">
-                    <p className="mb-2 text-sm font-medium text-muted-foreground">{t("quarter_2")}</p>
-                    <ResponsiveContainer width="100%" height="90%">
-                      <PieChart>
-                        <Pie data={q2Distribution} dataKey="value" innerRadius={40} outerRadius={70}>
-                          {q2Distribution.map((entry) => (
-                            <Cell key={entry.level} fill={PERFORMANCE_COLORS[entry.level]} />
-                          ))}
-                        </Pie>
-                        <Tooltip content={<AnalyticsTooltip />} />
-                      </PieChart>
-                    </ResponsiveContainer>
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+              </span>
+            }
+          >
+            <div className="h-80" data-testid="analytics-overview-bar">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={comparisonBarData} barCategoryGap="20%" barGap={4} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke={BOARD.grid} vertical={false} />
+                  <XAxis dataKey="level" tick={{ fontSize: 11 }} />
+                  <YAxis tick={{ fontSize: 11 }} />
+                  <Tooltip content={<AnalyticsTooltip />} />
+                  <Legend />
+                  <Bar dataKey={t("quarter_1")} radius={[6, 6, 0, 0]}>
+                    {comparisonBarData.map((entry, index) => (
+                      <Cell key={`q1-${index}`} fill={PERFORMANCE_COLORS[entry.levelKey]} />
+                    ))}
+                  </Bar>
+                  <Bar dataKey={t("quarter_2")} radius={[6, 6, 0, 0]}>
+                    {comparisonBarData.map((entry, index) => (
+                      <Cell key={`q2-${index}`} fill={PERFORMANCE_COLORS[entry.levelKey]} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </BoardPanel>
         </TabsContent>
 
         <TabsContent value="quarter1" className="mt-6" data-testid="analytics-quarter1-content">
@@ -913,6 +945,22 @@ export default function Analytics() {
       </Tabs>
       </div>
 
+      <Card className="rounded-xl border border-slate-200/90 bg-white shadow-sm dark:border-border dark:bg-card">
+        <CardHeader>
+          <CardTitle className="text-base">{t("visual_board_full_analysis")}</CardTitle>
+          <div className="grid gap-4 pt-2 md:grid-cols-2">
+            <div className="rounded-lg border border-border/60 bg-muted/20 p-3 text-sm">
+              <p className="font-semibold text-foreground">{t("visual_board_guide_read")}</p>
+              <p className="mt-1.5 leading-relaxed text-muted-foreground">{t("visual_board_guide_read_body")}</p>
+            </div>
+            <div className="rounded-lg border border-border/60 bg-muted/20 p-3 text-sm">
+              <p className="font-semibold text-foreground">{t("visual_board_guide_use")}</p>
+              <p className="mt-1.5 leading-relaxed text-muted-foreground">{t("visual_board_guide_use_body")}</p>
+            </div>
+          </div>
+        </CardHeader>
+      </Card>
+
       {/* Analysis insights: strengths, weaknesses, performance, standout data, actions, recommendations */}
       <section className="section-hover grid gap-4 rounded-xl border border-border/50 p-4 md:grid-cols-2" data-testid="analytics-insights">
         <Card>
@@ -1006,6 +1054,7 @@ export default function Analytics() {
           </CardContent>
         </Card>
       </section>
+      </BoardShell>
     </div>
   );
 }

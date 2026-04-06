@@ -1,16 +1,5 @@
 import { useState, useEffect, useRef } from "react";
 import { useOutletContext, Link } from "react-router-dom";
-import {
-  PieChart,
-  Pie,
-  Cell,
-  ResponsiveContainer,
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  Tooltip,
-} from "recharts";
 import { api } from "@/lib/api";
 import {
   TERM_SCOPES,
@@ -40,13 +29,15 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-
-const PERFORMANCE_COLORS = {
-  on_level: "#10b981",
-  approach: "#f59e0b",
-  below: "#ef4444",
-  no_data: "#94a3b8",
-};
+import {
+  BoardShell,
+  BoardPanel,
+  BoardHighlightsCard,
+  ClassAverageBarChart,
+  PassSplitDonut,
+  QuarterOnLevelTrend,
+  ClassScoreArea,
+} from "@/components/dashboard/VisualBoard";
 
 export default function Reports() {
   const { language, semester, quarter } = useOutletContext();
@@ -183,13 +174,14 @@ export default function Reports() {
     }
   };
 
-  const distributionData = (report?.distribution || []).map((item) => ({
-    name: t(item.level),
-    value: item.count,
-    level: item.level,
+  const classBreakdown = report?.class_breakdown || [];
+
+  const reportEnrollmentBars = (report?.class_breakdown || []).map((row) => ({
+    name: row.class_name,
+    score: row.student_count,
   }));
 
-  const classBreakdown = report?.class_breakdown || [];
+  const reportQuarterDistribution = report?.distribution || [];
 
   return (
     <div className="space-y-8" data-testid="reports-page">
@@ -275,7 +267,38 @@ export default function Reports() {
 
       {report ? (
         <div className="space-y-6" data-testid="reports-content">
-          <Card className="border-primary/20 bg-gradient-to-r from-primary/5 to-primary/10 dark:from-primary/10 dark:to-primary/5">
+          <BoardShell
+            sidebar={
+              <>
+                <BoardHighlightsCard title={t("visual_board_key_highlights")}>
+                  <div>
+                    <p className="text-xs font-medium text-muted-foreground">{t("analytics_term_scope")}</p>
+                    <p className="font-medium text-foreground">{t(`term_${termScopeId}`)}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs font-medium text-muted-foreground">{t("grade")}</p>
+                    <p className="text-lg font-semibold text-foreground">{grade}</p>
+                  </div>
+                  <div className="rounded-lg border border-border/60 bg-background/80 px-3 py-2">
+                    <p className="text-xs text-muted-foreground">{t("on_level")}</p>
+                    <p className="text-lg font-semibold tabular-nums text-primary">{report.exceeding_rate}%</p>
+                  </div>
+                  <Link
+                    to="/analytics"
+                    className="inline-flex text-sm font-medium text-primary hover:underline"
+                  >
+                    {t("view_analytics")} →
+                  </Link>
+                </BoardHighlightsCard>
+                <Card className="border-primary/20 bg-gradient-to-r from-primary/5 to-primary/10 dark:from-primary/10 dark:to-primary/5">
+                  <CardContent className="py-4 text-sm text-muted-foreground">
+                    {t("reports_synced_with_analytics")}
+                  </CardContent>
+                </Card>
+              </>
+            }
+          >
+          <Card className="border-primary/20 bg-gradient-to-r from-primary/5 to-primary/10 dark:from-primary/10 dark:to-primary/5 lg:hidden">
             <CardContent className="py-4">
               <p className="text-sm text-muted-foreground">
                 {t("reports_synced_with_analytics")}{" "}
@@ -358,44 +381,45 @@ export default function Reports() {
             </Card>
           </section>
 
-          <section className="section-bg-alt-2 grid gap-6 rounded-xl border border-border/50 p-4 lg:grid-cols-2" data-testid="reports-charts">
-            <Card>
-              <CardHeader>
-                <CardTitle>{t("performance_distribution")}</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="h-64" data-testid="reports-distribution-chart">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie data={distributionData} dataKey="value" innerRadius={60} outerRadius={90}>
-                        {distributionData.map((entry) => (
-                          <Cell key={entry.level} fill={PERFORMANCE_COLORS[entry.level]} />
-                        ))}
-                      </Pie>
-                      <Tooltip />
-                    </PieChart>
-                  </ResponsiveContainer>
-                </div>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader>
-                <CardTitle>{t("classes")}</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="h-64" data-testid="reports-classes-chart">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={classBreakdown} barSize={28}>
-                      <XAxis dataKey="class_name" />
-                      <YAxis />
-                      <Tooltip />
-                      <Bar dataKey="student_count" fill="#1e3a8a" radius={[8, 8, 0, 0]} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-              </CardContent>
-            </Card>
-          </section>
+          <div className="grid gap-4 md:grid-cols-2" data-testid="reports-visual-board-grid">
+            <BoardPanel
+              title={t("visual_board_chart_enrollment")}
+              subtitle={t("visual_board_chart_enrollment_sub")}
+            >
+              <ClassAverageBarChart data={reportEnrollmentBars} height={260} />
+            </BoardPanel>
+            <BoardPanel
+              title={t("visual_board_chart_pass_split")}
+              subtitle={t(`term_${termScopeId}`)}
+            >
+              <PassSplitDonut
+                distribution={reportQuarterDistribution || []}
+                onLevelLabel={t("on_level")}
+                restLabel={t("visual_board_rest_categories")}
+                centerCaption={t("on_level")}
+                height={260}
+              />
+            </BoardPanel>
+            <BoardPanel
+              title={t("visual_board_chart_q_trend")}
+              subtitle={t("visual_board_chart_q_trend_sub")}
+            >
+              <QuarterOnLevelTrend
+                q1Rate={report.quarter1?.on_level_rate}
+                q2Rate={report.quarter2?.on_level_rate}
+                labelQ1={t("quarter_1")}
+                labelQ2={t("quarter_2")}
+                lineName={t("visual_board_line_cohort")}
+                height={240}
+              />
+            </BoardPanel>
+            <BoardPanel
+              title={t("visual_board_chart_class_curve")}
+              subtitle={t("visual_board_chart_enrollment_sub")}
+            >
+              <ClassScoreArea data={reportEnrollmentBars} height={240} />
+            </BoardPanel>
+          </div>
 
           <div className="section-bg-alt-3 rounded-xl border border-border/50 p-4">
           <Card data-testid="reports-tabs-card">
@@ -526,6 +550,22 @@ export default function Reports() {
           </Card>
           </div>
 
+          <Card className="rounded-xl border border-slate-200/90 bg-white shadow-sm dark:border-border dark:bg-card">
+            <CardHeader>
+              <CardTitle className="text-base">{t("visual_board_full_analysis")}</CardTitle>
+              <div className="grid gap-4 pt-2 md:grid-cols-2">
+                <div className="rounded-lg border border-border/60 bg-muted/20 p-3 text-sm">
+                  <p className="font-semibold text-foreground">{t("visual_board_guide_read")}</p>
+                  <p className="mt-1.5 leading-relaxed text-muted-foreground">{t("visual_board_guide_read_body")}</p>
+                </div>
+                <div className="rounded-lg border border-border/60 bg-muted/20 p-3 text-sm">
+                  <p className="font-semibold text-foreground">{t("visual_board_guide_use")}</p>
+                  <p className="mt-1.5 leading-relaxed text-muted-foreground">{t("visual_board_guide_use_body")}</p>
+                </div>
+              </div>
+            </CardHeader>
+          </Card>
+
           {/* Analysis insights: strengths, weaknesses, performance, standout data, actions, recommendations */}
           <section className="section-hover grid gap-4 rounded-xl border border-border/50 p-4 md:grid-cols-2" data-testid="reports-insights">
             <Card>
@@ -619,6 +659,7 @@ export default function Reports() {
               </CardContent>
             </Card>
           </section>
+          </BoardShell>
         </div>
       ) : (
         <Card data-testid="reports-empty">
