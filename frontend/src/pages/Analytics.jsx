@@ -13,6 +13,11 @@ import {
   Legend,
 } from "recharts";
 import { api, getApiErrorMessage } from "@/lib/api";
+import {
+  TERM_SCOPES,
+  termScopeIdFromOutlet,
+  resolveTermScope,
+} from "@/lib/academicScope";
 import { buildAutoInsightsFromOverview } from "@/lib/insightAutofill";
 import { useTranslations } from "@/lib/i18n";
 import { sortByClassOrder } from "@/lib/utils";
@@ -56,7 +61,15 @@ const AnalyticsTooltip = ({ active, payload, label }) => {
 export default function Analytics() {
   const { language, semester, quarter } = useOutletContext();
   const t = useTranslations(language);
-  const semesterNumber = semester === "semester2" ? 2 : 1;
+  const [termScopeId, setTermScopeId] = useState(() =>
+    termScopeIdFromOutlet(semester, quarter),
+  );
+  useEffect(() => {
+    setTermScopeId(termScopeIdFromOutlet(semester, quarter));
+  }, [semester, quarter]);
+  const term = resolveTermScope(termScopeId);
+  const apiSemester = term.semester;
+  const apiQuarter = term.quarter;
   const [overview, setOverview] = useState(null);
   const [classSummary, setClassSummary] = useState([]);
   const [activeTab, setActiveTab] = useState("overview");
@@ -92,11 +105,11 @@ export default function Analytics() {
       const requestId = ++latestRequestIdRef.current;
       setLoading(true);
       const params = {
-        semester: semesterNumber,
-        quarter,
+        semester: apiSemester,
+        quarter: apiQuarter,
         ...(selectedClassId !== "all" ? { class_id: selectedClassId } : {}),
       };
-      const classSummaryParams = { semester: semesterNumber, quarter };
+      const classSummaryParams = { semester: apiSemester, quarter: apiQuarter };
 
       try {
         const overviewRes = await api.get("/analytics/overview", { params });
@@ -147,8 +160,8 @@ export default function Analytics() {
               class_id: st.class_id,
               quarter1_total: null,
               quarter2_total: null,
-              performance_level_q1: "on_level",
-              performance_level_q2: "on_level",
+              performance_level_q1: st.performance_level ?? "on_level",
+              performance_level_q2: st.performance_level ?? "on_level",
               strengths: [],
             })),
             students_per_class: s?.students_per_class ?? [],
@@ -186,7 +199,7 @@ export default function Analytics() {
         });
     };
     loadAnalytics();
-  }, [semesterNumber, quarter, selectedClassId, refreshKey]);
+  }, [apiSemester, apiQuarter, selectedClassId, refreshKey]);
 
   useEffect(() => {
     const onVisibility = () => {
@@ -301,14 +314,14 @@ export default function Analytics() {
   const handleDownload = async (format) => {
     try {
       const response = await api.get("/analytics/summary/export", {
-        params: { format, semester: semesterNumber, quarter },
+        params: { format, semester: apiSemester, quarter: apiQuarter },
         responseType: "blob",
       });
       const url = window.URL.createObjectURL(new Blob([response.data]));
       const link = document.createElement("a");
       link.href = url;
-      const sLabel = semesterNumber === 2 ? "S2" : "S1";
-      const qLabel = `Q${quarter}`;
+      const sLabel = apiSemester === 2 ? "S2" : "S1";
+      const qLabel = `Q${apiQuarter}`;
       link.setAttribute(
         "download",
         `analytics_summary_${sLabel}_${qLabel}.${format === "excel" ? "xlsx" : "pdf"}`,
@@ -343,6 +356,21 @@ export default function Analytics() {
         testIdPrefix="analytics"
         action={
           <div className="flex flex-wrap items-center gap-2">
+            <div className="flex min-w-[220px] flex-col gap-1">
+              <span className="text-xs text-muted-foreground">{t("analytics_term_scope")}</span>
+              <Select value={termScopeId} onValueChange={setTermScopeId}>
+                <SelectTrigger className="w-[min(100%,240px)]" data-testid="analytics-term-scope">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {TERM_SCOPES.map((s) => (
+                    <SelectItem key={s.id} value={s.id} data-testid={`analytics-term-${s.id}`}>
+                      {t(`term_${s.id}`)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
             <Select value={selectedClassId} onValueChange={setSelectedClassId}>
               <SelectTrigger className="w-48" data-testid="analytics-class-filter">
                 <SelectValue placeholder={t("classes")} />
@@ -383,6 +411,10 @@ export default function Analytics() {
         }
       />
 
+      <p className="text-xs text-muted-foreground" data-testid="analytics-term-hint">
+        {t("analytics_term_scope_hint")}
+      </p>
+
       {/* Key insights strip */}
       {overview && totalStudents > 0 && (
         <Card className="border-primary/20 bg-gradient-to-r from-primary/5 to-primary/10 dark:from-primary/10 dark:to-primary/5">
@@ -390,8 +422,19 @@ export default function Analytics() {
             <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
               {t("key_insights")}
             </h3>
+            <div className="mb-3 text-sm font-medium text-foreground">
+              {t("analytics_term_scope")}: {t(`term_${termScopeId}`)} ·{" "}
+              <span className="font-normal text-muted-foreground">{t("analytics_focus_quarter")}:</span>{" "}
+              {apiQuarter === 1 ? t("quarter_1") : t("quarter_2")}
+            </div>
             <div className="flex flex-wrap items-center gap-6 text-sm">
-              <span>
+              <span
+                className={
+                  apiQuarter === 1
+                    ? "rounded-md bg-primary/15 px-2 py-1 ring-1 ring-primary/30"
+                    : ""
+                }
+              >
                 <strong>{t("quarter_1")}:</strong> {q1.on_level_rate ?? 0}% {t("on_level")}
                 {q1.avg_total != null && (
                   <span className="ml-1 text-muted-foreground">
@@ -399,7 +442,13 @@ export default function Analytics() {
                   </span>
                 )}
               </span>
-              <span>
+              <span
+                className={
+                  apiQuarter === 2
+                    ? "rounded-md bg-primary/15 px-2 py-1 ring-1 ring-primary/30"
+                    : ""
+                }
+              >
                 <strong>{t("quarter_2")}:</strong> {q2.on_level_rate ?? 0}% {t("on_level")}
                 {q2.avg_total != null && (
                   <span className="ml-1 text-muted-foreground">
@@ -448,7 +497,10 @@ export default function Analytics() {
             </div>
           </CardContent>
         </Card>
-        <Card data-testid="analytics-q1">
+        <Card
+          data-testid="analytics-q1"
+          className={apiQuarter === 1 ? "ring-2 ring-primary ring-offset-2 ring-offset-background" : ""}
+        >
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
               {t("quarter_1")} — {t("on_level_rate")}
@@ -465,7 +517,10 @@ export default function Analytics() {
             )}
           </CardContent>
         </Card>
-        <Card data-testid="analytics-q2">
+        <Card
+          data-testid="analytics-q2"
+          className={apiQuarter === 2 ? "ring-2 ring-primary ring-offset-2 ring-offset-background" : ""}
+        >
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
               {t("quarter_2")} — {t("on_level_rate")}
@@ -548,9 +603,14 @@ export default function Analytics() {
         <TabsContent value="overview" className="mt-6" data-testid="analytics-overview-content">
           <Card className="border-primary/20 shadow-sm">
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Sparkles className="h-4 w-4 text-primary" />
-                {t("performance_distribution")} — {t("quarter_1")} vs {t("quarter_2")}
+              <CardTitle className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+                <span className="flex items-center gap-2">
+                  <Sparkles className="h-4 w-4 text-primary" />
+                  {t("performance_distribution")} — {t("analytics_compare_same_semester")}
+                </span>
+                <Badge variant="outline" className="w-fit font-normal">
+                  {t(apiSemester === 1 ? "semester_one" : "semester_two")} · {t("analytics_charts_semester_badge")}
+                </Badge>
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -681,7 +741,8 @@ export default function Analytics() {
                 {t("struggling_students")}
               </CardTitle>
               <p className="text-sm text-muted-foreground">
-                {t("students_needing_support")} — {t("weaknesses")}
+                {t("analytics_lists_for_term")} {t(`term_${termScopeId}`)} · {t("students_needing_support")} —{" "}
+                {t("weaknesses")}
               </p>
             </CardHeader>
             <CardContent>
@@ -753,7 +814,7 @@ export default function Analytics() {
                 {t("excelling_students")}
               </CardTitle>
               <p className="text-sm text-muted-foreground">
-                {t("top_performers")} — {t("strengths")}
+                {t("analytics_lists_for_term")} {t(`term_${termScopeId}`)} · {t("top_performers")} — {t("strengths")}
               </p>
             </CardHeader>
             <CardContent>
@@ -774,10 +835,10 @@ export default function Analytics() {
                         <p className="text-sm text-muted-foreground">{student.class_name}</p>
                         <div className="mt-2 flex flex-wrap gap-1">
                           <span className="rounded bg-emerald-100 px-2 py-0.5 text-xs text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300">
-                            Q1: {t("on_level")}
+                            Q1: {t(student.performance_level_q1 || "on_level")}
                           </span>
                           <span className="rounded bg-emerald-100 px-2 py-0.5 text-xs text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300">
-                            Q2: {t("on_level")}
+                            Q2: {t(student.performance_level_q2 || "on_level")}
                           </span>
                         </div>
                         {student.strengths?.length > 0 && (

@@ -12,6 +12,11 @@ import {
   Tooltip,
 } from "recharts";
 import { api } from "@/lib/api";
+import {
+  TERM_SCOPES,
+  termScopeIdFromOutlet,
+  resolveTermScope,
+} from "@/lib/academicScope";
 import { buildAutoInsightsFromReport } from "@/lib/insightAutofill";
 import { useTranslations } from "@/lib/i18n";
 import { PageHeader } from "@/components/layout/PageHeader";
@@ -46,7 +51,15 @@ const PERFORMANCE_COLORS = {
 export default function Reports() {
   const { language, semester, quarter } = useOutletContext();
   const t = useTranslations(language);
-  const semesterNumber = semester === "semester2" ? 2 : 1;
+  const [termScopeId, setTermScopeId] = useState(() =>
+    termScopeIdFromOutlet(semester, quarter),
+  );
+  useEffect(() => {
+    setTermScopeId(termScopeIdFromOutlet(semester, quarter));
+  }, [semester, quarter]);
+  const term = resolveTermScope(termScopeId);
+  const apiSemester = term.semester;
+  const apiQuarter = term.quarter;
   const [grade, setGrade] = useState("4");
   const [reportType, setReportType] = useState("summary");
   const [report, setReport] = useState(null);
@@ -57,6 +70,7 @@ export default function Reports() {
   const [analysisActions, setAnalysisActions] = useState("");
   const [analysisRecommendations, setAnalysisRecommendations] = useState("");
   const fetchReportRef = useRef(() => {});
+  const hasReportRef = useRef(false);
 
   const applyGeneratedInsights = (generated) => {
     if (!generated) return;
@@ -79,7 +93,7 @@ export default function Reports() {
   const fetchReport = () => {
     if (!grade) return;
     api
-      .get("/reports/grade", { params: { grade, semester: semesterNumber, quarter } })
+      .get("/reports/grade", { params: { grade, semester: apiSemester, quarter: apiQuarter } })
       .then((res) => {
         const reportData = res.data;
         setReport(reportData);
@@ -91,7 +105,7 @@ export default function Reports() {
 
   const handleGenerate = async () => {
     const response = await api.get("/reports/grade", {
-      params: { grade, semester: semesterNumber, quarter },
+      params: { grade, semester: apiSemester, quarter: apiQuarter },
     });
     const reportData = response.data;
     setReport(reportData);
@@ -111,6 +125,15 @@ export default function Reports() {
     };
   }, []);
 
+  useEffect(() => {
+    hasReportRef.current = Boolean(report);
+  }, [report]);
+
+  useEffect(() => {
+    if (!grade || !hasReportRef.current) return;
+    fetchReportRef.current();
+  }, [grade, termScopeId]);
+
   const handlePrint = () => {
     window.print();
   };
@@ -122,8 +145,8 @@ export default function Reports() {
           grade,
           format,
           report_type: reportType,
-          semester: semesterNumber,
-          quarter,
+          semester: apiSemester,
+          quarter: apiQuarter,
           analysis_strengths: analysisStrengths,
           analysis_weaknesses: analysisWeaknesses,
           analysis_performance: analysisPerformance,
@@ -136,11 +159,9 @@ export default function Reports() {
       const url = window.URL.createObjectURL(new Blob([response.data]));
       const link = document.createElement("a");
       link.href = url;
-      const sLabel = semesterNumber === 2 ? "S2" : "S1";
-      const qLabel = `Q${quarter}`;
       link.setAttribute(
         "download",
-        `grade_${grade}_${sLabel}_${qLabel}_report.${format === "excel" ? "xlsx" : "pdf"}`,
+        `grade_${grade}_${termScopeId}_report.${format === "excel" ? "xlsx" : "pdf"}`,
       );
       document.body.appendChild(link);
       link.click();
@@ -178,6 +199,21 @@ export default function Reports() {
         testIdPrefix="reports"
         action={
           <div className="flex flex-wrap items-center gap-3">
+            <div className="flex min-w-[220px] flex-col gap-1">
+              <span className="text-xs text-muted-foreground">{t("analytics_term_scope")}</span>
+              <Select value={termScopeId} onValueChange={setTermScopeId}>
+                <SelectTrigger className="w-[min(100%,240px)]" data-testid="reports-term-scope">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {TERM_SCOPES.map((s) => (
+                    <SelectItem key={s.id} value={s.id} data-testid={`reports-term-${s.id}`}>
+                      {t(`term_${s.id}`)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
             <Select value={grade} onValueChange={setGrade}>
               <SelectTrigger data-testid="reports-grade-select">
                 <SelectValue placeholder={t("grade")} />
@@ -233,12 +269,17 @@ export default function Reports() {
         }
       />
 
+      <p className="text-xs text-muted-foreground" data-testid="reports-term-hint">
+        {t("analytics_term_scope_hint")}
+      </p>
+
       {report ? (
         <div className="space-y-6" data-testid="reports-content">
           <Card className="border-primary/20 bg-gradient-to-r from-primary/5 to-primary/10 dark:from-primary/10 dark:to-primary/5">
             <CardContent className="py-4">
               <p className="text-sm text-muted-foreground">
-                {t("reports_synced_with_analytics")}
+                {t("reports_synced_with_analytics")}{" "}
+                <span className="font-medium text-foreground">({t(`term_${termScopeId}`)})</span>
               </p>
               <Link
                 to="/analytics"
@@ -278,10 +319,14 @@ export default function Reports() {
                 <div className="text-2xl font-semibold" data-testid="reports-exceeding-rate">
                   {report.exceeding_rate}%
                 </div>
-                <p className="text-xs text-muted-foreground">both quarters</p>
+                <p className="text-xs text-muted-foreground">{t(`term_${termScopeId}`)}</p>
               </CardContent>
             </Card>
-            <Card>
+            <Card
+              className={
+                apiQuarter === 1 ? "ring-2 ring-primary ring-offset-2 ring-offset-background" : ""
+              }
+            >
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm text-muted-foreground">{t("quarter_1")}</CardTitle>
               </CardHeader>
@@ -294,7 +339,11 @@ export default function Reports() {
                 </p>
               </CardContent>
             </Card>
-            <Card>
+            <Card
+              className={
+                apiQuarter === 2 ? "ring-2 ring-primary ring-offset-2 ring-offset-background" : ""
+              }
+            >
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm text-muted-foreground">{t("quarter_2")}</CardTitle>
               </CardHeader>
