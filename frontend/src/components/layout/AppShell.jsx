@@ -63,7 +63,7 @@ const SIDEBAR_NAV_GRADIENTS = [
 function sidebarNavButtonClass(isActive, index) {
   const g = SIDEBAR_NAV_GRADIENTS[index % SIDEBAR_NAV_GRADIENTS.length];
   return cn(
-    "pointer-events-auto flex w-full items-center gap-3 rounded-full px-3 py-2.5 text-sm font-semibold text-white shadow-md nav-item-pop bg-gradient-to-r hover:brightness-110 hover:shadow-lg transition-shadow",
+    "pointer-events-auto flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-semibold text-white shadow-md nav-item-pop bg-gradient-to-r hover:brightness-110 hover:shadow-lg transition-shadow",
     g,
     isActive &&
       "ring-2 ring-white ring-offset-2 ring-offset-zinc-100 dark:ring-offset-slate-950 brightness-110 scale-[1.02]",
@@ -270,7 +270,7 @@ export const AppShell = ({
                             data-testid={child.testId}
                             className={({ isActive }) =>
                               cn(
-                                "flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-semibold text-white shadow nav-item-pop bg-gradient-to-r",
+                                "flex items-center gap-2 rounded-md px-3 py-1.5 text-xs font-semibold text-white shadow nav-item-pop bg-gradient-to-r",
                                 SIDEBAR_NAV_GRADIENTS[(navIndex + ci + 1) % SIDEBAR_NAV_GRADIENTS.length],
                                 "hover:brightness-110",
                                 isActive && "ring-2 ring-white/90 ring-offset-1 ring-offset-zinc-100 dark:ring-offset-slate-950",
@@ -321,7 +321,7 @@ export const AppShell = ({
           </div>
           <a
             href="#contact"
-            className="flex items-center justify-center gap-2 w-full rounded-full bg-gradient-to-r from-violet-600 to-purple-600 text-white py-2.5 px-4 font-semibold text-sm shadow-md hover:brightness-110 transition-all duration-200 hover:translate-y-[-2px] hover:scale-[1.02] active:translate-y-0 active:scale-[0.98]"
+            className="flex items-center justify-center gap-2 w-full rounded-lg bg-gradient-to-r from-violet-600 to-purple-600 text-white py-2.5 px-4 font-semibold text-sm shadow-md hover:brightness-110 transition-all duration-200 hover:translate-y-[-2px] hover:scale-[1.02] active:translate-y-0 active:scale-[0.98]"
             data-testid="sidebar-contact-us"
           >
             <span className="relative flex items-center">

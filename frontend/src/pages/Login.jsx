@@ -215,7 +215,7 @@ export default function Login({
         }}
       />
       {/* Left column: logos top, social + Contact Us bottom, same horizontal center */}
-      <div className="absolute left-0 top-0 bottom-0 z-10 flex flex-col items-center pt-5 pb-6 px-6 w-56 sm:w-60 rounded-2xl sm:rounded-none sm:bg-transparent bg-card/80 dark:bg-slate-900/55 backdrop-blur-md border border-border dark:border-white/10 sm:border-0 mx-3 my-4 sm:mx-0 sm:my-0 shadow-sm sm:shadow-none" data-testid="login-left-column">
+      <div className="absolute left-0 top-0 bottom-0 z-10 flex flex-col items-center pt-5 pb-6 px-6 w-56 sm:w-60 bg-transparent border-0 shadow-none" data-testid="login-left-column">
         <div className="flex flex-col items-center gap-2">
           <img
             src="/logo-al-anjal.png"
@@ -231,10 +231,10 @@ export default function Login({
           />
         </div>
         <div className="mt-auto flex flex-col items-center gap-3" data-testid="login-social-contact">
-          <SocialLinks layout="column" iconSize="h-10 w-10" />
+          <SocialLinks layout="column" iconSize="h-9 w-11" />
           <a
             href="#contact"
-            className="flex items-center justify-center gap-2 rounded-full bg-primary text-primary-foreground py-2.5 px-5 font-medium text-sm hover:bg-primary/90 transition-all duration-200 hover:translate-y-[-2px] hover:scale-[1.02] hover:shadow-md active:translate-y-0 active:scale-[0.98] shadow-md whitespace-nowrap dark:bg-gradient-to-r dark:from-violet-600 dark:to-purple-600 dark:hover:from-violet-500 dark:hover:to-purple-500"
+            className="flex items-center justify-center gap-2 rounded-lg bg-primary text-primary-foreground py-2.5 px-5 font-medium text-sm hover:bg-primary/90 transition-all duration-200 hover:translate-y-[-2px] hover:scale-[1.02] hover:shadow-md active:translate-y-0 active:scale-[0.98] shadow-md whitespace-nowrap dark:bg-gradient-to-r dark:from-violet-600 dark:to-purple-600 dark:hover:from-violet-500 dark:hover:to-purple-500"
             data-testid="login-contact-us"
           >
             <span className="relative flex items-center">
