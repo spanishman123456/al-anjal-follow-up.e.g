@@ -359,16 +359,14 @@ export const AppShell = ({
             <div className="flex items-center gap-4" data-testid="school-header">
               <div
                 className={cn(
-                  "flex items-center justify-center rounded-xl p-2",
-                  heroSky
-                    ? "bg-white/15 ring-1 ring-white/25 backdrop-blur-md"
-                    : "bg-white dark:bg-white/10 dark:ring-1 dark:ring-white/15",
+                  "flex items-center justify-center rounded-xl bg-white p-2.5 shadow-md",
+                  heroSky ? "ring-1 ring-black/10" : "shadow-sm ring-1 ring-black/5 dark:shadow-md dark:ring-white/20",
                 )}
               >
                 <img
                   src={`${process.env.PUBLIC_URL || ""}/logo.png`}
                   alt="School Logo"
-                  className="h-12 w-auto"
+                  className="h-12 w-auto max-h-[3.25rem] object-contain [filter:none]"
                   data-testid="school-logo"
                 />
               </div>
