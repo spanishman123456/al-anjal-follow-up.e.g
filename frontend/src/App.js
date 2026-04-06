@@ -64,7 +64,7 @@ function App() {
     }
     return stored;
   });
-  const [theme, setTheme] = useState("light");
+  const [theme, setTheme] = useState(() => localStorage.getItem("theme") || "dark");
   const [token, setToken] = useState(() => sessionStorage.getItem("auth_token"));
   const [authReady, setAuthReady] = useState(() => (sessionStorage.getItem("auth_token") ? null : true));
   const [semester, setSemester] = useState(
@@ -155,6 +155,7 @@ function App() {
     } else {
       document.documentElement.classList.remove("dark");
     }
+    localStorage.setItem("theme", theme);
   }, [theme]);
 
   useEffect(() => {

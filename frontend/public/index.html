@@ -2,6 +2,16 @@
 <html lang="en">
     <head>
         <script>
+          (function () {
+            try {
+              var t = localStorage.getItem("theme");
+              if (t !== "light") document.documentElement.classList.add("dark");
+            } catch (e) {
+              document.documentElement.classList.add("dark");
+            }
+          })();
+        </script>
+        <script>
           // Run before any bundle: suppress ResizeObserver loop errors so the dev overlay does not show
           (function() {
             window.addEventListener('error', function(e) {
@@ -15,7 +25,7 @@
         </script>
         <meta charset="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <meta name="theme-color" content="#000000" />
+        <meta name="theme-color" content="#0a0e1a" />
         <meta name="description" content="Al Anjal School Follow-up Record - Student Progress Hub" />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />

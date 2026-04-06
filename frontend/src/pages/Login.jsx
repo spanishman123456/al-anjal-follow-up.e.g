@@ -191,7 +191,7 @@ export default function Login({
       className="login-mubarmij-bg min-h-screen flex flex-col items-center justify-center p-6 relative overflow-hidden"
       data-testid="login-page"
     >
-      <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden>
+      <div className="pointer-events-none absolute inset-0 overflow-hidden opacity-100 dark:opacity-40" aria-hidden>
         <div className="absolute -top-24 -right-20 h-[24rem] w-[24rem] rounded-full bg-purple-500/20 blur-3xl animate-blob-float" />
         <div
           className="absolute top-[30%] -left-28 h-[20rem] w-[20rem] rounded-full bg-pink-500/15 blur-3xl animate-blob-float"
@@ -202,9 +202,8 @@ export default function Login({
           style={{ animationDelay: "-8s" }}
         />
       </div>
-      {/* Optional school photo: subtle overlay on top of mesh */}
       <div
-        className="absolute inset-0 opacity-[0.14] mix-blend-multiply dark:opacity-[0.12] dark:mix-blend-soft-light"
+        className="absolute inset-0 opacity-[0.14] mix-blend-multiply dark:opacity-[0.06] dark:mix-blend-overlay"
         aria-hidden="true"
         style={{
           backgroundImage: "url('/login-bg.png')",
@@ -214,7 +213,7 @@ export default function Login({
         }}
       />
       {/* Left column: logos top, social + Contact Us bottom, same horizontal center */}
-      <div className="absolute left-0 top-0 bottom-0 z-10 flex flex-col items-center pt-5 pb-6 px-6 w-56 sm:w-60 rounded-lg sm:rounded-none sm:bg-transparent bg-card/80 dark:bg-card/50 backdrop-blur-sm border border-border sm:border-0 mx-3 my-4 sm:mx-0 sm:my-0 shadow-sm sm:shadow-none" data-testid="login-left-column">
+      <div className="absolute left-0 top-0 bottom-0 z-10 flex flex-col items-center pt-5 pb-6 px-6 w-56 sm:w-60 rounded-2xl sm:rounded-none sm:bg-transparent bg-card/80 dark:bg-slate-900/55 backdrop-blur-md border border-border dark:border-white/10 sm:border-0 mx-3 my-4 sm:mx-0 sm:my-0 shadow-sm sm:shadow-none" data-testid="login-left-column">
         <div className="flex flex-col items-center gap-2">
           <img
             src="/logo-al-anjal.png"
@@ -233,7 +232,7 @@ export default function Login({
           <SocialLinks layout="column" iconSize="h-10 w-10" />
           <a
             href="#contact"
-            className="flex items-center justify-center gap-2 rounded-md bg-primary text-primary-foreground py-2.5 px-4 font-medium text-sm hover:bg-primary/90 transition-all duration-200 hover:translate-y-[-2px] hover:scale-[1.02] hover:shadow-md active:translate-y-0 active:scale-[0.98] shadow-md whitespace-nowrap"
+            className="flex items-center justify-center gap-2 rounded-full bg-primary text-primary-foreground py-2.5 px-5 font-medium text-sm hover:bg-primary/90 transition-all duration-200 hover:translate-y-[-2px] hover:scale-[1.02] hover:shadow-md active:translate-y-0 active:scale-[0.98] shadow-md whitespace-nowrap dark:bg-gradient-to-r dark:from-violet-600 dark:to-purple-600 dark:hover:from-violet-500 dark:hover:to-purple-500"
             data-testid="login-contact-us"
           >
             <span className="relative flex items-center">
@@ -252,8 +251,8 @@ export default function Login({
             className={cn(
               "hover:translate-y-0 hover:scale-100",
               language === "en"
-                ? "bg-primary text-white hover:bg-primary/90 shadow-md"
-                : "bg-white border-2 border-slate-300 text-slate-600 hover:border-primary hover:bg-primary/5"
+                ? "bg-primary text-white hover:bg-primary/90 shadow-md dark:bg-gradient-to-r dark:from-violet-600 dark:to-purple-600"
+                : "bg-white border-2 border-slate-300 text-slate-600 hover:border-primary hover:bg-primary/5 dark:bg-white/5 dark:border-white/20 dark:text-slate-200 dark:hover:bg-white/10"
             )}
             variant={language === "en" ? "default" : "outline"}
             data-testid="login-lang-en"
@@ -267,8 +266,8 @@ export default function Login({
             className={cn(
               "hover:translate-y-0 hover:scale-100",
               language === "ar"
-                ? "bg-primary text-white hover:bg-primary/90 shadow-md"
-                : "bg-white border-2 border-slate-300 text-slate-600 hover:border-primary hover:bg-primary/5"
+                ? "bg-primary text-white hover:bg-primary/90 shadow-md dark:bg-gradient-to-r dark:from-violet-600 dark:to-purple-600"
+                : "bg-white border-2 border-slate-300 text-slate-600 hover:border-primary hover:bg-primary/5 dark:bg-white/5 dark:border-white/20 dark:text-slate-200 dark:hover:bg-white/10"
             )}
             variant={language === "ar" ? "default" : "outline"}
             data-testid="login-lang-ar"
@@ -279,21 +278,23 @@ export default function Login({
       </div>
 
       <div className="relative z-10 w-full max-w-lg text-center mt-24 mb-10 animate-fade-in-up" style={{ animationDuration: "0.6s" }} data-testid="login-welcome">
-        <h1 className="text-4xl sm:text-5xl font-extrabold tracking-tight bg-gradient-to-r from-purple-600 to-pink-500 bg-clip-text text-transparent dark:from-purple-400 dark:to-pink-400">
+        <h1 className="text-4xl sm:text-5xl font-extrabold tracking-tight bg-gradient-to-r from-purple-600 to-pink-500 bg-clip-text text-transparent dark:from-white dark:via-cyan-300 dark:to-white">
           {t("login_welcome_title")}
         </h1>
-        <p className="mt-4 text-lg max-w-md mx-auto text-muted-foreground font-semibold">{t("login_welcome_subtitle")}</p>
+        <p className="mt-4 text-lg max-w-md mx-auto text-muted-foreground font-semibold dark:text-slate-300">
+          {t("login_welcome_subtitle")}
+        </p>
       </div>
 
       {/* Login card – white, shadow, rounded (no hover pop on this page) */}
       <div
-        className="relative z-10 w-full max-w-md rounded-lg bg-card border border-border shadow-lg p-8 animate-scale-in"
+        className="relative z-10 w-full max-w-md rounded-2xl bg-card border border-border shadow-lg p-8 animate-scale-in dark:border-white/10 dark:bg-slate-900/75 dark:backdrop-blur-xl dark:shadow-2xl dark:shadow-black/50"
         style={{ animationDuration: "0.5s", animationDelay: "0.15s", animationFillMode: "backwards" }}
         data-testid="login-frame"
       >
-        <Card noHoverPop className="rounded-md border-0 shadow-none bg-transparent">
+        <Card noHoverPop className="rounded-xl border-0 shadow-none bg-transparent">
           <CardHeader className="px-0 pt-0">
-            <CardTitle className="text-xl text-primary">{t("login_title")}</CardTitle>
+            <CardTitle className="text-xl text-primary dark:text-cyan-400">{t("login_title")}</CardTitle>
           </CardHeader>
           <CardContent className="px-0 pb-0">
             <form className="space-y-4" onSubmit={handleLogin}>
@@ -301,7 +302,7 @@ export default function Login({
                 placeholder={t("username")}
                 value={form.username}
                 onChange={(event) => setForm((prev) => ({ ...prev, username: event.target.value }))}
-                className="h-11 border-slate-200 focus:ring-2 focus:ring-primary/20"
+                className="h-11 border-slate-200 focus:ring-2 focus:ring-primary/20 dark:border-white/15"
                 data-testid="login-username"
               />
               <Input
@@ -309,12 +310,12 @@ export default function Login({
                 placeholder={t("password")}
                 value={form.password}
                 onChange={(event) => setForm((prev) => ({ ...prev, password: event.target.value }))}
-                className="h-11 border-slate-200 focus:ring-2 focus:ring-primary/20"
+                className="h-11 border-slate-200 focus:ring-2 focus:ring-primary/20 dark:border-white/15"
                 data-testid="login-password"
               />
               <Button
                 type="submit"
-                className="w-full h-11 bg-primary hover:bg-primary/90 text-white font-semibold shadow-md"
+                className="w-full h-11 font-semibold shadow-md"
                 data-testid="login-submit"
                 disabled={isSubmitting || (backendOk === false && !isProductionBackendUrl)}
               >
@@ -322,10 +323,10 @@ export default function Login({
               </Button>
               <div className="relative my-4">
                 <div className="absolute inset-0 flex items-center">
-                  <span className="w-full border-t border-slate-200" />
+                  <span className="w-full border-t border-slate-200 dark:border-white/10" />
                 </div>
-                <div className="relative flex justify-center text-xs text-slate-500">
-                  <span className="bg-white px-2">{t("or_sign_in_with_gmail")}</span>
+                <div className="relative flex justify-center text-xs text-slate-500 dark:text-slate-400">
+                  <span className="bg-white px-2 dark:bg-slate-900">{t("or_sign_in_with_gmail")}</span>
                 </div>
               </div>
               {GOOGLE_CLIENT_ID && gsiReady ? (
@@ -334,7 +335,7 @@ export default function Login({
                 <Button
                   type="button"
                   variant="outline"
-                  className="w-full h-11 border-slate-300 text-slate-700 hover:bg-slate-50 font-medium"
+                  className="w-full h-11 border-slate-300 text-slate-700 hover:bg-slate-50 font-medium dark:border-white/20 dark:text-slate-200 dark:hover:bg-white/5"
                   onClick={handleGmailButtonClick}
                   disabled={isGoogleLoading}
                   data-testid="login-gmail-button"
@@ -344,16 +345,16 @@ export default function Login({
                 </Button>
               )}
               {isGoogleLoading && (
-                <p className="text-xs text-slate-500 mt-2 text-center">Signing in with Google...</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-2 text-center">Signing in with Google...</p>
               )}
               {backendOk === null && (
-                <p className="text-xs text-slate-500 mt-2">Checking server status...</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-2">Checking server status...</p>
               )}
               {backendOk === true && (
-                <p className="text-xs text-green-600 mt-2">Server and database connected</p>
+                <p className="text-xs text-green-600 dark:text-emerald-400 mt-2">Server and database connected</p>
               )}
               {backendOk === false && (
-                <p className="text-xs text-amber-600 mt-2">
+                <p className="text-xs text-amber-600 dark:text-amber-400 mt-2">
                   {isProductionBackendUrl
                     ? "Server is waking up (free hosting). Press Login once and the app will retry automatically."
                     : "Backend or database not reachable. Run Start_App.bat (keep it open). If this persists, open MongoDB Atlas → Network Access and allow your current IP (or 0.0.0.0/0 for testing), and ensure the cluster is not paused."}

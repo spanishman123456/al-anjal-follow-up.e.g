@@ -326,13 +326,13 @@ export const AppShell = ({
         dir={isRTL ? "rtl" : undefined}
       >
         <header
-          className="flex flex-col gap-4 border-b border-border/50 px-6 py-4 backdrop-blur-md glass-panel"
+          className="flex flex-col gap-4 border-b border-border/50 px-6 py-4 backdrop-blur-md glass-panel dark:border-white/10"
           style={{ background: "hsl(var(--section-header) / 0.92)" }}
           data-testid="top-header"
         >
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div className="flex items-center gap-4" data-testid="school-header">
-              <div className="flex items-center justify-center rounded-lg bg-white p-2">
+              <div className="flex items-center justify-center rounded-xl bg-white p-2 dark:bg-white/10 dark:ring-1 dark:ring-white/15">
                 <img
                   src={`${process.env.PUBLIC_URL || ""}/logo.png`}
                   alt="School Logo"
@@ -348,7 +348,7 @@ export const AppShell = ({
                   مدارس الأنجال الأهلية
                 </p>
                 <p
-                  className="text-lg font-bold text-primary"
+                  className="text-lg font-bold text-primary dark:text-cyan-400"
                   data-testid="school-name-en"
                 >
                   ALANJAL NATIONAL SCHOOL
@@ -458,7 +458,7 @@ export const AppShell = ({
         </header>
         {/* Academic context bar: semester reminder on every page */}
         <div
-          className="flex flex-wrap items-center justify-center gap-4 border-b border-border/50 px-6 py-3"
+          className="flex flex-wrap items-center justify-center gap-4 border-b border-border/50 px-6 py-3 dark:border-white/10"
           style={{ background: "hsl(var(--section-context))" }}
           data-testid="academic-context-bar"
         >

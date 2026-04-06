@@ -6,7 +6,7 @@ const Card = React.forwardRef(({ className, noHoverPop, ...props }, ref) => (
   <div
     ref={ref}
     data-card-pop={noHoverPop ? undefined : "true"}
-    className={cn("rounded-lg border border-border bg-card text-card-foreground shadow-sm", className)}
+    className={cn("rounded-xl border border-border bg-card text-card-foreground shadow-sm dark:border-white/10 dark:shadow-lg dark:shadow-black/20", className)}
     {...props} />
 ))
 Card.displayName = "Card"
