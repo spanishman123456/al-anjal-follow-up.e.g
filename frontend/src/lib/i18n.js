@@ -31,7 +31,7 @@ export const translations = {
     analytics: "Analytics",
     analytics_term_scope: "Analysis term",
     analytics_term_scope_hint:
-      "Choose one of the four quarters (two semesters × two quarters). Struggling/excelling lists and class averages use this term only. Overview charts still compare Quarter 1 vs Quarter 2 within that semester.",
+      "Choose one of the four quarters (two semesters × two quarters). All charts and tables reflect that term only—there is no Quarter 1 vs Quarter 2 comparison.",
     term_s1q1: "Semester 1 · Quarter 1",
     term_s1q2: "Semester 1 · Quarter 2",
     term_s2q1: "Semester 2 · Quarter 1",
@@ -47,6 +47,8 @@ export const translations = {
     visual_board_chart_pass_split_sub: "Selected quarter snapshot",
     visual_board_chart_q_trend: "On-level rate across quarters",
     visual_board_chart_q_trend_sub: "Cohort trend within this semester (Q1 → Q2)",
+    visual_board_chart_q_focus: "On-level rate (selected quarter)",
+    visual_board_chart_q_focus_sub: "Cohort on-level % for the selected term only",
     visual_board_chart_class_curve: "Class averages profile",
     visual_board_chart_class_curve_sub: "How averages spread across classes",
     visual_board_chart_enrollment: "Students per class",
@@ -56,7 +58,7 @@ export const translations = {
     visual_board_full_analysis: "Full analysis",
     visual_board_guide_read: "What the charts mean",
     visual_board_guide_read_body:
-      "Bars and areas show class-level averages for the selected term. The donut compares on-level students to all other categories in the highlighted quarter. The line links cohort on-level rates for Quarter 1 and Quarter 2 in the same semester.",
+      "Bars and areas show class-level averages for the selected term. The donut compares on-level students to all other categories in the highlighted quarter. The on-level chart shows cohort on-level % for the selected term only.",
     visual_board_guide_use: "How to use this view",
     visual_board_guide_use_body:
       "Start from highlights, then scan the grid for gaps between classes and quarters. Export PDF or Excel and paste the narrative sections into meetings or parent updates.",
@@ -306,6 +308,7 @@ export const translations = {
     quarter_1: "Quarter 1",
     quarter_2: "Quarter 2",
     quarter1_total: "Quarter 1 Total",
+    focus_quarter_total: "Quarter total (selected term)",
     quarter2_total: "Quarter 2 Total",
     struggling_students: "Students Needing Support",
     excelling_students: "Top Performers",
@@ -414,7 +417,7 @@ export const translations = {
     analytics: "التحليلات",
     analytics_term_scope: "فترة التحليل",
     analytics_term_scope_hint:
-      "اختر أحد الأرباع الأربعة (فصلان دراسيان × ربعان). قوائم الطلاب المتعثرين/المتفوقين ومتوسطات الفصول لهذه الفترة فقط. الرسوم البيانية في النظرة العامة ما زالت تقارن الربع 1 والربع 2 ضمن نفس الفصل الدراسي.",
+      "اختر أحد الأرباع الأربعة (فصلان دراسيان × ربعان). جميع الرسوم والجداول تعكس ذلك الربع فقط—دون مقارنة بين الربعين.",
     term_s1q1: "الفصل الدراسي 1 · الربع 1",
     term_s1q2: "الفصل الدراسي 1 · الربع 2",
     term_s2q1: "الفصل الدراسي 2 · الربع 1",
@@ -430,6 +433,8 @@ export const translations = {
     visual_board_chart_pass_split_sub: "لقطة للربع المحدد",
     visual_board_chart_q_trend: "نسبة على المستوى عبر الأرباع",
     visual_board_chart_q_trend_sub: "اتجاه المجموع ضمن هذا الفصل الدراسي (الربع 1 → الربع 2)",
+    visual_board_chart_q_focus: "نسبة على المستوى (الربع المحدد)",
+    visual_board_chart_q_focus_sub: "نسبة على المستوى للمجموعة للفترة المحددة فقط",
     visual_board_chart_class_curve: "توزيع متوسطات الفصول",
     visual_board_chart_class_curve_sub: "كيف تنتشر المتوسطات بين الفصول",
     visual_board_chart_enrollment: "الطلاب حسب الفصل",
@@ -439,7 +444,7 @@ export const translations = {
     visual_board_full_analysis: "التحليل الكامل",
     visual_board_guide_read: "ماذا تعني الرسوم",
     visual_board_guide_read_body:
-      "الأعمدة والمساحات تعرض متوسطات الفصول للفترة المحددة. الدائرة تقارن الطلاب على المستوى ببقية الفئات في الربع المميز. الخط يربط نسب على المستوى للربع 1 والربع 2 في نفس الفصل الدراسي.",
+      "الأعمدة والمساحات تعرض متوسطات الفصول للفترة المحددة. الدائرة تقارن الطلاب على المستوى ببقية الفئات في الربع المميز. رسم النسبة يعرض نسبة على المستوى للمجموعة للفترة المحددة فقط.",
     visual_board_guide_use: "كيفية استخدام العرض",
     visual_board_guide_use_body:
       "ابدأ من أبرز النقاط ثم راجع الشبكة للفجوات بين الفصول والأرباع. صدّر PDF أو Excel والصق الأقسام النصية في الاجتماعات أو تواصل أولياء الأمور.",
@@ -689,6 +694,7 @@ export const translations = {
     quarter_1: "الربع الأول",
     quarter_2: "الربع الثاني",
     quarter1_total: "مجموع الربع الأول",
+    focus_quarter_total: "مجموع الربع (الفترة المحددة)",
     quarter2_total: "مجموع الربع الثاني",
     struggling_students: "طلاب يحتاجون دعم",
     excelling_students: "أفضل الأداء",

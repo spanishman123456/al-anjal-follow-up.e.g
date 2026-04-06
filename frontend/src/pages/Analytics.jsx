@@ -44,7 +44,7 @@ import {
   BoardHighlightsCard,
   ClassAverageBarChart,
   PassSplitDonut,
-  QuarterOnLevelTrend,
+  QuarterOnLevelFocus,
   ClassScoreArea,
 } from "@/components/dashboard/VisualBoard";
 
@@ -108,7 +108,7 @@ export default function Analytics() {
 
   const autoFillInsights = () => {
     if (!overview) return;
-    applyGeneratedInsights(buildAutoInsightsFromOverview(overview));
+    applyGeneratedInsights(buildAutoInsightsFromOverview(overview, apiQuarter));
   };
 
   useEffect(() => {
@@ -227,8 +227,12 @@ export default function Analytics() {
 
   useEffect(() => {
     if (!overview) return;
-    autoFillInsights();
-  }, [overview]);
+    applyGeneratedInsights(buildAutoInsightsFromOverview(overview, apiQuarter));
+  }, [overview, apiQuarter]);
+
+  useEffect(() => {
+    if (activeTab === "quarter2") setActiveTab("quarter1");
+  }, [activeTab]);
 
   const q1 = overview?.quarter1 || {};
   const q2 = overview?.quarter2 || {};
@@ -241,21 +245,16 @@ export default function Analytics() {
     value: item.count,
     level: item.level,
   }));
-  const q2Distribution = (q2.distribution || []).map((item) => ({
-    name: t(item.level),
-    value: item.count,
-    level: item.level,
-  }));
 
-  const comparisonBarData = useMemo(() => {
+  const distributionBarData = useMemo(() => {
+    const dist = apiQuarter === 1 ? q1.distribution : q2.distribution;
     const levels = ["on_level", "approach", "below"];
     return levels.map((level) => ({
       level: t(level),
       levelKey: level,
-      [t("quarter_1")]: q1.distribution?.find((d) => d.level === level)?.count ?? 0,
-      [t("quarter_2")]: q2.distribution?.find((d) => d.level === level)?.count ?? 0,
+      count: dist?.find((d) => d.level === level)?.count ?? 0,
     }));
-  }, [q1.distribution, q2.distribution, t]);
+  }, [apiQuarter, q1.distribution, q2.distribution, t]);
 
   const classChartData = sortByClassOrder(
     classSummary.filter((cls) => selectedClassId === "all" || cls.class_id === selectedClassId)
@@ -281,12 +280,9 @@ export default function Analytics() {
   }, [classSummary]);
 
   const aiInsightRows = useMemo(() => {
-    const q1Rate = Number(q1.on_level_rate ?? 0);
-    const q2Rate = Number(q2.on_level_rate ?? 0);
-    const rateDelta = q2Rate - q1Rate;
-    const q1Avg = q1.avg_total ?? null;
-    const q2Avg = q2.avg_total ?? null;
-    const avgDelta = q1Avg != null && q2Avg != null ? Number((q2Avg - q1Avg).toFixed(2)) : null;
+    const focus = apiQuarter === 1 ? q1 : q2;
+    const focusRate = Number(focus.on_level_rate ?? 0);
+    const focusAvg = focus.avg_total ?? null;
 
     const classesWithAvg = [...classSummary].filter((c) => c.avg_total_score != null);
     const byAscendingAvg = [...classesWithAvg].sort((a, b) => (a.avg_total_score ?? 999) - (b.avg_total_score ?? 999));
@@ -304,15 +300,15 @@ export default function Analytics() {
       {
         icon: TrendingUp,
         tone: "text-emerald-600 dark:text-emerald-400",
-        text: `Trend: On-level rate changed by ${rateDelta >= 0 ? "+" : ""}${rateDelta.toFixed(1)} points from Q1 to Q2.`,
+        text: `On-level rate for the selected term is ${focusRate}%.`,
       },
       {
         icon: Sparkles,
         tone: "text-sky-600 dark:text-sky-400",
         text:
-          q1Avg != null && q2Avg != null
-            ? `Performance: Average quarter total moved from ${q1Avg} to ${q2Avg} (${avgDelta >= 0 ? "+" : ""}${avgDelta}).`
-            : "Performance: Waiting for more scored records to compute quarter average trend.",
+          focusAvg != null
+            ? `Average quarter total for the selected term is ${focusAvg}.`
+            : "Waiting for more scored records to compute the quarter average.",
       },
       {
         icon: AlertTriangle,
@@ -324,7 +320,7 @@ export default function Analytics() {
             : "Focus: Class-level contrast insight will appear once class averages are available.",
       },
     ];
-  }, [q1.on_level_rate, q2.on_level_rate, q1.avg_total, q2.avg_total, classSummary]);
+  }, [apiQuarter, q1.on_level_rate, q2.on_level_rate, q1.avg_total, q2.avg_total, classSummary]);
 
   const handleDownload = async (format) => {
     try {
@@ -472,17 +468,13 @@ export default function Analytics() {
               </BoardHighlightsCard>
               <BoardHighlightsCard title={t("key_insights")}>
                 <p>
-                  <span className="font-medium text-foreground">{t("quarter_1")}:</span>{" "}
-                  {q1.on_level_rate ?? 0}% {t("on_level")}
-                  {q1.avg_total != null && (
-                    <span className="text-muted-foreground"> · {t("avg_quarter_total")}: {q1.avg_total}</span>
-                  )}
-                </p>
-                <p>
-                  <span className="font-medium text-foreground">{t("quarter_2")}:</span>{" "}
-                  {q2.on_level_rate ?? 0}% {t("on_level")}
-                  {q2.avg_total != null && (
-                    <span className="text-muted-foreground"> · {t("avg_quarter_total")}: {q2.avg_total}</span>
+                  <span className="font-medium text-foreground">{t(`term_${termScopeId}`)}:</span>{" "}
+                  {(apiQuarter === 1 ? q1.on_level_rate : q2.on_level_rate) ?? 0}% {t("on_level")}
+                  {(apiQuarter === 1 ? q1.avg_total : q2.avg_total) != null && (
+                    <span className="text-muted-foreground">
+                      {" "}
+                      · {t("avg_quarter_total")}: {apiQuarter === 1 ? q1.avg_total : q2.avg_total}
+                    </span>
                   )}
                 </p>
               </BoardHighlightsCard>
@@ -495,7 +487,7 @@ export default function Analytics() {
         }
       >
       {/* Metric cards */}
-      <section className="section-bg-alt-1 grid gap-4 rounded-xl border border-border/50 p-4 md:grid-cols-2 lg:grid-cols-4" data-testid="analytics-metrics">
+      <section className="section-bg-alt-1 grid gap-4 rounded-xl border border-border/50 p-4 md:grid-cols-2 lg:grid-cols-3" data-testid="analytics-metrics">
         <Card data-testid="analytics-total-students">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
@@ -520,42 +512,19 @@ export default function Analytics() {
             </div>
           </CardContent>
         </Card>
-        <Card
-          data-testid="analytics-q1"
-          className={apiQuarter === 1 ? "ring-2 ring-primary ring-offset-2 ring-offset-background" : ""}
-        >
+        <Card data-testid="analytics-focus-quarter" className="ring-2 ring-primary ring-offset-2 ring-offset-background">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
-              {t("quarter_1")} — {t("on_level_rate")}
+              {t(`term_${termScopeId}`)} — {t("on_level_rate")}
             </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-semibold text-emerald-600 dark:text-emerald-400">
-              {q1.on_level_rate ?? 0}%
+              {(apiQuarter === 1 ? q1.on_level_rate : q2.on_level_rate) ?? 0}%
             </div>
-            {q1.avg_total != null && (
+            {(apiQuarter === 1 ? q1.avg_total : q2.avg_total) != null && (
               <p className="mt-1 text-xs text-muted-foreground">
-                {t("avg_quarter_total")}: {q1.avg_total}
-              </p>
-            )}
-          </CardContent>
-        </Card>
-        <Card
-          data-testid="analytics-q2"
-          className={apiQuarter === 2 ? "ring-2 ring-primary ring-offset-2 ring-offset-background" : ""}
-        >
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              {t("quarter_2")} — {t("on_level_rate")}
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-semibold text-emerald-600 dark:text-emerald-400">
-              {q2.on_level_rate ?? 0}%
-            </div>
-            {q2.avg_total != null && (
-              <p className="mt-1 text-xs text-muted-foreground">
-                {t("avg_quarter_total")}: {q2.avg_total}
+                {t("avg_quarter_total")}: {apiQuarter === 1 ? q1.avg_total : q2.avg_total}
               </p>
             )}
           </CardContent>
@@ -585,15 +554,13 @@ export default function Analytics() {
             />
           </BoardPanel>
           <BoardPanel
-            title={t("visual_board_chart_q_trend")}
-            subtitle={t("visual_board_chart_q_trend_sub")}
-            testId="analytics-board-q-trend"
+            title={t("visual_board_chart_q_focus")}
+            subtitle={t("visual_board_chart_q_focus_sub")}
+            testId="analytics-board-q-focus"
           >
-            <QuarterOnLevelTrend
-              q1Rate={q1.on_level_rate}
-              q2Rate={q2.on_level_rate}
-              labelQ1={t("quarter_1")}
-              labelQ2={t("quarter_2")}
+            <QuarterOnLevelFocus
+              rate={apiQuarter === 1 ? q1.on_level_rate : q2.on_level_rate}
+              termLabel={t(`term_${termScopeId}`)}
               lineName={t("visual_board_line_cohort")}
               height={240}
             />
@@ -652,9 +619,6 @@ export default function Analytics() {
           <TabsTrigger value="quarter1" data-testid="analytics-tab-quarter1">
             {t("quarter_1")}
           </TabsTrigger>
-          <TabsTrigger value="quarter2" data-testid="analytics-tab-quarter2">
-            {t("quarter_2")}
-          </TabsTrigger>
           <TabsTrigger value="struggling" data-testid="analytics-tab-struggling">
             {t("struggling_students")}
           </TabsTrigger>
@@ -671,7 +635,7 @@ export default function Analytics() {
 
         <TabsContent value="overview" className="mt-6" data-testid="analytics-overview-content">
           <BoardPanel
-            title={`${t("performance_distribution")} — ${t("analytics_compare_same_semester")}`}
+            title={`${t("performance_distribution")} — ${t(`term_${termScopeId}`)}`}
             subtitle={
               <span className="inline-flex items-center gap-2">
                 <Sparkles className="h-3.5 w-3.5 text-primary" />
@@ -683,20 +647,15 @@ export default function Analytics() {
           >
             <div className="h-80" data-testid="analytics-overview-bar">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={comparisonBarData} barCategoryGap="20%" barGap={4} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+                <BarChart data={distributionBarData} barCategoryGap="22%" margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke={BOARD.grid} vertical={false} />
                   <XAxis dataKey="level" tick={{ fontSize: 11 }} />
                   <YAxis tick={{ fontSize: 11 }} />
                   <Tooltip content={<AnalyticsTooltip />} />
                   <Legend />
-                  <Bar dataKey={t("quarter_1")} radius={[6, 6, 0, 0]}>
-                    {comparisonBarData.map((entry, index) => (
-                      <Cell key={`q1-${index}`} fill={PERFORMANCE_COLORS[entry.levelKey]} />
-                    ))}
-                  </Bar>
-                  <Bar dataKey={t("quarter_2")} radius={[6, 6, 0, 0]}>
-                    {comparisonBarData.map((entry, index) => (
-                      <Cell key={`q2-${index}`} fill={PERFORMANCE_COLORS[entry.levelKey]} />
+                  <Bar dataKey="count" name={t("students")} radius={[6, 6, 0, 0]} maxBarSize={56}>
+                    {distributionBarData.map((entry, index) => (
+                      <Cell key={`d-${index}`} fill={PERFORMANCE_COLORS[entry.levelKey]} />
                     ))}
                   </Bar>
                 </BarChart>
@@ -725,39 +684,6 @@ export default function Analytics() {
               </div>
               <div className="space-y-3" data-testid="analytics-q1-list">
                 {q1Distribution.map((item) => (
-                  <div
-                    key={item.level}
-                    className="flex items-center justify-between rounded-lg border border-border/60 px-3 py-2"
-                  >
-                    <span className="text-sm font-medium">{item.name}</span>
-                    <span className="text-sm text-muted-foreground">{item.value}</span>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="quarter2" className="mt-6" data-testid="analytics-quarter2-content">
-          <Card className="border-primary/20 shadow-sm">
-            <CardHeader>
-              <CardTitle>{t("quarter_2")} — {t("performance_distribution")}</CardTitle>
-            </CardHeader>
-            <CardContent className="grid gap-6 md:grid-cols-2">
-              <div className="h-64" data-testid="analytics-q2-chart">
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie data={q2Distribution} dataKey="value" innerRadius={60} outerRadius={90}>
-                      {q2Distribution.map((entry) => (
-                        <Cell key={entry.level} fill={PERFORMANCE_COLORS[entry.level]} />
-                      ))}
-                    </Pie>
-                    <Tooltip content={<AnalyticsTooltip />} />
-                  </PieChart>
-                </ResponsiveContainer>
-              </div>
-              <div className="space-y-3" data-testid="analytics-q2-list">
-                {q2Distribution.map((item) => (
                   <div
                     key={item.level}
                     className="flex items-center justify-between rounded-lg border border-border/60 px-3 py-2"
@@ -801,21 +727,14 @@ export default function Analytics() {
                         <div className="mt-2 flex flex-wrap gap-1">
                           <span
                             className={`rounded px-2 py-0.5 text-xs ${
-                              student.performance_level_q1 === "below"
+                              (apiQuarter === 1 ? student.performance_level_q1 : student.performance_level_q2) ===
+                              "below"
                                 ? "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300"
                                 : "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300"
                             }`}
                           >
-                            Q1: {t(student.performance_level_q1)}
-                          </span>
-                          <span
-                            className={`rounded px-2 py-0.5 text-xs ${
-                              student.performance_level_q2 === "below"
-                                ? "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300"
-                                : "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300"
-                            }`}
-                          >
-                            Q2: {t(student.performance_level_q2)}
+                            {t(`term_${termScopeId}`)}:{" "}
+                            {t(apiQuarter === 1 ? student.performance_level_q1 : student.performance_level_q2)}
                           </span>
                         </div>
                         {student.weak_areas?.length > 0 && (
@@ -872,10 +791,11 @@ export default function Analytics() {
                         <p className="text-sm text-muted-foreground">{student.class_name}</p>
                         <div className="mt-2 flex flex-wrap gap-1">
                           <span className="rounded bg-emerald-100 px-2 py-0.5 text-xs text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300">
-                            Q1: {t(student.performance_level_q1 || "on_level")}
-                          </span>
-                          <span className="rounded bg-emerald-100 px-2 py-0.5 text-xs text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300">
-                            Q2: {t(student.performance_level_q2 || "on_level")}
+                            {t(`term_${termScopeId}`)}:{" "}
+                            {t(
+                              (apiQuarter === 1 ? student.performance_level_q1 : student.performance_level_q2) ||
+                                "on_level",
+                            )}
                           </span>
                         </div>
                         {student.strengths?.length > 0 && (

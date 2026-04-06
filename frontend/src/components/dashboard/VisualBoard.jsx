@@ -10,8 +10,6 @@ import {
   PieChart,
   Pie,
   Cell,
-  LineChart,
-  Line,
   AreaChart,
   Area,
   LabelList,
@@ -24,7 +22,6 @@ export const BOARD = {
   grid: "#e2e8f0",
   axis: "#64748b",
   lineQ1: "#22c55e",
-  lineQ2: "#3b82f6",
   area: "#93c5fd",
   areaStroke: "#2563eb",
 };
@@ -158,18 +155,16 @@ export function PassSplitDonut({
   );
 }
 
-/** Two-point trend: cohort on-level % from Q1 to Q2 (same semester). */
-export function QuarterOnLevelTrend({ q1Rate, q2Rate, labelQ1, labelQ2, lineName, height = 220 }) {
-  const data = [
-    { x: labelQ1, rate: Number(q1Rate ?? 0) },
-    { x: labelQ2, rate: Number(q2Rate ?? 0) },
-  ];
+/** Single-quarter cohort on-level % (no Quarter 1 vs Quarter 2 comparison). */
+export function QuarterOnLevelFocus({ rate, termLabel, lineName, height = 220 }) {
+  const label = termLabel || "—";
+  const data = [{ name: label, rate: Number(rate ?? 0) }];
   return (
     <div style={{ height }} className="w-full">
       <ResponsiveContainer width="100%" height="100%">
-        <LineChart data={data} margin={{ top: 16, right: 16, left: 0, bottom: 4 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke={BOARD.grid} />
-          <XAxis dataKey="x" tick={{ fontSize: 11, fill: BOARD.axis }} />
+        <BarChart data={data} margin={{ top: 28, right: 12, left: 0, bottom: 8 }} barCategoryGap="45%">
+          <CartesianGrid strokeDasharray="3 3" stroke={BOARD.grid} vertical={false} />
+          <XAxis dataKey="name" tick={{ fontSize: 10, fill: BOARD.axis }} interval={0} />
           <YAxis
             tick={{ fontSize: 11, fill: BOARD.axis }}
             domain={[0, 100]}
@@ -177,16 +172,10 @@ export function QuarterOnLevelTrend({ q1Rate, q2Rate, labelQ1, labelQ2, lineName
           />
           <Tooltip content={boardTooltip} />
           <Legend wrapperStyle={{ fontSize: 12 }} />
-          <Line
-            type="monotone"
-            dataKey="rate"
-            name={lineName}
-            stroke={BOARD.lineQ1}
-            strokeWidth={2.5}
-            dot={{ r: 5, fill: BOARD.lineQ1, stroke: "#fff", strokeWidth: 2 }}
-            activeDot={{ r: 6 }}
-          />
-        </LineChart>
+          <Bar dataKey="rate" name={lineName} fill={BOARD.lineQ1} radius={[6, 6, 0, 0]} maxBarSize={72}>
+            <LabelList dataKey="rate" position="top" formatter={(v) => `${v}%`} fill="#64748b" fontSize={11} />
+          </Bar>
+        </BarChart>
       </ResponsiveContainer>
     </div>
   );

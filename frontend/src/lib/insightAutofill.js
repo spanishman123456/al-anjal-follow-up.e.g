@@ -33,41 +33,17 @@ function toNumber(value) {
   return Number.isFinite(n) ? n : null;
 }
 
-function quarterTrendSummary(students) {
-  let improved = 0;
-  let declined = 0;
-  let stable = 0;
-  (students || []).forEach((student) => {
-    const q1 = toNumber(student?.quarter1_total);
-    const q2 = toNumber(student?.quarter2_total);
-    if (q1 == null || q2 == null) return;
-    const delta = q2 - q1;
-    if (delta >= 2) improved += 1;
-    else if (delta <= -2) declined += 1;
-    else stable += 1;
-  });
-  return { improved, declined, stable };
-}
-
 function buildCommonInsights(payload) {
   const excelling = payload?.excelling || [];
   const struggling = payload?.struggling || [];
-  const allStudentsForTrend = [...excelling, ...struggling];
 
   const strengths = topLabels(excelling, "strengths");
   const weaknesses = topLabels(struggling, "weak_areas");
   const topExcellingNames = topNames(excelling);
   const topSupportNames = topNames(struggling);
 
-  const q1Rate = toNumber(payload?.q1Rate) ?? 0;
-  const q2Rate = toNumber(payload?.q2Rate) ?? 0;
-  const q1Avg = toNumber(payload?.q1Avg);
-  const q2Avg = toNumber(payload?.q2Avg);
-  const trend = quarterTrendSummary(allStudentsForTrend);
-
-  const rateDelta = (q2Rate - q1Rate).toFixed(1);
-  const avgDelta =
-    q1Avg != null && q2Avg != null ? (q2Avg - q1Avg).toFixed(2) : null;
+  const focusRate = toNumber(payload?.focusRate) ?? 0;
+  const focusAvg = toNumber(payload?.focusAvg);
 
   const strengthsText = strengths.length
     ? strengths.join(", ")
@@ -79,37 +55,39 @@ function buildCommonInsights(payload) {
   const excellingSample = formatNames(topExcellingNames);
   const supportSample = formatNames(topSupportNames);
 
+  const perfLine =
+    focusAvg != null
+      ? `Cohort on-level rate is ${focusRate}% for the selected term, with an average quarter total of ${focusAvg}.`
+      : `Cohort on-level rate is ${focusRate}% for the selected term. Average quarter total is still stabilizing as more scores are recorded.`;
+
   return {
     analysis_strengths: `Students show strongest outcomes in ${strengthsText}. ${excellingSample ? `${excellingSample} are currently leading with steady high performance and positive learning habits.` : "Several students are maintaining high and stable performance across the quarter."}`,
     analysis_weaknesses: `The main risk areas are ${weaknessesText}. ${supportSample ? `${supportSample} need focused support plans with short-cycle follow-up and parent communication.` : "A focused support group should receive weekly intervention and progress checks."}`,
-    analysis_performance: `Overall trend: on-level rate moved from ${q1Rate}% in Q1 to ${q2Rate}% in Q2 (${rateDelta >= 0 ? "+" : ""}${rateDelta} points). ${q1Avg != null && q2Avg != null ? `Average total changed from ${q1Avg} to ${q2Avg}${avgDelta ? ` (${avgDelta >= 0 ? "+" : ""}${avgDelta})` : ""}.` : "Average total is still stabilizing as more scores are recorded."} ${trend.improved > 0 ? `${trend.improved} students show clear improvement over time.` : "Improvement is limited and needs tighter weekly monitoring."}`,
-    analysis_standout_data: `${trend.improved > 0 ? `${trend.improved} students improved quarter-to-quarter` : "Few students showed strong quarter-to-quarter growth"}, ${trend.stable} remained stable, and ${trend.declined} declined. ${excelling.length} students are in the high-performance group while ${struggling.length} need targeted support.`,
-    analysis_actions: "Run small-group intervention for weak areas twice weekly; assign differentiated practice by skill gap; review progress every week using quarter trend checks; contact families of students with repeated decline.",
-    analysis_recommendations: "Maintain challenge tasks for top performers and create individualized recovery plans for support students. Use short formative checks, participation tracking, and monthly review meetings to keep growth measurable and sustainable.",
+    analysis_performance: perfLine,
+    analysis_standout_data: `${excelling.length} students are in the high-performance group while ${struggling.length} need targeted support. Use class and strand detail to prioritize follow-up.`,
+    analysis_actions:
+      "Run small-group intervention for weak areas twice weekly; assign differentiated practice by skill gap; review progress every week; contact families of students who remain below expectations.",
+    analysis_recommendations:
+      "Maintain challenge tasks for top performers and create individualized recovery plans for support students. Use short formative checks, participation tracking, and monthly review meetings to keep growth measurable and sustainable.",
   };
 }
 
-export function buildAutoInsightsFromOverview(overview) {
-  const q1 = overview?.quarter1 || {};
-  const q2 = overview?.quarter2 || {};
+/** @param {number} [selectedQuarter] 1 or 2 — which quarter in the semester is in focus */
+export function buildAutoInsightsFromOverview(overview, selectedQuarter = 1) {
+  const q =
+    selectedQuarter === 2 ? overview?.quarter2 || {} : overview?.quarter1 || {};
   return buildCommonInsights({
-    q1Rate: q1.on_level_rate,
-    q2Rate: q2.on_level_rate,
-    q1Avg: q1.avg_total,
-    q2Avg: q2.avg_total,
+    focusRate: q.on_level_rate ?? overview?.exceeding_rate,
+    focusAvg: q.avg_total,
     excelling: overview?.excelling_students || [],
     struggling: overview?.struggling_students || [],
   });
 }
 
 export function buildAutoInsightsFromReport(report) {
-  const q1 = report?.quarter1 || {};
-  const q2 = report?.quarter2 || {};
   return buildCommonInsights({
-    q1Rate: q1.on_level_rate,
-    q2Rate: q2.on_level_rate,
-    q1Avg: q1.avg_total,
-    q2Avg: q2.avg_total,
+    focusRate: report?.exceeding_rate,
+    focusAvg: report?.avg_total_score,
     excelling: report?.top_performers || [],
     struggling: report?.students_needing_support || [],
   });

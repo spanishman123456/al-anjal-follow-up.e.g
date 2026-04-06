@@ -35,7 +35,7 @@ import {
   BoardHighlightsCard,
   ClassAverageBarChart,
   PassSplitDonut,
-  QuarterOnLevelTrend,
+  QuarterOnLevelFocus,
   ClassScoreArea,
 } from "@/components/dashboard/VisualBoard";
 
@@ -183,6 +183,9 @@ export default function Reports() {
 
   const reportQuarterDistribution = report?.distribution || [];
 
+  const focusQuarterStudentTotal = (student) =>
+    apiQuarter === 2 ? student.quarter2_total ?? "—" : student.quarter1_total ?? "—";
+
   return (
     <div className="space-y-8" data-testid="reports-page">
       <PageHeader
@@ -313,7 +316,7 @@ export default function Reports() {
             </CardContent>
           </Card>
 
-          <section className="section-bg-alt-1 grid gap-4 rounded-xl border border-border/50 p-4 md:grid-cols-2 lg:grid-cols-5" data-testid="reports-summary">
+          <section className="section-bg-alt-1 grid gap-4 rounded-xl border border-border/50 p-4 md:grid-cols-2 lg:grid-cols-3" data-testid="reports-summary">
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm text-muted-foreground">{t("total_students")}</CardTitle>
@@ -345,40 +348,6 @@ export default function Reports() {
                 <p className="text-xs text-muted-foreground">{t(`term_${termScopeId}`)}</p>
               </CardContent>
             </Card>
-            <Card
-              className={
-                apiQuarter === 1 ? "ring-2 ring-primary ring-offset-2 ring-offset-background" : ""
-              }
-            >
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm text-muted-foreground">{t("quarter_1")}</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-semibold text-emerald-600 dark:text-emerald-400">
-                  {report.quarter1?.on_level_rate ?? 0}%
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  {t("avg_quarter_total")}: {report.quarter1?.avg_total ?? "—"}
-                </p>
-              </CardContent>
-            </Card>
-            <Card
-              className={
-                apiQuarter === 2 ? "ring-2 ring-primary ring-offset-2 ring-offset-background" : ""
-              }
-            >
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm text-muted-foreground">{t("quarter_2")}</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-semibold text-emerald-600 dark:text-emerald-400">
-                  {report.quarter2?.on_level_rate ?? 0}%
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  {t("avg_quarter_total")}: {report.quarter2?.avg_total ?? "—"}
-                </p>
-              </CardContent>
-            </Card>
           </section>
 
           <div className="grid gap-4 md:grid-cols-2" data-testid="reports-visual-board-grid">
@@ -401,14 +370,12 @@ export default function Reports() {
               />
             </BoardPanel>
             <BoardPanel
-              title={t("visual_board_chart_q_trend")}
-              subtitle={t("visual_board_chart_q_trend_sub")}
+              title={t("visual_board_chart_q_focus")}
+              subtitle={t("visual_board_chart_q_focus_sub")}
             >
-              <QuarterOnLevelTrend
-                q1Rate={report.quarter1?.on_level_rate}
-                q2Rate={report.quarter2?.on_level_rate}
-                labelQ1={t("quarter_1")}
-                labelQ2={t("quarter_2")}
+              <QuarterOnLevelFocus
+                rate={report.exceeding_rate}
+                termLabel={t(`term_${termScopeId}`)}
                 lineName={t("visual_board_line_cohort")}
                 height={240}
               />
@@ -449,8 +416,7 @@ export default function Reports() {
                       <TableRow>
                         <TableHead>{t("student_name")}</TableHead>
                         <TableHead>{t("class_name")}</TableHead>
-                        <TableHead>{t("quarter1_total")}</TableHead>
-                        <TableHead>{t("quarter2_total")}</TableHead>
+                        <TableHead>{t("focus_quarter_total")}</TableHead>
                         <TableHead>{t("total_score")}</TableHead>
                         <TableHead>{t("strengths")}</TableHead>
                       </TableRow>
@@ -460,8 +426,7 @@ export default function Reports() {
                         <TableRow key={student.id} data-testid={`reports-top-${student.id}`}>
                           <TableCell>{student.full_name}</TableCell>
                           <TableCell>{student.class_name}</TableCell>
-                          <TableCell>{student.quarter1_total ?? "-"}</TableCell>
-                          <TableCell>{student.quarter2_total ?? "-"}</TableCell>
+                          <TableCell>{focusQuarterStudentTotal(student)}</TableCell>
                           <TableCell>{student.total_score_normalized != null ? student.total_score_normalized : "-"}</TableCell>
                           <TableCell>
                             {(student.strengths || []).length > 0 ? (
@@ -491,8 +456,7 @@ export default function Reports() {
                       <TableRow>
                         <TableHead>{t("student_name")}</TableHead>
                         <TableHead>{t("class_name")}</TableHead>
-                        <TableHead>{t("quarter1_total")}</TableHead>
-                        <TableHead>{t("quarter2_total")}</TableHead>
+                        <TableHead>{t("focus_quarter_total")}</TableHead>
                         <TableHead>{t("performance_level")}</TableHead>
                         <TableHead>{t("weaknesses")}</TableHead>
                       </TableRow>
@@ -502,8 +466,7 @@ export default function Reports() {
                         <TableRow key={student.id} data-testid={`reports-support-${student.id}`}>
                           <TableCell>{student.full_name}</TableCell>
                           <TableCell>{student.class_name}</TableCell>
-                          <TableCell>{student.quarter1_total ?? "-"}</TableCell>
-                          <TableCell>{student.quarter2_total ?? "-"}</TableCell>
+                          <TableCell>{focusQuarterStudentTotal(student)}</TableCell>
                           <TableCell>{t(student.performance_level)}</TableCell>
                           <TableCell>
                             {(student.weak_areas || []).length > 0 ? (
