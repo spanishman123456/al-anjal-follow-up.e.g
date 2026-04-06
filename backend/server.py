@@ -1146,6 +1146,36 @@ def parse_class_name(name: str) -> Dict[str, Optional[Any]]:
     return {"grade": grade, "section": section}
 
 
+def _normalize_excel_grade(val: Any) -> Optional[int]:
+    """Parse grade/level from Excel (handles 4, 4.0, '4', 'Grade 4')."""
+    if pd.isna(val):
+        return None
+    if isinstance(val, bool):
+        return None
+    if isinstance(val, (int, float)):
+        f = float(val)
+        if f != f:  # NaN
+            return None
+        return int(round(f))
+    s = str(val).strip()
+    m = re.match(r"^(\d+)", s)
+    return int(m.group(1)) if m else None
+
+
+def _normalize_excel_section(val: Any) -> Optional[str]:
+    """Parse section letter from Excel (handles 'A', 'a', ' A ')."""
+    if pd.isna(val):
+        return None
+    s = str(val).strip().upper()
+    if not s:
+        return None
+    m = re.match(r"^([A-Z])$", s)
+    if m:
+        return m.group(1)
+    m2 = re.search(r"[A-Z]", s)
+    return m2.group(0) if m2 else None
+
+
 def _normalize_class_name_for_uniqueness(name: str) -> str:
     """Normalize class name for duplicate check: '5A', '5 A', '5a' -> same key."""
     if not name or not isinstance(name, str):
@@ -4698,12 +4728,9 @@ async def import_excel(
             "class",
             "classname",
             "classroom",
-            "section",
             "الصف",
-            "الشعبة",
-            "الفصل",
         ],
-        "grade": ["grade", "المستوى", "المرحلة"],
+        "grade": ["grade", "level", "year", "المستوى", "المرحلة"],
         "section": ["section", "الشعبة", "الفصل"],
         "attendance": ["attendance", "attendance25", "حضور"],
         "participation": ["participation", "participation25", "مشاركة"],
@@ -4834,7 +4861,8 @@ async def import_excel(
     if "student_name" not in column_lookup and len(df.columns):
         column_lookup["student_name"] = df.columns[0]
     if "class_name" not in column_lookup and len(df.columns) >= 2:
-        column_lookup["class_name"] = df.columns[1]
+        if not (column_lookup.get("grade") and column_lookup.get("section")):
+            column_lookup["class_name"] = df.columns[1]
 
     # Detect name vs class by content so column order does not matter (e.g. Class | Name or Name | Class)
     def value_looks_like_class(val: Any) -> bool:
@@ -4865,6 +4893,9 @@ async def import_excel(
                     if c != best_class_col:
                         column_lookup["student_name"] = c
                         break
+
+    if column_lookup.get("grade") and column_lookup.get("section"):
+        column_lookup.pop("class_name", None)
 
     classes = await db.classes.find({}, {"_id": 0}).to_list(200)
 
@@ -4913,46 +4944,52 @@ async def import_excel(
     processed_rows = 0
     for _, row in df.iterrows():
         student_name = row.get(column_lookup["student_name"])
-        class_doc = None
-        class_name = row.get(column_lookup.get("class_name")) if column_lookup.get("class_name") else None
         if pd.isna(student_name):
             continue
         student_name = str(student_name).strip()
-        if class_name is not None and class_name == class_name:
-            class_name = str(class_name).strip().upper()
-            if not class_name:
-                class_name = None
-            else:
-                class_doc = class_map.get(normalize_class_name(class_name))
-            if not class_doc and class_name:
-                # Try to create new class from class name (e.g. 5A, 6B) so enrollment works without pre-creating classes
-                parsed = parse_class_name(class_name)
-                if parsed.get("grade") is not None and parsed.get("section"):
-                    new_class_name = f"{parsed['grade']}{parsed['section']}"
-                    class_doc = class_map.get(normalize_class_name(new_class_name))
+        if not student_name:
+            continue
+
+        class_doc = None
+
+        if column_lookup.get("grade") and column_lookup.get("section"):
+            gv = _normalize_excel_grade(row.get(column_lookup["grade"]))
+            sv = _normalize_excel_section(row.get(column_lookup["section"]))
+            if gv is not None and sv:
+                combined = f"{gv}{sv}"
+                class_doc = class_map.get(normalize_class_name(combined))
+                if not class_doc:
+                    class_record = ClassRecord(name=combined, grade=gv, section=sv)
+                    await db.classes.insert_one(class_record.model_dump())
+                    class_doc = class_record.model_dump()
+                    class_map[normalize_class_name(combined)] = class_doc
+                    created_classes += 1
+
+        if not class_doc and column_lookup.get("class_name"):
+            raw_class = row.get(column_lookup["class_name"])
+            if raw_class is not None and pd.notna(raw_class):
+                cn = str(raw_class).strip().upper()
+                if cn:
+                    class_doc = class_map.get(normalize_class_name(cn))
                     if not class_doc:
-                        class_record = ClassRecord(
-                            name=new_class_name,
-                            grade=parsed["grade"],
-                            section=parsed["section"],
-                        )
-                        await db.classes.insert_one(class_record.model_dump())
-                        class_doc = class_record.model_dump()
-                        class_map[normalize_class_name(new_class_name)] = class_doc
-                        created_classes += 1
-                else:
-                    continue
+                        parsed = parse_class_name(cn)
+                        if parsed.get("grade") is not None and parsed.get("section"):
+                            new_class_name = f"{parsed['grade']}{parsed['section']}"
+                            class_doc = class_map.get(normalize_class_name(new_class_name))
+                            if not class_doc:
+                                class_record = ClassRecord(
+                                    name=new_class_name,
+                                    grade=parsed["grade"],
+                                    section=parsed["section"],
+                                )
+                                await db.classes.insert_one(class_record.model_dump())
+                                class_doc = class_record.model_dump()
+                                class_map[normalize_class_name(new_class_name)] = class_doc
+                                created_classes += 1
+
         if not class_doc and default_class_doc:
             class_doc = default_class_doc
-        elif column_lookup.get("grade") and column_lookup.get("section"):
-            grade_value = row.get(column_lookup.get("grade"))
-            section_value = row.get(column_lookup.get("section"))
-            if grade_value == grade_value and section_value == section_value:
-                class_name = f"{str(grade_value).strip()}{str(section_value).strip()}".upper()
-                class_doc = class_map.get(normalize_class_name(class_name))
-                if not class_doc:
-                    # Marks-only import: do not create new classes; skip row
-                    continue
+
         if not class_doc:
             continue
         payload = {
@@ -5055,7 +5092,7 @@ async def import_excel(
     if processed_rows == 0:
         raise HTTPException(
             status_code=400,
-            detail="No students were imported. Please use an Excel file with one column for student names and one for class (e.g. 4A, 5B, 6A). Columns can be in any order.",
+            detail="No students were imported. Use a column for student names and class info: either one column like 4A / 5B, or separate Level (or Grade) and Section columns (e.g. 4 and A). Column order does not matter.",
         )
     await log_user_action(
         current_user,
