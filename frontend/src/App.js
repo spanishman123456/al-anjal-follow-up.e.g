@@ -1,5 +1,4 @@
-import { useCallback, useEffect, useState, useRef, lazy, Suspense, Component } from "react";
-import { flushSync } from "react-dom";
+import { useCallback, useEffect, useState, lazy, Suspense, Component } from "react";
 import "@/App.css";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AppShell } from "@/components/layout/AppShell";
@@ -68,9 +67,6 @@ function App() {
   const [theme, setTheme] = useState("light");
   const [token, setToken] = useState(() => sessionStorage.getItem("auth_token"));
   const [authReady, setAuthReady] = useState(() => (sessionStorage.getItem("auth_token") ? null : true));
-  /** Overlap login + app briefly for crossfade after sign-in. */
-  const [loginLeaving, setLoginLeaving] = useState(false);
-  const loginCrossfadeTimerRef = useRef(null);
   const [semester, setSemester] = useState(
     () => localStorage.getItem("semester") || "semester1",
   );
@@ -126,7 +122,6 @@ function App() {
         if (err?.response?.status === 401 || err?.code === "ECONNABORTED" || err?.message === "Network Error") {
           sessionStorage.removeItem("auth_token");
           setToken(null);
-          setLoginLeaving(false);
         }
         setAuthReady(true);
       });
@@ -137,7 +132,6 @@ function App() {
     const handler = () => {
       setToken(null);
       setAuthReady(true);
-      setLoginLeaving(false);
     };
     window.addEventListener("auth-logout", handler);
     return () => window.removeEventListener("auth-logout", handler);
@@ -176,53 +170,40 @@ function App() {
   useEffect(() => {
     if (token) return;
     let cancelled = false;
-    checkBackendHealth().then((ok) => {
-      if (!cancelled) setBackendOk(ok);
-    });
+    let intervalId = null;
     const safetyMs = isProductionBackendUrl ? 95000 : 12000;
     const pollMs = isProductionBackendUrl ? 45000 : 8000;
+    const tick = () => {
+      checkBackendHealth().then((ok) => {
+        if (cancelled) return;
+        setBackendOk(ok);
+        // Stop polling after first success on Render — repeated pings made the status line flicker green/amber.
+        if (ok && isProductionBackendUrl && intervalId != null) {
+          clearInterval(intervalId);
+          intervalId = null;
+        }
+      });
+    };
+    tick();
     const safety = setTimeout(() => {
       if (!cancelled) setBackendOk((v) => (v === null ? false : v));
     }, safetyMs);
-    const interval = setInterval(() => {
-      checkBackendHealth().then((ok) => {
-        if (!cancelled) setBackendOk(ok);
-      });
-    }, pollMs);
+    intervalId = setInterval(tick, pollMs);
     return () => {
       cancelled = true;
       clearTimeout(safety);
-      clearInterval(interval);
+      if (intervalId != null) clearInterval(intervalId);
     };
   }, [token]);
 
-  useEffect(() => {
-    return () => {
-      if (loginCrossfadeTimerRef.current) {
-        window.clearTimeout(loginCrossfadeTimerRef.current);
-      }
-    };
-  }, []);
-
   const handleLogin = useCallback((newToken) => {
-    flushSync(() => {
-      setToken(newToken);
-      setAuthReady(true);
-      setLoginLeaving(true);
-    });
-    if (loginCrossfadeTimerRef.current) {
-      window.clearTimeout(loginCrossfadeTimerRef.current);
-    }
-    loginCrossfadeTimerRef.current = window.setTimeout(() => {
-      setLoginLeaving(false);
-      loginCrossfadeTimerRef.current = null;
-    }, 360);
+    setToken(newToken);
+    setAuthReady(true);
   }, []);
 
-  // Single BrowserRouter for the whole app — avoids tearing down/remounting the router on login (major flicker).
+  // Single BrowserRouter for the whole app — avoids tearing down/remounting the router on login.
   const authChecking = Boolean(token && authReady === null);
-  const showLoginOnly = !token;
-  const showCrossfade = Boolean(token && loginLeaving);
+  const showLogin = !token;
 
   const authenticatedRoutes = (
     <Routes>
@@ -272,32 +253,15 @@ function App() {
         <BrowserRouter>
           {authChecking ? (
             <div className="flex min-h-screen items-center justify-center bg-background">
-              <span className="text-muted-foreground animate-pulse">Checking session…</span>
+              <span className="text-muted-foreground">Checking session…</span>
             </div>
-          ) : showLoginOnly ? (
+          ) : showLogin ? (
             <Login
               language={language}
               onLogin={handleLogin}
               onLanguageChange={setLanguage}
               serverStatus={backendOk}
             />
-          ) : showCrossfade ? (
-            <div
-              className="relative min-h-[100dvh] overflow-hidden bg-background"
-              aria-hidden={false}
-            >
-              <div className="auth-crossfade-app absolute inset-0 z-[1] min-h-[100dvh]">
-                {authenticatedRoutes}
-              </div>
-              <div className="auth-crossfade-login absolute inset-0 z-[2] min-h-[100dvh] pointer-events-none">
-                <Login
-                  language={language}
-                  onLogin={handleLogin}
-                  onLanguageChange={setLanguage}
-                  serverStatus={backendOk}
-                />
-              </div>
-            </div>
           ) : (
             authenticatedRoutes
           )}

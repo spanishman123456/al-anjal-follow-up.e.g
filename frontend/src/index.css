@@ -314,37 +314,3 @@ body {
     background-color: hsl(var(--background));
 }
 
-/* Login → dashboard crossfade (see App.js loginLeaving) */
-.auth-crossfade-app {
-    opacity: 0;
-    animation: auth-crossfade-in 0.35s ease-out forwards;
-}
-
-.auth-crossfade-login {
-    animation: auth-crossfade-out 0.35s ease-out forwards;
-}
-
-@keyframes auth-crossfade-in {
-    from {
-        opacity: 0;
-    }
-    to {
-        opacity: 1;
-    }
-}
-
-@keyframes auth-crossfade-out {
-    from {
-        opacity: 1;
-    }
-    to {
-        opacity: 0;
-    }
-}
-
-@media (prefers-reduced-motion: reduce) {
-    .auth-crossfade-app,
-    .auth-crossfade-login {
-        animation-duration: 0.05s;
-    }
-}
