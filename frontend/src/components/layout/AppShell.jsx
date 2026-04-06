@@ -65,6 +65,7 @@ export const AppShell = ({
   const [profile, setProfile] = useState(null);
   const [notifications, setNotifications] = useState([]);
   const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
+  const [expandedNavKey, setExpandedNavKey] = useState(null);
 
   // Keep URL in sync with header semester/quarter when on quarter-specific pages
   useEffect(() => {
@@ -181,12 +182,21 @@ export const AppShell = ({
   return (
     <div className="min-h-screen w-full bg-background text-foreground flex flex-row" dir="ltr" data-testid="app-shell">
       <aside
-        className={`w-64 shrink-0 text-white flex flex-col justify-between bg-gradient-to-b from-[hsl(166,76%,28%)] via-[hsl(166,76%,24%)] to-[hsl(172,66%,22%)] shadow-xl ${
+        className={`w-64 shrink-0 text-white flex flex-col justify-between bg-gradient-to-b from-indigo-700 via-violet-700 to-purple-900 shadow-xl shadow-indigo-900/25 relative overflow-hidden ${
           isRTL ? "order-2" : "order-1"
         }`}
         data-testid="sidebar"
         dir={isRTL ? "rtl" : undefined}
       >
+        <div
+          className="pointer-events-none absolute inset-0 opacity-40"
+          aria-hidden
+          style={{
+            background:
+              "radial-gradient(ellipse 80% 60% at 20% 0%, rgba(255,255,255,0.22) 0%, transparent 55%), radial-gradient(ellipse 70% 50% at 100% 100%, rgba(56,189,248,0.18) 0%, transparent 50%)",
+          }}
+        />
+        <div className="relative z-[1] flex flex-col flex-1 min-h-0 justify-between">
         <div>
           <div className="px-6 py-6 border-b border-white/15">
             <div className="flex items-center animate-fade-in" data-testid="brand-block">
@@ -236,7 +246,7 @@ export const AppShell = ({
                       )}
                     </button>
                     {isOpen && (
-                      <div className="ms-4 space-y-1 border-s border-slate-700 ps-3" data-testid="quarter-marks-submenu">
+                      <div className="ms-4 space-y-1 border-s border-white/25 ps-3" data-testid="quarter-marks-submenu">
                         {item.children.map((child) => (
                           <NavLink
                             key={child.to}
@@ -277,7 +287,7 @@ export const AppShell = ({
             })}
           </nav>
         </div>
-        <div className="px-4 pb-6 space-y-4" data-testid="sidebar-footer">
+        <div className="px-4 pb-6 space-y-4 relative z-[1]" data-testid="sidebar-footer">
           <div className="rounded-xl bg-white/10 px-4 py-4 backdrop-blur-sm border border-white/15 shadow-lg">
             <p
               className="text-xs uppercase tracking-[0.2em] text-white/70"
@@ -313,6 +323,7 @@ export const AppShell = ({
           <p className="text-xs text-white/60 text-center" data-testid="sidebar-copyright">
             {t("sidebar_copyright")}
           </p>
+        </div>
         </div>
       </aside>
       <div
@@ -506,7 +517,6 @@ export const AppShell = ({
         <main
           className="page-content-bg flex-1 px-6 py-8 page-enter"
           data-testid="main-content"
-          style={theme === "dark" ? undefined : { background: "#f1f1f2" }}
         >
           <Outlet
             context={{

@@ -1,4 +1,4 @@
-@import url("https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=Manrope:wght@600;700;800&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=Manrope:wght@600;700;800&family=Tajawal:wght@400;500;700;800&display=swap");
 
 @tailwind base;
 @tailwind components;
@@ -20,7 +20,7 @@ body {
 
 body.font-ar {
     --font-body: "IBM Plex Sans Arabic", sans-serif;
-    --font-heading: "IBM Plex Sans Arabic", sans-serif;
+    --font-heading: "Tajawal", "IBM Plex Sans Arabic", sans-serif;
 }
 
 h1,
@@ -40,89 +40,80 @@ code {
 
 @layer base {
     :root {
-        /* Clean white/light gray – Interacto style */
-        --background: 0 0% 98%;
-        --foreground: 220 20% 18%;
+        /* Light canvas: soft cool tint (playful ed-tech, inspired by modern Arabic learning landings) */
+        --background: 250 60% 98%;
+        --foreground: 265 30% 16%;
         --card: 0 0% 100%;
-        --card-foreground: 222 47% 11%;
+        --card-foreground: 265 25% 14%;
         --popover: 0 0% 100%;
-        --popover-foreground: 222 47% 11%;
-        /* Primary: Interacto-style teal/green (main actions) */
-        --primary: 166 76% 38%;
+        --popover-foreground: 265 25% 14%;
+        --primary: 262 83% 58%;
         --primary-foreground: 0 0% 100%;
-        /* Secondary: complementary teal (supporting actions) */
-        --secondary: 172 66% 42%;
+        --secondary: 199 89% 48%;
         --secondary-foreground: 0 0% 100%;
-        --muted: 212 28% 94%;
-        --muted-foreground: 215 16% 46%;
-        /* Accent: soft blue-gray for outline/ghost hovers */
-        --accent: 214 32% 92%;
-        --accent-foreground: 222 47% 20%;
-        /* Destructive: soft red (delete/danger) */
+        --muted: 250 40% 94%;
+        --muted-foreground: 265 12% 42%;
+        --accent: 280 45% 96%;
+        --accent-foreground: 265 30% 18%;
         --destructive: 2 56% 48%;
         --destructive-foreground: 0 0% 100%;
-        /* Success: soft green (confirm/success actions) */
-        --success: 158 44% 38%;
+        --success: 158 64% 38%;
         --success-foreground: 0 0% 100%;
-        /* Outline border: soft slate */
-        --border: 214 28% 82%;
-        --input: 214 28% 82%;
-        --ring: 166 76% 38%;
-        --chart-1: 172 66% 42%;
-        --chart-2: 166 76% 38%;
-        --chart-3: 43 72% 52%;
-        --chart-4: 2 56% 48%;
-        --chart-5: 215 20% 65%;
-        --radius: 0.75rem;
-        /* Deeper, distinct section backgrounds – neutral gray (no blue tint) */
-        --section-header: 0 0% 96%;
-        --section-context: 0 0% 92%;
-        --section-main: 0 0% 94%;
-        --section-toolbar: 0 0% 93%;
-        --section-card: 0 0% 98%;
-        --section-alt-1: 0 0% 92%;
-        --section-alt-2: 0 0% 91%;
-        --section-alt-3: 0 0% 93%;
-        --section-alt-4: 0 0% 92%;
+        --border: 250 35% 88%;
+        --input: 250 35% 88%;
+        --ring: 262 83% 58%;
+        --chart-1: 262 83% 58%;
+        --chart-2: 199 89% 48%;
+        --chart-3: 280 65% 55%;
+        --chart-4: 43 72% 52%;
+        --chart-5: 215 20% 55%;
+        --radius: 1rem;
+        --section-header: 250 55% 97%;
+        --section-context: 250 45% 95%;
+        --section-main: 250 50% 97%;
+        --section-toolbar: 250 40% 95%;
+        --section-card: 0 0% 100%;
+        --section-alt-1: 250 42% 96%;
+        --section-alt-2: 220 40% 96%;
+        --section-alt-3: 280 35% 97%;
+        --section-alt-4: 250 38% 95%;
     }
     .dark {
-        /* Soothing dark background – does not affect buttons */
-        --background: 222 42% 12%;
-        --foreground: 210 40% 98%;
-        --card: 222 42% 14%;
-        --card-foreground: 210 40% 98%;
-        --popover: 222 42% 14%;
-        --popover-foreground: 210 40% 98%;
-        --primary: 166 70% 48%;
-        --primary-foreground: 0 0% 100%;
-        --secondary: 172 60% 50%;
-        --secondary-foreground: 0 0% 100%;
-        --muted: 217 19% 20%;
-        --muted-foreground: 215 20% 65%;
-        --accent: 217 25% 22%;
-        --accent-foreground: 210 40% 98%;
+        --background: 265 35% 10%;
+        --foreground: 250 40% 96%;
+        --card: 265 32% 13%;
+        --card-foreground: 250 40% 96%;
+        --popover: 265 32% 13%;
+        --popover-foreground: 250 40% 96%;
+        --primary: 263 70% 68%;
+        --primary-foreground: 265 40% 8%;
+        --secondary: 199 80% 52%;
+        --secondary-foreground: 222 47% 8%;
+        --muted: 265 22% 18%;
+        --muted-foreground: 250 15% 68%;
+        --accent: 265 28% 20%;
+        --accent-foreground: 250 40% 96%;
         --destructive: 2 58% 52%;
         --destructive-foreground: 0 0% 100%;
-        --success: 158 42% 42%;
+        --success: 158 50% 42%;
         --success-foreground: 0 0% 100%;
-        --border: 217 19% 35%;
-        --input: 217 19% 35%;
-        --ring: 166 70% 48%;
-        --chart-1: 172 60% 50%;
-        --chart-2: 166 70% 48%;
-        --chart-3: 43 72% 52%;
+        --border: 265 22% 24%;
+        --input: 265 22% 24%;
+        --ring: 263 70% 68%;
+        --chart-1: 263 70% 68%;
+        --chart-2: 199 80% 52%;
+        --chart-3: 280 60% 58%;
         --chart-4: 2 58% 52%;
         --chart-5: 215 20% 65%;
-        /* Deeper distinct section backgrounds (dark) */
-        --section-header: 222 36% 15%;
-        --section-context: 222 32% 17%;
-        --section-main: 222 40% 13%;
-        --section-toolbar: 217 30% 16%;
-        --section-card: 222 38% 15%;
-        --section-alt-1: 217 26% 18%;
-        --section-alt-2: 222 28% 16%;
-        --section-alt-3: 215 24% 19%;
-        --section-alt-4: 220 22% 17%;
+        --section-header: 265 32% 12%;
+        --section-context: 265 28% 14%;
+        --section-main: 265 35% 11%;
+        --section-toolbar: 265 26% 15%;
+        --section-card: 265 30% 13%;
+        --section-alt-1: 265 26% 15%;
+        --section-alt-2: 265 28% 14%;
+        --section-alt-3: 265 24% 16%;
+        --section-alt-4: 265 30% 12%;
     }
 }
 
@@ -236,12 +227,38 @@ code {
     animation: fade-in-up 0.45s var(--motion-ease-out) forwards;
 }
 
-/* Page content area – neutral light gray (no blue); main also gets inline style in AppShell */
+/* Main workspace: soft multi-stop gradient (light), solid token (dark) */
 .page-content-bg {
-    background: #f1f1f2 !important;
+    background: linear-gradient(
+        165deg,
+        hsl(250 58% 97%) 0%,
+        hsl(220 45% 97%) 42%,
+        hsl(280 40% 97%) 100%
+    ) !important;
 }
 html.dark .page-content-bg {
-    background: hsl(var(--background)) !important;
+    background: linear-gradient(
+        165deg,
+        hsl(var(--background)) 0%,
+        hsl(265 38% 12%) 100%
+    ) !important;
+}
+
+/* Login: mesh + blobs (reference: playful Arabic ed-tech landings) */
+.login-mubarmij-bg {
+    background-color: hsl(250 60% 97%);
+    background-image:
+        radial-gradient(ellipse 120% 80% at 10% -20%, rgba(99, 102, 241, 0.35) 0%, transparent 55%),
+        radial-gradient(ellipse 90% 70% at 100% 0%, rgba(168, 85, 247, 0.28) 0%, transparent 50%),
+        radial-gradient(ellipse 80% 60% at 50% 100%, rgba(56, 189, 248, 0.22) 0%, transparent 55%),
+        linear-gradient(180deg, hsl(250 70% 98%) 0%, hsl(220 50% 98%) 100%);
+}
+html.dark .login-mubarmij-bg {
+    background-color: hsl(var(--background));
+    background-image:
+        radial-gradient(ellipse 100% 70% at 20% 0%, rgba(99, 102, 241, 0.25) 0%, transparent 50%),
+        radial-gradient(ellipse 80% 60% at 100% 30%, rgba(168, 85, 247, 0.2) 0%, transparent 50%),
+        linear-gradient(180deg, hsl(265 35% 11%) 0%, hsl(265 40% 9%) 100%);
 }
 
 /* Distinct section backgrounds + section pop on hover */

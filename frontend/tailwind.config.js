@@ -90,6 +90,11 @@ module.exports = {
   			'gradient-shift': {
   				'0%, 100%': { opacity: '1' },
   				'50%': { opacity: '0.85' }
+  			},
+  			'blob-float': {
+  				'0%, 100%': { transform: 'translate(0, 0) scale(1)' },
+  				'33%': { transform: 'translate(28px, -18px) scale(1.06)' },
+  				'66%': { transform: 'translate(-22px, 12px) scale(0.96)' }
   			}
   		},
   		animation: {
@@ -100,7 +105,8 @@ module.exports = {
   			'fade-in': 'fade-in 0.4s ease-out forwards',
   			'scale-in': 'scale-in 0.4s cubic-bezier(0.22, 1, 0.36, 1) forwards',
   			'shimmer': 'shimmer 1.5s ease-in-out infinite',
-  			'gradient-shift': 'gradient-shift 4s ease-in-out infinite'
+  			'gradient-shift': 'gradient-shift 4s ease-in-out infinite',
+  			'blob-float': 'blob-float 14s ease-in-out infinite'
   		},
   		transitionDuration: {
   			smooth: '350ms',

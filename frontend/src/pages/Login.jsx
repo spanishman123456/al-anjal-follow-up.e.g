@@ -188,23 +188,35 @@ export default function Login({
 
   return (
     <div
-      className="min-h-screen flex flex-col items-center justify-center p-6 relative overflow-hidden bg-gradient-to-b from-slate-50 to-white"
+      className="login-mubarmij-bg min-h-screen flex flex-col items-center justify-center p-6 relative overflow-hidden"
       data-testid="login-page"
     >
-      {/* Background image – clearer visibility (reduced transparency) */}
+      <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden>
+        <div
+          className="absolute -top-20 -right-16 h-[22rem] w-[22rem] rounded-full bg-violet-400/35 blur-3xl animate-blob-float"
+        />
+        <div
+          className="absolute top-[28%] -left-24 h-[18rem] w-[18rem] rounded-full bg-sky-400/30 blur-3xl animate-blob-float"
+          style={{ animationDelay: "-4s" }}
+        />
+        <div
+          className="absolute bottom-0 right-1/4 h-[16rem] w-[16rem] rounded-full bg-fuchsia-400/25 blur-3xl animate-blob-float"
+          style={{ animationDelay: "-7s" }}
+        />
+      </div>
+      {/* Optional school photo: subtle overlay on top of mesh */}
       <div
-        className="absolute inset-0 opacity-50"
+        className="absolute inset-0 opacity-[0.14] mix-blend-multiply dark:opacity-[0.12] dark:mix-blend-soft-light"
         aria-hidden="true"
         style={{
           backgroundImage: "url('/login-bg.png')",
           backgroundRepeat: "no-repeat",
           backgroundPosition: "center",
           backgroundSize: "cover",
-          backgroundColor: "#e8e8e8",
         }}
       />
       {/* Left column: logos top, social + Contact Us bottom, same horizontal center */}
-      <div className="absolute left-0 top-0 bottom-0 z-10 flex flex-col items-center pt-5 pb-6 px-6 w-56 sm:w-60" data-testid="login-left-column">
+      <div className="absolute left-0 top-0 bottom-0 z-10 flex flex-col items-center pt-5 pb-6 px-6 w-56 sm:w-60 rounded-2xl sm:rounded-none sm:bg-transparent bg-white/25 dark:bg-white/5 backdrop-blur-md border border-white/30 sm:border-0 mx-3 my-4 sm:mx-0 sm:my-0" data-testid="login-left-column">
         <div className="flex flex-col items-center gap-2">
           <img
             src="/logo-al-anjal.png"
@@ -270,19 +282,21 @@ export default function Login({
 
       {/* Hero section – Interacto style: large title + subtitle (darker green) */}
       <div className="relative z-10 w-full max-w-lg text-center mt-24 mb-10 animate-fade-in-up" style={{ animationDuration: "0.6s" }} data-testid="login-welcome">
-        <h1 className="text-4xl sm:text-5xl font-bold tracking-tight text-[hsl(166,76%,28%)]">{t("login_welcome_title")}</h1>
-        <p className="mt-4 text-lg max-w-md mx-auto text-[hsl(166,76%,24%)]">{t("login_welcome_subtitle")}</p>
+        <h1 className="text-4xl sm:text-5xl font-extrabold tracking-tight bg-gradient-to-r from-indigo-600 via-violet-600 to-fuchsia-600 bg-clip-text text-transparent dark:from-indigo-300 dark:via-violet-300 dark:to-fuchsia-300">
+          {t("login_welcome_title")}
+        </h1>
+        <p className="mt-4 text-lg max-w-md mx-auto text-foreground/80 font-semibold">{t("login_welcome_subtitle")}</p>
       </div>
 
       {/* Login card – white, shadow, rounded (no hover pop on this page) */}
       <div
-        className="relative z-10 w-full max-w-md rounded-2xl bg-white border border-slate-200 shadow-xl p-8 animate-scale-in"
+        className="relative z-10 w-full max-w-md rounded-3xl bg-white/90 dark:bg-card/90 backdrop-blur-xl border border-white/60 dark:border-white/10 shadow-2xl shadow-indigo-900/10 p-8 animate-scale-in"
         style={{ animationDuration: "0.5s", animationDelay: "0.15s", animationFillMode: "backwards" }}
         data-testid="login-frame"
       >
-        <Card noHoverPop className="rounded-xl border-0 shadow-none bg-transparent">
+        <Card noHoverPop className="rounded-2xl border-0 shadow-none bg-transparent">
           <CardHeader className="px-0 pt-0">
-            <CardTitle className="text-xl text-[hsl(166,76%,28%)]">{t("login_title")}</CardTitle>
+            <CardTitle className="text-xl text-primary">{t("login_title")}</CardTitle>
           </CardHeader>
           <CardContent className="px-0 pb-0">
             <form className="space-y-4" onSubmit={handleLogin}>
