@@ -1517,16 +1517,10 @@ def create_analytics_quarter_focus_bar_chart(rate: Any, xlabel: str = "Focus") -
 
 
 def _pdf_focus_quarter_total(student: Dict[str, Any], report_quarter: int) -> Any:
-    """Prefer 30-point Quizzes & Chapter total; fall back to cumulative quarter total (50 max)."""
+    """Cumulative quarter total (50 max): follow-up, quizzes, chapter tests, quarter exams."""
     rq = int(report_quarter or 1)
     if rq == 2:
-        v = student.get("quizzes_chapter_total_q2")
-        if v is not None:
-            return v
         return student.get("quarter2_total")
-    v = student.get("quizzes_chapter_total_q1")
-    if v is not None:
-        return v
     return student.get("quarter1_total")
 
 
@@ -1797,7 +1791,7 @@ def generate_report_pdf(
 
     top_performers = report.get("top_performers", []) or []
     elements.append(Paragraph("Top Performers", section_style))
-    top_table_data = [["Student", "Class", "Quizzes & Chapter total (30)", "Total", "Strengths"]]
+    top_table_data = [["Student", "Class", "Quarter total (50)", "Total", "Strengths"]]
     for student in top_performers:
         strengths = ", ".join(student.get("strengths") or []) or "-"
         top_table_data.append(
@@ -1816,7 +1810,7 @@ def generate_report_pdf(
 
     support_students = report.get("students_needing_support", []) or []
     elements.append(Paragraph("Students Needing Support", section_style))
-    support_table_data = [["Student", "Class", "Quizzes & Chapter total (30)", "Performance", "Areas to Improve"]]
+    support_table_data = [["Student", "Class", "Quarter total (50)", "Performance", "Areas to Improve"]]
     for student in support_students:
         weak_areas = ", ".join(student.get("weak_areas") or []) or "-"
         support_table_data.append(
@@ -2059,7 +2053,7 @@ def generate_analytics_dashboard_pdf(
 
     top_performers = report.get("top_performers", []) or []
     elements.append(Paragraph("Top Performers", section_style))
-    top_table_data = [["Student", "Class", "Quizzes & Chapter total (30)", "Total", "Strengths"]]
+    top_table_data = [["Student", "Class", "Quarter total (50)", "Total", "Strengths"]]
     for student in top_performers:
         strengths = ", ".join(student.get("strengths") or []) or "-"
         top_table_data.append(
@@ -2078,7 +2072,7 @@ def generate_analytics_dashboard_pdf(
 
     support_students = report.get("students_needing_support", []) or []
     elements.append(Paragraph("Students Needing Support", section_style))
-    support_table_data = [["Student", "Class", "Quizzes & Chapter total (30)", "Performance", "Areas to Improve"]]
+    support_table_data = [["Student", "Class", "Quarter total (50)", "Performance", "Areas to Improve"]]
     for student in support_students:
         weak_areas = ", ".join(student.get("weak_areas") or []) or "-"
         support_table_data.append(
@@ -2324,7 +2318,7 @@ def generate_reports_dashboard_pdf(
 
     top_performers = report.get("top_performers", []) or []
     elements.append(Paragraph("Top Performers", section_style))
-    top_table_data = [["Student", "Class", "Quizzes & Chapter total (30)", "Total", "Strengths"]]
+    top_table_data = [["Student", "Class", "Quarter total (50)", "Total", "Strengths"]]
     for student in top_performers:
         strengths = ", ".join(student.get("strengths") or []) or "-"
         top_table_data.append(
@@ -2343,7 +2337,7 @@ def generate_reports_dashboard_pdf(
 
     support_students = report.get("students_needing_support", []) or []
     elements.append(Paragraph("Students Needing Support", section_style))
-    support_table_data = [["Student", "Class", "Quizzes & Chapter total (30)", "Performance", "Areas to Improve"]]
+    support_table_data = [["Student", "Class", "Quarter total (50)", "Performance", "Areas to Improve"]]
     for student in support_students:
         weak_areas = ", ".join(student.get("weak_areas") or []) or "-"
         support_table_data.append(
@@ -2399,7 +2393,7 @@ def generate_report_excel(report: Dict[str, Any], scope: Any) -> bytes:
         {
             "Student": student.get("full_name"),
             "Class": student.get("class_name"),
-            "Quizzes & Chapter total (30)": _focus_total(student),
+            "Quarter total (50)": _focus_total(student),
             "Total Score": student.get("total_score_normalized"),
             "Strengths": ", ".join(student.get("strengths") or []),
         }
@@ -2409,7 +2403,7 @@ def generate_report_excel(report: Dict[str, Any], scope: Any) -> bytes:
         {
             "Student": student.get("full_name"),
             "Class": student.get("class_name"),
-            "Quizzes & Chapter total (30)": _focus_total(student),
+            "Quarter total (50)": _focus_total(student),
             "Performance": student.get("performance_label"),
             "Areas to Improve": ", ".join(student.get("weak_areas") or []),
         }

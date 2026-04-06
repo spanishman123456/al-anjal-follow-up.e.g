@@ -183,12 +183,8 @@ export default function Reports() {
 
   const reportQuarterDistribution = report?.distribution || [];
 
-  const focusQuarterStudentTotal = (student) => {
-    if (apiQuarter === 2) {
-      return student.quizzes_chapter_total_q2 ?? student.quarter2_total ?? "—";
-    }
-    return student.quizzes_chapter_total_q1 ?? student.quarter1_total ?? "—";
-  };
+  const focusQuarterStudentTotal = (student) =>
+    apiQuarter === 2 ? student.quarter2_total ?? "—" : student.quarter1_total ?? "—";
 
   return (
     <div className="space-y-8" data-testid="reports-page">
