@@ -48,6 +48,12 @@ const formatScore = (value, suffix = "") => {
   return `${value}${suffix}`;
 };
 
+function parseApiSubtotal(v) {
+  if (v == null || v === "") return null;
+  const n = Number(v);
+  return Number.isNaN(n) ? null : n;
+}
+
 const parseScore = (value) => {
   if (value === "" || value === null || value === undefined) {
     return null;
@@ -729,8 +735,16 @@ export default function AssessmentMarksQ2() {
               {filteredStudents.length ? (
                 filteredStudents.map((student) => {
                   const current = bulkScores[student.id] || student;
-                  const weeklyPart = computeWeeklySubtotalQ2(student);
-                  const marksPart = computeAssessmentTotal(current);
+                  let weeklyPart = computeWeeklySubtotalQ2(student);
+                  let marksPart = computeAssessmentTotal(current);
+                  if (!bulkEditMode) {
+                    const ws = parseApiSubtotal(student.assessment_q2_weekly_subtotal);
+                    const ms = parseApiSubtotal(student.assessment_q2_marks_subtotal);
+                    if (ws != null && ms != null) {
+                      weeklyPart = Math.min(STUDENTS_TOTAL_MAX, ws);
+                      marksPart = Math.min(ASSESSMENT_TOTAL_MAX, ms);
+                    }
+                  }
                   const total =
                     !bulkEditMode &&
                     student.assessment_q2_combined_total != null &&

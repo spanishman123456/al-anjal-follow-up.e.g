@@ -2585,9 +2585,19 @@ async def get_students(
                     student["assessment_combined_total"] = res_q1.get("combined_total")
                     student["assessment_performance_level"] = res_q1.get("performance_level")
                     student["assessment_performance_label"] = res_q1.get("performance_label")
+                    st_q1 = res_q1.get("students_total")
+                    student["assessment_weekly_subtotal"] = st_q1
+                    if res_q1.get("combined_total") is not None and st_q1 is not None:
+                        student["assessment_marks_subtotal"] = round(
+                            float(res_q1["combined_total"]) - float(st_q1), 2
+                        )
+                    else:
+                        student["assessment_marks_subtotal"] = None
                     student["assessment_q2_combined_total"] = None
                     student["assessment_q2_performance_level"] = None
                     student["assessment_q2_performance_label"] = None
+                    student["assessment_q2_weekly_subtotal"] = None
+                    student["assessment_q2_marks_subtotal"] = None
                     effective_q1 = _effective_scores_q1(sw)
                     # Use current week's quarter exam values only (no fallback to week 9).
                     effective_q1_edit = {
@@ -2608,12 +2618,22 @@ async def get_students(
                     student["assessment_combined_total"] = None
                     student["assessment_performance_level"] = None
                     student["assessment_performance_label"] = None
+                    student["assessment_weekly_subtotal"] = None
+                    student["assessment_marks_subtotal"] = None
                     res_q2 = compute_assessment_combined_q2(
                         scores_dict, avg_weeks_10_18=avg_10_18, students_total_override=students_total_q2
                     )
                     student["assessment_q2_combined_total"] = res_q2.get("combined_total")
                     student["assessment_q2_performance_level"] = res_q2.get("performance_level")
                     student["assessment_q2_performance_label"] = res_q2.get("performance_label")
+                    st_q2 = res_q2.get("students_total")
+                    student["assessment_q2_weekly_subtotal"] = st_q2
+                    if res_q2.get("combined_total") is not None and st_q2 is not None:
+                        student["assessment_q2_marks_subtotal"] = round(
+                            float(res_q2["combined_total"]) - float(st_q2), 2
+                        )
+                    else:
+                        student["assessment_q2_marks_subtotal"] = None
                     effective_q2 = _effective_scores_q2(sw)
                     # Use current week's quarter exam values only (no cross-week fallback for quarter fields).
                     effective_q2_edit = {

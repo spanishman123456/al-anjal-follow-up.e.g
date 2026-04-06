@@ -147,9 +147,9 @@ export const translations = {
     total_score: "Total Score",
     combined_total_parts: "{weekly}/15 + {marks}/15",
     total_score_tooltip_q1:
-      "Out of 30: up to 15 from weekly work (average of the first 9 weeks from the Assessment page, or this week’s attendance + participation + behavior + homework), plus up to 15 from the higher quiz score plus the chapter practical test.",
+      "Out of 30: up to 15 from weekly work (9-week cumulative average used for the total, or this week’s attendance + participation + behavior + homework if no average), plus up to 15 from the higher of Quiz 1 or Quiz 2 plus the chapter practical test—not the sum of both quizzes. Two students with the same three boxes can still differ if their weekly part differs.",
     total_score_tooltip_q2:
-      "Out of 30: up to 15 from weekly work (average of weeks 10–18 from the Assessment page, or this week’s attendance + participation + behavior + homework), plus up to 15 from the higher quiz score plus the chapter practical test.",
+      "Out of 30: up to 15 from weekly work (weeks 10–18 cumulative average used for the total, or this week’s fields if no average), plus up to 15 from the higher of Quiz 3 or Quiz 4 plus the chapter practical test—not the sum of both quizzes. Two students with the same three boxes can still differ if their weekly part differs.",
     save_scores_banner:
       "After you enter or change quiz and chapter test scores, tap Save All Scores so they are stored for the week you selected.",
     save_scores_banner_final_exams:
@@ -499,9 +499,9 @@ export const translations = {
     total_score: "المجموع",
     combined_total_parts: "{weekly}/15 + {marks}/15",
     total_score_tooltip_q1:
-      "من 30: حتى 15 من الأعمال الأسبوعية (متوسط أول 9 أسابيع من صفحة التقييم، أو حضور + مشاركة + سلوك + واجبات لهذا الأسبوع)، زائد حتى 15 من أعلى درجة اختبار قصير + اختبار الفصل العملي.",
+      "من 30: حتى 15 من الأعمال الأسبوعية (متوسط تراكمي لأول 9 أسابيع يُستخدم في المجموع، أو حقول هذا الأسبوع إن لم يوجد متوسط)، زائد حتى 15 من الأعلى بين اختبار قصير 1 أو 2 زائد اختبار الفصل العملي—وليس مجموع الاختبارين. طالبان بنفس القيم في المربعات الثلاثة قد يختلفان إذا اختلف الجزء الأسبوعي.",
     total_score_tooltip_q2:
-      "من 30: حتى 15 من الأعمال الأسبوعية (متوسط الأسابيع 10–18 من صفحة التقييم، أو حقول هذا الأسبوع)، زائد حتى 15 من أعلى درجة اختبار قصير + اختبار الفصل العملي.",
+      "من 30: حتى 15 من الأعمال الأسبوعية (متوسط تراكمي للأسابيع 10–18، أو حقول هذا الأسبوع)، زائد حتى 15 من الأعلى بين اختبار قصير 3 أو 4 زائد اختبار الفصل العملي—وليس مجموع الاختبارين. طالبان بنفس القيم قد يختلفان إذا اختلف الجزء الأسبوعي.",
     save_scores_banner:
       "بعد إدخال أو تعديل درجات الاختبارات واختبار الفصل، اضغط «حفظ جميع الدرجات» لحفظها للأسبوع المحدد.",
     save_scores_banner_final_exams:

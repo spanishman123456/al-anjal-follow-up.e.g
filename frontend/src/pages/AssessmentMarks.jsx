@@ -48,6 +48,13 @@ const formatScore = (value, suffix = "") => {
   return `${value}${suffix}`;
 };
 
+/** Backend sends these so the x/15 + y/15 line matches assessment_combined_total (same logic as students_total_override). */
+function parseApiSubtotal(v) {
+  if (v == null || v === "") return null;
+  const n = Number(v);
+  return Number.isNaN(n) ? null : n;
+}
+
 const parseScore = (value) => {
   if (value === "" || value === null || value === undefined) {
     return null;
@@ -732,8 +739,16 @@ export default function AssessmentMarks() {
               {filteredStudents.length ? (
                 filteredStudents.map((student) => {
                   const current = bulkScores[student.id] || student;
-                  const weeklyPart = computeWeeklySubtotalQ1(student);
-                  const marksPart = computeAssessmentTotal(current);
+                  let weeklyPart = computeWeeklySubtotalQ1(student);
+                  let marksPart = computeAssessmentTotal(current);
+                  if (!bulkEditMode) {
+                    const ws = parseApiSubtotal(student.assessment_weekly_subtotal);
+                    const ms = parseApiSubtotal(student.assessment_marks_subtotal);
+                    if (ws != null && ms != null) {
+                      weeklyPart = Math.min(STUDENTS_TOTAL_MAX, ws);
+                      marksPart = Math.min(ASSESSMENT_TOTAL_MAX, ms);
+                    }
+                  }
                   // Use backend combined total when available (so 30/30 shows correctly); in bulk edit use local computation for live preview
                   const total =
                     !bulkEditMode && student.assessment_combined_total != null && !Number.isNaN(Number(student.assessment_combined_total))
