@@ -430,52 +430,43 @@ html:not(.dark) .login-top-sky {
         margin: 0;
     }
 
+    /* Tight fixed width: enough for decimals (e.g. 3.5, 10.5) without spinners eating space */
     .score-table-input-5 {
         @apply shrink-0 text-center tabular-nums;
         box-sizing: border-box;
-        width: 11rem;
-        min-width: 11rem;
-        max-width: none;
-        padding-left: 0.5rem;
-        padding-right: 0.5rem;
+        width: 5.25rem;
+        min-width: 5.25rem;
+        max-width: 5.25rem;
+        padding-left: 0.35rem !important;
+        padding-right: 0.35rem !important;
     }
     .score-table-input-5-fill {
         @apply h-8 shrink-0 text-center text-sm tabular-nums;
         box-sizing: border-box;
-        width: 11rem;
-        min-width: 11rem;
-        max-width: none;
-        padding-left: 0.5rem;
-        padding-right: 0.5rem;
+        width: 5.25rem;
+        min-width: 5.25rem;
+        max-width: 5.25rem;
+        padding-left: 0.35rem !important;
+        padding-right: 0.35rem !important;
     }
     .score-table-input-10 {
         @apply shrink-0 text-center tabular-nums;
         box-sizing: border-box;
-        width: 12.5rem;
-        min-width: 12.5rem;
-        max-width: none;
-        padding-left: 0.5rem;
-        padding-right: 0.5rem;
+        width: 6.25rem;
+        min-width: 6.25rem;
+        max-width: 6.25rem;
+        padding-left: 0.35rem !important;
+        padding-right: 0.35rem !important;
     }
     .score-table-input-10-fill {
         @apply h-8 shrink-0 text-center text-sm tabular-nums;
         box-sizing: border-box;
-        width: 12.5rem;
-        min-width: 12.5rem;
-        max-width: none;
-        padding-left: 0.5rem;
-        padding-right: 0.5rem;
+        width: 6.25rem;
+        min-width: 6.25rem;
+        max-width: 6.25rem;
+        padding-left: 0.35rem !important;
+        padding-right: 0.35rem !important;
     }
-}
-
-/* Let table columns grow so score inputs are not squeezed (automatic table layout). */
-table td:has(input.score-table-input-5),
-table td:has(input.score-table-input-5-fill) {
-    min-width: 11rem;
-}
-table td:has(input.score-table-input-10),
-table td:has(input.score-table-input-10-fill) {
-    min-width: 12.5rem;
 }
 
 body {
