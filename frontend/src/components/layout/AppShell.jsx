@@ -182,33 +182,25 @@ export const AppShell = ({
   return (
     <div className="min-h-screen w-full bg-background text-foreground flex flex-row" dir="ltr" data-testid="app-shell">
       <aside
-        className={`w-64 shrink-0 text-white flex flex-col justify-between bg-gradient-to-b from-indigo-700 via-violet-700 to-purple-900 shadow-xl shadow-indigo-900/25 relative overflow-hidden ${
-          isRTL ? "order-2" : "order-1"
+        className={`w-64 shrink-0 flex flex-col justify-between border-[hsl(var(--sidebar-border))] bg-[hsl(var(--sidebar-background))] text-[hsl(var(--sidebar-foreground))] shadow-sm ${
+          isRTL ? "order-2 border-s" : "order-1 border-e"
         }`}
         data-testid="sidebar"
         dir={isRTL ? "rtl" : undefined}
       >
-        <div
-          className="pointer-events-none absolute inset-0 opacity-40"
-          aria-hidden
-          style={{
-            background:
-              "radial-gradient(ellipse 80% 60% at 20% 0%, rgba(255,255,255,0.22) 0%, transparent 55%), radial-gradient(ellipse 70% 50% at 100% 100%, rgba(56,189,248,0.18) 0%, transparent 50%)",
-          }}
-        />
-        <div className="relative z-[1] flex flex-col flex-1 min-h-0 justify-between">
+        <div className="flex flex-col flex-1 min-h-0 justify-between">
         <div>
-          <div className="px-6 py-6 border-b border-white/15">
+          <div className="px-6 py-6 border-b border-[hsl(var(--sidebar-border))]">
             <div className="flex items-center animate-fade-in" data-testid="brand-block">
               <div>
                 <p
-                  className="text-sm font-semibold text-white"
+                  className="text-sm font-semibold text-[hsl(var(--sidebar-foreground))]"
                   data-testid="brand-name"
                 >
                   {t("app_name")}
                 </p>
                 <p
-                  className="text-xs text-white/70"
+                  className="text-xs text-muted-foreground"
                   data-testid="brand-subtitle"
                 >
                   {t("app_subtitle")}
@@ -231,10 +223,10 @@ export const AppShell = ({
                       type="button"
                       data-testid={item.testId}
                       onClick={() => setExpandedNavKey((k) => (k === item.testId ? null : item.testId))}
-                      className={                  `pointer-events-auto flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium nav-item-pop ${
+                      className={`pointer-events-auto flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm font-medium nav-item-pop ${
                         isChildActive
-                          ? "bg-white/20 text-white"
-                          : "text-white/85 hover:bg-white/15 hover:text-white"
+                          ? "bg-primary/12 text-primary"
+                          : "text-muted-foreground hover:bg-[hsl(var(--sidebar-accent))] hover:text-[hsl(var(--sidebar-accent-foreground))]"
                       }`}
                     >
                       <Icon className="h-4 w-4 shrink-0" />
@@ -246,7 +238,7 @@ export const AppShell = ({
                       )}
                     </button>
                     {isOpen && (
-                      <div className="ms-4 space-y-1 border-s border-white/25 ps-3" data-testid="quarter-marks-submenu">
+                      <div className="ms-4 space-y-1 border-s border-[hsl(var(--sidebar-border))] ps-3" data-testid="quarter-marks-submenu">
                         {item.children.map((child) => (
                           <NavLink
                             key={child.to}
@@ -254,7 +246,9 @@ export const AppShell = ({
                             data-testid={child.testId}
                             className={({ isActive }) =>
                               `flex items-center gap-2 rounded-md px-2 py-1.5 text-sm nav-item-pop ${
-                                isActive ? "bg-white/20 text-white" : "text-white/75 hover:bg-white/15 hover:text-white"
+                                isActive
+                                  ? "bg-primary/12 text-primary"
+                                  : "text-muted-foreground hover:bg-[hsl(var(--sidebar-accent))]"
                               }`
                             }
                           >
@@ -273,10 +267,10 @@ export const AppShell = ({
                   to={item.to}
                   data-testid={item.testId}
                   className={({ isActive }) =>
-                    `pointer-events-auto flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium nav-item-pop ${
+                    `pointer-events-auto flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium nav-item-pop ${
                       isActive
-                        ? "bg-white/20 text-white"
-                        : "text-white/85 hover:bg-white/15 hover:text-white"
+                        ? "bg-primary/12 text-primary"
+                        : "text-muted-foreground hover:bg-[hsl(var(--sidebar-accent))] hover:text-[hsl(var(--sidebar-accent-foreground))]"
                     }`
                   }
                 >
@@ -287,28 +281,28 @@ export const AppShell = ({
             })}
           </nav>
         </div>
-        <div className="px-4 pb-6 space-y-4 relative z-[1]" data-testid="sidebar-footer">
-          <div className="rounded-xl bg-white/10 px-4 py-4 backdrop-blur-sm border border-white/15 shadow-lg">
+        <div className="px-4 pb-6 space-y-4" data-testid="sidebar-footer">
+          <div className="rounded-md bg-[hsl(var(--sidebar-accent))] px-4 py-4 border border-[hsl(var(--sidebar-border))] shadow-sm">
             <p
-              className="text-xs uppercase tracking-[0.2em] text-white/70"
+              className="text-xs uppercase tracking-[0.2em] text-muted-foreground"
               data-testid="sidebar-login-label"
             >
               Logged in as
             </p>
             <p
-              className="text-sm font-semibold text-white"
+              className="text-sm font-semibold text-[hsl(var(--sidebar-foreground))]"
               data-testid="sidebar-login-name"
             >
               {profile?.name || "Administrator"}
             </p>
             <p
-              className="text-xs text-white/70" data-testid="sidebar-login-role">
+              className="text-xs text-muted-foreground" data-testid="sidebar-login-role">
               {profile?.role_name || "Admin"}
             </p>
           </div>
           <a
             href="#contact"
-            className="flex items-center justify-center gap-2 w-full rounded-xl bg-primary text-white py-2.5 px-4 font-medium text-sm hover:bg-primary/90 transition-all duration-200 hover:translate-y-[-2px] hover:scale-[1.02] hover:shadow-md active:translate-y-0 active:scale-[0.98] shadow-lg"
+            className="flex items-center justify-center gap-2 w-full rounded-md bg-primary text-primary-foreground py-2.5 px-4 font-medium text-sm hover:bg-primary/90 transition-all duration-200 hover:translate-y-[-2px] hover:scale-[1.02] hover:shadow-md active:translate-y-0 active:scale-[0.98] shadow-md"
             data-testid="sidebar-contact-us"
           >
             <span className="relative flex items-center">
@@ -320,7 +314,7 @@ export const AppShell = ({
           <div data-testid="sidebar-social">
             <SocialLinks layout="row" className="flex-wrap" />
           </div>
-          <p className="text-xs text-white/60 text-center" data-testid="sidebar-copyright">
+          <p className="text-xs text-muted-foreground text-center" data-testid="sidebar-copyright">
             {t("sidebar_copyright")}
           </p>
         </div>

@@ -192,16 +192,14 @@ export default function Login({
       data-testid="login-page"
     >
       <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden>
+        <div className="absolute -top-24 -right-20 h-[24rem] w-[24rem] rounded-full bg-purple-500/20 blur-3xl animate-blob-float" />
         <div
-          className="absolute -top-20 -right-16 h-[22rem] w-[22rem] rounded-full bg-violet-400/35 blur-3xl animate-blob-float"
+          className="absolute top-[30%] -left-28 h-[20rem] w-[20rem] rounded-full bg-pink-500/15 blur-3xl animate-blob-float"
+          style={{ animationDelay: "-5s" }}
         />
         <div
-          className="absolute top-[28%] -left-24 h-[18rem] w-[18rem] rounded-full bg-sky-400/30 blur-3xl animate-blob-float"
-          style={{ animationDelay: "-4s" }}
-        />
-        <div
-          className="absolute bottom-0 right-1/4 h-[16rem] w-[16rem] rounded-full bg-fuchsia-400/25 blur-3xl animate-blob-float"
-          style={{ animationDelay: "-7s" }}
+          className="absolute bottom-0 left-1/3 h-[14rem] w-[14rem] rounded-full bg-secondary/20 blur-3xl animate-blob-float"
+          style={{ animationDelay: "-8s" }}
         />
       </div>
       {/* Optional school photo: subtle overlay on top of mesh */}
@@ -216,7 +214,7 @@ export default function Login({
         }}
       />
       {/* Left column: logos top, social + Contact Us bottom, same horizontal center */}
-      <div className="absolute left-0 top-0 bottom-0 z-10 flex flex-col items-center pt-5 pb-6 px-6 w-56 sm:w-60 rounded-2xl sm:rounded-none sm:bg-transparent bg-white/25 dark:bg-white/5 backdrop-blur-md border border-white/30 sm:border-0 mx-3 my-4 sm:mx-0 sm:my-0" data-testid="login-left-column">
+      <div className="absolute left-0 top-0 bottom-0 z-10 flex flex-col items-center pt-5 pb-6 px-6 w-56 sm:w-60 rounded-lg sm:rounded-none sm:bg-transparent bg-card/80 dark:bg-card/50 backdrop-blur-sm border border-border sm:border-0 mx-3 my-4 sm:mx-0 sm:my-0 shadow-sm sm:shadow-none" data-testid="login-left-column">
         <div className="flex flex-col items-center gap-2">
           <img
             src="/logo-al-anjal.png"
@@ -235,7 +233,7 @@ export default function Login({
           <SocialLinks layout="column" iconSize="h-10 w-10" />
           <a
             href="#contact"
-            className="flex items-center justify-center gap-2 rounded-xl bg-primary text-white py-2.5 px-4 font-medium text-sm hover:bg-primary/90 transition-all duration-200 hover:translate-y-[-2px] hover:scale-[1.02] hover:shadow-md active:translate-y-0 active:scale-[0.98] shadow-lg whitespace-nowrap"
+            className="flex items-center justify-center gap-2 rounded-md bg-primary text-primary-foreground py-2.5 px-4 font-medium text-sm hover:bg-primary/90 transition-all duration-200 hover:translate-y-[-2px] hover:scale-[1.02] hover:shadow-md active:translate-y-0 active:scale-[0.98] shadow-md whitespace-nowrap"
             data-testid="login-contact-us"
           >
             <span className="relative flex items-center">
@@ -280,21 +278,20 @@ export default function Login({
           </Button>
       </div>
 
-      {/* Hero section – Interacto style: large title + subtitle (darker green) */}
       <div className="relative z-10 w-full max-w-lg text-center mt-24 mb-10 animate-fade-in-up" style={{ animationDuration: "0.6s" }} data-testid="login-welcome">
-        <h1 className="text-4xl sm:text-5xl font-extrabold tracking-tight bg-gradient-to-r from-indigo-600 via-violet-600 to-fuchsia-600 bg-clip-text text-transparent dark:from-indigo-300 dark:via-violet-300 dark:to-fuchsia-300">
+        <h1 className="text-4xl sm:text-5xl font-extrabold tracking-tight bg-gradient-to-r from-purple-600 to-pink-500 bg-clip-text text-transparent dark:from-purple-400 dark:to-pink-400">
           {t("login_welcome_title")}
         </h1>
-        <p className="mt-4 text-lg max-w-md mx-auto text-foreground/80 font-semibold">{t("login_welcome_subtitle")}</p>
+        <p className="mt-4 text-lg max-w-md mx-auto text-muted-foreground font-semibold">{t("login_welcome_subtitle")}</p>
       </div>
 
       {/* Login card – white, shadow, rounded (no hover pop on this page) */}
       <div
-        className="relative z-10 w-full max-w-md rounded-3xl bg-white/90 dark:bg-card/90 backdrop-blur-xl border border-white/60 dark:border-white/10 shadow-2xl shadow-indigo-900/10 p-8 animate-scale-in"
+        className="relative z-10 w-full max-w-md rounded-lg bg-card border border-border shadow-lg p-8 animate-scale-in"
         style={{ animationDuration: "0.5s", animationDelay: "0.15s", animationFillMode: "backwards" }}
         data-testid="login-frame"
       >
-        <Card noHoverPop className="rounded-2xl border-0 shadow-none bg-transparent">
+        <Card noHoverPop className="rounded-md border-0 shadow-none bg-transparent">
           <CardHeader className="px-0 pt-0">
             <CardTitle className="text-xl text-primary">{t("login_title")}</CardTitle>
           </CardHeader>

@@ -1,12 +1,13 @@
-@import url("https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=Manrope:wght@600;700;800&family=Tajawal:wght@400;500;700;800&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&family=Tajawal:wght@400;500;700;800;900&family=Kufam:wght@400;500;600;700&display=swap");
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 :root {
-    --font-heading: "Manrope", sans-serif;
-    --font-body: "IBM Plex Sans", sans-serif;
+    /* Match reference landing (Tajawal + Kufam) */
+    --font-heading: "Kufam", "Tajawal", sans-serif;
+    --font-body: "Tajawal", sans-serif;
 }
 
 body {
@@ -19,8 +20,8 @@ body {
 }
 
 body.font-ar {
-    --font-body: "IBM Plex Sans Arabic", sans-serif;
-    --font-heading: "Tajawal", "IBM Plex Sans Arabic", sans-serif;
+    --font-body: "Tajawal", "IBM Plex Sans Arabic", sans-serif;
+    --font-heading: "Kufam", "Tajawal", "IBM Plex Sans Arabic", sans-serif;
 }
 
 h1,
@@ -39,81 +40,92 @@ code {
 }
 
 @layer base {
+    /* Light tokens aligned to https://qyhfjkezskthq.ok.kimi.link/ (Al-Mubarmij reference CSS) */
     :root {
-        /* Light canvas: soft cool tint (playful ed-tech, inspired by modern Arabic learning landings) */
-        --background: 250 60% 98%;
-        --foreground: 265 30% 16%;
+        --background: 0 0% 100%;
+        --foreground: 222.2 84% 4.9%;
         --card: 0 0% 100%;
-        --card-foreground: 265 25% 14%;
+        --card-foreground: 222.2 84% 4.9%;
         --popover: 0 0% 100%;
-        --popover-foreground: 265 25% 14%;
-        --primary: 262 83% 58%;
+        --popover-foreground: 222.2 84% 4.9%;
+        --primary: 262 56% 52%;
         --primary-foreground: 0 0% 100%;
-        --secondary: 199 89% 48%;
+        --secondary: 187 94% 43%;
         --secondary-foreground: 0 0% 100%;
-        --muted: 250 40% 94%;
-        --muted-foreground: 265 12% 42%;
-        --accent: 280 45% 96%;
-        --accent-foreground: 265 30% 18%;
-        --destructive: 2 56% 48%;
-        --destructive-foreground: 0 0% 100%;
-        --success: 158 64% 38%;
+        --muted: 210 40% 96.1%;
+        --muted-foreground: 215.4 16.3% 46.9%;
+        --accent: 160 84% 39%;
+        --accent-foreground: 0 0% 100%;
+        --destructive: 0 84.2% 60.2%;
+        --destructive-foreground: 210 40% 98%;
+        --success: 160 84% 36%;
         --success-foreground: 0 0% 100%;
-        --border: 250 35% 88%;
-        --input: 250 35% 88%;
-        --ring: 262 83% 58%;
-        --chart-1: 262 83% 58%;
-        --chart-2: 199 89% 48%;
-        --chart-3: 280 65% 55%;
-        --chart-4: 43 72% 52%;
-        --chart-5: 215 20% 55%;
-        --radius: 1rem;
-        --section-header: 250 55% 97%;
-        --section-context: 250 45% 95%;
-        --section-main: 250 50% 97%;
-        --section-toolbar: 250 40% 95%;
+        --border: 214.3 31.8% 91.4%;
+        --input: 214.3 31.8% 91.4%;
+        --ring: 262 56% 52%;
+        --radius: 0.5rem;
+        --chart-1: 262 56% 52%;
+        --chart-2: 187 94% 43%;
+        --chart-3: 160 84% 39%;
+        --chart-4: 330 75% 55%;
+        --chart-5: 215.4 16.3% 46.9%;
+        --section-header: 0 0% 100%;
+        --section-context: 210 40% 96.1%;
+        --section-main: 210 40% 98.5%;
+        --section-toolbar: 210 40% 96.5%;
         --section-card: 0 0% 100%;
-        --section-alt-1: 250 42% 96%;
-        --section-alt-2: 220 40% 96%;
-        --section-alt-3: 280 35% 97%;
-        --section-alt-4: 250 38% 95%;
+        --section-alt-1: 210 40% 96.1%;
+        --section-alt-2: 210 40% 97.5%;
+        --section-alt-3: 280 60% 98%;
+        --section-alt-4: 210 40% 96.5%;
+        /* Reference sidebar (light rail) */
+        --sidebar-background: 0 0% 98%;
+        --sidebar-foreground: 240 5.3% 26.1%;
+        --sidebar-border: 220 13% 91%;
+        --sidebar-accent: 240 4.8% 95.9%;
+        --sidebar-accent-foreground: 240 5.9% 10%;
     }
     .dark {
-        --background: 265 35% 10%;
-        --foreground: 250 40% 96%;
-        --card: 265 32% 13%;
-        --card-foreground: 250 40% 96%;
-        --popover: 265 32% 13%;
-        --popover-foreground: 250 40% 96%;
-        --primary: 263 70% 68%;
-        --primary-foreground: 265 40% 8%;
-        --secondary: 199 80% 52%;
-        --secondary-foreground: 222 47% 8%;
-        --muted: 265 22% 18%;
-        --muted-foreground: 250 15% 68%;
-        --accent: 265 28% 20%;
-        --accent-foreground: 250 40% 96%;
-        --destructive: 2 58% 52%;
-        --destructive-foreground: 0 0% 100%;
-        --success: 158 50% 42%;
+        --background: 222.2 84% 4.9%;
+        --foreground: 210 40% 98%;
+        --card: 222.2 84% 6%;
+        --card-foreground: 210 40% 98%;
+        --popover: 222.2 84% 4.9%;
+        --popover-foreground: 210 40% 98%;
+        --primary: 263 56% 60%;
+        --primary-foreground: 0 0% 100%;
+        --secondary: 187 70% 45%;
+        --secondary-foreground: 222.2 84% 4.9%;
+        --muted: 217.2 32.6% 17.5%;
+        --muted-foreground: 215 20.2% 65.1%;
+        --accent: 160 55% 40%;
+        --accent-foreground: 210 40% 98%;
+        --destructive: 0 62.8% 50.6%;
+        --destructive-foreground: 210 40% 98%;
+        --success: 160 50% 38%;
         --success-foreground: 0 0% 100%;
-        --border: 265 22% 24%;
-        --input: 265 22% 24%;
-        --ring: 263 70% 68%;
-        --chart-1: 263 70% 68%;
-        --chart-2: 199 80% 52%;
-        --chart-3: 280 60% 58%;
-        --chart-4: 2 58% 52%;
-        --chart-5: 215 20% 65%;
-        --section-header: 265 32% 12%;
-        --section-context: 265 28% 14%;
-        --section-main: 265 35% 11%;
-        --section-toolbar: 265 26% 15%;
-        --section-card: 265 30% 13%;
-        --section-alt-1: 265 26% 15%;
-        --section-alt-2: 265 28% 14%;
-        --section-alt-3: 265 24% 16%;
-        --section-alt-4: 265 30% 12%;
+        --border: 217.2 32.6% 17.5%;
+        --input: 217.2 32.6% 17.5%;
+        --ring: 263 56% 60%;
+        --chart-1: 263 56% 60%;
+        --chart-2: 187 70% 48%;
+        --chart-3: 160 55% 45%;
+        --chart-4: 330 65% 60%;
+        --chart-5: 215 20.2% 65.1%;
+        --section-header: 222.2 84% 6%;
+        --section-context: 217.2 32.6% 14%;
+        --section-main: 222.2 84% 4.9%;
+        --section-toolbar: 217.2 32.6% 15%;
+        --section-card: 222.2 84% 6%;
+        --section-alt-1: 217.2 32.6% 14%;
+        --section-alt-2: 222.2 32% 12%;
+        --section-alt-3: 265 30% 12%;
+        --section-alt-4: 217.2 28% 14%;
+        --sidebar-background: 222.2 47% 8%;
+        --sidebar-foreground: 210 40% 96%;
+        --sidebar-border: 217.2 32.6% 18%;
+        --sidebar-accent: 217.2 32.6% 15%;
+        --sidebar-accent-foreground: 210 40% 98%;
     }
 }
 
@@ -227,38 +239,29 @@ code {
     animation: fade-in-up 0.45s var(--motion-ease-out) forwards;
 }
 
-/* Main workspace: soft multi-stop gradient (light), solid token (dark) */
+/* Main workspace – near-white (reference uses white / muted gray sections) */
 .page-content-bg {
-    background: linear-gradient(
-        165deg,
-        hsl(250 58% 97%) 0%,
-        hsl(220 45% 97%) 42%,
-        hsl(280 40% 97%) 100%
-    ) !important;
+    background: hsl(var(--section-main)) !important;
 }
 html.dark .page-content-bg {
-    background: linear-gradient(
-        165deg,
-        hsl(var(--background)) 0%,
-        hsl(265 38% 12%) 100%
-    ) !important;
+    background: hsl(var(--section-main)) !important;
 }
 
-/* Login: mesh + blobs (reference: playful Arabic ed-tech landings) */
+/* Login hero – white base + purple→pink soft blobs (same utility pairing as reference CSS) */
 .login-mubarmij-bg {
-    background-color: hsl(250 60% 97%);
+    background-color: hsl(0 0% 100%);
     background-image:
-        radial-gradient(ellipse 120% 80% at 10% -20%, rgba(99, 102, 241, 0.35) 0%, transparent 55%),
-        radial-gradient(ellipse 90% 70% at 100% 0%, rgba(168, 85, 247, 0.28) 0%, transparent 50%),
-        radial-gradient(ellipse 80% 60% at 50% 100%, rgba(56, 189, 248, 0.22) 0%, transparent 55%),
-        linear-gradient(180deg, hsl(250 70% 98%) 0%, hsl(220 50% 98%) 100%);
+        radial-gradient(ellipse 100% 80% at 85% -10%, rgba(168, 85, 247, 0.12) 0%, transparent 50%),
+        radial-gradient(ellipse 90% 70% at 0% 30%, rgba(236, 72, 153, 0.1) 0%, transparent 48%),
+        radial-gradient(ellipse 70% 60% at 50% 100%, rgba(6, 182, 212, 0.08) 0%, transparent 50%),
+        linear-gradient(180deg, hsl(210 40% 99%) 0%, hsl(0 0% 100%) 40%);
 }
 html.dark .login-mubarmij-bg {
     background-color: hsl(var(--background));
     background-image:
-        radial-gradient(ellipse 100% 70% at 20% 0%, rgba(99, 102, 241, 0.25) 0%, transparent 50%),
-        radial-gradient(ellipse 80% 60% at 100% 30%, rgba(168, 85, 247, 0.2) 0%, transparent 50%),
-        linear-gradient(180deg, hsl(265 35% 11%) 0%, hsl(265 40% 9%) 100%);
+        radial-gradient(ellipse 100% 70% at 90% 0%, rgba(168, 85, 247, 0.15) 0%, transparent 45%),
+        radial-gradient(ellipse 80% 60% at 0% 40%, rgba(236, 72, 153, 0.12) 0%, transparent 45%),
+        linear-gradient(180deg, hsl(var(--background)) 0%, hsl(222.2 84% 6%) 100%);
 }
 
 /* Distinct section backgrounds + section pop on hover */
