@@ -1081,6 +1081,40 @@ def _compute_cumulative_final_quarter(
     return {"combined_total": combined, "performance_level": level, "performance_label": label}
 
 
+def _compute_quizzes_chapter_assessment_sw(
+    sw: Dict[int, Dict[str, Optional[float]]],
+    quarter: int,
+) -> Optional[float]:
+    """
+    30-point Quizzes & Chapter Test total (same rules as Assessment Marks /students):
+    cumulative students part (max 15) + assessment part max 15 via compute_assessment_combined*.
+    This is intentionally different from quarter*_total from _compute_cumulative_final_quarter (50 max).
+    """
+    if not sw:
+        return None
+    if quarter == 1:
+        avg_9 = compute_avg_first_9_weeks(sw)
+        st = compute_students_total_for_assessment(sw, avg_first_9_weeks=avg_9, weeks_10_18=False)
+        eq = _effective_scores_q1(sw)
+        scores_dict = {
+            "quiz1": eq.get("quiz1"),
+            "quiz2": eq.get("quiz2"),
+            "chapter_test1_practical": eq.get("chapter_test1_practical"),
+        }
+        r = compute_assessment_combined(scores_dict, avg_first_9_weeks=avg_9, students_total_override=st)
+        return r.get("combined_total")
+    avg_10 = compute_avg_weeks_10_18(sw)
+    st = compute_students_total_for_assessment(sw, weeks_10_18=True)
+    eq = _effective_scores_q2(sw)
+    scores_dict = {
+        "quiz3": eq.get("quiz3"),
+        "quiz4": eq.get("quiz4"),
+        "chapter_test2_practical": eq.get("chapter_test2_practical"),
+    }
+    r = compute_assessment_combined_q2(scores_dict, avg_weeks_10_18=avg_10, students_total_override=st)
+    return r.get("combined_total")
+
+
 def _enrich_student_single_quarter(
     student: Dict[str, Any],
     sw: Dict[int, Dict[str, Optional[float]]],
@@ -1098,6 +1132,8 @@ def _enrich_student_single_quarter(
         student["performance_label"] = "No Data"
         for k in ("quiz1", "quiz2", "quiz3", "quiz4", "chapter_test1", "chapter_test2"):
             student[k] = None
+        student["quizzes_chapter_total_q1"] = None
+        student["quizzes_chapter_total_q2"] = None
         return
     if quarter == 2:
         effective = _effective_scores_q2(sw)
@@ -1116,6 +1152,8 @@ def _enrich_student_single_quarter(
         student["quiz1"] = None
         student["quiz2"] = None
         student["chapter_test1"] = None
+        student["quizzes_chapter_total_q2"] = _compute_quizzes_chapter_assessment_sw(sw, 2)
+        student["quizzes_chapter_total_q1"] = None
     else:
         effective = _effective_scores_q1(sw)
         res = _compute_cumulative_final_quarter(sw, quarter=1)
@@ -1133,6 +1171,8 @@ def _enrich_student_single_quarter(
         student["quiz3"] = None
         student["quiz4"] = None
         student["chapter_test2"] = None
+        student["quizzes_chapter_total_q1"] = _compute_quizzes_chapter_assessment_sw(sw, 1)
+        student["quizzes_chapter_total_q2"] = None
     label_map = {"on_level": "On Level", "approach": "Approach", "below": "Below", "no_data": "No Data"}
     student["performance_label"] = label_map.get(student["performance_level"], "No Data")
 
@@ -1477,8 +1517,16 @@ def create_analytics_quarter_focus_bar_chart(rate: Any, xlabel: str = "Focus") -
 
 
 def _pdf_focus_quarter_total(student: Dict[str, Any], report_quarter: int) -> Any:
-    if int(report_quarter or 1) == 2:
+    """Prefer 30-point Quizzes & Chapter total; fall back to cumulative quarter total (50 max)."""
+    rq = int(report_quarter or 1)
+    if rq == 2:
+        v = student.get("quizzes_chapter_total_q2")
+        if v is not None:
+            return v
         return student.get("quarter2_total")
+    v = student.get("quizzes_chapter_total_q1")
+    if v is not None:
+        return v
     return student.get("quarter1_total")
 
 
@@ -1749,7 +1797,7 @@ def generate_report_pdf(
 
     top_performers = report.get("top_performers", []) or []
     elements.append(Paragraph("Top Performers", section_style))
-    top_table_data = [["Student", "Class", "Quarter total", "Total", "Strengths"]]
+    top_table_data = [["Student", "Class", "Quizzes & Chapter total (30)", "Total", "Strengths"]]
     for student in top_performers:
         strengths = ", ".join(student.get("strengths") or []) or "-"
         top_table_data.append(
@@ -1768,7 +1816,7 @@ def generate_report_pdf(
 
     support_students = report.get("students_needing_support", []) or []
     elements.append(Paragraph("Students Needing Support", section_style))
-    support_table_data = [["Student", "Class", "Quarter total", "Performance", "Areas to Improve"]]
+    support_table_data = [["Student", "Class", "Quizzes & Chapter total (30)", "Performance", "Areas to Improve"]]
     for student in support_students:
         weak_areas = ", ".join(student.get("weak_areas") or []) or "-"
         support_table_data.append(
@@ -2011,7 +2059,7 @@ def generate_analytics_dashboard_pdf(
 
     top_performers = report.get("top_performers", []) or []
     elements.append(Paragraph("Top Performers", section_style))
-    top_table_data = [["Student", "Class", "Quarter total", "Total", "Strengths"]]
+    top_table_data = [["Student", "Class", "Quizzes & Chapter total (30)", "Total", "Strengths"]]
     for student in top_performers:
         strengths = ", ".join(student.get("strengths") or []) or "-"
         top_table_data.append(
@@ -2030,7 +2078,7 @@ def generate_analytics_dashboard_pdf(
 
     support_students = report.get("students_needing_support", []) or []
     elements.append(Paragraph("Students Needing Support", section_style))
-    support_table_data = [["Student", "Class", "Quarter total", "Performance", "Areas to Improve"]]
+    support_table_data = [["Student", "Class", "Quizzes & Chapter total (30)", "Performance", "Areas to Improve"]]
     for student in support_students:
         weak_areas = ", ".join(student.get("weak_areas") or []) or "-"
         support_table_data.append(
@@ -2276,7 +2324,7 @@ def generate_reports_dashboard_pdf(
 
     top_performers = report.get("top_performers", []) or []
     elements.append(Paragraph("Top Performers", section_style))
-    top_table_data = [["Student", "Class", "Quarter total", "Total", "Strengths"]]
+    top_table_data = [["Student", "Class", "Quizzes & Chapter total (30)", "Total", "Strengths"]]
     for student in top_performers:
         strengths = ", ".join(student.get("strengths") or []) or "-"
         top_table_data.append(
@@ -2295,7 +2343,7 @@ def generate_reports_dashboard_pdf(
 
     support_students = report.get("students_needing_support", []) or []
     elements.append(Paragraph("Students Needing Support", section_style))
-    support_table_data = [["Student", "Class", "Quarter total", "Performance", "Areas to Improve"]]
+    support_table_data = [["Student", "Class", "Quizzes & Chapter total (30)", "Performance", "Areas to Improve"]]
     for student in support_students:
         weak_areas = ", ".join(student.get("weak_areas") or []) or "-"
         support_table_data.append(
@@ -2351,7 +2399,7 @@ def generate_report_excel(report: Dict[str, Any], scope: Any) -> bytes:
         {
             "Student": student.get("full_name"),
             "Class": student.get("class_name"),
-            "Quarter total (focus)": _focus_total(student),
+            "Quizzes & Chapter total (30)": _focus_total(student),
             "Total Score": student.get("total_score_normalized"),
             "Strengths": ", ".join(student.get("strengths") or []),
         }
@@ -2361,7 +2409,7 @@ def generate_report_excel(report: Dict[str, Any], scope: Any) -> bytes:
         {
             "Student": student.get("full_name"),
             "Class": student.get("class_name"),
-            "Quarter total (focus)": _focus_total(student),
+            "Quizzes & Chapter total (30)": _focus_total(student),
             "Performance": student.get("performance_label"),
             "Areas to Improve": ", ".join(student.get("weak_areas") or []),
         }
@@ -4739,9 +4787,11 @@ async def get_analytics_overview(
         _enrich_student_single_quarter(student, sw1, 1)
         q1_total = student.get("quarter1_total")
         q1_level = student.get("performance_level_q1")
+        qc1 = student.get("quizzes_chapter_total_q1")
         _enrich_student_single_quarter(student, sw2, 2)
         student["quarter1_total"] = q1_total
         student["performance_level_q1"] = q1_level
+        student["quizzes_chapter_total_q1"] = qc1
         student["performance_level"] = student.get("performance_level_q2") if q == 2 else q1_level
         student["semester_total"] = student.get("quarter2_total") if q == 2 else q1_total
     # Quarter 1 distribution (from each student's Q1 level/total)
@@ -4792,6 +4842,8 @@ async def get_analytics_overview(
             "class_id": s.get("class_id"),
             "quarter1_total": s.get("quarter1_total"),
             "quarter2_total": s.get("quarter2_total"),
+            "quizzes_chapter_total_q1": s.get("quizzes_chapter_total_q1"),
+            "quizzes_chapter_total_q2": s.get("quizzes_chapter_total_q2"),
             "performance_level_q1": s.get("performance_level_q1"),
             "performance_level_q2": s.get("performance_level_q2"),
             "weak_areas": s.get("weak_areas") or [],
@@ -4807,6 +4859,8 @@ async def get_analytics_overview(
             "class_id": s.get("class_id"),
             "quarter1_total": s.get("quarter1_total"),
             "quarter2_total": s.get("quarter2_total"),
+            "quizzes_chapter_total_q1": s.get("quizzes_chapter_total_q1"),
+            "quizzes_chapter_total_q2": s.get("quizzes_chapter_total_q2"),
             "performance_level_q1": s.get("performance_level_q1"),
             "performance_level_q2": s.get("performance_level_q2"),
             "strengths": s.get("strengths") or [],
@@ -4852,6 +4906,8 @@ def overview_to_pdf_report(overview: Dict[str, Any]) -> Dict[str, Any]:
             "class_name": s.get("class_name"),
             "quarter1_total": s.get("quarter1_total"),
             "quarter2_total": s.get("quarter2_total"),
+            "quizzes_chapter_total_q1": s.get("quizzes_chapter_total_q1"),
+            "quizzes_chapter_total_q2": s.get("quizzes_chapter_total_q2"),
             "total_score_normalized": (s.get("quarter2_total") if q == 2 else s.get("quarter1_total")),
             "strengths": s.get("strengths") or [],
         }
@@ -4863,6 +4919,8 @@ def overview_to_pdf_report(overview: Dict[str, Any]) -> Dict[str, Any]:
             "class_name": s.get("class_name"),
             "quarter1_total": s.get("quarter1_total"),
             "quarter2_total": s.get("quarter2_total"),
+            "quizzes_chapter_total_q1": s.get("quizzes_chapter_total_q1"),
+            "quizzes_chapter_total_q2": s.get("quizzes_chapter_total_q2"),
             "performance_level": pl,
             "performance_label": pl,
             "weak_areas": s.get("weak_areas") or [],
@@ -4943,9 +5001,11 @@ async def _build_class_summary_list(
         _enrich_student_single_quarter(student, sw1, 1)
         q1_total = student.get("quarter1_total")
         q1_level = student.get("performance_level_q1")
+        qc1 = student.get("quizzes_chapter_total_q1")
         _enrich_student_single_quarter(student, sw2, 2)
         student["quarter1_total"] = q1_total
         student["performance_level_q1"] = q1_level
+        student["quizzes_chapter_total_q1"] = qc1
         student["performance_level"] = student.get("performance_level_q2") if quarter == 2 else q1_level
         student["semester_total"] = student.get("quarter2_total") if quarter == 2 else q1_total
     student_map: Dict[str, List[Dict[str, Any]]] = {}
