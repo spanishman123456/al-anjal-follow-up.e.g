@@ -64,7 +64,7 @@ function App() {
     }
     return stored;
   });
-  const [theme, setTheme] = useState(() => localStorage.getItem("theme") || "dark");
+  const [theme, setTheme] = useState(() => localStorage.getItem("theme") || "light");
   const [token, setToken] = useState(() => sessionStorage.getItem("auth_token"));
   const [authReady, setAuthReady] = useState(() => (sessionStorage.getItem("auth_token") ? null : true));
   const [semester, setSemester] = useState(
@@ -259,6 +259,7 @@ function App() {
           ) : showLogin ? (
             <Login
               language={language}
+              theme={theme}
               onLogin={handleLogin}
               onLanguageChange={setLanguage}
               serverStatus={backendOk}

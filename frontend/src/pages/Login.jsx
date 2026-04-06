@@ -14,6 +14,7 @@ const GOOGLE_CLIENT_ID = process.env.REACT_APP_GOOGLE_CLIENT_ID || "";
 
 export default function Login({
   language = "en",
+  theme = "light",
   onLogin,
   onLanguageChange,
   serverStatus: serverStatusProp,
@@ -191,7 +192,8 @@ export default function Login({
       className="login-mubarmij-bg min-h-screen flex flex-col items-center justify-center p-6 relative overflow-hidden"
       data-testid="login-page"
     >
-      <div className="pointer-events-none absolute inset-0 overflow-hidden opacity-100 dark:opacity-40" aria-hidden>
+      {theme === "light" && <div className="login-top-sky" aria-hidden />}
+      <div className="pointer-events-none absolute inset-0 overflow-hidden opacity-100 dark:opacity-40 z-[1]" aria-hidden>
         <div className="absolute -top-24 -right-20 h-[24rem] w-[24rem] rounded-full bg-purple-500/20 blur-3xl animate-blob-float" />
         <div
           className="absolute top-[30%] -left-28 h-[20rem] w-[20rem] rounded-full bg-pink-500/15 blur-3xl animate-blob-float"

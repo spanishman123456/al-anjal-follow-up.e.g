@@ -2,7 +2,6 @@ import { NavLink, Outlet, useNavigate, Link, useLocation } from "react-router-do
 import { useEffect, useState } from "react";
 import {
   LayoutDashboard,
-  Users,
   GraduationCap,
   BarChart3,
   ClipboardList,
@@ -43,6 +42,33 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { SocialLinks } from "@/components/SocialLinks";
+import { cn } from "@/lib/utils";
+
+/** Rotating gradient fills (reference: colorful path / CTA buttons) */
+const SIDEBAR_NAV_GRADIENTS = [
+  "from-violet-600 to-indigo-600",
+  "from-fuchsia-500 to-pink-600",
+  "from-sky-500 to-cyan-600",
+  "from-emerald-500 to-teal-600",
+  "from-amber-500 to-orange-600",
+  "from-rose-500 to-red-500",
+  "from-blue-600 to-violet-600",
+  "from-purple-500 to-fuchsia-600",
+  "from-teal-500 to-green-600",
+  "from-orange-500 to-rose-500",
+  "from-indigo-500 to-blue-600",
+  "from-pink-500 to-orange-400",
+];
+
+function sidebarNavButtonClass(isActive, index) {
+  const g = SIDEBAR_NAV_GRADIENTS[index % SIDEBAR_NAV_GRADIENTS.length];
+  return cn(
+    "pointer-events-auto flex w-full items-center gap-3 rounded-full px-3 py-2.5 text-sm font-semibold text-white shadow-md nav-item-pop bg-gradient-to-r hover:brightness-110 hover:shadow-lg transition-shadow",
+    g,
+    isActive &&
+      "ring-2 ring-white ring-offset-2 ring-offset-zinc-100 dark:ring-offset-slate-950 brightness-110 scale-[1.02]",
+  );
+}
 
 export const AppShell = ({
   language,
@@ -179,6 +205,8 @@ export const AppShell = ({
     (item) => item.roles.includes(profile?.role_name || "Admin")
   );
 
+  const heroSky = theme === "light";
+
   return (
     <div className="min-h-screen w-full bg-background text-foreground flex flex-row" dir="ltr" data-testid="app-shell">
       <aside
@@ -208,8 +236,8 @@ export const AppShell = ({
               </div>
             </div>
           </div>
-          <nav className="px-4 py-6 space-y-2" data-testid="sidebar-nav">
-            {navItems.map((item) => {
+          <nav className="px-3 py-5 space-y-2.5" data-testid="sidebar-nav">
+            {navItems.map((item, navIndex) => {
               const Icon = item.icon;
               const isExpandableGroup = item.children;
               const isChildActive =
@@ -223,33 +251,30 @@ export const AppShell = ({
                       type="button"
                       data-testid={item.testId}
                       onClick={() => setExpandedNavKey((k) => (k === item.testId ? null : item.testId))}
-                      className={`pointer-events-auto flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm font-medium nav-item-pop ${
-                        isChildActive
-                          ? "bg-primary/12 text-primary"
-                          : "text-muted-foreground hover:bg-[hsl(var(--sidebar-accent))] hover:text-[hsl(var(--sidebar-accent-foreground))]"
-                      }`}
+                      className={sidebarNavButtonClass(isChildActive, navIndex)}
                     >
-                      <Icon className="h-4 w-4 shrink-0" />
+                      <Icon className="h-4 w-4 shrink-0 opacity-95" />
                       <span className="flex-1 text-start">{item.label}</span>
                       {isOpen ? (
-                        <ChevronDown className="h-4 w-4 shrink-0" />
+                        <ChevronDown className="h-4 w-4 shrink-0 opacity-90" />
                       ) : (
-                        <ChevronRight className="h-4 w-4 shrink-0" />
+                        <ChevronRight className="h-4 w-4 shrink-0 opacity-90" />
                       )}
                     </button>
                     {isOpen && (
-                      <div className="ms-4 space-y-1 border-s border-[hsl(var(--sidebar-border))] ps-3" data-testid="quarter-marks-submenu">
-                        {item.children.map((child) => (
+                      <div className="ms-3 space-y-1.5 border-s border-white/20 ps-3 dark:border-white/10" data-testid="quarter-marks-submenu">
+                        {item.children.map((child, ci) => (
                           <NavLink
                             key={child.to}
                             to={child.to}
                             data-testid={child.testId}
                             className={({ isActive }) =>
-                              `flex items-center gap-2 rounded-md px-2 py-1.5 text-sm nav-item-pop ${
-                                isActive
-                                  ? "bg-primary/12 text-primary"
-                                  : "text-muted-foreground hover:bg-[hsl(var(--sidebar-accent))]"
-                              }`
+                              cn(
+                                "flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-semibold text-white shadow nav-item-pop bg-gradient-to-r",
+                                SIDEBAR_NAV_GRADIENTS[(navIndex + ci + 1) % SIDEBAR_NAV_GRADIENTS.length],
+                                "hover:brightness-110",
+                                isActive && "ring-2 ring-white/90 ring-offset-1 ring-offset-zinc-100 dark:ring-offset-slate-950",
+                              )
                             }
                           >
                             {child.label}
@@ -263,19 +288,13 @@ export const AppShell = ({
 
               return (
                 <NavLink
-                  key={item.to}
+                  key={item.testId || `${item.to}-${item.label}`}
                   to={item.to}
                   data-testid={item.testId}
-                  className={({ isActive }) =>
-                    `pointer-events-auto flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium nav-item-pop ${
-                      isActive
-                        ? "bg-primary/12 text-primary"
-                        : "text-muted-foreground hover:bg-[hsl(var(--sidebar-accent))] hover:text-[hsl(var(--sidebar-accent-foreground))]"
-                    }`
-                  }
+                  className={({ isActive }) => sidebarNavButtonClass(isActive, navIndex)}
                 >
-                  <Icon className="h-4 w-4" />
-                  <span>{item.label}</span>
+                  <Icon className="h-4 w-4 shrink-0 opacity-95" />
+                  <span className="truncate">{item.label}</span>
                 </NavLink>
               );
             })}
@@ -302,7 +321,7 @@ export const AppShell = ({
           </div>
           <a
             href="#contact"
-            className="flex items-center justify-center gap-2 w-full rounded-md bg-primary text-primary-foreground py-2.5 px-4 font-medium text-sm hover:bg-primary/90 transition-all duration-200 hover:translate-y-[-2px] hover:scale-[1.02] hover:shadow-md active:translate-y-0 active:scale-[0.98] shadow-md"
+            className="flex items-center justify-center gap-2 w-full rounded-full bg-gradient-to-r from-violet-600 to-purple-600 text-white py-2.5 px-4 font-semibold text-sm shadow-md hover:brightness-110 transition-all duration-200 hover:translate-y-[-2px] hover:scale-[1.02] active:translate-y-0 active:scale-[0.98]"
             data-testid="sidebar-contact-us"
           >
             <span className="relative flex items-center">
@@ -325,14 +344,27 @@ export const AppShell = ({
         data-testid="main-panel"
         dir={isRTL ? "rtl" : undefined}
       >
+        <div className={cn(heroSky && "main-hero-sky pb-2")}>
         <header
-          className="flex flex-col gap-4 border-b border-border/50 px-6 py-4 backdrop-blur-md glass-panel dark:border-white/10"
-          style={{ background: "hsl(var(--section-header) / 0.92)" }}
+          className={cn(
+            "relative z-10 flex flex-col gap-4 px-6 py-4 backdrop-blur-sm",
+            heroSky
+              ? "border-0 bg-transparent"
+              : "border-b border-border/50 glass-panel dark:border-white/10",
+          )}
+          style={heroSky ? undefined : { background: "hsl(var(--section-header) / 0.92)" }}
           data-testid="top-header"
         >
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div className="flex items-center gap-4" data-testid="school-header">
-              <div className="flex items-center justify-center rounded-xl bg-white p-2 dark:bg-white/10 dark:ring-1 dark:ring-white/15">
+              <div
+                className={cn(
+                  "flex items-center justify-center rounded-xl p-2",
+                  heroSky
+                    ? "bg-white/15 ring-1 ring-white/25 backdrop-blur-md"
+                    : "bg-white dark:bg-white/10 dark:ring-1 dark:ring-white/15",
+                )}
+              >
                 <img
                   src={`${process.env.PUBLIC_URL || ""}/logo.png`}
                   alt="School Logo"
@@ -342,13 +374,16 @@ export const AppShell = ({
               </div>
               <div>
                 <p
-                  className="text-sm font-semibold text-foreground"
+                  className={cn("text-sm font-semibold", heroSky ? "text-white" : "text-foreground")}
                   data-testid="school-name-ar"
                 >
                   مدارس الأنجال الأهلية
                 </p>
                 <p
-                  className="text-lg font-bold text-primary dark:text-cyan-400"
+                  className={cn(
+                    "text-lg font-bold",
+                    heroSky ? "text-cyan-300" : "text-primary dark:text-cyan-400",
+                  )}
                   data-testid="school-name-en"
                 >
                   ALANJAL NATIONAL SCHOOL
@@ -362,6 +397,9 @@ export const AppShell = ({
                   size="sm"
                   onClick={() => setLanguage("en")}
                   data-testid="language-toggle-en"
+                  className={cn(
+                    heroSky && language !== "en" && "border-white/40 bg-white/10 text-white hover:bg-white/20 hover:text-white",
+                  )}
                 >
                   EN
                 </Button>
@@ -370,6 +408,9 @@ export const AppShell = ({
                   size="sm"
                   onClick={() => setLanguage("ar")}
                   data-testid="language-toggle-ar"
+                  className={cn(
+                    heroSky && language !== "ar" && "border-white/40 bg-white/10 text-white hover:bg-white/20 hover:text-white",
+                  )}
                 >
                   AR
                 </Button>
@@ -379,6 +420,9 @@ export const AppShell = ({
                 size="sm"
                 onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
                 data-testid="theme-toggle-button"
+                className={cn(
+                  heroSky && "border-white/40 bg-white/10 text-white hover:bg-white/20 hover:text-white",
+                )}
               >
                 {theme === "dark" ? t("theme_light") : t("theme_dark")}
               </Button>
@@ -388,6 +432,7 @@ export const AppShell = ({
                     variant="ghost"
                     size="icon"
                     data-testid="notifications-button"
+                    className={cn(heroSky && "text-white hover:bg-white/15 hover:text-white")}
                   >
                     <Bell className="h-4 w-4" />
                   </Button>
@@ -417,13 +462,17 @@ export const AppShell = ({
                 variant="ghost"
                 onClick={handleLogout}
                 data-testid="logout-button"
+                className={cn(heroSky && "text-white hover:bg-white/15 hover:text-white")}
               >
                 <LogOut className="mr-2 h-4 w-4" />
                 {t("logout")}
               </Button>
               <button
                 type="button"
-                className="flex items-center gap-2 rounded-lg px-2 py-1 transition-colors hover:bg-muted"
+                className={cn(
+                  "flex items-center gap-2 rounded-lg px-2 py-1 transition-colors",
+                  heroSky ? "hover:bg-white/10" : "hover:bg-muted",
+                )}
                 data-testid="user-profile"
                 onClick={() => navigate("/settings?section=profile")}
               >
@@ -445,10 +494,16 @@ export const AppShell = ({
                   )}
                 </div>
                 <div>
-                  <p className="text-sm font-semibold" data-testid="user-name">
+                  <p
+                    className={cn("text-sm font-semibold", heroSky && "text-white")}
+                    data-testid="user-name"
+                  >
                     {profile?.name || "Administrator"}
                   </p>
-                  <p className="text-xs text-muted-foreground" data-testid="user-role">
+                  <p
+                    className={cn("text-xs", heroSky ? "text-slate-300" : "text-muted-foreground")}
+                    data-testid="user-role"
+                  >
                     {profile?.role_name || "Admin"}
                   </p>
                 </div>
@@ -458,12 +513,20 @@ export const AppShell = ({
         </header>
         {/* Academic context bar: semester reminder on every page */}
         <div
-          className="flex flex-wrap items-center justify-center gap-4 border-b border-border/50 px-6 py-3 dark:border-white/10"
-          style={{ background: "hsl(var(--section-context))" }}
+          className={cn(
+            "relative z-10 flex flex-wrap items-center justify-center gap-4 px-6 py-3",
+            heroSky ? "border-0 bg-transparent" : "border-b border-border/50 dark:border-white/10",
+          )}
+          style={heroSky ? undefined : { background: "hsl(var(--section-context))" }}
           data-testid="academic-context-bar"
         >
           <div
-            className="rounded-full border border-border/80 bg-muted px-4 py-2 text-sm font-medium text-foreground shadow-sm"
+            className={cn(
+              "rounded-full border px-4 py-2 text-sm font-medium shadow-sm",
+              heroSky
+                ? "border-white/25 bg-white/10 text-white backdrop-blur-sm"
+                : "border-border/80 bg-muted text-foreground",
+            )}
             data-testid="academic-year-display"
           >
             {t("academic_year")}: {academicYear}
@@ -478,7 +541,12 @@ export const AppShell = ({
             data-testid="semester-quarter-select"
           >
             <SelectTrigger
-              className="w-[220px] rounded-full border border-border/80 bg-muted px-4 py-2 text-sm font-medium shadow-sm data-[state=open]:bg-muted"
+              className={cn(
+                "w-[220px] rounded-full border px-4 py-2 text-sm font-medium shadow-sm",
+                heroSky
+                  ? "border-white/25 bg-white/10 text-white backdrop-blur-sm data-[state=open]:bg-white/15 [&_svg]:opacity-80"
+                  : "border-border/80 bg-muted data-[state=open]:bg-muted",
+              )}
               data-testid="semester-quarter-trigger"
             >
               <SelectValue placeholder={t("select_semester_quarter")} />
@@ -501,12 +569,31 @@ export const AppShell = ({
           <Button
             variant="outline"
             size="sm"
-            className="rounded-full border-border/80 bg-background px-4 py-2 text-sm font-medium shadow-sm hover:bg-muted/80"
+            className={cn(
+              "rounded-full border px-4 py-2 text-sm font-medium shadow-sm",
+              heroSky
+                ? "border-white/30 bg-white/10 text-white hover:bg-white/20 hover:text-white"
+                : "border-border/80 bg-background hover:bg-muted/80",
+            )}
             onClick={() => window.dispatchEvent(new CustomEvent("app-refresh-data"))}
             data-testid="academic-context-refresh"
           >
             {t("refresh_data")}
           </Button>
+        </div>
+        {heroSky && (
+          <svg
+            className="relative z-[5] -mb-px block w-full text-[hsl(210_40%_98.5%)]"
+            viewBox="0 0 1440 56"
+            preserveAspectRatio="none"
+            aria-hidden
+          >
+            <path
+              fill="currentColor"
+              d="M0,28 C240,52 480,8 720,28 C960,48 1200,12 1440,32 L1440,56 L0,56 Z"
+            />
+          </svg>
+        )}
         </div>
         <main
           className="page-content-bg flex-1 px-6 py-8 page-enter"
