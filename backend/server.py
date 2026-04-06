@@ -39,6 +39,7 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.utils import ImageReader
 from reportlab.pdfgen import canvas
 import random
+import math
 from sendgrid import SendGridAPIClient
 from sendgrid.helpers.mail import (
     Mail,
@@ -1461,6 +1462,73 @@ def create_analytics_class_area_chart(class_rows: List[Dict[str, Any]]) -> io.By
     return buf
 
 
+def create_reports_enrollment_bar_chart(class_breakdown: List[Dict[str, Any]]) -> io.BytesIO:
+    """Enrollment per class (student_count) — same data as Reports `reportEnrollmentBars`."""
+    if not class_breakdown:
+        return _analytics_empty_chart("No class enrollment data")
+    names = [str(r.get("class_name") or "?") for r in class_breakdown]
+    counts = [int(r.get("student_count") or 0) for r in class_breakdown]
+    fig, ax = plt.subplots(figsize=(5.4, 3.5))
+    ax.set_facecolor("white")
+    x = range(len(names))
+    ymax = max(counts) if counts else 1
+    y_top = max(6, int(math.ceil((ymax * 1.15) / 6) * 6))
+    bars = ax.bar(x, counts, color=BOARD_ANALYTICS["bar"], edgecolor="white", linewidth=0.8, width=0.65)
+    ax.set_ylim(0, y_top)
+    for i, bar in enumerate(bars):
+        h = bar.get_height()
+        ax.text(
+            bar.get_x() + bar.get_width() / 2,
+            h + y_top * 0.015,
+            str(int(counts[i])),
+            ha="center",
+            va="bottom",
+            fontsize=9,
+            color="#475569",
+        )
+    ax.set_xticks(list(x))
+    ax.set_xticklabels(names, fontsize=9, color="#64748b", rotation=22 if len(names) > 5 else 0)
+    ax.yaxis.grid(True, linestyle="--", color=BOARD_ANALYTICS["grid"], linewidth=0.8)
+    ax.set_axisbelow(True)
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+    buf = io.BytesIO()
+    plt.tight_layout()
+    plt.savefig(buf, format="png", dpi=160, bbox_inches="tight", facecolor="white")
+    plt.close(fig)
+    buf.seek(0)
+    return buf
+
+
+def create_reports_enrollment_area_chart(class_breakdown: List[Dict[str, Any]]) -> io.BytesIO:
+    """Enrollment profile across classes — same series as Reports `ClassScoreArea` with enrollment bars."""
+    if not class_breakdown:
+        return _analytics_empty_chart("No class enrollment data")
+    n = len(class_breakdown)
+    xs = list(range(n))
+    names = [str(r.get("class_name") or "?") for r in class_breakdown]
+    ys = [float(int(r.get("student_count") or 0)) for r in class_breakdown]
+    fig, ax = plt.subplots(figsize=(5.4, 3.5))
+    ax.set_facecolor("white")
+    ymax = max(ys) if ys else 1
+    y_top = max(6, int(math.ceil((ymax * 1.15) / 6) * 6))
+    ax.fill_between(xs, ys, color=BOARD_ANALYTICS["area_fill"], alpha=0.55, linewidth=0)
+    ax.plot(xs, ys, color=BOARD_ANALYTICS["area_line"], linewidth=2.2, marker="o", markersize=7)
+    ax.set_xticks(xs)
+    ax.set_xticklabels(names, fontsize=9, color="#64748b", rotation=22 if n > 5 else 0)
+    ax.set_ylim(0, y_top)
+    ax.yaxis.grid(True, linestyle="--", color=BOARD_ANALYTICS["grid"], linewidth=0.8)
+    ax.set_axisbelow(True)
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+    buf = io.BytesIO()
+    plt.tight_layout()
+    plt.savefig(buf, format="png", dpi=160, bbox_inches="tight", facecolor="white")
+    plt.close(fig)
+    buf.seek(0)
+    return buf
+
+
 def format_scope_label(scope: Any) -> str:
     if isinstance(scope, int):
         return f"Grade {scope}"
@@ -1896,6 +1964,282 @@ def generate_analytics_dashboard_pdf(
     elements.append(Spacer(1, 10))
 
     class_breakdown = report.get("class_breakdown", []) or []
+    elements.append(Paragraph("Class breakdown", section_style))
+    class_table_data = [["Class", "Students"]]
+    for item in class_breakdown:
+        class_table_data.append([_fmt(item.get("class_name")), _fmt(item.get("student_count"))])
+    if len(class_table_data) == 1:
+        class_table_data.append(["-", "0"])
+    elements.append(_styled_table(class_table_data, col_widths=[350, 180]))
+    elements.append(PageBreak())
+
+    top_performers = report.get("top_performers", []) or []
+    elements.append(Paragraph("Top Performers", section_style))
+    top_table_data = [["Student", "Class", "Q1", "Q2", "Total", "Strengths"]]
+    for student in top_performers:
+        strengths = ", ".join(student.get("strengths") or []) or "-"
+        top_table_data.append(
+            [
+                _fmt(student.get("full_name")),
+                _fmt(student.get("class_name")),
+                _fmt(student.get("quarter1_total")),
+                _fmt(student.get("quarter2_total")),
+                _fmt(student.get("total_score_normalized")),
+                strengths,
+            ]
+        )
+    if len(top_table_data) == 1:
+        top_table_data.append(["-", "-", "-", "-", "-", "-"])
+    elements.append(_styled_table(top_table_data, col_widths=[130, 58, 38, 38, 45, 220]))
+    elements.append(Spacer(1, 10))
+
+    support_students = report.get("students_needing_support", []) or []
+    elements.append(Paragraph("Students Needing Support", section_style))
+    support_table_data = [["Student", "Class", "Q1", "Q2", "Performance", "Areas to Improve"]]
+    for student in support_students:
+        weak_areas = ", ".join(student.get("weak_areas") or []) or "-"
+        support_table_data.append(
+            [
+                _fmt(student.get("full_name")),
+                _fmt(student.get("class_name")),
+                _fmt(student.get("quarter1_total")),
+                _fmt(student.get("quarter2_total")),
+                _fmt(student.get("performance_label") or student.get("performance_level")),
+                weak_areas,
+            ]
+        )
+    if len(support_table_data) == 1:
+        support_table_data.append(["-", "-", "-", "-", "-", "-"])
+    elements.append(_styled_table(support_table_data, col_widths=[130, 58, 38, 38, 65, 210]))
+
+    insights = insights or {}
+    insight_rows = [
+        ["Insight", "Details"],
+        ["Strengths", (insights.get("analysis_strengths") or "").strip() or "-"],
+        ["Weaknesses", (insights.get("analysis_weaknesses") or "").strip() or "-"],
+        ["Student Performance", (insights.get("analysis_performance") or "").strip() or "-"],
+        ["Standout Data", (insights.get("analysis_standout_data") or "").strip() or "-"],
+        ["Recommended Actions", (insights.get("analysis_actions") or "").strip() or "-"],
+        ["Recommendations", (insights.get("analysis_recommendations") or "").strip() or "-"],
+    ]
+    elements.append(Spacer(1, 10))
+    elements.append(Paragraph("Key Insights", section_style))
+    elements.append(_styled_table(insight_rows, col_widths=[130, 380], repeat_header=True))
+
+    doc.build(elements)
+    pdf_value = buffer.getvalue()
+    buffer.close()
+    return pdf_value
+
+
+def generate_reports_dashboard_pdf(
+    report: Dict[str, Any],
+    scope: Any,
+    insights: Optional[Dict[str, str]] = None,
+) -> bytes:
+    """
+    PDF for Reports page export: four Visual Board charts (enrollment bars/area, donut, quarter line)
+    using the same BOARD palette as the web, then the same metric tables as the standard grade report.
+    """
+    def _fmt(value: Any, suffix: str = "") -> str:
+        if value is None or value == "":
+            return "-"
+        return f"{value}{suffix}"
+
+    def _styled_table(data: List[List[Any]], col_widths: Optional[List[int]] = None, repeat_header: bool = True) -> Table:
+        wrapped_rows: List[List[Any]] = []
+        for row_idx, row in enumerate(data):
+            wrapped_row: List[Any] = []
+            for cell in row:
+                if isinstance(cell, Paragraph):
+                    wrapped_row.append(cell)
+                    continue
+                text = escape("" if cell is None else str(cell)).replace("\n", "<br/>")
+                if row_idx == 0:
+                    wrapped_row.append(Paragraph(text, table_header_style))
+                else:
+                    wrapped_row.append(Paragraph(text, table_body_style))
+            wrapped_rows.append(wrapped_row)
+        tbl = Table(wrapped_rows, colWidths=col_widths, repeatRows=1 if repeat_header else 0, hAlign="LEFT")
+        tbl.setStyle(
+            TableStyle(
+                [
+                    ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#0f766e")),
+                    ("TEXTCOLOR", (0, 0), (-1, 0), colors.whitesmoke),
+                    ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                    ("FONTSIZE", (0, 0), (-1, 0), 9),
+                    ("FONTSIZE", (0, 1), (-1, -1), 8),
+                    ("ALIGN", (0, 0), (-1, -1), "LEFT"),
+                    ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                    ("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#9ca3af")),
+                    ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#f8fafc")]),
+                    ("LEFTPADDING", (0, 0), (-1, -1), 6),
+                    ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+                    ("TOPPADDING", (0, 0), (-1, -1), 4),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+                ]
+            )
+        )
+        return tbl
+
+    buffer = io.BytesIO()
+    styles = getSampleStyleSheet()
+    title_style = ParagraphStyle(
+        name="ReportsDashTitle",
+        parent=styles["Title"],
+        fontSize=18,
+        textColor=colors.HexColor("#0f172a"),
+        spaceAfter=6,
+    )
+    subtitle_style = ParagraphStyle(
+        name="ReportsDashSubtitle",
+        parent=styles["Normal"],
+        fontSize=10,
+        textColor=colors.HexColor("#475569"),
+        spaceAfter=10,
+    )
+    section_style = ParagraphStyle(
+        name="ReportsDashSection",
+        parent=styles["Heading2"],
+        fontSize=12,
+        textColor=colors.HexColor("#0f766e"),
+        spaceBefore=6,
+        spaceAfter=6,
+    )
+    cap_style = ParagraphStyle(
+        name="ReportsChartCaption",
+        parent=styles["Normal"],
+        fontSize=9,
+        textColor=colors.HexColor("#334155"),
+        spaceAfter=4,
+        leading=12,
+    )
+    table_header_style = ParagraphStyle(
+        name="ReportsTableHeaderCell",
+        parent=styles["Normal"],
+        fontName="Helvetica-Bold",
+        fontSize=8.5,
+        textColor=colors.whitesmoke,
+        leading=10,
+        wordWrap="CJK",
+    )
+    table_body_style = ParagraphStyle(
+        name="ReportsTableBodyCell",
+        parent=styles["Normal"],
+        fontSize=8,
+        textColor=colors.HexColor("#111827"),
+        leading=10,
+        wordWrap="CJK",
+    )
+
+    scope_label = format_scope_label(scope)
+    sem = int(report.get("semester") or 1)
+    qn = int(report.get("quarter") or 1)
+    class_breakdown = report.get("class_breakdown", []) or []
+    distribution = report.get("distribution") or []
+    q1 = report.get("quarter1") or {}
+    q2 = report.get("quarter2") or {}
+
+    bar_buf = create_reports_enrollment_bar_chart(class_breakdown)
+    donut_buf = create_analytics_pass_donut(distribution)
+    line_buf = create_analytics_quarter_line_chart(q1.get("on_level_rate"), q2.get("on_level_rate"))
+    area_buf = create_reports_enrollment_area_chart(class_breakdown)
+
+    def _cap(title: str, subtitle: str) -> Paragraph:
+        sub_esc = escape(subtitle)
+        return Paragraph(
+            f"<b>{escape(title)}</b><br/><font size='8' color='#64748b'>{sub_esc}</font>",
+            cap_style,
+        )
+
+    term_sub = f"Semester {sem} · Quarter {qn}"
+
+    doc = SimpleDocTemplate(buffer, pagesize=A4, leftMargin=28, rightMargin=28, topMargin=28, bottomMargin=28)
+    elements: List[Any] = []
+
+    elements.append(Paragraph("Reports", title_style))
+    elements.append(Paragraph(f"<b>{scope_label}</b>", subtitle_style))
+    elements.append(
+        Paragraph(
+            f"Generated on {datetime.now(REPORT_TIMEZONE).strftime('%Y-%m-%d %H:%M')} · "
+            "Charts match the Reports page Visual Board (enrollment, on-level split, quarter trend).",
+            subtitle_style,
+        )
+    )
+
+    elements.append(Paragraph("Visual dashboard", section_style))
+    dashboard_grid = Table(
+        [
+            [
+                _cap("Students per class", "Enrollment by class section"),
+                _cap("On-level vs. other categories", term_sub),
+            ],
+            [
+                RLImage(bar_buf, width=248, height=176),
+                RLImage(donut_buf, width=248, height=176),
+            ],
+            [
+                _cap("On-level rate across quarters", "Cohort trend within this semester (Q1 → Q2)"),
+                _cap("Class averages profile", "Enrollment by class section"),
+            ],
+            [
+                RLImage(line_buf, width=248, height=176),
+                RLImage(area_buf, width=248, height=176),
+            ],
+        ],
+        colWidths=[260, 260],
+        hAlign="LEFT",
+    )
+    dashboard_grid.setStyle(
+        TableStyle(
+            [
+                ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                ("BOX", (0, 0), (-1, -1), 0.5, colors.HexColor("#cbd5e1")),
+                ("LEFTPADDING", (0, 0), (-1, -1), 8),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 8),
+                ("TOPPADDING", (0, 0), (-1, -1), 8),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+                ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#ffffff")),
+            ]
+        )
+    )
+    elements.append(dashboard_grid)
+    elements.append(Spacer(1, 14))
+
+    summary_data = [
+        ["Metric", "Value"],
+        ["Scope", scope_label],
+        ["Total Students", _fmt(report.get("total_students"))],
+        ["Average Total Score", _fmt(report.get("avg_total_score"))],
+        ["On Level % (focus quarter)", _fmt(report.get("exceeding_rate"), "%")],
+        ["Quarter 1 On Level", _fmt(q1.get("on_level_rate"), "%")],
+        ["Quarter 1 Avg Total", _fmt(q1.get("avg_total"))],
+        ["Quarter 2 On Level", _fmt(q2.get("on_level_rate"), "%")],
+        ["Quarter 2 Avg Total", _fmt(q2.get("avg_total"))],
+    ]
+    elements.append(Paragraph("Summary metrics", section_style))
+    elements.append(_styled_table(summary_data, col_widths=[210, 320]))
+    elements.append(Spacer(1, 10))
+
+    elements.append(Paragraph("Quarter comparison", section_style))
+    quarter_table_data = [
+        ["Metric", "Quarter 1", "Quarter 2"],
+        ["On Level %", _fmt(q1.get("on_level_rate"), "%"), _fmt(q2.get("on_level_rate"), "%")],
+        ["Avg Quarter Total", _fmt(q1.get("avg_total")), _fmt(q2.get("avg_total"))],
+        ["Students With Data", _fmt(q1.get("total_with_data")), _fmt(q2.get("total_with_data"))],
+    ]
+    elements.append(_styled_table(quarter_table_data, col_widths=[180, 175, 175]))
+    elements.append(Spacer(1, 10))
+
+    elements.append(Paragraph("Performance distribution (focus quarter)", section_style))
+    dist_rows = [["Level", "Count"]]
+    for item in distribution:
+        dist_rows.append([str(item.get("level", "")).replace("_", " ").title(), _fmt(item.get("count"))])
+    if len(dist_rows) == 1:
+        dist_rows.append(["No Data", "0"])
+    elements.append(_styled_table(dist_rows, col_widths=[260, 270]))
+    elements.append(Spacer(1, 10))
+
     elements.append(Paragraph("Class breakdown", section_style))
     class_table_data = [["Class", "Students"]]
     for item in class_breakdown:
@@ -5142,7 +5486,7 @@ async def export_grade_report(
             "analysis_actions": analysis_actions or "",
             "analysis_recommendations": analysis_recommendations or "",
         }
-        content = generate_report_pdf(summary, grade, insights=insights)
+        content = generate_reports_dashboard_pdf(summary, grade, insights=insights)
         filename = f"grade_{grade}_report.pdf"
         media_type = "application/pdf"
     headers = {"Content-Disposition": f"attachment; filename={filename}"}
@@ -5620,7 +5964,7 @@ async def send_weekly_admin_reports():
         settings = await get_report_settings()
         grade = int(settings.get("grade", 4))
         summary = await get_grade_report(grade)
-        report_pdf = generate_report_pdf(summary, grade)
+        report_pdf = generate_reports_dashboard_pdf(summary, grade)
         report_excel = generate_report_excel(summary, grade)
         admins = await db.users.find({"role_name": "Admin", "active": True}, {"_id": 0}).to_list(200)
         recipients = [admin["email"] for admin in admins if admin.get("email")]
