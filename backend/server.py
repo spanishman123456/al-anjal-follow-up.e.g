@@ -32,6 +32,7 @@ import matplotlib
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+from matplotlib.patches import Patch
 from reportlab.lib.pagesizes import A4
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image as RLImage, PageBreak
 from reportlab.lib import colors
@@ -606,28 +607,20 @@ async def build_quarter_score_map_with_q1_spillover(
     base = await build_quarter_score_map(student_ids, semester, quarter)
     if quarter != 1 or not student_ids:
         return base
-    spill_week = await db.weeks.find_one(
-        {"semester": semester, "quarter": 2, "number": 10},
-        {"_id": 0, "id": 1},
-    )
-    if not spill_week:
-        all_q2 = await db.weeks.find({"semester": semester, "quarter": 2}, {"_id": 0, "id": 1, "number": 1}).to_list(200)
-        tens = [w for w in all_q2 if int(w.get("number") or 0) == 10]
-        spill_week = tens[0] if tens else None
-    if not spill_week or not spill_week.get("id"):
+    # Merge Q1 final exam fields from every week in Q2 of the same semester (teachers may use any Q2 week).
+    q2_weeks = await db.weeks.find({"semester": semester, "quarter": 2}, {"_id": 0, "id": 1}).to_list(200)
+    week_ids = [w["id"] for w in q2_weeks if w.get("id")]
+    if not week_ids:
         return base
-    wid = spill_week["id"]
     spill_scores = await db.student_scores.find(
-        {"week_id": wid, "student_id": {"$in": student_ids}}, {"_id": 0}
-    ).to_list(5000)
+        {"week_id": {"$in": week_ids}, "student_id": {"$in": student_ids}}, {"_id": 0}
+    ).to_list(10000)
     for doc in spill_scores:
         sid = doc.get("student_id")
         if not sid:
             continue
         qp = doc.get("quarter1_practical")
         qt = doc.get("quarter1_theory")
-        if qp is None and qt is None:
-            continue
         if isinstance(qp, float) and pd.isna(qp):
             qp = None
         if isinstance(qt, float) and pd.isna(qt):
@@ -636,10 +629,21 @@ async def build_quarter_score_map_with_q1_spillover(
             continue
         bucket = base.setdefault(sid, {})
         w10 = dict(bucket.get(10) or {})
-        if qp is not None:
-            w10["quarter1_practical"] = qp
-        if qt is not None:
-            w10["quarter1_theory"] = qt
+        for key, raw in (("quarter1_practical", qp), ("quarter1_theory", qt)):
+            if raw is None:
+                continue
+            try:
+                fv = min(float(raw), 10.0)
+            except (TypeError, ValueError):
+                continue
+            old = w10.get(key)
+            if old is None or (isinstance(old, float) and pd.isna(old)):
+                w10[key] = fv
+            else:
+                try:
+                    w10[key] = max(float(old), fv)
+                except (TypeError, ValueError):
+                    w10[key] = fv
         bucket[10] = w10
     return base
 
@@ -764,14 +768,22 @@ def compute_avg_weeks_10_18_inclusive(scores_by_week: Dict[int, Dict[str, Option
 def compute_students_total_for_assessment(
     scores_by_week: Dict[int, Dict[str, Optional[float]]],
     avg_first_9_weeks: Optional[float] = None,
+    avg_weeks_10_18: Optional[float] = None,
     weeks_10_18: bool = False,
 ) -> float:
-    """Students total (max 15) for Assessment/Final: average over all weeks in range, with empty weeks = 0 (cumulative)."""
+    """
+    Students follow-up total (max 15) for the 30-point assessment / 50-point quarter model.
+    Uses averages over weeks that actually have follow-up scores (non-inclusive). Empty weeks are not
+    folded in, so early-term or partial data is not diluted across all nine weeks (which was forcing
+    healthy students into the Below band and emptying On-level / Approaching in dashboards and PDFs).
+    """
     if weeks_10_18:
-        avg_inclusive = compute_avg_weeks_10_18_inclusive(scores_by_week)
+        avg = avg_weeks_10_18 if avg_weeks_10_18 is not None else compute_avg_weeks_10_18(scores_by_week)
     else:
-        avg_inclusive = compute_avg_first_9_weeks_inclusive(scores_by_week)
-    return round(min(max(0, avg_inclusive), 15), 2)
+        avg = avg_first_9_weeks if avg_first_9_weeks is not None else compute_avg_first_9_weeks(scores_by_week)
+    if avg is None:
+        return 0.0
+    return round(min(max(0, float(avg)), 15), 2)
 
 
 def _safe_float_score(val: Any) -> float:
@@ -1263,7 +1275,7 @@ def _compute_quizzes_chapter_assessment_sw(
         r = compute_assessment_combined(scores_dict, avg_first_9_weeks=avg_9, students_total_override=st)
         return r.get("combined_total")
     avg_10 = compute_avg_weeks_10_18(sw)
-    st = compute_students_total_for_assessment(sw, weeks_10_18=True)
+    st = compute_students_total_for_assessment(sw, avg_weeks_10_18=avg_10, weeks_10_18=True)
     eq = _effective_scores_q2(sw)
     scores_dict = {
         "quiz3": eq.get("quiz3"),
@@ -1504,7 +1516,7 @@ BOARD_ANALYTICS = {
     "line": "#22c55e",
     "area_fill": "#93c5fd",
     "area_line": "#2563eb",
-    "donut_on": "#38bdf8",
+    "donut_on": "#10b981",
     "donut_rest": "#86efac",  # legacy; see create_analytics_pass_donut for level colors
     "donut_approach": "#f59e0b",
     "donut_below": "#ef4444",
@@ -1561,7 +1573,7 @@ def create_analytics_class_avg_bar_chart(class_rows: List[Dict[str, Any]]) -> io
 
 
 def create_analytics_pass_donut(distribution: List[Dict[str, Any]]) -> io.BytesIO:
-    """Donut: on-level (blue), approaching full score / approach (amber), below level (red), no data (grey)."""
+    """Donut: on-level (green), approaching full score (amber), below level (red), no data (grey)."""
     list_d = distribution or []
 
     def _count(level: str) -> int:
@@ -1600,7 +1612,14 @@ def create_analytics_pass_donut(distribution: List[Dict[str, Any]]) -> io.BytesI
         wedgeprops=dict(width=0.38, edgecolor="white", linewidth=2),
     )
     ax.axis("equal")
-    ax.legend(wedges, labels, loc="upper left", fontsize=8, frameon=False, bbox_to_anchor=(0.0, 1.02))
+    # Always show all four categories in the legend (with counts), including zeros, so On/Approach appear when 0.
+    legend_handles = [
+        Patch(facecolor=BOARD_ANALYTICS["donut_on"], edgecolor="white", label=f"On Level: {on_level}"),
+        Patch(facecolor=BOARD_ANALYTICS["donut_approach"], edgecolor="white", label=f"Approaching full score: {approach}"),
+        Patch(facecolor=BOARD_ANALYTICS["donut_below"], edgecolor="white", label=f"Below Level: {below}"),
+        Patch(facecolor=BOARD_ANALYTICS["donut_no_data"], edgecolor="white", label=f"No data: {no_data}"),
+    ]
+    ax.legend(handles=legend_handles, loc="upper left", fontsize=8, frameon=False, bbox_to_anchor=(0.0, 1.02))
     ax.text(0, 0.02, f"{pct}%", ha="center", va="center", fontsize=20, fontweight="bold", color="#0f172a")
     ax.text(0, -0.12, "ON LEVEL", ha="center", va="center", fontsize=8, color="#64748b")
     buf = io.BytesIO()
@@ -3578,7 +3597,7 @@ async def get_students(
                 student["avg_first_9_weeks"] = avg_9
                 student["avg_weeks_10_18"] = avg_10_18
                 students_total_q1 = compute_students_total_for_assessment(sw, avg_first_9_weeks=avg_9, weeks_10_18=False)
-                students_total_q2 = compute_students_total_for_assessment(sw, weeks_10_18=True)
+                students_total_q2 = compute_students_total_for_assessment(sw, avg_weeks_10_18=avg_10_18, weeks_10_18=True)
                 if q == 1:
                     # Quarter-wide quiz/chapter (not just the selected week) so Finals week matches Quizzes & Chapter page.
                     effective_q1 = _effective_scores_q1(sw)

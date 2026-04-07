@@ -108,12 +108,18 @@ export function PassSplitDonut({
   const total = onLevel + approach + below + noData;
   const pct = total > 0 ? Math.round((onLevel / total) * 1000) / 10 : 0;
   const segments = [
-    { name: onLevelLabel, value: onLevel, fill: "#38bdf8" },
+    { name: onLevelLabel, value: onLevel, fill: "#10b981" },
     { name: approachingLabel, value: approach, fill: "#f59e0b" },
     { name: belowLabel, value: below, fill: "#ef4444" },
     { name: noDataLabel, value: noData, fill: "#94a3b8" },
   ];
   const data = segments.filter((d) => d.value > 0);
+  const legendPayload = segments.map((s) => ({
+    value: `${s.name}: ${s.value}`,
+    type: "square",
+    color: s.fill,
+    id: s.name,
+  }));
 
   if (total === 0) {
     return (
@@ -142,7 +148,12 @@ export function PassSplitDonut({
             ))}
           </Pie>
           <Tooltip content={boardTooltip} />
-          <Legend verticalAlign="top" align="left" wrapperStyle={{ fontSize: 12, paddingBottom: 8 }} />
+          <Legend
+            verticalAlign="top"
+            align="left"
+            wrapperStyle={{ fontSize: 12, paddingBottom: 8 }}
+            payload={legendPayload}
+          />
         </PieChart>
       </ResponsiveContainer>
       <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center pt-6">
