@@ -187,6 +187,8 @@ export const translations = {
       "After you enter or change quiz and chapter test scores, tap Save All Scores so they are stored for the week you selected.",
     save_scores_banner_final_exams:
       "After you enter or change final exam scores, tap Save All Scores so they are stored for the week you selected.",
+    final_exams_total_formula_hint:
+      "Total out of 50 = up to 15 follow-up (9-week average) + 15 quizzes & chapter (best scores recorded anywhere in the quarter) + 20 for the two quarter exams below. The first two parts stay in sync with the Quizzes & Chapter Test page.",
     performance_level: "Performance Level",
     actions: "Actions",
     create: "Create",
@@ -573,6 +575,8 @@ export const translations = {
       "بعد إدخال أو تعديل درجات الاختبارات واختبار الفصل، اضغط «حفظ جميع الدرجات» لحفظها للأسبوع المحدد.",
     save_scores_banner_final_exams:
       "بعد إدخال أو تعديل درجات الاختبارات النهائية، اضغط «حفظ جميع الدرجات» لحفظها للأسبوع المحدد.",
+    final_exams_total_formula_hint:
+      "المجموع من 50 = حتى 15 متابعة (متوسط 9 أسابيع) + 15 اختبارات قصيرة واختبار فصل (أفضل الدرجات المسجّلة في أي أسبوع من الربع) + 20 لامتحاني الربع أدناه. الجزآن الأولان يتطابقان مع صفحة الاختبارات القصيرة واختبار الفصل.",
     performance_level: "مستوى الأداء",
     actions: "الإجراءات",
     create: "إنشاء",

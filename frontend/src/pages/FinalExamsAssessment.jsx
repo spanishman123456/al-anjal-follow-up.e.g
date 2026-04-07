@@ -88,7 +88,11 @@ function computeAssessmentPartTotal(baseStudent, currentStudent = baseStudent) {
 
 // Final total = Assessment part (30) + Quarter Practical (10) + Quarter Theory (10) = 50.
 function computeFinalTotal(baseStudent, currentStudent = baseStudent) {
-  const assessmentPart = computeAssessmentPartTotal(baseStudent, currentStudent);
+  const assessmentPart =
+    baseStudent?.assessment_combined_total != null &&
+    !Number.isNaN(Number(baseStudent.assessment_combined_total))
+      ? Math.min(30, Math.round(Number(baseStudent.assessment_combined_total) * 100) / 100)
+      : computeAssessmentPartTotal(baseStudent, currentStudent);
   const qp = Number(currentStudent?.quarter1_practical) ?? 0;
   const qt = Number(currentStudent?.quarter1_theory) ?? 0;
   const quarterSum = (Number.isNaN(qp) ? 0 : qp) + (Number.isNaN(qt) ? 0 : qt);
@@ -554,6 +558,10 @@ export default function FinalExamsAssessment() {
         </CardContent>
       </Card>
 
+      <p className="text-xs text-muted-foreground" data-testid="final-exams-total-formula-hint">
+        {t("final_exams_total_formula_hint")}
+      </p>
+
       <div
         className="flex flex-col gap-3 rounded-xl border-2 border-primary/25 bg-primary/5 p-4 sm:flex-row sm:items-center sm:justify-between"
         data-testid="final-exams-save-banner"
@@ -641,7 +649,24 @@ export default function FinalExamsAssessment() {
                         />
                       </TableCell>
                       <TableCell className="text-center" data-testid={`final-exams-total-${student.id}`}>
-                        {formatScore(total, `/${FINAL_TOTAL_MAX}`)}
+                        <div className="flex flex-col items-center gap-0.5">
+                          <span className="font-semibold tabular-nums">
+                            {formatScore(total, `/${FINAL_TOTAL_MAX}`)}
+                          </span>
+                          {!bulkEditMode &&
+                            student.assessment_weekly_subtotal != null &&
+                            student.assessment_marks_subtotal != null && (
+                              <span className="text-[11px] leading-tight text-muted-foreground tabular-nums">
+                                {Number(student.assessment_weekly_subtotal).toFixed(2)}/15 +{" "}
+                                {Number(student.assessment_marks_subtotal).toFixed(2)}/15 +{" "}
+                                {(
+                                  (Number(current.quarter1_practical) || 0) +
+                                  (Number(current.quarter1_theory) || 0)
+                                ).toFixed(2)}
+                                /20
+                              </span>
+                            )}
+                        </div>
                       </TableCell>
                       <TableCell className="text-center">
                         <Badge variant="outline" className={levelStyles[perfLevel] ?? levelStyles.no_data}>{t(perfLevel)}</Badge>

@@ -550,7 +550,11 @@ async def build_semester_score_map(student_ids: List[str], semester: int) -> Dic
     scores_by_student: Dict[str, Dict[int, Dict[str, Optional[float]]]] = {}
     for score in all_scores:
         week_number = week_number_map.get(score.get("week_id"))
-        if not week_number:
+        if week_number is None:
+            continue
+        try:
+            week_number = int(week_number)
+        except (TypeError, ValueError):
             continue
         scores_by_student.setdefault(score["student_id"], {})[week_number] = score
     return scores_by_student
@@ -579,8 +583,29 @@ async def build_quarter_score_map(
     for score in all_scores:
         wn = week_number_map.get(score.get("week_id"))
         if wn is not None:
+            try:
+                wn = int(wn)
+            except (TypeError, ValueError):
+                continue
             scores_by_student.setdefault(score["student_id"], {})[wn] = score
     return scores_by_student
+
+
+def _normalize_scores_by_week_keys(
+    scores_by_week: Optional[Dict[Any, Dict[str, Optional[float]]]],
+) -> Dict[int, Dict[str, Optional[float]]]:
+    """Use int week keys so lookups with range(1,10) / range(10,19) match DB values stored as strings."""
+    if not scores_by_week:
+        return {}
+    out: Dict[int, Dict[str, Optional[float]]] = {}
+    for k, doc in scores_by_week.items():
+        try:
+            ik = int(k)
+        except (TypeError, ValueError):
+            continue
+        if isinstance(doc, dict):
+            out[ik] = doc
+    return out
 
 
 def _normalized_week_number(week: Dict[str, Any]) -> int:
@@ -607,7 +632,11 @@ async def build_full_year_score_map(student_ids: List[str]) -> Dict[str, Dict[in
     scores_by_student: Dict[str, Dict[int, Dict[str, Optional[float]]]] = {}
     for score in all_scores:
         week_number = week_number_map.get(score.get("week_id"))
-        if not week_number:
+        if week_number is None:
+            continue
+        try:
+            week_number = int(week_number)
+        except (TypeError, ValueError):
             continue
         scores_by_student.setdefault(score["student_id"], {})[week_number] = score
     return scores_by_student
@@ -962,6 +991,7 @@ def _effective_scores_q1(scores_by_week: Dict[int, Dict[str, Optional[float]]]) 
     """Build effective Q1 scores from weeks 1-9: best quiz/chapter from any week, exams from week 9 (or 9/10 if both exist).
     Note: Quarter 1 only has weeks 1-9 in the DB, so week 10 is never present when loading Q1 only. Read quarter1_theory
     from week 9 as fallback so theory marks are not lost and students are not wrongly marked Below."""
+    scores_by_week = _normalize_scores_by_week_keys(scores_by_week)
     q1_list = []
     q2_list = []
     ch1_list = []
@@ -987,6 +1017,7 @@ def _effective_scores_q1(scores_by_week: Dict[int, Dict[str, Optional[float]]]) 
 
 def _effective_scores_q2(scores_by_week: Dict[int, Dict[str, Optional[float]]]) -> Dict[str, Optional[float]]:
     """Build effective Q2 scores from weeks 10-18: best quiz/chapter from any week, exams from 17/18."""
+    scores_by_week = _normalize_scores_by_week_keys(scores_by_week)
     q3_list = []
     q4_list = []
     ch2_list = []
@@ -1045,19 +1076,30 @@ def _compute_cumulative_final_quarter(
     scores_by_week: Dict[int, Dict[str, Optional[float]]],
     quarter: int,
 ) -> Dict[str, Any]:
-    """Cumulative quarter total (50 max): include empty weeks as 0 for consistent cross-page syncing."""
+    """Quarter total out of 50, aligned with Final Exams + Quizzes pages: 30 (follow-up + quizzes/chapter) + 20 (exams)."""
+    scores_by_week = _normalize_scores_by_week_keys(scores_by_week)
     if quarter == 2:
-        students_total = compute_students_total_for_assessment(scores_by_week, weeks_10_18=True)
-        avg_quiz, avg_chapter = compute_inclusive_quiz_chapter_q2(scores_by_week)
-        avg_practical, avg_theory = compute_inclusive_quarter_exams_q2(scores_by_week)
         week_range = range(10, 19)
         quarter_keys = ("quiz3", "quiz4", "chapter_test2_practical", "quarter2_practical", "quarter2_theory")
+        eq = _effective_scores_q2(scores_by_week)
+        exam20 = round(
+            min(
+                max(0, _safe_float_score(eq.get("quarter2_practical")) + _safe_float_score(eq.get("quarter2_theory"))),
+                20,
+            ),
+            2,
+        )
     else:
-        students_total = compute_students_total_for_assessment(scores_by_week, weeks_10_18=False)
-        avg_quiz, avg_chapter = compute_inclusive_quiz_chapter_q1(scores_by_week)
-        avg_practical, avg_theory = compute_inclusive_quarter_exams_q1(scores_by_week)
         week_range = range(1, 10)
         quarter_keys = ("quiz1", "quiz2", "chapter_test1_practical", "quarter1_practical", "quarter1_theory")
+        eq = _effective_scores_q1(scores_by_week)
+        exam20 = round(
+            min(
+                max(0, _safe_float_score(eq.get("quarter1_practical")) + _safe_float_score(eq.get("quarter1_theory"))),
+                20,
+            ),
+            2,
+        )
 
     has_any = False
     for w in week_range:
@@ -1071,7 +1113,9 @@ def _compute_cumulative_final_quarter(
     if not has_any:
         return {"combined_total": None, "performance_level": "no_data", "performance_label": "No Data"}
 
-    combined = round(min(students_total + avg_quiz + avg_chapter + avg_practical + avg_theory, 50), 2)
+    qc30 = _compute_quizzes_chapter_assessment_sw(scores_by_week, quarter)
+    assessment_part = float(qc30) if qc30 is not None else 0.0
+    combined = round(min(assessment_part + exam20, 50), 2)
     if combined >= 42:
         level, label = "on_level", "On Level"
     elif combined >= 35:
@@ -1086,10 +1130,10 @@ def _compute_quizzes_chapter_assessment_sw(
     quarter: int,
 ) -> Optional[float]:
     """
-    30-point Quizzes & Chapter Test total (same rules as Assessment Marks /students):
-    cumulative students part (max 15) + assessment part max 15 via compute_assessment_combined*.
-    This is intentionally different from quarter*_total from _compute_cumulative_final_quarter (50 max).
+    30-point block (max): follow-up average (15) + best quiz + chapter practical (15), same as Quizzes & Chapter page.
+    Used inside the 50-point quarter total (30 + quarter exams 20) for Reports and cumulative quarter.
     """
+    sw = _normalize_scores_by_week_keys(sw)
     if not sw:
         return None
     if quarter == 1:
@@ -3408,25 +3452,18 @@ async def get_students(
                 student["avg_weeks_10_18"] = avg_10_18
                 students_total_q1 = compute_students_total_for_assessment(sw, avg_first_9_weeks=avg_9, weeks_10_18=False)
                 students_total_q2 = compute_students_total_for_assessment(sw, weeks_10_18=True)
-                scores_dict = {
-                    "attendance": student.get("attendance"),
-                    "participation": student.get("participation"),
-                    "behavior": student.get("behavior"),
-                    "homework": student.get("homework"),
-                    "quiz1": student.get("quiz1"),
-                    "quiz2": student.get("quiz2"),
-                    "quiz3": student.get("quiz3"),
-                    "quiz4": student.get("quiz4"),
-                    "chapter_test1_practical": student.get("chapter_test1_practical"),
-                    "chapter_test2_practical": student.get("chapter_test2_practical"),
-                    "quarter1_practical": student.get("quarter1_practical"),
-                    "quarter1_theory": student.get("quarter1_theory"),
-                    "quarter2_practical": student.get("quarter2_practical"),
-                    "quarter2_theory": student.get("quarter2_theory"),
-                }
                 if q == 1:
+                    # Quarter-wide quiz/chapter (not just the selected week) so Finals week matches Quizzes & Chapter page.
+                    effective_q1 = _effective_scores_q1(sw)
+                    scores_dict_q1_eff = {
+                        "quiz1": effective_q1.get("quiz1"),
+                        "quiz2": effective_q1.get("quiz2"),
+                        "chapter_test1_practical": effective_q1.get("chapter_test1_practical"),
+                    }
                     res_q1 = compute_assessment_combined(
-                        scores_dict, avg_first_9_weeks=avg_9, students_total_override=students_total_q1
+                        scores_dict_q1_eff,
+                        avg_first_9_weeks=avg_9,
+                        students_total_override=students_total_q1,
                     )
                     student["assessment_combined_total"] = res_q1.get("combined_total")
                     student["assessment_performance_level"] = res_q1.get("performance_level")
@@ -3444,7 +3481,6 @@ async def get_students(
                     student["assessment_q2_performance_label"] = None
                     student["assessment_q2_weekly_subtotal"] = None
                     student["assessment_q2_marks_subtotal"] = None
-                    effective_q1 = _effective_scores_q1(sw)
                     # Use current week's quarter exam values only (no fallback to week 9).
                     effective_q1_edit = {
                         **effective_q1,
@@ -3466,8 +3502,16 @@ async def get_students(
                     student["assessment_performance_label"] = None
                     student["assessment_weekly_subtotal"] = None
                     student["assessment_marks_subtotal"] = None
+                    effective_q2 = _effective_scores_q2(sw)
+                    scores_dict_q2_eff = {
+                        "quiz3": effective_q2.get("quiz3"),
+                        "quiz4": effective_q2.get("quiz4"),
+                        "chapter_test2_practical": effective_q2.get("chapter_test2_practical"),
+                    }
                     res_q2 = compute_assessment_combined_q2(
-                        scores_dict, avg_weeks_10_18=avg_10_18, students_total_override=students_total_q2
+                        scores_dict_q2_eff,
+                        avg_weeks_10_18=avg_10_18,
+                        students_total_override=students_total_q2,
                     )
                     student["assessment_q2_combined_total"] = res_q2.get("combined_total")
                     student["assessment_q2_performance_level"] = res_q2.get("performance_level")
@@ -3480,7 +3524,6 @@ async def get_students(
                         )
                     else:
                         student["assessment_q2_marks_subtotal"] = None
-                    effective_q2 = _effective_scores_q2(sw)
                     # Use current week's quarter exam values only (no cross-week fallback for quarter fields).
                     effective_q2_edit = {
                         **effective_q2,
