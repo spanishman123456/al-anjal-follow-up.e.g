@@ -355,63 +355,34 @@ def average_values(values: List[Optional[float]]) -> float:
     return float(sum(filtered)) / len(filtered)
 
 
-def compute_quarter_totals(scores_by_week: Dict[int, Dict[str, Optional[float]]]) -> Dict[str, float]:
-    # Keep quarter boundaries aligned across the codebase:
-    # Q1 = weeks 1-9, Q2 = weeks 10-18
-    quarter1_weeks = [week for week in scores_by_week.keys() if week <= 9]
-    quarter2_weeks = [week for week in scores_by_week.keys() if week >= 10]
-
-    def avg_field(weeks: List[int], field: str) -> float:
-        return average_values([scores_by_week.get(week, {}).get(field) for week in weeks])
-
-    avg_quiz12 = average_values([
-        scores_by_week.get(4, {}).get("quiz1"),
-        scores_by_week.get(4, {}).get("quiz2"),
-    ])
-    avg_quiz34 = average_values([
-        scores_by_week.get(16, {}).get("quiz3"),
-        scores_by_week.get(16, {}).get("quiz4"),
-    ])
-    chapter1 = _safe_float(scores_by_week.get(4, {}).get("chapter_test1_practical")) or 0.0
-    chapter2 = _safe_float(scores_by_week.get(16, {}).get("chapter_test2_practical")) or 0.0
-    quarter1_practical = _safe_float(scores_by_week.get(9, {}).get("quarter1_practical")) or 0.0
-    quarter1_theory = _coalesce_score(
-        scores_by_week.get(10, {}).get("quarter1_theory"),
-        scores_by_week.get(9, {}).get("quarter1_theory"),
-    ) or 0.0
-    quarter2_practical = _safe_float(scores_by_week.get(17, {}).get("quarter2_practical")) or 0.0
-    quarter2_theory = _safe_float(scores_by_week.get(18, {}).get("quarter2_theory")) or 0.0
-
-    quarter1_total = (
-        avg_quiz12
-        + chapter1
-        + quarter1_practical
-        + quarter1_theory
-        + avg_field(quarter1_weeks, "attendance")
-        + avg_field(quarter1_weeks, "participation")
-        + avg_field(quarter1_weeks, "behavior")
-        + avg_field(quarter1_weeks, "homework")
-    )
-    quarter2_total = (
-        avg_quiz34
-        + chapter2
-        + quarter2_practical
-        + quarter2_theory
-        + avg_field(quarter2_weeks, "attendance")
-        + avg_field(quarter2_weeks, "participation")
-        + avg_field(quarter2_weeks, "behavior")
-        + avg_field(quarter2_weeks, "homework")
-    )
+def compute_quarter_totals(scores_by_week: Dict[int, Dict[str, Optional[float]]]) -> Dict[str, Optional[float]]:
+    """
+    Same 50-point quarter model as Dashboard, Classes, Analytics, and Reports:
+    30 (follow-up + quizzes/chapter, quarter-wide) + 20 (quarter exams from effective weeks).
+    Works when scores_by_week contains only Q1 weeks, only Q2 weeks, or both (e.g. full-year map).
+    """
+    sw = _normalize_scores_by_week_keys(scores_by_week)
+    res_q1 = _compute_cumulative_final_quarter(sw, 1)
+    res_q2 = _compute_cumulative_final_quarter(sw, 2)
+    q1 = res_q1.get("combined_total")
+    q2 = res_q2.get("combined_total")
+    semester_total: Optional[float] = None
+    if q1 is not None and q2 is not None:
+        semester_total = round(float(q1) + float(q2), 2)
+    elif q1 is not None:
+        semester_total = round(float(q1), 2)
+    elif q2 is not None:
+        semester_total = round(float(q2), 2)
     return {
-        "quarter1_total": round(quarter1_total, 2),
-        "quarter2_total": round(quarter2_total, 2),
-        "semester_total": round(quarter1_total + quarter2_total, 2),
+        "quarter1_total": q1,
+        "quarter2_total": q2,
+        "semester_total": semester_total,
     }
 
 
-# Quarter total max ~55 (follow-up 15 + quiz 5 + chapter 10 + exams 20). Thresholds for performance level.
-QUARTER_TOTAL_ON_LEVEL = 44   # ~80%
-QUARTER_TOTAL_APPROACH = 33   # ~60%
+# Legacy helper thresholds (out of 50): align with _compute_cumulative_final_quarter / final exams bands.
+QUARTER_TOTAL_ON_LEVEL = 42
+QUARTER_TOTAL_APPROACH = 35
 
 
 def quarter_total_to_level(quarter_total: Optional[float]) -> str:
@@ -4505,7 +4476,8 @@ async def get_analytics_summary(
     semester: Optional[int] = Query(default=1),
     quarter: Optional[int] = Query(default=1),
 ):
-    """Summary for Dashboard: one (semester, quarter) only. Full separation S1Q1, S1Q2, S2Q1, S2Q2."""
+    """Summary for Dashboard: one (semester, quarter) only. S1/S2 and Q1/Q2 isolated.
+    Per-student total_score_normalized is the 50-point quarter total (same formula as Final Exams, Classes, Reports)."""
     try:
         student_query = {"class_id": class_id} if class_id else {}
         class_query = {"id": class_id} if class_id else {}
