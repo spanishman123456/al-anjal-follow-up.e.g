@@ -280,7 +280,7 @@ export default function Login({
       </div>
 
       <div className="relative z-10 w-full max-w-lg text-center mt-24 mb-10 animate-fade-in-up" style={{ animationDuration: "0.6s" }} data-testid="login-welcome">
-        <h1 className="text-4xl sm:text-5xl font-extrabold tracking-tight bg-gradient-to-r from-purple-600 to-pink-500 bg-clip-text text-transparent dark:from-white dark:via-cyan-300 dark:to-white">
+        <h1 className="font-sans text-3xl sm:text-4xl font-semibold leading-snug tracking-normal text-white drop-shadow-sm dark:text-white">
           {t("login_welcome_title")}
         </h1>
         <p className="mt-4 text-lg max-w-md mx-auto text-muted-foreground font-semibold dark:text-slate-300">
