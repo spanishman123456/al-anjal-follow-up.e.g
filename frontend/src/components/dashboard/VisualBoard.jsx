@@ -99,6 +99,7 @@ export function PassSplitDonut({
   noDataLabel,
   centerCaption,
   height = 240,
+  showLegend = true,
 }) {
   const list = Array.isArray(distribution) ? distribution : [];
   const onLevel = list.find((d) => d.level === "on_level")?.count ?? 0;
@@ -161,12 +162,14 @@ export function PassSplitDonut({
             ))}
           </Pie>
           <Tooltip content={boardTooltip} />
-          <Legend
-            verticalAlign="top"
-            align="left"
-            wrapperStyle={{ fontSize: 12, paddingBottom: 8 }}
-            payload={legendPayload}
-          />
+          {showLegend ? (
+            <Legend
+              verticalAlign="top"
+              align="left"
+              wrapperStyle={{ fontSize: 12, paddingBottom: 8 }}
+              payload={legendPayload}
+            />
+          ) : null}
         </PieChart>
       </ResponsiveContainer>
       <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center pt-6">

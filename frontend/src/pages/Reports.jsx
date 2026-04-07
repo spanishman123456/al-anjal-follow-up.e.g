@@ -361,6 +361,20 @@ export default function Reports() {
               title={t("visual_board_chart_pass_split")}
               subtitle={t(`term_${termScopeId}`)}
             >
+              <div className="mb-2 space-y-1 text-sm font-semibold">
+                <div className="flex items-center gap-2 text-emerald-600">
+                  <span className="inline-block h-3 w-3 rounded-sm bg-emerald-500" />
+                  {t("on_level")}
+                </div>
+                <div className="flex items-center gap-2 text-amber-600">
+                  <span className="inline-block h-3 w-3 rounded-sm bg-amber-500" />
+                  {t("visual_board_approaching_full_score")}
+                </div>
+                <div className="flex items-center gap-2 text-red-500">
+                  <span className="inline-block h-3 w-3 rounded-sm bg-red-500" />
+                  {t("visual_board_below_level")}
+                </div>
+              </div>
               <PassSplitDonut
                 distribution={reportQuarterDistribution || []}
                 onLevelLabel={t("on_level")}
@@ -369,6 +383,7 @@ export default function Reports() {
                 noDataLabel={t("no_data")}
                 centerCaption={t("on_level")}
                 height={260}
+                showLegend={false}
               />
             </BoardPanel>
             <BoardPanel
