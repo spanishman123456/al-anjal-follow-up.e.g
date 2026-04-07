@@ -415,31 +415,35 @@ def _coalesce_score(*values: Any) -> Optional[float]:
     return None
 
 
-def compute_student_insights(scores_by_week: Dict[int, Dict[str, Optional[float]]]) -> Dict[str, List[str]]:
+def compute_student_insights(
+    scores_by_week: Dict[int, Dict[str, Optional[float]]],
+    quarter: int = 1,
+) -> Dict[str, List[str]]:
     """
-    From semester scores, compute weak_areas and strengths (display labels).
-    Weak: dimension avg below 60% of max or missing. Strength: >= 85% of max.
+    Weak/strength labels for one quarter. Uses effective quiz/chapter/exam scores (best across weeks),
+    matching the 50-point quarter total and Final Exams page.
     """
+    sw = _normalize_scores_by_week_keys(scores_by_week)
     weak_areas: List[str] = []
     strengths: List[str] = []
-    q1_weeks = [w for w in scores_by_week.keys() if w <= 9]
-    q2_weeks = [w for w in scores_by_week.keys() if w >= 10]
+    week_range = range(1, 10) if quarter == 1 else range(10, 19)
 
-    def avg_field(weeks: List[int], field: str) -> Optional[float]:
-        vals = [scores_by_week.get(w, {}).get(field) for w in weeks]
-        nums = [v for v in vals if _safe_float(v) is not None]
-        return (sum(nums) / len(nums)) if nums else None
+    def avg_followup(field: str, max_val: float) -> Optional[float]:
+        vals: List[float] = []
+        for w in week_range:
+            s = sw.get(w) or {}
+            v = s.get(field)
+            if v is not None and not (isinstance(v, float) and pd.isna(v)):
+                vals.append(float(v))
+        return sum(vals) / len(vals) if vals else None
 
-    # Follow-up dimensions (max 2.5, 2.5, 5, 5)
     for label, field, max_val in [
         ("Attendance", "attendance", 2.5),
         ("Participation", "participation", 2.5),
         ("Behavior", "behavior", 5.0),
         ("Homework", "homework", 5.0),
     ]:
-        v1 = avg_field(q1_weeks, field)
-        v2 = avg_field(q2_weeks, field)
-        v = v2 if v2 is not None else v1
+        v = avg_followup(field, max_val)
         if v is None:
             weak_areas.append(label)
         elif v < 0.6 * max_val:
@@ -447,16 +451,27 @@ def compute_student_insights(scores_by_week: Dict[int, Dict[str, Optional[float]
         elif v >= 0.85 * max_val:
             strengths.append(label)
 
-    # Quiz (best of quiz1/2 in Q1, quiz3/4 in Q2; max 5 each)
-    q1_quiz = average_values([
-        scores_by_week.get(4, {}).get("quiz1"),
-        scores_by_week.get(4, {}).get("quiz2"),
-    ])
-    q2_quiz = average_values([
-        scores_by_week.get(16, {}).get("quiz3"),
-        scores_by_week.get(16, {}).get("quiz4"),
-    ])
-    quiz_val = q2_quiz if q2_quiz is not None else q1_quiz
+    if quarter == 1:
+        eq = _effective_scores_q1(sw)
+        qa, qb = eq.get("quiz1"), eq.get("quiz2")
+        if qa is None and qb is None:
+            quiz_val = None
+        else:
+            quiz_val = max(float(qa or 0), float(qb or 0))
+        ch_val = _safe_float(eq.get("chapter_test1_practical"))
+        ex_p = _safe_float(eq.get("quarter1_practical"))
+        ex_t = _safe_float(eq.get("quarter1_theory"))
+    else:
+        eq = _effective_scores_q2(sw)
+        qa, qb = eq.get("quiz3"), eq.get("quiz4")
+        if qa is None and qb is None:
+            quiz_val = None
+        else:
+            quiz_val = max(float(qa or 0), float(qb or 0))
+        ch_val = _safe_float(eq.get("chapter_test2_practical"))
+        ex_p = _safe_float(eq.get("quarter2_practical"))
+        ex_t = _safe_float(eq.get("quarter2_theory"))
+
     if quiz_val is None:
         weak_areas.append("Quizzes")
     elif quiz_val < 3.0:
@@ -464,10 +479,6 @@ def compute_student_insights(scores_by_week: Dict[int, Dict[str, Optional[float]
     elif quiz_val >= 4.25:
         strengths.append("Quizzes")
 
-    # Chapter tests (max 10 each)
-    ch1 = _safe_float(scores_by_week.get(4, {}).get("chapter_test1_practical"))
-    ch2 = _safe_float(scores_by_week.get(16, {}).get("chapter_test2_practical"))
-    ch_val = ch2 if ch2 is not None else ch1
     if ch_val is None:
         weak_areas.append("Chapter tests")
     elif ch_val < 6.0:
@@ -475,26 +486,14 @@ def compute_student_insights(scores_by_week: Dict[int, Dict[str, Optional[float]
     elif ch_val >= 8.5:
         strengths.append("Chapter tests")
 
-    # Quarter exams (practical + theory, max 10 each per quarter). Q1 has only weeks 1-9, so fallback to week 9 for theory.
-    q1_p = _safe_float(scores_by_week.get(9, {}).get("quarter1_practical"))
-    q1_t = _coalesce_score(
-        scores_by_week.get(10, {}).get("quarter1_theory"),
-        scores_by_week.get(9, {}).get("quarter1_theory"),
-    )
-    q2_p = _safe_float(scores_by_week.get(17, {}).get("quarter2_practical"))
-    q2_t = _safe_float(scores_by_week.get(18, {}).get("quarter2_theory"))
-    has_q1_exam = q1_p is not None or q1_t is not None
-    has_q2_exam = q2_p is not None or q2_t is not None
-    exam_q1 = (q1_p or 0) + (q1_t or 0)
-    exam_q2 = (q2_p or 0) + (q2_t or 0)
-    if not has_q1_exam and not has_q2_exam:
+    exam_val = (ex_p or 0) + (ex_t or 0)
+    has_exam = ex_p is not None or ex_t is not None
+    if not has_exam:
         weak_areas.append("Quarter exams")
-    else:
-        exam_val = exam_q2 if has_q2_exam else exam_q1
-        if exam_val < 12:  # 60% of 20
-            weak_areas.append("Quarter exams")
-        elif exam_val >= 17:  # 85% of 20
-            strengths.append("Quarter exams")
+    elif exam_val < 12:
+        weak_areas.append("Quarter exams")
+    elif exam_val >= 17:
+        strengths.append("Quarter exams")
 
     return {"weak_areas": weak_areas, "strengths": strengths}
 
@@ -959,13 +958,14 @@ def compute_final_exams_combined(
 
 
 def _effective_scores_q1(scores_by_week: Dict[int, Dict[str, Optional[float]]]) -> Dict[str, Optional[float]]:
-    """Build effective Q1 scores from weeks 1-9: best quiz/chapter from any week, exams from week 9 (or 9/10 if both exist).
-    Note: Quarter 1 only has weeks 1-9 in the DB, so week 10 is never present when loading Q1 only. Read quarter1_theory
-    from week 9 as fallback so theory marks are not lost and students are not wrongly marked Below."""
+    """Build effective Q1 scores from weeks 1-9: best quiz/chapter from any week; quarter exams = max across any week
+    (Final Exams are often entered on a chosen week, not only week 9). Week 10 may carry Q1 exam fields in full-year maps."""
     scores_by_week = _normalize_scores_by_week_keys(scores_by_week)
     q1_list = []
     q2_list = []
     ch1_list = []
+    qp_list: List[float] = []
+    qt_list: List[float] = []
     for w in range(1, 10):
         s = scores_by_week.get(w) or {}
         if s.get("quiz1") is not None:
@@ -974,24 +974,34 @@ def _effective_scores_q1(scores_by_week: Dict[int, Dict[str, Optional[float]]]) 
             q2_list.append(float(s["quiz2"]) if not (isinstance(s["quiz2"], float) and pd.isna(s["quiz2"])) else 0)
         if s.get("chapter_test1_practical") is not None:
             ch1_list.append(float(s["chapter_test1_practical"]) if not (isinstance(s["chapter_test1_practical"], float) and pd.isna(s["chapter_test1_practical"])) else 0)
+        if s.get("quarter1_practical") is not None and not (isinstance(s.get("quarter1_practical"), float) and pd.isna(s.get("quarter1_practical"))):
+            qp_list.append(min(float(s["quarter1_practical"]), 10.0))
+        if s.get("quarter1_theory") is not None and not (isinstance(s.get("quarter1_theory"), float) and pd.isna(s.get("quarter1_theory"))):
+            qt_list.append(min(float(s["quarter1_theory"]), 10.0))
+    s10 = scores_by_week.get(10) or {}
+    if s10.get("quarter1_practical") is not None and not (isinstance(s10.get("quarter1_practical"), float) and pd.isna(s10.get("quarter1_practical"))):
+        qp_list.append(min(float(s10["quarter1_practical"]), 10.0))
+    if s10.get("quarter1_theory") is not None and not (isinstance(s10.get("quarter1_theory"), float) and pd.isna(s10.get("quarter1_theory"))):
+        qt_list.append(min(float(s10["quarter1_theory"]), 10.0))
     quiz1 = max(q1_list) if q1_list else None
     quiz2 = max(q2_list) if q2_list else None
     ch1 = max(ch1_list) if ch1_list else None
-    s9 = scores_by_week.get(9) or {}
-    s10 = scores_by_week.get(10) or {}
-    quarter1_theory = _coalesce_score(s10.get("quarter1_theory"), s9.get("quarter1_theory"))
+    quarter1_practical = max(qp_list) if qp_list else None
+    quarter1_theory = max(qt_list) if qt_list else None
     return {
         "quiz1": quiz1, "quiz2": quiz2, "chapter_test1_practical": ch1,
-        "quarter1_practical": s9.get("quarter1_practical"), "quarter1_theory": quarter1_theory,
+        "quarter1_practical": quarter1_practical, "quarter1_theory": quarter1_theory,
     }
 
 
 def _effective_scores_q2(scores_by_week: Dict[int, Dict[str, Optional[float]]]) -> Dict[str, Optional[float]]:
-    """Build effective Q2 scores from weeks 10-18: best quiz/chapter from any week, exams from 17/18."""
+    """Build effective Q2 scores from weeks 10-18: best quiz/chapter from any week; quarter exams = max across any week."""
     scores_by_week = _normalize_scores_by_week_keys(scores_by_week)
     q3_list = []
     q4_list = []
     ch2_list = []
+    qp_list: List[float] = []
+    qt_list: List[float] = []
     for w in range(10, 19):
         s = scores_by_week.get(w) or {}
         if s.get("quiz3") is not None:
@@ -1000,14 +1010,18 @@ def _effective_scores_q2(scores_by_week: Dict[int, Dict[str, Optional[float]]]) 
             q4_list.append(float(s["quiz4"]) if not (isinstance(s["quiz4"], float) and pd.isna(s["quiz4"])) else 0)
         if s.get("chapter_test2_practical") is not None:
             ch2_list.append(float(s["chapter_test2_practical"]) if not (isinstance(s["chapter_test2_practical"], float) and pd.isna(s["chapter_test2_practical"])) else 0)
+        if s.get("quarter2_practical") is not None and not (isinstance(s.get("quarter2_practical"), float) and pd.isna(s.get("quarter2_practical"))):
+            qp_list.append(min(float(s["quarter2_practical"]), 10.0))
+        if s.get("quarter2_theory") is not None and not (isinstance(s.get("quarter2_theory"), float) and pd.isna(s.get("quarter2_theory"))):
+            qt_list.append(min(float(s["quarter2_theory"]), 10.0))
     quiz3 = max(q3_list) if q3_list else None
     quiz4 = max(q4_list) if q4_list else None
     ch2 = max(ch2_list) if ch2_list else None
-    s17 = scores_by_week.get(17) or {}
-    s18 = scores_by_week.get(18) or {}
+    quarter2_practical = max(qp_list) if qp_list else None
+    quarter2_theory = max(qt_list) if qt_list else None
     return {
         "quiz3": quiz3, "quiz4": quiz4, "chapter_test2_practical": ch2,
-        "quarter2_practical": s17.get("quarter2_practical"), "quarter2_theory": s18.get("quarter2_theory"),
+        "quarter2_practical": quarter2_practical, "quarter2_theory": quarter2_theory,
     }
 
 
@@ -4490,13 +4504,22 @@ async def get_analytics_summary(
             for student in students:
                 sw = scores_by_student.get(student["id"], {})
                 _enrich_student_single_quarter(student, sw, q)
-                # Inclusive (cumulative) quiz/chapter for Dashboard so empty weeks reduce averages
+                # Best quiz + chapter in quarter (same as assessment / 30-pt block), not 9-week diluted averages
+                eff = _effective_scores_q1(sw) if q == 1 else _effective_scores_q2(sw)
                 if q == 1:
-                    iq, ic = compute_inclusive_quiz_chapter_q1(sw)
+                    a, b = eff.get("quiz1"), eff.get("quiz2")
+                    if a is None and b is None:
+                        student["avg_quiz_inclusive"] = None
+                    else:
+                        student["avg_quiz_inclusive"] = max(float(a or 0), float(b or 0))
+                    student["avg_chapter_inclusive"] = eff.get("chapter_test1_practical")
                 else:
-                    iq, ic = compute_inclusive_quiz_chapter_q2(sw)
-                student["avg_quiz_inclusive"] = iq
-                student["avg_chapter_inclusive"] = ic
+                    a, b = eff.get("quiz3"), eff.get("quiz4")
+                    if a is None and b is None:
+                        student["avg_quiz_inclusive"] = None
+                    else:
+                        student["avg_quiz_inclusive"] = max(float(a or 0), float(b or 0))
+                    student["avg_chapter_inclusive"] = eff.get("chapter_test2_practical")
         return build_summary(students, classes)
     except Exception as e:
         logger.exception("Analytics summary failed")
@@ -4790,7 +4813,7 @@ async def get_analytics_overview(
     for student in students:
         sw1 = scores_by_student_q1.get(student["id"], {})
         sw2 = scores_by_student_q2.get(student["id"], {})
-        insights = compute_student_insights(sw1 if q == 1 else sw2)
+        insights = compute_student_insights(sw1 if q == 1 else sw2, q)
         student["weak_areas"] = insights["weak_areas"]
         student["strengths"] = insights["strengths"]
         _enrich_student_single_quarter(student, sw1, 1)
@@ -5143,7 +5166,7 @@ async def get_grade_report(
     scores_by_student = await build_quarter_score_map([s["id"] for s in students], sem, q)
     for student in students:
         sw = scores_by_student.get(student["id"], {})
-        insights = compute_student_insights(sw)
+        insights = compute_student_insights(sw, q)
         student["weak_areas"] = insights["weak_areas"]
         student["strengths"] = insights["strengths"]
         _enrich_student_single_quarter(student, sw, q)
