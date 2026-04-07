@@ -108,7 +108,8 @@ export function PassSplitDonut({
   const noData = list.find((d) => d.level === "no_data")?.count ?? 0;
   const total = onLevel + approach + below + noData;
   const graded = onLevel + approach + below;
-  const pct = graded > 0 ? Math.round((onLevel / graded) * 1000) / 10 : 0;
+  // Percentage is based on all students in the snapshot (including no_data) for clearer reporting context.
+  const pct = total > 0 ? Math.round((onLevel / total) * 1000) / 10 : 0;
   const segments = [
     { name: onLevelLabel, value: onLevel, fill: "#10b981" },
     { name: approachingLabel, value: approach, fill: "#f59e0b" },
@@ -175,13 +176,14 @@ export function PassSplitDonut({
         </ResponsiveContainer>
         <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center -translate-y-3">
           <span className="text-2xl font-semibold tabular-nums text-slate-800 dark:text-foreground">
-            {pct}%
+            {onLevel}
           </span>
           {centerCaption ? (
             <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
               {centerCaption}
             </span>
           ) : null}
+          <span className="text-[10px] text-muted-foreground">{pct}%</span>
         </div>
       </div>
     </div>
