@@ -1541,6 +1541,9 @@ BOARD_ANALYTICS = {
     "donut_no_data": "#94a3b8",
 }
 
+# Lower DPI keeps PDF generation fast while preserving readability.
+PDF_EXPORT_CHART_DPI = 110
+
 
 def _analytics_empty_chart(message: str) -> io.BytesIO:
     fig, ax = plt.subplots(figsize=(4.2, 2.8))
@@ -1548,7 +1551,7 @@ def _analytics_empty_chart(message: str) -> io.BytesIO:
     ax.text(0.5, 0.5, message, ha="center", va="center", fontsize=11, color="#64748b")
     ax.axis("off")
     buf = io.BytesIO()
-    plt.savefig(buf, format="png", dpi=150, bbox_inches="tight", facecolor="white")
+    plt.savefig(buf, format="png", dpi=PDF_EXPORT_CHART_DPI, facecolor="white")
     plt.close(fig)
     buf.seek(0)
     return buf
@@ -1583,8 +1586,8 @@ def create_analytics_class_avg_bar_chart(class_rows: List[Dict[str, Any]]) -> io
     ax.spines["top"].set_visible(False)
     ax.spines["right"].set_visible(False)
     buf = io.BytesIO()
-    plt.tight_layout()
-    plt.savefig(buf, format="png", dpi=160, bbox_inches="tight", facecolor="white")
+    fig.subplots_adjust(left=0.08, right=0.98, top=0.92, bottom=0.16)
+    plt.savefig(buf, format="png", dpi=PDF_EXPORT_CHART_DPI, facecolor="white")
     plt.close(fig)
     buf.seek(0)
     return buf
@@ -1638,8 +1641,8 @@ def create_analytics_pass_donut(distribution: List[Dict[str, Any]]) -> io.BytesI
     ax.text(0, 0.02, f"{pct}%", ha="center", va="center", fontsize=20, fontweight="bold", color="#0f172a")
     ax.text(0, -0.12, "ON LEVEL", ha="center", va="center", fontsize=8, color="#64748b")
     buf = io.BytesIO()
-    plt.tight_layout()
-    plt.savefig(buf, format="png", dpi=160, bbox_inches="tight", facecolor="white")
+    fig.subplots_adjust(left=0.08, right=0.98, top=0.92, bottom=0.16)
+    plt.savefig(buf, format="png", dpi=PDF_EXPORT_CHART_DPI, facecolor="white")
     plt.close(fig)
     buf.seek(0)
     return buf
@@ -1674,8 +1677,8 @@ def create_analytics_quarter_line_chart(q1_rate: Any, q2_rate: Any) -> io.BytesI
     ax.spines["right"].set_visible(False)
     ax.legend([line], ["Cohort on-level %"], loc="lower center", fontsize=8, frameon=False)
     buf = io.BytesIO()
-    plt.tight_layout()
-    plt.savefig(buf, format="png", dpi=160, bbox_inches="tight", facecolor="white")
+    fig.subplots_adjust(left=0.08, right=0.98, top=0.92, bottom=0.16)
+    plt.savefig(buf, format="png", dpi=PDF_EXPORT_CHART_DPI, facecolor="white")
     plt.close(fig)
     buf.seek(0)
     return buf
@@ -1715,8 +1718,8 @@ def create_analytics_quarter_focus_bar_chart(rate: Any, xlabel: str = "Focus") -
     ax.spines["right"].set_visible(False)
     ax.legend(["Cohort on-level %"], loc="lower center", fontsize=8, frameon=False)
     buf = io.BytesIO()
-    plt.tight_layout()
-    plt.savefig(buf, format="png", dpi=160, bbox_inches="tight", facecolor="white")
+    fig.subplots_adjust(left=0.08, right=0.98, top=0.92, bottom=0.16)
+    plt.savefig(buf, format="png", dpi=PDF_EXPORT_CHART_DPI, facecolor="white")
     plt.close(fig)
     buf.seek(0)
     return buf
@@ -1756,8 +1759,8 @@ def create_analytics_class_area_chart(class_rows: List[Dict[str, Any]]) -> io.By
     ax.spines["top"].set_visible(False)
     ax.spines["right"].set_visible(False)
     buf = io.BytesIO()
-    plt.tight_layout()
-    plt.savefig(buf, format="png", dpi=160, bbox_inches="tight", facecolor="white")
+    fig.subplots_adjust(left=0.08, right=0.98, top=0.92, bottom=0.16)
+    plt.savefig(buf, format="png", dpi=PDF_EXPORT_CHART_DPI, facecolor="white")
     plt.close(fig)
     buf.seek(0)
     return buf
@@ -1794,8 +1797,8 @@ def create_reports_enrollment_bar_chart(class_breakdown: List[Dict[str, Any]]) -
     ax.spines["top"].set_visible(False)
     ax.spines["right"].set_visible(False)
     buf = io.BytesIO()
-    plt.tight_layout()
-    plt.savefig(buf, format="png", dpi=160, bbox_inches="tight", facecolor="white")
+    fig.subplots_adjust(left=0.08, right=0.98, top=0.92, bottom=0.16)
+    plt.savefig(buf, format="png", dpi=PDF_EXPORT_CHART_DPI, facecolor="white")
     plt.close(fig)
     buf.seek(0)
     return buf
@@ -1823,8 +1826,8 @@ def create_reports_enrollment_area_chart(class_breakdown: List[Dict[str, Any]]) 
     ax.spines["top"].set_visible(False)
     ax.spines["right"].set_visible(False)
     buf = io.BytesIO()
-    plt.tight_layout()
-    plt.savefig(buf, format="png", dpi=160, bbox_inches="tight", facecolor="white")
+    fig.subplots_adjust(left=0.08, right=0.98, top=0.92, bottom=0.16)
+    plt.savefig(buf, format="png", dpi=PDF_EXPORT_CHART_DPI, facecolor="white")
     plt.close(fig)
     buf.seek(0)
     return buf
