@@ -43,8 +43,10 @@ export const translations = {
     visual_board_key_highlights: "Key highlights",
     visual_board_chart_class_avg: "Average score by class",
     visual_board_chart_class_avg_sub: "Class mean total for the current term and filters",
-    visual_board_chart_pass_split: "On-level vs. other categories",
+    visual_board_chart_pass_split: "On-level, approaching full score, and below level",
     visual_board_chart_pass_split_sub: "Selected quarter snapshot",
+    visual_board_approaching_full_score: "Approaching full score",
+    visual_board_below_level: "Below Level",
     visual_board_chart_q_trend: "On-level rate across quarters",
     visual_board_chart_q_trend_sub: "Cohort trend within this semester (Q1 → Q2)",
     visual_board_chart_q_focus: "On-level rate (selected quarter)",
@@ -58,7 +60,7 @@ export const translations = {
     visual_board_full_analysis: "Full analysis",
     visual_board_guide_read: "What the charts mean",
     visual_board_guide_read_body:
-      "Bars and areas show class-level averages for the selected term. The donut compares on-level students to all other categories in the highlighted quarter. The on-level chart shows cohort on-level % for the selected term only.",
+      "Bars and areas show class-level averages for the selected term. The donut splits students into on-level, approaching full score, below level, and no data for the highlighted quarter. The on-level chart shows cohort on-level % for the selected term only.",
     visual_board_guide_use: "How to use this view",
     visual_board_guide_use_body:
       "Start from highlights, then scan the grid for gaps between classes and quarters. Export PDF or Excel and paste the narrative sections into meetings or parent updates.",
@@ -431,8 +433,10 @@ export const translations = {
     visual_board_key_highlights: "أبرز النقاط",
     visual_board_chart_class_avg: "متوسط الدرجة حسب الفصل",
     visual_board_chart_class_avg_sub: "متوسط المجموع للفصل للفترة والمرشحات الحالية",
-    visual_board_chart_pass_split: "على المستوى مقابل الفئات الأخرى",
+    visual_board_chart_pass_split: "على المستوى، يقتربون من الدرجة الكاملة، ودون المستوى",
     visual_board_chart_pass_split_sub: "لقطة للربع المحدد",
+    visual_board_approaching_full_score: "يقتربون من الدرجة الكاملة",
+    visual_board_below_level: "دون المستوى",
     visual_board_chart_q_trend: "نسبة على المستوى عبر الأرباع",
     visual_board_chart_q_trend_sub: "اتجاه المجموع ضمن هذا الفصل الدراسي (الربع 1 → الربع 2)",
     visual_board_chart_q_focus: "نسبة على المستوى (الربع المحدد)",
@@ -446,7 +450,7 @@ export const translations = {
     visual_board_full_analysis: "التحليل الكامل",
     visual_board_guide_read: "ماذا تعني الرسوم",
     visual_board_guide_read_body:
-      "الأعمدة والمساحات تعرض متوسطات الفصول للفترة المحددة. الدائرة تقارن الطلاب على المستوى ببقية الفئات في الربع المميز. رسم النسبة يعرض نسبة على المستوى للمجموعة للفترة المحددة فقط.",
+      "الأعمدة والمساحات تعرض متوسطات الفصول للفترة المحددة. الدائرة تقسم الطلاب إلى على المستوى، يقتربون من الدرجة الكاملة، دون المستوى، ولا بيانات في الربع المميز. رسم النسبة يعرض نسبة على المستوى للمجموعة للفترة المحددة فقط.",
     visual_board_guide_use: "كيفية استخدام العرض",
     visual_board_guide_use_body:
       "ابدأ من أبرز النقاط ثم راجع الشبكة للفجوات بين الفصول والأرباع. صدّر PDF أو Excel والصق الأقسام النصية في الاجتماعات أو تواصل أولياء الأمور.",

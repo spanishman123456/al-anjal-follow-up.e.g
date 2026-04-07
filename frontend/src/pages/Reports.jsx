@@ -364,7 +364,9 @@ export default function Reports() {
               <PassSplitDonut
                 distribution={reportQuarterDistribution || []}
                 onLevelLabel={t("on_level")}
-                restLabel={t("visual_board_rest_categories")}
+                approachingLabel={t("visual_board_approaching_full_score")}
+                belowLabel={t("visual_board_below_level")}
+                noDataLabel={t("no_data")}
                 centerCaption={t("on_level")}
                 height={260}
               />

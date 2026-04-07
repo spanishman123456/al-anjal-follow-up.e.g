@@ -388,6 +388,25 @@ QUARTER_TOTAL_APPROACH = 35
 PERFORMANCE_LEVEL_NEED_SUPPORT = "below"
 
 
+def include_in_need_support_list(student: Dict[str, Any]) -> bool:
+    """
+    True if this student should appear on 'Students Needing Support' and related lists.
+    Requires performance band 'below' and a quarter total strictly under the approach threshold (35/50).
+    """
+    if student.get("performance_level") != PERFORMANCE_LEVEL_NEED_SUPPORT:
+        return False
+    total = student.get("total_score_normalized")
+    if total is None:
+        total = student.get("semester_total")
+    if total is not None:
+        try:
+            if float(total) >= float(QUARTER_TOTAL_APPROACH):
+                return False
+        except (TypeError, ValueError):
+            pass
+    return True
+
+
 def quarter_total_to_level(quarter_total: Optional[float]) -> str:
     """Map quarter total to performance level (on_level, approach, below, no_data)."""
     if quarter_total is None or (isinstance(quarter_total, float) and pd.isna(quarter_total)):
@@ -1133,6 +1152,25 @@ def _has_any_scores(scores_by_week: Dict[int, Dict[str, Optional[float]]]) -> bo
     return False
 
 
+def _quarter_has_quiz_chapter_or_exam_substance(
+    scores_by_week: Dict[int, Dict[str, Optional[float]]], quarter: int
+) -> bool:
+    """
+    True if this quarter has at least one meaningful quiz, chapter practical, or final exam field.
+    Used to avoid labeling students 'Below' (and listing them as needing support) when the 50-point
+    total is driven only by follow-up/behavior or missing assessment rows — which misclassifies
+    high-performing students when structured marks are not in the loaded week map.
+    """
+    scores_by_week = _normalize_scores_by_week_keys(scores_by_week)
+    if quarter == 1:
+        eq = _effective_scores_q1(scores_by_week)
+        keys = ("quiz1", "quiz2", "chapter_test1_practical", "quarter1_practical", "quarter1_theory")
+    else:
+        eq = _effective_scores_q2(scores_by_week)
+        keys = ("quiz3", "quiz4", "chapter_test2_practical", "quarter2_practical", "quarter2_theory")
+    return any(_is_meaningful_score(eq.get(k)) for k in keys)
+
+
 def _compute_cumulative_final_quarter(
     scores_by_week: Dict[int, Dict[str, Optional[float]]],
     quarter: int,
@@ -1196,6 +1234,9 @@ def _compute_cumulative_final_quarter(
         level, label = "approach", "Approach"
     else:
         level, label = "below", "Below"
+    # Do not assign 'Below' (needs support) without real quiz/chapter/exam marks for this quarter.
+    if level == "below" and not _quarter_has_quiz_chapter_or_exam_substance(scores_by_week, quarter):
+        return {"combined_total": None, "performance_level": "no_data", "performance_label": "No Data"}
     return {"combined_total": combined, "performance_level": level, "performance_label": label}
 
 
@@ -1464,7 +1505,10 @@ BOARD_ANALYTICS = {
     "area_fill": "#93c5fd",
     "area_line": "#2563eb",
     "donut_on": "#38bdf8",
-    "donut_rest": "#86efac",
+    "donut_rest": "#86efac",  # legacy; see create_analytics_pass_donut for level colors
+    "donut_approach": "#f59e0b",
+    "donut_below": "#ef4444",
+    "donut_no_data": "#94a3b8",
 }
 
 
@@ -1517,24 +1561,34 @@ def create_analytics_class_avg_bar_chart(class_rows: List[Dict[str, Any]]) -> io
 
 
 def create_analytics_pass_donut(distribution: List[Dict[str, Any]]) -> io.BytesIO:
+    """Donut: on-level (blue), approaching full score / approach (amber), below level (red), no data (grey)."""
     list_d = distribution or []
-    on_level = next((int(d.get("count") or 0) for d in list_d if d.get("level") == "on_level"), 0)
-    rest = sum(int(d.get("count") or 0) for d in list_d if d.get("level") != "on_level")
-    total = on_level + rest
+
+    def _count(level: str) -> int:
+        return next((int(d.get("count") or 0) for d in list_d if d.get("level") == level), 0)
+
+    on_level = _count("on_level")
+    approach = _count("approach")
+    below = _count("below")
+    no_data = _count("no_data")
+    total = on_level + approach + below + no_data
     if total == 0:
         return _analytics_empty_chart("No distribution data")
     pct = round((on_level / total) * 1000) / 10.0
+    segments: List[tuple] = [
+        (on_level, BOARD_ANALYTICS["donut_on"], "On Level"),
+        (approach, BOARD_ANALYTICS["donut_approach"], "Approaching full score"),
+        (below, BOARD_ANALYTICS["donut_below"], "Below Level"),
+        (no_data, BOARD_ANALYTICS["donut_no_data"], "No data"),
+    ]
     sizes: List[float] = []
     cols: List[str] = []
     labels: List[str] = []
-    if on_level > 0:
-        sizes.append(float(on_level))
-        cols.append(BOARD_ANALYTICS["donut_on"])
-        labels.append("On Level")
-    if rest > 0:
-        sizes.append(float(rest))
-        cols.append(BOARD_ANALYTICS["donut_rest"])
-        labels.append("Other categories")
+    for count, color, lab in segments:
+        if count > 0:
+            sizes.append(float(count))
+            cols.append(color)
+            labels.append(lab)
     if not sizes:
         return _analytics_empty_chart("No distribution data")
     fig, ax = plt.subplots(figsize=(4.8, 3.6))
@@ -2097,7 +2151,7 @@ def generate_analytics_dashboard_pdf(
         [
             [
                 Paragraph("<b>Average score by class</b>", cap_style),
-                Paragraph("<b>On-level vs other categories</b>", cap_style),
+                Paragraph("<b>On-level, approaching full score, and below level</b>", cap_style),
             ],
             [
                 RLImage(bar_buf, width=248, height=176),
@@ -2356,7 +2410,7 @@ def generate_reports_dashboard_pdf(
     elements.append(
         Paragraph(
             f"Generated on {datetime.now(REPORT_TIMEZONE).strftime('%Y-%m-%d %H:%M')} · "
-            "Charts match the Reports page Visual Board (enrollment, on-level split, focus quarter).",
+            "Charts match the Reports page Visual Board (enrollment, performance donut, focus quarter).",
             subtitle_style,
         )
     )
@@ -2368,7 +2422,7 @@ def generate_reports_dashboard_pdf(
         [
             [
                 _cap("Students per class", "Enrollment by class section"),
-                _cap("On-level vs. other categories", term_sub),
+                _cap("On-level, approaching full score, and below level", term_sub),
             ],
             [
                 RLImage(bar_buf, width=248, height=176),
@@ -4549,7 +4603,7 @@ def build_summary(students: List[Dict[str, Any]], classes: List[Dict[str, Any]])
     total_with_data = len(enriched) - counts.get("no_data", 0)
     total_no_data = counts.get("no_data", 0)
     on_level_rate = round((counts.get("on_level", 0) / total_with_data) * 100, 1) if total_with_data else 0
-    students_needing_support = [s for s in enriched if s.get("performance_level") == PERFORMANCE_LEVEL_NEED_SUPPORT]
+    students_needing_support = [s for s in enriched if include_in_need_support_list(s)]
     # Dashboard: list every student at 50/50 (not capped at five).
     top_performers = sorted(
         [s for s in enriched if is_quarter_total_full_marks(s.get("total_score_normalized"))],
@@ -4982,7 +5036,7 @@ async def get_analytics_overview(
             "weak_areas": s.get("weak_areas") or [],
         }
         for s in students
-        if s.get("performance_level") == PERFORMANCE_LEVEL_NEED_SUPPORT
+        if include_in_need_support_list(s)
     ]
     excelling_students = [
         {
@@ -5167,7 +5221,7 @@ async def _build_class_summary_list(
         for s in class_students:
             level = s.get("performance_level", "no_data")
             counts[level] = counts.get(level, 0) + 1
-            if level == PERFORMANCE_LEVEL_NEED_SUPPORT:
+            if include_in_need_support_list(s):
                 needing_support += 1
             if level == "on_level":
                 top_performers += 1
@@ -5315,7 +5369,7 @@ async def get_grade_report(
             "weak_areas": s.get("weak_areas") or [],
         }
         for s in students
-        if s.get("performance_level") == PERFORMANCE_LEVEL_NEED_SUPPORT
+        if include_in_need_support_list(s)
     ]
     top_performers = [
         {

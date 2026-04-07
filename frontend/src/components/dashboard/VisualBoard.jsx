@@ -90,26 +90,30 @@ export function ClassAverageBarChart({ data, valueKey = "score", labelKey = "nam
   );
 }
 
-/** Donut: on_level vs rest (approach + below + no_data) for one quarter snapshot. */
+/** Donut: on-level, approaching full score, below level, and no data (same breakdown as PDF export). */
 export function PassSplitDonut({
   distribution,
   onLevelLabel,
-  restLabel,
+  approachingLabel,
+  belowLabel,
+  noDataLabel,
   centerCaption,
   height = 240,
 }) {
   const list = Array.isArray(distribution) ? distribution : [];
   const onLevel = list.find((d) => d.level === "on_level")?.count ?? 0;
-  const rest =
-    (list.find((d) => d.level === "approach")?.count ?? 0) +
-    (list.find((d) => d.level === "below")?.count ?? 0) +
-    (list.find((d) => d.level === "no_data")?.count ?? 0);
-  const total = onLevel + rest;
+  const approach = list.find((d) => d.level === "approach")?.count ?? 0;
+  const below = list.find((d) => d.level === "below")?.count ?? 0;
+  const noData = list.find((d) => d.level === "no_data")?.count ?? 0;
+  const total = onLevel + approach + below + noData;
   const pct = total > 0 ? Math.round((onLevel / total) * 1000) / 10 : 0;
-  const data = [
+  const segments = [
     { name: onLevelLabel, value: onLevel, fill: "#38bdf8" },
-    { name: restLabel, value: rest, fill: "#86efac" },
-  ].filter((d) => d.value > 0 || total === 0);
+    { name: approachingLabel, value: approach, fill: "#f59e0b" },
+    { name: belowLabel, value: below, fill: "#ef4444" },
+    { name: noDataLabel, value: noData, fill: "#94a3b8" },
+  ];
+  const data = segments.filter((d) => d.value > 0);
 
   if (total === 0) {
     return (
