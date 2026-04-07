@@ -384,6 +384,9 @@ def compute_quarter_totals(scores_by_week: Dict[int, Dict[str, Optional[float]]]
 QUARTER_TOTAL_ON_LEVEL = 42
 QUARTER_TOTAL_APPROACH = 35
 
+# Dashboard / class / report lists titled "need support": only "below" (<35/50), not "approach" (35–41.99).
+PERFORMANCE_LEVEL_NEED_SUPPORT = "below"
+
 
 def quarter_total_to_level(quarter_total: Optional[float]) -> str:
     """Map quarter total to performance level (on_level, approach, below, no_data)."""
@@ -395,6 +398,16 @@ def quarter_total_to_level(quarter_total: Optional[float]) -> str:
     if v >= QUARTER_TOTAL_APPROACH:
         return "approach"
     return "below"
+
+
+def is_quarter_total_full_marks(val: Any) -> bool:
+    """True when the 50-point quarter total is at the maximum (50/50)."""
+    if val is None or (isinstance(val, float) and pd.isna(val)):
+        return False
+    try:
+        return round(float(val), 2) >= 50.0
+    except (TypeError, ValueError):
+        return False
 
 
 def _safe_float(val: Any) -> Optional[float]:
@@ -983,6 +996,13 @@ def _effective_scores_q1(scores_by_week: Dict[int, Dict[str, Optional[float]]]) 
         qp_list.append(min(float(s10["quarter1_practical"]), 10.0))
     if s10.get("quarter1_theory") is not None and not (isinstance(s10.get("quarter1_theory"), float) and pd.isna(s10.get("quarter1_theory"))):
         qt_list.append(min(float(s10["quarter1_theory"]), 10.0))
+    # Rare: Q1 exam fields on week 11+ (mis-tagged week); still pick up max.
+    for w in range(11, 19):
+        sx = scores_by_week.get(w) or {}
+        if sx.get("quarter1_practical") is not None and not (isinstance(sx.get("quarter1_practical"), float) and pd.isna(sx.get("quarter1_practical"))):
+            qp_list.append(min(float(sx["quarter1_practical"]), 10.0))
+        if sx.get("quarter1_theory") is not None and not (isinstance(sx.get("quarter1_theory"), float) and pd.isna(sx.get("quarter1_theory"))):
+            qt_list.append(min(float(sx["quarter1_theory"]), 10.0))
     quiz1 = max(q1_list) if q1_list else None
     quiz2 = max(q2_list) if q2_list else None
     ch1 = max(ch1_list) if ch1_list else None
@@ -1014,6 +1034,11 @@ def _effective_scores_q2(scores_by_week: Dict[int, Dict[str, Optional[float]]]) 
             qp_list.append(min(float(s["quarter2_practical"]), 10.0))
         if s.get("quarter2_theory") is not None and not (isinstance(s.get("quarter2_theory"), float) and pd.isna(s.get("quarter2_theory"))):
             qt_list.append(min(float(s["quarter2_theory"]), 10.0))
+    s19 = scores_by_week.get(19) or {}
+    if s19.get("quarter2_practical") is not None and not (isinstance(s19.get("quarter2_practical"), float) and pd.isna(s19.get("quarter2_practical"))):
+        qp_list.append(min(float(s19["quarter2_practical"]), 10.0))
+    if s19.get("quarter2_theory") is not None and not (isinstance(s19.get("quarter2_theory"), float) and pd.isna(s19.get("quarter2_theory"))):
+        qt_list.append(min(float(s19["quarter2_theory"]), 10.0))
     quiz3 = max(q3_list) if q3_list else None
     quiz4 = max(q4_list) if q4_list else None
     ch2 = max(ch2_list) if ch2_list else None
@@ -1095,6 +1120,19 @@ def _compute_cumulative_final_quarter(
                 break
         if has_any:
             break
+    # Q1 exams are often entered on week 10 (next quarter in the DB); Q2 spillover e.g. week 19.
+    if not has_any and quarter == 1:
+        s10 = scores_by_week.get(10) or {}
+        for k in ("quarter1_practical", "quarter1_theory"):
+            if _is_meaningful_score(s10.get(k)):
+                has_any = True
+                break
+    if not has_any and quarter == 2:
+        s19 = scores_by_week.get(19) or {}
+        for k in ("quarter2_practical", "quarter2_theory"):
+            if _is_meaningful_score(s19.get(k)):
+                has_any = True
+                break
     if not has_any:
         return {"combined_total": None, "performance_level": "no_data", "performance_label": "No Data"}
 
@@ -3425,8 +3463,8 @@ async def get_students(
         if week_doc:
             sem = week_doc.get("semester", 1)
             q = _week_quarter(week_doc)
-            # Only load scores for this (semester, quarter) — full separation S1Q1, S1Q2, S2Q1, S2Q2
-            scores_by_student = await build_quarter_score_map(student_ids, sem, q)
+            # Full year map so Q1 finals on week 10 (or other spillover weeks) are included in quarter totals.
+            scores_by_student = await build_full_year_score_map(student_ids)
             for student in students:
                 sw = scores_by_student.get(student["id"], {})
                 totals = compute_quarter_totals(sw)
@@ -4417,11 +4455,25 @@ async def get_certificate_file(filename: str):
 
 
 def build_summary(students: List[Dict[str, Any]], classes: List[Dict[str, Any]]) -> Dict[str, Any]:
-    # If caller already set semester_total/total_score_normalized/performance_level (e.g. from final-exams), keep them
-    enriched = [
-        student if student.get("semester_total") is not None else enrich_student(student)
-        for student in students
-    ]
+    # Quarter totals come from _enrich_student_single_quarter. Never fall back to enrich_student():
+    # that uses weekly behavioral scores only (max 15) and mislabels students as "below".
+    enriched: List[Dict[str, Any]] = []
+    for student in students:
+        if student.get("semester_total") is not None:
+            enriched.append(student)
+            continue
+        pl = student.get("performance_level")
+        if pl in ("on_level", "approach", "below", "no_data"):
+            enriched.append(student)
+        else:
+            enriched.append(
+                {
+                    **student,
+                    "performance_level": "no_data",
+                    "performance_label": "No Data",
+                    "total_score_normalized": None,
+                }
+            )
     counts = {"on_level": 0, "approach": 0, "below": 0, "no_data": 0}
     total_scores = []
     quiz_scores = []
@@ -4447,12 +4499,12 @@ def build_summary(students: List[Dict[str, Any]], classes: List[Dict[str, Any]])
     total_with_data = len(enriched) - counts.get("no_data", 0)
     total_no_data = counts.get("no_data", 0)
     on_level_rate = round((counts.get("on_level", 0) / total_with_data) * 100, 1) if total_with_data else 0
-    students_needing_support = [s for s in enriched if s["performance_level"] in ["approach", "below"]]
+    students_needing_support = [s for s in enriched if s.get("performance_level") == PERFORMANCE_LEVEL_NEED_SUPPORT]
+    # Dashboard: list every student at 50/50 (not capped at five).
     top_performers = sorted(
-        [s for s in enriched if s["total_score_normalized"] is not None],
-        key=lambda s: s["total_score_normalized"],
-        reverse=True,
-    )[:5]
+        [s for s in enriched if is_quarter_total_full_marks(s.get("total_score_normalized"))],
+        key=lambda s: (_class_sort_key(s.get("class_name") or ""), (s.get("full_name") or "").lower()),
+    )
     class_counts: Dict[str, int] = {}
     for student in enriched:
         class_counts[student["class_name"]] = class_counts.get(student["class_name"], 0) + 1
@@ -4500,7 +4552,7 @@ async def get_analytics_summary(
         sem = semester or 1
         q = quarter or 1
         if students:
-            scores_by_student = await build_quarter_score_map([s["id"] for s in students], sem, q)
+            scores_by_student = await build_full_year_score_map([s["id"] for s in students])
             for student in students:
                 sw = scores_by_student.get(student["id"], {})
                 _enrich_student_single_quarter(student, sw, q)
@@ -4807,20 +4859,17 @@ async def get_analytics_overview(
     for s in students:
         s["class_name"] = class_id_to_name.get(s.get("class_id"), s.get("class_name", ""))
     student_ids = [s["id"] for s in students]
-    # Build score maps for BOTH quarters so we can show each quarter's insight independently
-    scores_by_student_q1 = await build_quarter_score_map(student_ids, sem, 1)
-    scores_by_student_q2 = await build_quarter_score_map(student_ids, sem, 2)
+    scores_by_student = await build_full_year_score_map(student_ids)
     for student in students:
-        sw1 = scores_by_student_q1.get(student["id"], {})
-        sw2 = scores_by_student_q2.get(student["id"], {})
-        insights = compute_student_insights(sw1 if q == 1 else sw2, q)
+        sw = scores_by_student.get(student["id"], {})
+        insights = compute_student_insights(sw, q)
         student["weak_areas"] = insights["weak_areas"]
         student["strengths"] = insights["strengths"]
-        _enrich_student_single_quarter(student, sw1, 1)
+        _enrich_student_single_quarter(student, sw, 1)
         q1_total = student.get("quarter1_total")
         q1_level = student.get("performance_level_q1")
         qc1 = student.get("quizzes_chapter_total_q1")
-        _enrich_student_single_quarter(student, sw2, 2)
+        _enrich_student_single_quarter(student, sw, 2)
         student["quarter1_total"] = q1_total
         student["performance_level_q1"] = q1_level
         student["quizzes_chapter_total_q1"] = qc1
@@ -4881,7 +4930,7 @@ async def get_analytics_overview(
             "weak_areas": s.get("weak_areas") or [],
         }
         for s in students
-        if s.get("performance_level") in ("approach", "below")
+        if s.get("performance_level") == PERFORMANCE_LEVEL_NEED_SUPPORT
     ]
     excelling_students = [
         {
@@ -5025,16 +5074,14 @@ async def _build_class_summary_list(
         ]
     # Build both Q1 and Q2 so each class shows insights for each quarter independently
     student_ids = [s["id"] for s in students]
-    scores_q1 = await build_quarter_score_map(student_ids, semester, 1)
-    scores_q2 = await build_quarter_score_map(student_ids, semester, 2)
+    scores_full = await build_full_year_score_map(student_ids)
     for student in students:
-        sw1 = scores_q1.get(student["id"], {})
-        sw2 = scores_q2.get(student["id"], {})
-        _enrich_student_single_quarter(student, sw1, 1)
+        sw = scores_full.get(student["id"], {})
+        _enrich_student_single_quarter(student, sw, 1)
         q1_total = student.get("quarter1_total")
         q1_level = student.get("performance_level_q1")
         qc1 = student.get("quizzes_chapter_total_q1")
-        _enrich_student_single_quarter(student, sw2, 2)
+        _enrich_student_single_quarter(student, sw, 2)
         student["quarter1_total"] = q1_total
         student["performance_level_q1"] = q1_level
         student["quizzes_chapter_total_q1"] = qc1
@@ -5066,7 +5113,7 @@ async def _build_class_summary_list(
         for s in class_students:
             level = s.get("performance_level", "no_data")
             counts[level] = counts.get(level, 0) + 1
-            if level in ("approach", "below"):
+            if level == PERFORMANCE_LEVEL_NEED_SUPPORT:
                 needing_support += 1
             if level == "on_level":
                 top_performers += 1
@@ -5163,7 +5210,7 @@ async def get_grade_report(
             "class_breakdown": [{"class_name": c["name"], "student_count": 0} for c in classes],
         }
 
-    scores_by_student = await build_quarter_score_map([s["id"] for s in students], sem, q)
+    scores_by_student = await build_full_year_score_map([s["id"] for s in students])
     for student in students:
         sw = scores_by_student.get(student["id"], {})
         insights = compute_student_insights(sw, q)
@@ -5214,7 +5261,7 @@ async def get_grade_report(
             "weak_areas": s.get("weak_areas") or [],
         }
         for s in students
-        if s.get("performance_level") in ("approach", "below")
+        if s.get("performance_level") == PERFORMANCE_LEVEL_NEED_SUPPORT
     ]
     top_performers = [
         {

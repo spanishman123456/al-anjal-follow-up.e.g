@@ -538,7 +538,7 @@ export default function Dashboard() {
               {t("top_performers")}
             </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-3">
+          <CardContent className="max-h-[28rem] space-y-3 overflow-y-auto pr-1">
             {summary?.top_performers?.length ? (
               summary.top_performers.map((student) => (
                 <div

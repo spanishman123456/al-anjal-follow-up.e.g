@@ -516,9 +516,6 @@ export default function AssessmentMarksQ2() {
         testIdPrefix="assessment-marks-q2"
         action={
           <div className="flex flex-wrap gap-2">
-            <Button onClick={openBulkSaveConfirm} data-testid="assessment-q2-bulk-save">
-              {t("save_all_scores")}
-            </Button>
             {bulkEditMode ? (
               <Button variant="outline" onClick={() => setBulkEditMode(false)} data-testid="assessment-q2-bulk-cancel">
                 {t("cancel")}

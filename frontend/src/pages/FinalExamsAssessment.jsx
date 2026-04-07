@@ -484,9 +484,6 @@ export default function FinalExamsAssessment() {
         testIdPrefix="final-exams-assessment"
         action={
           <div className="flex flex-wrap gap-2">
-            <Button type="button" onClick={openBulkSaveConfirm} data-testid="final-exams-bulk-save">
-              {t("save_all_scores")}
-            </Button>
             {bulkEditMode ? (
               <Button variant="outline" onClick={() => setBulkEditMode(false)}>{t("cancel")}</Button>
             ) : (
