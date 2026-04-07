@@ -138,7 +138,7 @@ export function PassSplitDonut({
   }
 
   return (
-    <div className="relative mx-auto w-full max-w-sm" style={{ height }}>
+    <div className="relative mx-auto w-full max-w-sm overflow-hidden" style={{ height }}>
       {showLegend ? (
         <div className="mb-2 space-y-1 text-sm font-semibold">
           {segments.map((s) => (
@@ -158,9 +158,9 @@ export function PassSplitDonut({
             dataKey="value"
             nameKey="name"
             cx="50%"
-            cy="50%"
-            innerRadius={68}
-            outerRadius={92}
+            cy="44%"
+            innerRadius={54}
+            outerRadius={78}
             paddingAngle={2}
           >
             {data.map((entry, i) => (
@@ -170,7 +170,7 @@ export function PassSplitDonut({
           <Tooltip content={boardTooltip} />
         </PieChart>
       </ResponsiveContainer>
-      <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center pt-6">
+      <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center -translate-y-4">
         <span className="text-2xl font-semibold tabular-nums text-slate-800 dark:text-foreground">
           {pct}%
         </span>
