@@ -1,4 +1,6 @@
-from fastapi import FastAPI, APIRouter, UploadFile, File, HTTPException, Query, Depends, status
+import time
+
+from fastapi import FastAPI, APIRouter, UploadFile, File, HTTPException, Query, Depends, status, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.responses import StreamingResponse, FileResponse
 from fastapi.middleware.gzip import GZipMiddleware
@@ -153,6 +155,21 @@ auth_router = APIRouter(prefix="/api/auth")
 api_router = APIRouter(prefix="/api", dependencies=[Depends(get_current_user)])
 
 
+@app.middleware("http")
+async def invalidate_data_caches_on_writes(request: Request, call_next):
+    """Drop JSON/PDF caches after successful mutating API calls so reads stay fresh."""
+    response = await call_next(request)
+    if response.status_code >= 400:
+        return response
+    if request.method not in ("POST", "PUT", "PATCH", "DELETE"):
+        return response
+    path = request.url.path
+    if not path.startswith("/api/") or path.startswith("/api/auth/"):
+        return response
+    bump_data_cache()
+    return response
+
+
 @app.get("/health")
 async def health_check():
     """
@@ -184,6 +201,58 @@ scheduler = AsyncIOScheduler(timezone=REPORT_TIMEZONE)
 
 def iso_now() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+# --- Short TTL caches for heavy read-only aggregations & export bytes (invalidated on successful API writes) ---
+_READ_CACHE_LOCK = asyncio.Lock()
+_READ_CACHE: Dict[Any, tuple] = {}
+_PDF_BYTES_CACHE: Dict[Any, tuple] = {}
+_DATA_CACHE_VERSION = 0
+CACHE_TTL_JSON = 30.0
+CACHE_TTL_PDF = 90.0
+MAX_READ_CACHE_ENTRIES = 384
+MAX_PDF_CACHE_ENTRIES = 40
+
+
+def bump_data_cache() -> None:
+    global _DATA_CACHE_VERSION, _READ_CACHE, _PDF_BYTES_CACHE
+    _DATA_CACHE_VERSION += 1
+    _READ_CACHE.clear()
+    _PDF_BYTES_CACHE.clear()
+
+
+def _prune_read_cache_if_needed() -> None:
+    if len(_READ_CACHE) > MAX_READ_CACHE_ENTRIES:
+        _READ_CACHE.clear()
+
+
+async def cache_get_json(cache_key: tuple, ttl_sec: float, producer):
+    now = time.monotonic()
+    full_key = (_DATA_CACHE_VERSION, cache_key)
+    async with _READ_CACHE_LOCK:
+        hit = _READ_CACHE.get(full_key)
+        if hit and hit[0] > now:
+            return hit[1]
+    value = await producer()
+    async with _READ_CACHE_LOCK:
+        _prune_read_cache_if_needed()
+        _READ_CACHE[full_key] = (now + ttl_sec, value)
+    return value
+
+
+async def cache_get_bytes(cache_key: tuple, ttl_sec: float, producer):
+    now = time.monotonic()
+    full_key = (_DATA_CACHE_VERSION, cache_key)
+    async with _READ_CACHE_LOCK:
+        hit = _PDF_BYTES_CACHE.get(full_key)
+        if hit and hit[0] > now:
+            return hit[1]
+    data = await producer()
+    async with _READ_CACHE_LOCK:
+        if len(_PDF_BYTES_CACHE) > MAX_PDF_CACHE_ENTRIES:
+            _PDF_BYTES_CACHE.clear()
+        _PDF_BYTES_CACHE[full_key] = (now + ttl_sec, data)
+    return data
 
 
 def normalize_reward_performance(value: Optional[str]) -> str:
@@ -3323,9 +3392,13 @@ def _teacher_class_filter(current_user: Dict[str, Any]) -> Dict[str, Any]:
 
 @api_router.get("/classes", response_model=List[ClassRecord])
 async def get_classes(current_user: Dict[str, Any] = Depends(get_current_user)):
-    query = _teacher_class_filter(current_user)
-    classes = await db.classes.find(query, {"_id": 0}).sort("grade", 1).to_list(200)
-    return classes
+    uid = current_user.get("id")
+
+    async def _produce():
+        query = _teacher_class_filter(current_user)
+        return await db.classes.find(query, {"_id": 0}).sort("grade", 1).to_list(200)
+
+    return await cache_get_json(("classes_list", uid), CACHE_TTL_JSON, _produce)
 
 
 @api_router.post("/classes", response_model=ClassRecord)
@@ -3416,22 +3489,28 @@ async def list_weeks(
     quarter: Optional[int] = Query(default=None, description="1 = weeks 1-9, 2 = weeks 10-18 (per semester)"),
 ):
     """Return weeks for the given semester and quarter only. Full separation: S1Q1, S1Q2, S2Q1, S2Q2 each have their own weeks. Never returns weeks from another quarter."""
-    # When semester is set, always filter by quarter (default 1). Avoid ever returning "all weeks" for a semester.
     sem = semester if semester is not None else 1
     q = quarter if quarter in (1, 2) else 1
     if semester is not None:
-        query = {"semester": sem, "quarter": q}
-        all_weeks = await db.weeks.find(query, {"_id": 0}).sort("number", 1).to_list(200)
+
+        async def _produce():
+            query = {"semester": sem, "quarter": q}
+            all_weeks = await db.weeks.find(query, {"_id": 0}).sort("number", 1).to_list(200)
+            for w in all_weeks:
+                if "quarter" not in w or w["quarter"] not in (1, 2):
+                    w["quarter"] = 1 if w.get("number", 1) <= 9 else 2
+            return all_weeks
+
+        return await cache_get_json(("weeks_sq", sem, q), CACHE_TTL_JSON, _produce)
+
+    async def _produce_all():
+        all_weeks = await db.weeks.find({"semester": {"$in": [1, 2]}}, {"_id": 0}).sort([("semester", 1), ("number", 1)]).to_list(200)
         for w in all_weeks:
             if "quarter" not in w or w["quarter"] not in (1, 2):
                 w["quarter"] = 1 if w.get("number", 1) <= 9 else 2
         return all_weeks
-    # No semester: return all weeks (e.g. admin tools) with quarter backfilled
-    all_weeks = await db.weeks.find({"semester": {"$in": [1, 2]}}, {"_id": 0}).sort([("semester", 1), ("number", 1)]).to_list(200)
-    for w in all_weeks:
-        if "quarter" not in w or w["quarter"] not in (1, 2):
-            w["quarter"] = 1 if w.get("number", 1) <= 9 else 2
-    return all_weeks
+
+    return await cache_get_json(("weeks_all",), CACHE_TTL_JSON, _produce_all)
 
 
 @api_router.post("/weeks", response_model=WeekRecord)
@@ -4677,43 +4756,56 @@ def build_summary(students: List[Dict[str, Any]], classes: List[Dict[str, Any]])
     }
 
 
+async def _compute_analytics_summary(
+    class_id: Optional[str],
+    semester: Optional[int],
+    quarter: Optional[int],
+):
+    """Summary for Dashboard: one (semester, quarter) only. S1/S2 and Q1/Q2 isolated."""
+    student_query = {"class_id": class_id} if class_id else {}
+    class_query = {"id": class_id} if class_id else {}
+    students = await db.students.find(student_query, {"_id": 0}).to_list(5000)
+    classes = await db.classes.find(class_query, {"_id": 0}).to_list(200)
+    sem = semester or 1
+    q = quarter or 1
+    if students:
+        scores_by_student = await build_quarter_score_map_with_q1_spillover([s["id"] for s in students], sem, q)
+        for student in students:
+            sw = scores_by_student.get(student["id"], {})
+            _enrich_student_single_quarter(student, sw, q)
+            eff = _effective_scores_q1(sw) if q == 1 else _effective_scores_q2(sw)
+            if q == 1:
+                a, b = eff.get("quiz1"), eff.get("quiz2")
+                if a is None and b is None:
+                    student["avg_quiz_inclusive"] = None
+                else:
+                    student["avg_quiz_inclusive"] = max(float(a or 0), float(b or 0))
+                student["avg_chapter_inclusive"] = eff.get("chapter_test1_practical")
+            else:
+                a, b = eff.get("quiz3"), eff.get("quiz4")
+                if a is None and b is None:
+                    student["avg_quiz_inclusive"] = None
+                else:
+                    student["avg_quiz_inclusive"] = max(float(a or 0), float(b or 0))
+                student["avg_chapter_inclusive"] = eff.get("chapter_test2_practical")
+    return build_summary(students, classes)
+
+
 @api_router.get("/analytics/summary")
 async def get_analytics_summary(
     class_id: Optional[str] = Query(default=None),
     semester: Optional[int] = Query(default=1),
     quarter: Optional[int] = Query(default=1),
 ):
-    """Summary for Dashboard: one (semester, quarter) only. S1/S2 and Q1/Q2 isolated.
-    Per-student total_score_normalized is the 50-point quarter total (same formula as Final Exams, Classes, Reports)."""
+    """Summary for Dashboard: one (semester, quarter) only. Cached briefly; invalidated on writes."""
     try:
-        student_query = {"class_id": class_id} if class_id else {}
-        class_query = {"id": class_id} if class_id else {}
-        students = await db.students.find(student_query, {"_id": 0}).to_list(5000)
-        classes = await db.classes.find(class_query, {"_id": 0}).to_list(200)
         sem = semester or 1
         q = quarter or 1
-        if students:
-            scores_by_student = await build_quarter_score_map_with_q1_spillover([s["id"] for s in students], sem, q)
-            for student in students:
-                sw = scores_by_student.get(student["id"], {})
-                _enrich_student_single_quarter(student, sw, q)
-                # Best quiz + chapter in quarter (same as assessment / 30-pt block), not 9-week diluted averages
-                eff = _effective_scores_q1(sw) if q == 1 else _effective_scores_q2(sw)
-                if q == 1:
-                    a, b = eff.get("quiz1"), eff.get("quiz2")
-                    if a is None and b is None:
-                        student["avg_quiz_inclusive"] = None
-                    else:
-                        student["avg_quiz_inclusive"] = max(float(a or 0), float(b or 0))
-                    student["avg_chapter_inclusive"] = eff.get("chapter_test1_practical")
-                else:
-                    a, b = eff.get("quiz3"), eff.get("quiz4")
-                    if a is None and b is None:
-                        student["avg_quiz_inclusive"] = None
-                    else:
-                        student["avg_quiz_inclusive"] = max(float(a or 0), float(b or 0))
-                    student["avg_chapter_inclusive"] = eff.get("chapter_test2_practical")
-        return build_summary(students, classes)
+
+        async def _produce():
+            return await _compute_analytics_summary(class_id, semester, quarter)
+
+        return await cache_get_json(("analytics_summary", class_id, sem, q), CACHE_TTL_JSON, _produce)
     except Exception as e:
         logger.exception("Analytics summary failed")
         raise HTTPException(status_code=500, detail=f"Failed to load analytics summary: {str(e)}")
@@ -4967,11 +5059,10 @@ async def get_missed_assessment_students(
     }
 
 
-@api_router.get("/analytics/overview")
-async def get_analytics_overview(
-    class_id: Optional[str] = Query(default=None),
-    semester: Optional[int] = Query(default=1),
-    quarter: Optional[int] = Query(default=1),
+async def _compute_analytics_overview(
+    class_id: Optional[str],
+    semester: Optional[int],
+    quarter: Optional[int],
 ):
     """
     Analytics overview for the selected semester. Returns insights for BOTH quarter 1 and quarter 2
@@ -5111,6 +5202,21 @@ async def get_analytics_overview(
         "excelling_students": excelling_students,
         "students_per_class": students_per_class,
     }
+
+
+@api_router.get("/analytics/overview")
+async def get_analytics_overview(
+    class_id: Optional[str] = Query(default=None),
+    semester: Optional[int] = Query(default=1),
+    quarter: Optional[int] = Query(default=1),
+):
+    sem = semester or 1
+    q = quarter or 1
+
+    async def _produce():
+        return await _compute_analytics_overview(class_id, semester, quarter)
+
+    return await cache_get_json(("analytics_overview", class_id, sem, q), CACHE_TTL_JSON, _produce)
 
 
 def overview_to_pdf_report(overview: Dict[str, Any]) -> Dict[str, Any]:
@@ -5283,6 +5389,17 @@ async def _build_class_summary_list(
     return summaries
 
 
+async def _compute_classes_summary_payload(
+    current_user: Dict[str, Any],
+    semester: Optional[int],
+    quarter: Optional[int],
+):
+    class_query = _teacher_class_filter(current_user)
+    classes = await db.classes.find(class_query, {"_id": 0}).sort("grade", 1).to_list(200)
+    summaries = await _build_class_summary_list(classes, semester or 1, quarter or 1)
+    return sorted(summaries, key=lambda x: _class_sort_key(x.get("class_name") or ""))
+
+
 @api_router.get("/classes/summary")
 async def get_class_summary(
     current_user: Dict[str, Any] = Depends(get_current_user),
@@ -5290,10 +5407,14 @@ async def get_class_summary(
     quarter: Optional[int] = Query(default=1),
 ):
     try:
-        class_query = _teacher_class_filter(current_user)
-        classes = await db.classes.find(class_query, {"_id": 0}).sort("grade", 1).to_list(200)
-        summaries = await _build_class_summary_list(classes, semester or 1, quarter or 1)
-        return sorted(summaries, key=lambda x: _class_sort_key(x.get("class_name") or ""))
+        uid = current_user.get("id")
+        sem = semester or 1
+        q = quarter or 1
+
+        async def _produce():
+            return await _compute_classes_summary_payload(current_user, semester, quarter)
+
+        return await cache_get_json(("classes_summary", uid, sem, q), CACHE_TTL_JSON, _produce)
     except Exception as e:
         logger.exception("Classes summary failed")
         raise HTTPException(status_code=500, detail=f"Failed to load classes: {str(e)}")
@@ -5314,15 +5435,12 @@ def _overall_performance_level(level_q1: str, level_q2: str) -> str:
     return _worst_performance_level(level_q1, level_q2)
 
 
-@api_router.get("/reports/grade")
-async def get_grade_report(
-    grade: int = Query(...),
-    semester: Optional[int] = Query(default=1),
-    quarter: Optional[int] = Query(default=1),
+async def _compute_grade_report(
+    grade: int,
+    semester: Optional[int],
+    quarter: Optional[int],
 ):
-    """
-    Grade report for one (semester, quarter) only. Full separation S1Q1, S1Q2, S2Q1, S2Q2.
-    """
+    """Grade report for one (semester, quarter) only. Full separation S1Q1, S1Q2, S2Q1, S2Q2."""
     sem = semester or 1
     q = quarter or 1
     classes = await db.classes.find({"grade": grade}, {"_id": 0}).to_list(200)
@@ -5451,6 +5569,30 @@ async def get_grade_report(
         "students_needing_support": students_needing_support,
         "class_breakdown": class_breakdown,
     }
+
+
+async def get_grade_report_data(
+    grade: int,
+    semester: Optional[int] = None,
+    quarter: Optional[int] = None,
+):
+    sem = semester or 1
+    q = quarter or 1
+
+    async def _produce():
+        return await _compute_grade_report(grade, semester, quarter)
+
+    return await cache_get_json(("grade_report", grade, sem, q), CACHE_TTL_JSON, _produce)
+
+
+@api_router.get("/reports/grade")
+async def get_grade_report(
+    grade: int = Query(...),
+    semester: Optional[int] = Query(default=1),
+    quarter: Optional[int] = Query(default=1),
+):
+    """Grade report for one (semester, quarter) only. Cached briefly; invalidated on writes."""
+    return await get_grade_report_data(grade, semester, quarter)
 
 
 async def get_report_settings() -> Dict[str, Any]:
@@ -5791,12 +5933,28 @@ async def export_grade_report(
     analysis_actions: Optional[str] = Query(default=None),
     analysis_recommendations: Optional[str] = Query(default=None),
 ):
-    summary = await get_grade_report(grade, semester, quarter)
-    if format == "excel":
-        content = generate_report_excel(summary, grade)
-        filename = f"grade_{grade}_report.xlsx"
-        media_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-    else:
+    sem = semester or 1
+    q = quarter or 1
+    fmt = (format or "pdf").lower()
+    cache_key = (
+        "grade_export",
+        fmt,
+        (report_type or "full").lower(),
+        grade,
+        sem,
+        q,
+        analysis_strengths or "",
+        analysis_weaknesses or "",
+        analysis_performance or "",
+        analysis_standout_data or "",
+        analysis_actions or "",
+        analysis_recommendations or "",
+    )
+
+    async def _produce():
+        summary = await get_grade_report_data(grade, semester, quarter)
+        if fmt == "excel":
+            return generate_report_excel(summary, grade)
         insights = {
             "analysis_strengths": analysis_strengths or "",
             "analysis_weaknesses": analysis_weaknesses or "",
@@ -5805,7 +5963,13 @@ async def export_grade_report(
             "analysis_actions": analysis_actions or "",
             "analysis_recommendations": analysis_recommendations or "",
         }
-        content = generate_reports_dashboard_pdf(summary, grade, insights=insights)
+        return generate_reports_dashboard_pdf(summary, grade, insights=insights)
+
+    content = await cache_get_bytes(cache_key, CACHE_TTL_PDF, _produce)
+    if fmt == "excel":
+        filename = f"grade_{grade}_report.xlsx"
+        media_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    else:
         filename = f"grade_{grade}_report.pdf"
         media_type = "application/pdf"
     headers = {"Content-Disposition": f"attachment; filename={filename}"}
@@ -5824,30 +5988,34 @@ async def export_analytics_summary(
     """
     sem = semester or 1
     q = quarter or 1
-    overview = await get_analytics_overview(class_id=class_id, semester=semester, quarter=quarter)
-    summary = overview_to_pdf_report(overview)
+    fmt = (format or "pdf").lower()
+    cache_key = ("analytics_export", fmt, sem, q, class_id or "")
 
-    class_query = {"id": class_id} if class_id else {}
-    classes_for_charts = await db.classes.find(class_query, {"_id": 0}).to_list(200)
-    class_summaries = await _build_class_summary_list(classes_for_charts, sem, q)
-    class_summaries = sorted(class_summaries, key=lambda x: _class_sort_key(x.get("class_name") or ""))
+    async def _produce():
+        overview = await get_analytics_overview(class_id=class_id, semester=semester, quarter=quarter)
+        summary = overview_to_pdf_report(overview)
+        class_query = {"id": class_id} if class_id else {}
+        classes_for_charts = await db.classes.find(class_query, {"_id": 0}).to_list(200)
+        class_summaries = await _build_class_summary_list(classes_for_charts, sem, q)
+        class_summaries = sorted(class_summaries, key=lambda x: _class_sort_key(x.get("class_name") or ""))
+        scope_label = f"Analytics · Semester {sem} · Q{q}"
+        if class_id:
+            cls = await db.classes.find_one({"id": class_id}, {"_id": 0, "name": 1})
+            cname = (cls or {}).get("name") or class_id
+            scope_label = f"{scope_label} · {cname}"
+        if fmt == "excel":
+            return generate_report_excel(summary, scope_label)
+        return generate_analytics_dashboard_pdf(summary, scope_label, overview, class_summaries)
 
-    scope_label = f"Analytics · Semester {sem} · Q{q}"
-    if class_id:
-        cls = await db.classes.find_one({"id": class_id}, {"_id": 0, "name": 1})
-        cname = (cls or {}).get("name") or class_id
-        scope_label = f"{scope_label} · {cname}"
-
+    content = await cache_get_bytes(cache_key, CACHE_TTL_PDF, _produce)
     fn_base = f"analytics_s{sem}_q{q}"
     if class_id:
         cid = "".join(c for c in class_id if c.isalnum())[:24] or "class"
         fn_base = f"{fn_base}_{cid}"
-    if format == "excel":
-        content = generate_report_excel(summary, scope_label)
+    if fmt == "excel":
         filename = f"{fn_base}.xlsx"
         media_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     else:
-        content = generate_analytics_dashboard_pdf(summary, scope_label, overview, class_summaries)
         filename = f"{fn_base}.pdf"
         media_type = "application/pdf"
     headers = {"Content-Disposition": f"attachment; filename={filename}"}
@@ -5861,13 +6029,22 @@ async def export_classes_summary(
     semester: Optional[int] = Query(default=1),
     quarter: Optional[int] = Query(default=1),
 ):
-    class_summary = await get_class_summary(current_user, semester, quarter)
-    if format == "excel":
-        content = generate_class_summary_excel(class_summary)
+    sem = semester or 1
+    q = quarter or 1
+    fmt = (format or "pdf").lower()
+    cache_key = ("classes_export", current_user.get("id"), fmt, sem, q)
+
+    async def _produce():
+        class_summary = await _compute_classes_summary_payload(current_user, semester, quarter)
+        if fmt == "excel":
+            return generate_class_summary_excel(class_summary)
+        return generate_class_summary_pdf(class_summary)
+
+    content = await cache_get_bytes(cache_key, CACHE_TTL_PDF, _produce)
+    if fmt == "excel":
         filename = "class_summary.xlsx"
         media_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     else:
-        content = generate_class_summary_pdf(class_summary)
         filename = "class_summary.pdf"
         media_type = "application/pdf"
     headers = {"Content-Disposition": f"attachment; filename={filename}"}
@@ -6282,7 +6459,7 @@ async def send_weekly_admin_reports():
     try:
         settings = await get_report_settings()
         grade = int(settings.get("grade", 4))
-        summary = await get_grade_report(grade)
+        summary = await get_grade_report_data(grade)
         report_pdf = generate_reports_dashboard_pdf(summary, grade)
         report_excel = generate_report_excel(summary, grade)
         admins = await db.users.find({"role_name": "Admin", "active": True}, {"_id": 0}).to_list(200)

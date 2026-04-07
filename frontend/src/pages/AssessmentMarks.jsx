@@ -147,24 +147,21 @@ export default function AssessmentMarks() {
   const loadData = async (weekId = activeWeekId) => {
     const requestId = ++latestLoadRequestIdRef.current;
     try {
-      const studentRes = await api.get("/students", { params: weekId ? { week_id: weekId } : {} });
+      const needClassesFromApi = !(classesLoaded && contextClasses?.length);
+      const [studentRes, classRes] = await Promise.all([
+        api.get("/students", { params: weekId ? { week_id: weekId } : {} }),
+        needClassesFromApi
+          ? api.get("/classes").catch(() => ({ data: null }))
+          : Promise.resolve({ data: null }),
+      ]);
       if (latestLoadRequestIdRef.current !== requestId) return;
       setStudents(studentRes.data || []);
-
-      if (classesLoaded && contextClasses?.length) {
-        setClasses(contextClasses || []);
+      if (needClassesFromApi) {
+        const classesFromApi = classRes?.data;
+        if (classesFromApi?.length) setClasses(classesFromApi);
+        else setClasses(contextClasses || []);
       } else {
-        api.get("/classes")
-          .then((res) => {
-            if (latestLoadRequestIdRef.current !== requestId) return;
-            const classesFromApi = res.data;
-            if (classesFromApi?.length) setClasses(classesFromApi);
-            else setClasses(contextClasses || []);
-          })
-          .catch(() => {
-            if (latestLoadRequestIdRef.current !== requestId) return;
-            setClasses(contextClasses || []);
-          });
+        setClasses(contextClasses || []);
       }
     } catch (error) {
       if (latestLoadRequestIdRef.current !== requestId) return;
