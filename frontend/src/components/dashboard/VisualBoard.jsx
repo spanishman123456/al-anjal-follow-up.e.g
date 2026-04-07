@@ -161,7 +161,7 @@ export function PassSplitDonut({
               dataKey="value"
               nameKey="name"
               cx="50%"
-              cy="42%"
+              cy="45%"
               innerRadius={52}
               outerRadius={74}
               paddingAngle={2}
@@ -173,7 +173,7 @@ export function PassSplitDonut({
             <Tooltip content={boardTooltip} />
           </PieChart>
         </ResponsiveContainer>
-        <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center -translate-y-5">
+        <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center -translate-y-3">
           <span className="text-2xl font-semibold tabular-nums text-slate-800 dark:text-foreground">
             {pct}%
           </span>
