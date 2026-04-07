@@ -240,6 +240,12 @@ export default function Analytics() {
     () => (apiQuarter === 1 ? q1.distribution || [] : q2.distribution || []),
     [apiQuarter, q1.distribution, q2.distribution],
   );
+  const focusOnLevelRate = useMemo(() => {
+    const dist = selectedQuarterDistribution || [];
+    const onLevel = Number(dist.find((d) => d.level === "on_level")?.count ?? 0);
+    const total = dist.reduce((sum, d) => sum + Number(d?.count ?? 0), 0);
+    return total > 0 ? Math.round((onLevel / total) * 1000) / 10 : 0;
+  }, [selectedQuarterDistribution]);
   const q1Distribution = (q1.distribution || []).map((item) => ({
     name: t(item.level),
     value: item.count,
@@ -281,7 +287,10 @@ export default function Analytics() {
 
   const aiInsightRows = useMemo(() => {
     const focus = apiQuarter === 1 ? q1 : q2;
-    const focusRate = Number(focus.on_level_rate ?? 0);
+    const dist = focus.distribution || [];
+    const onLevel = Number(dist.find((d) => d.level === "on_level")?.count ?? 0);
+    const total = dist.reduce((sum, d) => sum + Number(d?.count ?? 0), 0);
+    const focusRate = total > 0 ? Math.round((onLevel / total) * 1000) / 10 : 0;
     const focusAvg = focus.avg_total ?? null;
 
     const classesWithAvg = [...classSummary].filter((c) => c.avg_total_score != null);
@@ -320,7 +329,7 @@ export default function Analytics() {
             : "Focus: Class-level contrast insight will appear once class averages are available.",
       },
     ];
-  }, [apiQuarter, q1.on_level_rate, q2.on_level_rate, q1.avg_total, q2.avg_total, classSummary]);
+  }, [apiQuarter, q1.distribution, q2.distribution, q1.avg_total, q2.avg_total, classSummary]);
 
   const handleDownload = async (format) => {
     try {
@@ -443,7 +452,7 @@ export default function Analytics() {
                 <div className="rounded-lg border border-border/60 bg-background/80 px-3 py-2">
                   <p className="text-xs text-muted-foreground">{t("analytics_focus_quarter")}</p>
                   <p className="text-lg font-semibold tabular-nums text-primary">
-                    {apiQuarter === 1 ? q1.on_level_rate ?? 0 : q2.on_level_rate ?? 0}%
+                    {focusOnLevelRate}%
                     <span className="ml-1 text-sm font-normal text-muted-foreground">{t("on_level")}</span>
                   </p>
                 </div>
@@ -469,7 +478,7 @@ export default function Analytics() {
               <BoardHighlightsCard title={t("key_insights")}>
                 <p>
                   <span className="font-medium text-foreground">{t(`term_${termScopeId}`)}:</span>{" "}
-                  {(apiQuarter === 1 ? q1.on_level_rate : q2.on_level_rate) ?? 0}% {t("on_level")}
+                  {focusOnLevelRate}% {t("on_level")}
                   {(apiQuarter === 1 ? q1.avg_total : q2.avg_total) != null && (
                     <span className="text-muted-foreground">
                       {" "}
@@ -520,7 +529,7 @@ export default function Analytics() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-semibold text-emerald-600 dark:text-emerald-400">
-              {(apiQuarter === 1 ? q1.on_level_rate : q2.on_level_rate) ?? 0}%
+              {focusOnLevelRate}%
             </div>
             {(apiQuarter === 1 ? q1.avg_total : q2.avg_total) != null && (
               <p className="mt-1 text-xs text-muted-foreground">
@@ -561,7 +570,7 @@ export default function Analytics() {
             testId="analytics-board-q-focus"
           >
             <QuarterOnLevelFocus
-              rate={apiQuarter === 1 ? q1.on_level_rate : q2.on_level_rate}
+              rate={focusOnLevelRate}
               termLabel={t(`term_${termScopeId}`)}
               lineName={t("visual_board_line_cohort")}
               height={240}
