@@ -115,6 +115,8 @@ export function PassSplitDonut({
     { name: belowLabel, value: below, fill: "#ef4444" },
   ];
   const data = segments.filter((d) => d.value > 0);
+  const legendSpace = showLegend ? 92 : 0;
+  const chartHeight = Math.max(height - legendSpace, 150);
 
   if (total === 0) {
     return (
@@ -138,7 +140,7 @@ export function PassSplitDonut({
   }
 
   return (
-    <div className="relative mx-auto w-full max-w-sm overflow-hidden" style={{ height }}>
+    <div className="mx-auto w-full max-w-sm overflow-hidden" style={{ height }}>
       {showLegend ? (
         <div className="mb-2 space-y-1 text-sm font-semibold">
           {segments.map((s) => (
@@ -151,34 +153,36 @@ export function PassSplitDonut({
           ))}
         </div>
       ) : null}
-      <ResponsiveContainer width="100%" height="100%">
-        <PieChart>
-          <Pie
-            data={data}
-            dataKey="value"
-            nameKey="name"
-            cx="50%"
-            cy="44%"
-            innerRadius={54}
-            outerRadius={78}
-            paddingAngle={2}
-          >
-            {data.map((entry, i) => (
-              <Cell key={i} fill={entry.fill} stroke="white" strokeWidth={1} />
-            ))}
-          </Pie>
-          <Tooltip content={boardTooltip} />
-        </PieChart>
-      </ResponsiveContainer>
-      <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center -translate-y-4">
-        <span className="text-2xl font-semibold tabular-nums text-slate-800 dark:text-foreground">
-          {pct}%
-        </span>
-        {centerCaption ? (
-          <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-            {centerCaption}
+      <div className="relative" style={{ height: chartHeight }}>
+        <ResponsiveContainer width="100%" height="100%">
+          <PieChart>
+            <Pie
+              data={data}
+              dataKey="value"
+              nameKey="name"
+              cx="50%"
+              cy="42%"
+              innerRadius={52}
+              outerRadius={74}
+              paddingAngle={2}
+            >
+              {data.map((entry, i) => (
+                <Cell key={i} fill={entry.fill} stroke="white" strokeWidth={1} />
+              ))}
+            </Pie>
+            <Tooltip content={boardTooltip} />
+          </PieChart>
+        </ResponsiveContainer>
+        <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center -translate-y-5">
+          <span className="text-2xl font-semibold tabular-nums text-slate-800 dark:text-foreground">
+            {pct}%
           </span>
-        ) : null}
+          {centerCaption ? (
+            <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+              {centerCaption}
+            </span>
+          ) : null}
+        </div>
       </div>
     </div>
   );
