@@ -53,6 +53,7 @@ export default function Reports() {
   const apiQuarter = term.quarter;
   const [grade, setGrade] = useState("4");
   const [reportType, setReportType] = useState("summary");
+  const isFullReport = reportType === "full";
   const [report, setReport] = useState(null);
   const [analysisStrengths, setAnalysisStrengths] = useState("");
   const [analysisWeaknesses, setAnalysisWeaknesses] = useState("");
@@ -267,6 +268,9 @@ export default function Reports() {
       <p className="text-xs text-muted-foreground" data-testid="reports-term-hint">
         {t("analytics_term_scope_hint")}
       </p>
+      <p className="text-xs text-muted-foreground max-w-3xl" data-testid="reports-type-hint">
+        {isFullReport ? t("report_type_full_help") : t("report_type_summary_help")}
+      </p>
 
       {report ? (
         <div className="space-y-6" data-testid="reports-content">
@@ -386,25 +390,43 @@ export default function Reports() {
                 showLegend={false}
               />
             </BoardPanel>
-            <BoardPanel
-              title={t("visual_board_chart_q_focus")}
-              subtitle={t("visual_board_chart_q_focus_sub")}
-            >
-              <QuarterOnLevelFocus
-                rate={report.exceeding_rate}
-                termLabel={t(`term_${termScopeId}`)}
-                lineName={t("visual_board_line_cohort")}
-                height={240}
-              />
-            </BoardPanel>
-            <BoardPanel
-              title={t("visual_board_chart_class_curve")}
-              subtitle={t("visual_board_chart_enrollment_sub")}
-            >
-              <ClassScoreArea data={reportEnrollmentBars} height={240} />
-            </BoardPanel>
           </div>
 
+          {isFullReport && (
+            <div className="grid gap-4 md:grid-cols-2" data-testid="reports-visual-board-grid-full">
+              <BoardPanel
+                title={t("visual_board_chart_q_focus")}
+                subtitle={t("visual_board_chart_q_focus_sub")}
+              >
+                <QuarterOnLevelFocus
+                  rate={report.exceeding_rate}
+                  termLabel={t(`term_${termScopeId}`)}
+                  lineName={t("visual_board_line_cohort")}
+                  height={240}
+                />
+              </BoardPanel>
+              <BoardPanel
+                title={t("visual_board_chart_class_curve")}
+                subtitle={t("visual_board_chart_enrollment_sub")}
+              >
+                <ClassScoreArea data={reportEnrollmentBars} height={240} />
+              </BoardPanel>
+            </div>
+          )}
+
+          {!isFullReport && (
+            <Card
+              className="border-amber-500/35 bg-amber-500/[0.06] dark:bg-amber-950/20"
+              data-testid="reports-summary-mode-banner"
+            >
+              <CardContent className="py-3 text-sm text-muted-foreground">
+                {t("reports_summary_layout_note")}
+              </CardContent>
+            </Card>
+          )}
+
+          {isFullReport && (
+            <>
           <div className="section-bg-alt-3 rounded-xl border border-border/50 p-4">
           <Card data-testid="reports-tabs-card">
             <CardHeader>
@@ -639,6 +661,8 @@ export default function Reports() {
               </CardContent>
             </Card>
           </section>
+            </>
+          )}
           </BoardShell>
         </div>
       ) : (

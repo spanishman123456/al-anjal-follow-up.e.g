@@ -136,6 +136,12 @@ export const translations = {
     classes_synced_with_quarters: "Class performance is aligned with 1st and 2nd Quarter Marks—same quarter totals and performance levels for informed decisions.",
     summary_report: "Summary Report",
     full_report: "Full Report",
+    report_type_summary_help:
+      "Summary: headline metrics, enrollment, and performance split only. PDF/Excel omit student lists and written insights—good for a quick overview.",
+    report_type_full_help:
+      "Full: adds focus charts, executive tables (top performers, support, classes), analysis guide, insight fields, and complete PDF/Excel exports.",
+    reports_summary_layout_note:
+      "You are in Summary mode: student tables and analysis fields are hidden. Choose Full report above to see them on screen and in downloads.",
     print: "Print",
     download: "Download",
     download_pdf: "Download PDF",
@@ -526,6 +532,12 @@ export const translations = {
     classes_synced_with_quarters: "أداء الفصول متوافق مع درجات الربع الأول والثاني—نفس المجاميع ومستويات الأداء لاتخاذ قرارات مبنية على البيانات.",
     summary_report: "تقرير ملخص",
     full_report: "تقرير كامل",
+    report_type_summary_help:
+      "الملخص: المؤشرات الأساسية والتسجيل وتوزيع الأداء فقط. ملف PDF/Excel بدون قوائم بأسماء الطلاب أو حقول التحليل—مناسب لنظرة سريعة.",
+    report_type_full_help:
+      "الكامل: يضيف مخططات التركيز وجداول الملخص التنفيذي (المتفوقون، الدعم، الفصول) ودليل التحليل وحقول الملاحظات وتصدير PDF/Excel كاملاً.",
+    reports_summary_layout_note:
+      "أنت في وضع الملخص: جداول الطلاب وحقول التحليل مخفية. اختر «تقرير كامل» أعلاه لإظهارها في الصفحة وفي التحميلات.",
     print: "طباعة",
     download: "تحميل",
     download_pdf: "تحميل PDF",

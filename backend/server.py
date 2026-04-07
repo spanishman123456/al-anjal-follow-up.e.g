@@ -2390,11 +2390,16 @@ def generate_reports_dashboard_pdf(
     report: Dict[str, Any],
     scope: Any,
     insights: Optional[Dict[str, str]] = None,
+    report_type: str = "full",
 ) -> bytes:
     """
     PDF for Reports page export: four Visual Board charts (enrollment bars/area, donut, quarter line)
     using the same BOARD palette as the web, then the same metric tables as the standard grade report.
+
+    report_type: \"full\" = all charts, student tables, and key insights. \"summary\" = headline metrics,
+    enrollment + performance donut, distribution and class counts only (no per-student tables or insights).
     """
+    is_summary = str(report_type or "full").lower() == "summary"
     def _fmt(value: Any, suffix: str = "") -> str:
         if value is None or value == "":
             return "-"
@@ -2496,8 +2501,9 @@ def generate_reports_dashboard_pdf(
 
     bar_buf = create_reports_enrollment_bar_chart(class_breakdown)
     donut_buf = create_analytics_pass_donut(distribution)
-    line_buf = create_analytics_quarter_focus_bar_chart(report.get("exceeding_rate"), _pdf_term_short_label(report))
-    area_buf = create_reports_enrollment_area_chart(class_breakdown)
+    if not is_summary:
+        line_buf = create_analytics_quarter_focus_bar_chart(report.get("exceeding_rate"), _pdf_term_short_label(report))
+        area_buf = create_reports_enrollment_area_chart(class_breakdown)
 
     def _cap(title: str, subtitle: str) -> Paragraph:
         sub_esc = escape(subtitle)
@@ -2511,12 +2517,19 @@ def generate_reports_dashboard_pdf(
     doc = SimpleDocTemplate(buffer, pagesize=A4, leftMargin=28, rightMargin=28, topMargin=28, bottomMargin=28)
     elements: List[Any] = []
 
-    elements.append(Paragraph("Reports", title_style))
+    elements.append(
+        Paragraph("Reports (Summary)" if is_summary else "Reports", title_style)
+    )
     elements.append(Paragraph(f"<b>{scope_label}</b>", subtitle_style))
+    if is_summary:
+        sub_note = (
+            "Summary: key metrics, enrollment, and performance split only—no student lists or written insights."
+        )
+    else:
+        sub_note = "Charts match the Reports page Visual Board (enrollment, performance donut, focus quarter)."
     elements.append(
         Paragraph(
-            f"Generated on {datetime.now(REPORT_TIMEZONE).strftime('%Y-%m-%d %H:%M')} · "
-            "Charts match the Reports page Visual Board (enrollment, performance donut, focus quarter).",
+            f"Generated on {datetime.now(REPORT_TIMEZONE).strftime('%Y-%m-%d %H:%M')} · {sub_note}",
             subtitle_style,
         )
     )
@@ -2524,28 +2537,44 @@ def generate_reports_dashboard_pdf(
     elements.append(Paragraph("Visual dashboard", section_style))
     rq = qn
     focus_q = q1 if rq == 1 else q2
-    dashboard_grid = Table(
-        [
+    if is_summary:
+        dashboard_grid = Table(
             [
-                _cap("Students per class", "Enrollment by class section"),
-                _cap("On-level, approaching full score, and below level", term_sub),
+                [
+                    _cap("Students per class", "Enrollment by class section"),
+                    _cap("On-level, approaching full score, and below level", term_sub),
+                ],
+                [
+                    RLImage(bar_buf, width=248, height=176),
+                    RLImage(donut_buf, width=248, height=176),
+                ],
             ],
+            colWidths=[260, 260],
+            hAlign="LEFT",
+        )
+    else:
+        dashboard_grid = Table(
             [
-                RLImage(bar_buf, width=248, height=176),
-                RLImage(donut_buf, width=248, height=176),
+                [
+                    _cap("Students per class", "Enrollment by class section"),
+                    _cap("On-level, approaching full score, and below level", term_sub),
+                ],
+                [
+                    RLImage(bar_buf, width=248, height=176),
+                    RLImage(donut_buf, width=248, height=176),
+                ],
+                [
+                    _cap("On-level rate (selected quarter)", "Cohort on-level % for the selected term only"),
+                    _cap("Class averages profile", "Enrollment by class section"),
+                ],
+                [
+                    RLImage(line_buf, width=248, height=176),
+                    RLImage(area_buf, width=248, height=176),
+                ],
             ],
-            [
-                _cap("On-level rate (selected quarter)", "Cohort on-level % for the selected term only"),
-                _cap("Class averages profile", "Enrollment by class section"),
-            ],
-            [
-                RLImage(line_buf, width=248, height=176),
-                RLImage(area_buf, width=248, height=176),
-            ],
-        ],
-        colWidths=[260, 260],
-        hAlign="LEFT",
-    )
+            colWidths=[260, 260],
+            hAlign="LEFT",
+        )
     dashboard_grid.setStyle(
         TableStyle(
             [
@@ -2592,58 +2621,60 @@ def generate_reports_dashboard_pdf(
     if len(class_table_data) == 1:
         class_table_data.append(["-", "0"])
     elements.append(_styled_table(class_table_data, col_widths=[350, 180]))
-    elements.append(PageBreak())
 
-    top_performers = report.get("top_performers", []) or []
-    elements.append(Paragraph("Top Performers", section_style))
-    top_table_data = [["Student", "Class", "Quarter total (50)", "Total", "Strengths"]]
-    for student in top_performers:
-        strengths = ", ".join(student.get("strengths") or []) or "-"
-        top_table_data.append(
-            [
-                _fmt(student.get("full_name")),
-                _fmt(student.get("class_name")),
-                _fmt(_pdf_focus_quarter_total(student, rq)),
-                _fmt(student.get("total_score_normalized")),
-                strengths,
-            ]
-        )
-    if len(top_table_data) == 1:
-        top_table_data.append(["-", "-", "-", "-", "-"])
-    elements.append(_styled_table(top_table_data, col_widths=[130, 58, 52, 52, 240]))
-    elements.append(Spacer(1, 10))
+    if not is_summary:
+        elements.append(PageBreak())
 
-    support_students = report.get("students_needing_support", []) or []
-    elements.append(Paragraph("Students Needing Support", section_style))
-    support_table_data = [["Student", "Class", "Quarter total (50)", "Performance", "Areas to Improve"]]
-    for student in support_students:
-        weak_areas = ", ".join(student.get("weak_areas") or []) or "-"
-        support_table_data.append(
-            [
-                _fmt(student.get("full_name")),
-                _fmt(student.get("class_name")),
-                _fmt(_pdf_focus_quarter_total(student, rq)),
-                _fmt(student.get("performance_label") or student.get("performance_level")),
-                weak_areas,
-            ]
-        )
-    if len(support_table_data) == 1:
-        support_table_data.append(["-", "-", "-", "-", "-"])
-    elements.append(_styled_table(support_table_data, col_widths=[130, 58, 52, 70, 230]))
+        top_performers = report.get("top_performers", []) or []
+        elements.append(Paragraph("Top Performers", section_style))
+        top_table_data = [["Student", "Class", "Quarter total (50)", "Total", "Strengths"]]
+        for student in top_performers:
+            strengths = ", ".join(student.get("strengths") or []) or "-"
+            top_table_data.append(
+                [
+                    _fmt(student.get("full_name")),
+                    _fmt(student.get("class_name")),
+                    _fmt(_pdf_focus_quarter_total(student, rq)),
+                    _fmt(student.get("total_score_normalized")),
+                    strengths,
+                ]
+            )
+        if len(top_table_data) == 1:
+            top_table_data.append(["-", "-", "-", "-", "-"])
+        elements.append(_styled_table(top_table_data, col_widths=[130, 58, 52, 52, 240]))
+        elements.append(Spacer(1, 10))
 
-    insights = insights or {}
-    insight_rows = [
-        ["Insight", "Details"],
-        ["Strengths", (insights.get("analysis_strengths") or "").strip() or "-"],
-        ["Weaknesses", (insights.get("analysis_weaknesses") or "").strip() or "-"],
-        ["Student Performance", (insights.get("analysis_performance") or "").strip() or "-"],
-        ["Standout Data", (insights.get("analysis_standout_data") or "").strip() or "-"],
-        ["Recommended Actions", (insights.get("analysis_actions") or "").strip() or "-"],
-        ["Recommendations", (insights.get("analysis_recommendations") or "").strip() or "-"],
-    ]
-    elements.append(Spacer(1, 10))
-    elements.append(Paragraph("Key Insights", section_style))
-    elements.append(_styled_table(insight_rows, col_widths=[130, 380], repeat_header=True))
+        support_students = report.get("students_needing_support", []) or []
+        elements.append(Paragraph("Students Needing Support", section_style))
+        support_table_data = [["Student", "Class", "Quarter total (50)", "Performance", "Areas to Improve"]]
+        for student in support_students:
+            weak_areas = ", ".join(student.get("weak_areas") or []) or "-"
+            support_table_data.append(
+                [
+                    _fmt(student.get("full_name")),
+                    _fmt(student.get("class_name")),
+                    _fmt(_pdf_focus_quarter_total(student, rq)),
+                    _fmt(student.get("performance_label") or student.get("performance_level")),
+                    weak_areas,
+                ]
+            )
+        if len(support_table_data) == 1:
+            support_table_data.append(["-", "-", "-", "-", "-"])
+        elements.append(_styled_table(support_table_data, col_widths=[130, 58, 52, 70, 230]))
+
+        insights = insights or {}
+        insight_rows = [
+            ["Insight", "Details"],
+            ["Strengths", (insights.get("analysis_strengths") or "").strip() or "-"],
+            ["Weaknesses", (insights.get("analysis_weaknesses") or "").strip() or "-"],
+            ["Student Performance", (insights.get("analysis_performance") or "").strip() or "-"],
+            ["Standout Data", (insights.get("analysis_standout_data") or "").strip() or "-"],
+            ["Recommended Actions", (insights.get("analysis_actions") or "").strip() or "-"],
+            ["Recommendations", (insights.get("analysis_recommendations") or "").strip() or "-"],
+        ]
+        elements.append(Spacer(1, 10))
+        elements.append(Paragraph("Key Insights", section_style))
+        elements.append(_styled_table(insight_rows, col_widths=[130, 380], repeat_header=True))
 
     doc.build(elements)
     pdf_value = buffer.getvalue()
@@ -2651,10 +2682,11 @@ def generate_reports_dashboard_pdf(
     return pdf_value
 
 
-def generate_report_excel(report: Dict[str, Any], scope: Any) -> bytes:
+def generate_report_excel(report: Dict[str, Any], scope: Any, report_type: str = "full") -> bytes:
     buffer = io.BytesIO()
     scope_label = format_scope_label(scope)
     rq = int(report.get("quarter") or 1)
+    is_summary = str(report_type or "full").lower() == "summary"
 
     def _focus_total(stu: Dict[str, Any]) -> Any:
         return _pdf_focus_quarter_total(stu, rq)
@@ -2662,11 +2694,37 @@ def generate_report_excel(report: Dict[str, Any], scope: Any) -> bytes:
     summary_df = pd.DataFrame([
         {
             "Scope": scope_label,
+            "Term": f"Semester {report.get('semester', 1)} · Quarter {rq}",
             "Total Students": report.get("total_students", 0),
             "Avg Total Score": report.get("avg_total_score"),
-            "Exceeding Rate": report.get("exceeding_rate"),
+            "On-level %": report.get("exceeding_rate"),
         }
     ])
+    if is_summary:
+        distribution = report.get("distribution") or []
+        dist_df = pd.DataFrame(
+            [
+                {
+                    "Level": str(item.get("level", "")).replace("_", " ").title(),
+                    "Count": item.get("count"),
+                }
+                for item in distribution
+            ]
+        )
+        class_breakdown = report.get("class_breakdown", []) or []
+        class_df = pd.DataFrame(
+            [
+                {"Class": item.get("class_name"), "Students": item.get("student_count")}
+                for item in class_breakdown
+            ]
+        )
+        with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
+            summary_df.to_excel(writer, sheet_name="Overview", index=False)
+            dist_df.to_excel(writer, sheet_name="Distribution", index=False)
+            class_df.to_excel(writer, sheet_name="Classes", index=False)
+        buffer.seek(0)
+        return buffer.getvalue()
+
     top_df = pd.DataFrame([
         {
             "Student": student.get("full_name"),
@@ -5951,10 +6009,12 @@ async def export_grade_report(
         analysis_recommendations or "",
     )
 
+    rt = (report_type or "full").lower()
+
     async def _produce():
         summary = await get_grade_report_data(grade, semester, quarter)
         if fmt == "excel":
-            return generate_report_excel(summary, grade)
+            return generate_report_excel(summary, grade, report_type=rt)
         insights = {
             "analysis_strengths": analysis_strengths or "",
             "analysis_weaknesses": analysis_weaknesses or "",
@@ -5963,7 +6023,7 @@ async def export_grade_report(
             "analysis_actions": analysis_actions or "",
             "analysis_recommendations": analysis_recommendations or "",
         }
-        return generate_reports_dashboard_pdf(summary, grade, insights=insights)
+        return generate_reports_dashboard_pdf(summary, grade, insights=insights, report_type=rt)
 
     content = await cache_get_bytes(cache_key, CACHE_TTL_PDF, _produce)
     if fmt == "excel":
