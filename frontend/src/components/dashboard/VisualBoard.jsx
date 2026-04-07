@@ -115,12 +115,6 @@ export function PassSplitDonut({
     { name: belowLabel, value: below, fill: "#ef4444" },
   ];
   const data = segments.filter((d) => d.value > 0);
-  const legendPayload = segments.map((s) => ({
-    value: `${s.name}: ${s.value}`,
-    type: "square",
-    color: s.fill,
-    id: s.name,
-  }));
 
   if (total === 0) {
     return (
@@ -145,6 +139,18 @@ export function PassSplitDonut({
 
   return (
     <div className="relative mx-auto w-full max-w-sm" style={{ height }}>
+      {showLegend ? (
+        <div className="mb-2 space-y-1 text-sm font-semibold">
+          {segments.map((s) => (
+            <div key={s.name} className="flex items-center gap-2" style={{ color: s.fill }}>
+              <span className="inline-block h-3 w-3 rounded-sm" style={{ backgroundColor: s.fill }} />
+              <span>
+                {s.name}: {s.value}
+              </span>
+            </div>
+          ))}
+        </div>
+      ) : null}
       <ResponsiveContainer width="100%" height="100%">
         <PieChart>
           <Pie
@@ -162,14 +168,6 @@ export function PassSplitDonut({
             ))}
           </Pie>
           <Tooltip content={boardTooltip} />
-          {showLegend ? (
-            <Legend
-              verticalAlign="top"
-              align="left"
-              wrapperStyle={{ fontSize: 12, paddingBottom: 8 }}
-              payload={legendPayload}
-            />
-          ) : null}
         </PieChart>
       </ResponsiveContainer>
       <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center pt-6">
