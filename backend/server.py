@@ -420,6 +420,14 @@ def quarter_total_to_level(quarter_total: Optional[float]) -> str:
     return "below"
 
 
+def on_level_rate_full_cohort(distribution: List[Dict[str, Any]]) -> float:
+    """On-level % across the full cohort in the snapshot (includes no_data in denominator)."""
+    dist = distribution or []
+    on_level = next((int(d.get("count") or 0) for d in dist if d.get("level") == "on_level"), 0)
+    total = sum(int(d.get("count") or 0) for d in dist)
+    return round((on_level / total) * 100, 1) if total else 0.0
+
+
 def is_quarter_total_full_marks(val: Any) -> bool:
     """True when the 50-point quarter total is full marks (50/50), allowing tiny float noise."""
     if val is None or (isinstance(val, float) and pd.isna(val)):
@@ -1596,8 +1604,7 @@ def create_analytics_pass_donut(distribution: List[Dict[str, Any]]) -> io.BytesI
     total = on_level + approach + below + no_data
     if total == 0:
         return _analytics_empty_chart("No distribution data")
-    graded = on_level + approach + below
-    pct = round((on_level / graded) * 1000) / 10.0 if graded else 0.0
+    pct = round((on_level / total) * 1000) / 10.0 if total else 0.0
     segments: List[tuple] = [
         (on_level, BOARD_ANALYTICS["donut_on"], "On Level"),
         (approach, BOARD_ANALYTICS["donut_approach"], "Approaching full score"),
@@ -4629,7 +4636,7 @@ def build_summary(students: List[Dict[str, Any]], classes: List[Dict[str, Any]])
             chapter_scores.append(student["chapter_test2"])
     total_with_data = len(enriched) - counts.get("no_data", 0)
     total_no_data = counts.get("no_data", 0)
-    on_level_rate = round((counts.get("on_level", 0) / total_with_data) * 100, 1) if total_with_data else 0
+    on_level_rate = round((counts.get("on_level", 0) / len(enriched)) * 100, 1) if enriched else 0
     students_needing_support = [s for s in enriched if include_in_need_support_list(s)]
     # Dashboard: full marks or 49+/50 (excellence tier); sorted by class then name.
     top_performers = sorted(
@@ -5025,7 +5032,7 @@ async def get_analytics_overview(
             {"level": "no_data", "count": counts_q1["no_data"]},
         ],
         "avg_total": round(sum(totals_q1) / len(totals_q1), 2) if totals_q1 else None,
-        "on_level_rate": round((counts_q1["on_level"] / with_data_q1) * 100, 1) if with_data_q1 else 0,
+        "on_level_rate": round((counts_q1["on_level"] / len(students)) * 100, 1) if students else 0,
         "total_with_data": with_data_q1,
     }
     # Quarter 2 distribution
@@ -5045,7 +5052,7 @@ async def get_analytics_overview(
             {"level": "no_data", "count": counts_q2["no_data"]},
         ],
         "avg_total": round(sum(totals_q2) / len(totals_q2), 2) if totals_q2 else None,
-        "on_level_rate": round((counts_q2["on_level"] / with_data_q2) * 100, 1) if with_data_q2 else 0,
+        "on_level_rate": round((counts_q2["on_level"] / len(students)) * 100, 1) if students else 0,
         "total_with_data": with_data_q2,
     }
     struggling_students = [
@@ -5362,7 +5369,7 @@ async def get_grade_report(
 
     total_with_data = len(students) - report_level_counts.get("no_data", 0)
     on_level_count = report_level_counts["on_level"]
-    exceeding_rate = round((on_level_count / total_with_data) * 100, 1) if total_with_data else 0
+    exceeding_rate = round((on_level_count / len(students)) * 100, 1) if students else 0
     avg_total = round(sum(quarter_totals) / len(quarter_totals), 2) if quarter_totals else None
 
     quarter_summary = {
