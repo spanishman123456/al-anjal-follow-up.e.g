@@ -430,6 +430,14 @@ def is_quarter_total_full_marks(val: Any) -> bool:
         return False
 
 
+def is_top_performer_total(val: Any) -> bool:
+    """Dashboard Top Performers: full marks or 49+/50 (excellence tier; rounding-safe)."""
+    if is_quarter_total_full_marks(val):
+        return True
+    f = _safe_float(val)
+    return f is not None and f >= 49.0
+
+
 def _safe_float(val: Any) -> Optional[float]:
     if val is None or (isinstance(val, float) and pd.isna(val)):
         return None
@@ -468,6 +476,15 @@ def compute_student_insights(
             v = s.get(field)
             if v is not None and not (isinstance(v, float) and pd.isna(v)):
                 vals.append(float(v))
+        if vals:
+            return sum(vals) / len(vals)
+        # Q1 follow-up sometimes keyed on weeks 10-18 (mis-tagged rows); mirror compute_avg_first_9_weeks fallback.
+        if quarter == 1:
+            for w in range(10, 19):
+                s = sw.get(w) or {}
+                v = s.get(field)
+                if v is not None and not (isinstance(v, float) and pd.isna(v)):
+                    vals.append(float(v))
         return sum(vals) / len(vals) if vals else None
 
     for label, field, max_val in [
@@ -699,10 +716,11 @@ async def build_full_year_score_map(student_ids: List[str]) -> Dict[str, Dict[in
     return scores_by_student
 
 
-def compute_avg_first_9_weeks(scores_by_week: Dict[int, Dict[str, Optional[float]]]) -> Optional[float]:
-    """Average of student's follow-up total (attendance+participation+behavior+homework, max 15) over weeks 1-9. Only includes weeks that have at least one non-null score; returns None if no such weeks."""
+def _collect_followup_week_totals_for_range(
+    scores_by_week: Dict[int, Dict[str, Optional[float]]], start: int, end_inclusive: int
+) -> List[float]:
     week_totals: List[float] = []
-    for week_num in range(1, 10):
+    for week_num in range(start, end_inclusive + 1):
         score = scores_by_week.get(week_num) or {}
         a, p, b, h = score.get("attendance"), score.get("participation"), score.get("behavior"), score.get("homework")
         if all(v is None or (isinstance(v, float) and pd.isna(v)) for v in [a, p, b, h]):
@@ -712,6 +730,15 @@ def compute_avg_first_9_weeks(scores_by_week: Dict[int, Dict[str, Optional[float
             for v in [a, p, b, h]
         )
         week_totals.append(min(total, TOTAL_SCORE_MAX))
+    return week_totals
+
+
+def compute_avg_first_9_weeks(scores_by_week: Dict[int, Dict[str, Optional[float]]]) -> Optional[float]:
+    """Average follow-up total (max 15) over Q1. Uses weeks 1-9 first; if none have data, uses 10-18 (mis-keyed S2 Q1 rows)."""
+    scores_by_week = _normalize_scores_by_week_keys(scores_by_week)
+    week_totals = _collect_followup_week_totals_for_range(scores_by_week, 1, 9)
+    if not week_totals:
+        week_totals = _collect_followup_week_totals_for_range(scores_by_week, 10, 18)
     if not week_totals:
         return None
     return round(sum(week_totals) / len(week_totals), 2)
@@ -1053,15 +1080,14 @@ def compute_final_exams_combined(
 
 
 def _effective_scores_q1(scores_by_week: Dict[int, Dict[str, Optional[float]]]) -> Dict[str, Optional[float]]:
-    """Build effective Q1 scores from weeks 1-9: best quiz/chapter from any week; quarter exams = max across any week
-    (Final Exams are often entered on a chosen week, not only week 9). Week 10 may carry Q1 exam fields in full-year maps."""
+    """Build effective Q1 scores: best quiz/chapter from any week in 1-18 (Q1 quizzes are sometimes saved on week 10-18 rows)."""
     scores_by_week = _normalize_scores_by_week_keys(scores_by_week)
     q1_list = []
     q2_list = []
     ch1_list = []
     qp_list: List[float] = []
     qt_list: List[float] = []
-    for w in range(1, 10):
+    for w in range(1, 19):
         s = scores_by_week.get(w) or {}
         if s.get("quiz1") is not None:
             q1_list.append(float(s["quiz1"]) if not (isinstance(s["quiz1"], float) and pd.isna(s["quiz1"])) else 0)
@@ -1073,18 +1099,6 @@ def _effective_scores_q1(scores_by_week: Dict[int, Dict[str, Optional[float]]]) 
             qp_list.append(min(float(s["quarter1_practical"]), 10.0))
         if s.get("quarter1_theory") is not None and not (isinstance(s.get("quarter1_theory"), float) and pd.isna(s.get("quarter1_theory"))):
             qt_list.append(min(float(s["quarter1_theory"]), 10.0))
-    s10 = scores_by_week.get(10) or {}
-    if s10.get("quarter1_practical") is not None and not (isinstance(s10.get("quarter1_practical"), float) and pd.isna(s10.get("quarter1_practical"))):
-        qp_list.append(min(float(s10["quarter1_practical"]), 10.0))
-    if s10.get("quarter1_theory") is not None and not (isinstance(s10.get("quarter1_theory"), float) and pd.isna(s10.get("quarter1_theory"))):
-        qt_list.append(min(float(s10["quarter1_theory"]), 10.0))
-    # Rare: Q1 exam fields on week 11+ (mis-tagged week); still pick up max.
-    for w in range(11, 19):
-        sx = scores_by_week.get(w) or {}
-        if sx.get("quarter1_practical") is not None and not (isinstance(sx.get("quarter1_practical"), float) and pd.isna(sx.get("quarter1_practical"))):
-            qp_list.append(min(float(sx["quarter1_practical"]), 10.0))
-        if sx.get("quarter1_theory") is not None and not (isinstance(sx.get("quarter1_theory"), float) and pd.isna(sx.get("quarter1_theory"))):
-            qt_list.append(min(float(sx["quarter1_theory"]), 10.0))
     quiz1 = max(q1_list) if q1_list else None
     quiz2 = max(q2_list) if q2_list else None
     ch1 = max(ch1_list) if ch1_list else None
@@ -1201,7 +1215,7 @@ def _compute_cumulative_final_quarter(
             2,
         )
     else:
-        week_range = range(1, 10)
+        week_range = range(1, 19)
         quarter_keys = ("quiz1", "quiz2", "chapter_test1_practical", "quarter1_practical", "quarter1_theory")
         eq = _effective_scores_q1(scores_by_week)
         exam20 = round(
@@ -1221,13 +1235,6 @@ def _compute_cumulative_final_quarter(
                 break
         if has_any:
             break
-    # Q1 exams are often entered on week 10 (next quarter in the DB); Q2 spillover e.g. week 19.
-    if not has_any and quarter == 1:
-        s10 = scores_by_week.get(10) or {}
-        for k in ("quarter1_practical", "quarter1_theory"):
-            if _is_meaningful_score(s10.get(k)):
-                has_any = True
-                break
     if not has_any and quarter == 2:
         s19 = scores_by_week.get(19) or {}
         for k in ("quarter2_practical", "quarter2_theory"):
@@ -1451,17 +1458,20 @@ def normalize_schedule(schedule: Optional[Dict[str, List[str]]]) -> Dict[str, Li
 
 
 def create_distribution_chart(distribution: List[Dict[str, Any]]) -> io.BytesIO:
-    labels = [item["level"].replace("_", " ").title() for item in distribution]
-    sizes = [item["count"] for item in distribution]
+    """Pie chart for three performance bands only (on level, approach, below)."""
+    distribution = distribution or []
+    graded_only = [item for item in distribution if item.get("level") != "no_data"]
+    labels = [item["level"].replace("_", " ").title() for item in graded_only]
+    sizes = [item["count"] for item in graded_only]
     colors_map = {
         "on_level": "#10b981",
         "approach": "#f59e0b",
         "below": "#ef4444",
         "no_data": "#94a3b8",
     }
-    chart_colors = [colors_map.get(item["level"], "#94a3b8") for item in distribution]
-    if sum(sizes) == 0:
-        sizes = [1 for _ in sizes]
+    chart_colors = [colors_map.get(item["level"], "#94a3b8") for item in graded_only]
+    if not graded_only or sum(sizes) == 0:
+        return _analytics_empty_chart("No graded distribution")
     fig, ax = plt.subplots(figsize=(5.0, 3.8))
     wedges, _, _ = ax.pie(
         sizes,
@@ -1573,7 +1583,7 @@ def create_analytics_class_avg_bar_chart(class_rows: List[Dict[str, Any]]) -> io
 
 
 def create_analytics_pass_donut(distribution: List[Dict[str, Any]]) -> io.BytesIO:
-    """Donut: on-level (green), approaching full score (amber), below level (red), no data (grey)."""
+    """Donut: three bands — on-level (green), approaching (amber), below (red). No-data students are not part of the ring."""
     list_d = distribution or []
 
     def _count(level: str) -> int:
@@ -1586,12 +1596,12 @@ def create_analytics_pass_donut(distribution: List[Dict[str, Any]]) -> io.BytesI
     total = on_level + approach + below + no_data
     if total == 0:
         return _analytics_empty_chart("No distribution data")
-    pct = round((on_level / total) * 1000) / 10.0
+    graded = on_level + approach + below
+    pct = round((on_level / graded) * 1000) / 10.0 if graded else 0.0
     segments: List[tuple] = [
         (on_level, BOARD_ANALYTICS["donut_on"], "On Level"),
         (approach, BOARD_ANALYTICS["donut_approach"], "Approaching full score"),
         (below, BOARD_ANALYTICS["donut_below"], "Below Level"),
-        (no_data, BOARD_ANALYTICS["donut_no_data"], "No data"),
     ]
     sizes: List[float] = []
     cols: List[str] = []
@@ -1602,7 +1612,7 @@ def create_analytics_pass_donut(distribution: List[Dict[str, Any]]) -> io.BytesI
             cols.append(color)
             labels.append(lab)
     if not sizes:
-        return _analytics_empty_chart("No distribution data")
+        return _analytics_empty_chart("No graded students (all no data)")
     fig, ax = plt.subplots(figsize=(4.8, 3.6))
     ax.set_facecolor("white")
     wedges, _ = ax.pie(
@@ -1612,12 +1622,10 @@ def create_analytics_pass_donut(distribution: List[Dict[str, Any]]) -> io.BytesI
         wedgeprops=dict(width=0.38, edgecolor="white", linewidth=2),
     )
     ax.axis("equal")
-    # Always show all four categories in the legend (with counts), including zeros, so On/Approach appear when 0.
     legend_handles = [
         Patch(facecolor=BOARD_ANALYTICS["donut_on"], edgecolor="white", label=f"On Level: {on_level}"),
         Patch(facecolor=BOARD_ANALYTICS["donut_approach"], edgecolor="white", label=f"Approaching full score: {approach}"),
         Patch(facecolor=BOARD_ANALYTICS["donut_below"], edgecolor="white", label=f"Below Level: {below}"),
-        Patch(facecolor=BOARD_ANALYTICS["donut_no_data"], edgecolor="white", label=f"No data: {no_data}"),
     ]
     ax.legend(handles=legend_handles, loc="upper left", fontsize=8, frameon=False, bbox_to_anchor=(0.0, 1.02))
     ax.text(0, 0.02, f"{pct}%", ha="center", va="center", fontsize=20, fontweight="bold", color="#0f172a")
@@ -4623,9 +4631,9 @@ def build_summary(students: List[Dict[str, Any]], classes: List[Dict[str, Any]])
     total_no_data = counts.get("no_data", 0)
     on_level_rate = round((counts.get("on_level", 0) / total_with_data) * 100, 1) if total_with_data else 0
     students_needing_support = [s for s in enriched if include_in_need_support_list(s)]
-    # Dashboard: list every student at 50/50 (not capped at five).
+    # Dashboard: full marks or 49+/50 (excellence tier); sorted by class then name.
     top_performers = sorted(
-        [s for s in enriched if is_quarter_total_full_marks(s.get("total_score_normalized"))],
+        [s for s in enriched if is_top_performer_total(s.get("total_score_normalized"))],
         key=lambda s: (_class_sort_key(s.get("class_name") or ""), (s.get("full_name") or "").lower()),
     )
     class_counts: Dict[str, int] = {}
@@ -5390,6 +5398,14 @@ async def get_grade_report(
         for s in students
         if include_in_need_support_list(s)
     ]
+    top_sorted = sorted(
+        [
+            s
+            for s in students
+            if s.get("performance_level") == "on_level" or is_top_performer_total(s.get("total_score_normalized"))
+        ],
+        key=lambda s: (-float(s.get("semester_total") or 0), (s.get("full_name") or "").lower()),
+    )
     top_performers = [
         {
             "id": s["id"],
@@ -5404,8 +5420,7 @@ async def get_grade_report(
             "performance_level_q2": s.get("performance_level_q2"),
             "strengths": s.get("strengths") or [],
         }
-        for s in students
-        if s.get("performance_level") == "on_level"
+        for s in top_sorted
     ]
     class_breakdown = [
         {"class_name": c["name"], "student_count": len([s for s in students if s["class_id"] == c["id"]])}

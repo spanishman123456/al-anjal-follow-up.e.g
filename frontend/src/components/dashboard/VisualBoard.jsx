@@ -90,7 +90,7 @@ export function ClassAverageBarChart({ data, valueKey = "score", labelKey = "nam
   );
 }
 
-/** Donut: on-level, approaching full score, below level, and no data (same breakdown as PDF export). */
+/** Donut: three performance bands (green / amber / red). No-data students are excluded from the ring and center %. */
 export function PassSplitDonut({
   distribution,
   onLevelLabel,
@@ -106,12 +106,12 @@ export function PassSplitDonut({
   const below = list.find((d) => d.level === "below")?.count ?? 0;
   const noData = list.find((d) => d.level === "no_data")?.count ?? 0;
   const total = onLevel + approach + below + noData;
-  const pct = total > 0 ? Math.round((onLevel / total) * 1000) / 10 : 0;
+  const graded = onLevel + approach + below;
+  const pct = graded > 0 ? Math.round((onLevel / graded) * 1000) / 10 : 0;
   const segments = [
     { name: onLevelLabel, value: onLevel, fill: "#10b981" },
     { name: approachingLabel, value: approach, fill: "#f59e0b" },
     { name: belowLabel, value: below, fill: "#ef4444" },
-    { name: noDataLabel, value: noData, fill: "#94a3b8" },
   ];
   const data = segments.filter((d) => d.value > 0);
   const legendPayload = segments.map((s) => ({
@@ -125,6 +125,19 @@ export function PassSplitDonut({
     return (
       <div className="flex h-[240px] items-center justify-center text-sm text-muted-foreground">
         —
+      </div>
+    );
+  }
+
+  if (graded === 0) {
+    return (
+      <div className="flex h-[240px] flex-col items-center justify-center gap-1 text-sm text-muted-foreground">
+        <span>—</span>
+        {noData > 0 ? (
+          <span className="text-xs">
+            {noDataLabel}: {noData}
+          </span>
+        ) : null}
       </div>
     );
   }
