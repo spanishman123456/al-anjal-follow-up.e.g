@@ -401,11 +401,11 @@ def quarter_total_to_level(quarter_total: Optional[float]) -> str:
 
 
 def is_quarter_total_full_marks(val: Any) -> bool:
-    """True when the 50-point quarter total is at the maximum (50/50)."""
+    """True when the 50-point quarter total is full marks (50/50), allowing tiny float noise."""
     if val is None or (isinstance(val, float) and pd.isna(val)):
         return False
     try:
-        return round(float(val), 2) >= 50.0
+        return round(float(val), 2) >= 49.99
     except (TypeError, ValueError):
         return False
 
@@ -572,6 +572,57 @@ async def build_quarter_score_map(
                 continue
             scores_by_student.setdefault(score["student_id"], {})[wn] = score
     return scores_by_student
+
+
+async def build_quarter_score_map_with_q1_spillover(
+    student_ids: List[str], semester: int, quarter: int
+) -> Dict[str, Dict[int, Dict[str, Optional[float]]]]:
+    """
+    Load scores for one (semester, quarter) using native week *numbers* as keys (Q1 → 1–9, Q2 → 10–18).
+    When quarter==1, merge quarter1_practical / quarter1_theory from the first week of Q2 in the same
+    semester (week number 10) into bucket 10 so finals entered after Q1 still count — without using
+    build_full_year_score_map, which re-keys Semester 2 weeks to 10–18 and breaks _effective_scores_q1
+    (it only reads weeks 1–9 for quiz/chapter).
+    """
+    base = await build_quarter_score_map(student_ids, semester, quarter)
+    if quarter != 1 or not student_ids:
+        return base
+    spill_week = await db.weeks.find_one(
+        {"semester": semester, "quarter": 2, "number": 10},
+        {"_id": 0, "id": 1},
+    )
+    if not spill_week:
+        all_q2 = await db.weeks.find({"semester": semester, "quarter": 2}, {"_id": 0, "id": 1, "number": 1}).to_list(200)
+        tens = [w for w in all_q2 if int(w.get("number") or 0) == 10]
+        spill_week = tens[0] if tens else None
+    if not spill_week or not spill_week.get("id"):
+        return base
+    wid = spill_week["id"]
+    spill_scores = await db.student_scores.find(
+        {"week_id": wid, "student_id": {"$in": student_ids}}, {"_id": 0}
+    ).to_list(5000)
+    for doc in spill_scores:
+        sid = doc.get("student_id")
+        if not sid:
+            continue
+        qp = doc.get("quarter1_practical")
+        qt = doc.get("quarter1_theory")
+        if qp is None and qt is None:
+            continue
+        if isinstance(qp, float) and pd.isna(qp):
+            qp = None
+        if isinstance(qt, float) and pd.isna(qt):
+            qt = None
+        if qp is None and qt is None:
+            continue
+        bucket = base.setdefault(sid, {})
+        w10 = dict(bucket.get(10) or {})
+        if qp is not None:
+            w10["quarter1_practical"] = qp
+        if qt is not None:
+            w10["quarter1_theory"] = qt
+        bucket[10] = w10
+    return base
 
 
 def _normalize_scores_by_week_keys(
@@ -3463,8 +3514,7 @@ async def get_students(
         if week_doc:
             sem = week_doc.get("semester", 1)
             q = _week_quarter(week_doc)
-            # Full year map so Q1 finals on week 10 (or other spillover weeks) are included in quarter totals.
-            scores_by_student = await build_full_year_score_map(student_ids)
+            scores_by_student = await build_quarter_score_map_with_q1_spillover(student_ids, sem, q)
             for student in students:
                 sw = scores_by_student.get(student["id"], {})
                 totals = compute_quarter_totals(sw)
@@ -4552,7 +4602,7 @@ async def get_analytics_summary(
         sem = semester or 1
         q = quarter or 1
         if students:
-            scores_by_student = await build_full_year_score_map([s["id"] for s in students])
+            scores_by_student = await build_quarter_score_map_with_q1_spillover([s["id"] for s in students], sem, q)
             for student in students:
                 sw = scores_by_student.get(student["id"], {})
                 _enrich_student_single_quarter(student, sw, q)
@@ -4859,17 +4909,19 @@ async def get_analytics_overview(
     for s in students:
         s["class_name"] = class_id_to_name.get(s.get("class_id"), s.get("class_name", ""))
     student_ids = [s["id"] for s in students]
-    scores_by_student = await build_full_year_score_map(student_ids)
+    scores_q1 = await build_quarter_score_map_with_q1_spillover(student_ids, sem, 1)
+    scores_q2 = await build_quarter_score_map_with_q1_spillover(student_ids, sem, 2)
     for student in students:
-        sw = scores_by_student.get(student["id"], {})
-        insights = compute_student_insights(sw, q)
+        sw1 = scores_q1.get(student["id"], {})
+        sw2 = scores_q2.get(student["id"], {})
+        insights = compute_student_insights(sw1 if q == 1 else sw2, q)
         student["weak_areas"] = insights["weak_areas"]
         student["strengths"] = insights["strengths"]
-        _enrich_student_single_quarter(student, sw, 1)
+        _enrich_student_single_quarter(student, sw1, 1)
         q1_total = student.get("quarter1_total")
         q1_level = student.get("performance_level_q1")
         qc1 = student.get("quizzes_chapter_total_q1")
-        _enrich_student_single_quarter(student, sw, 2)
+        _enrich_student_single_quarter(student, sw2, 2)
         student["quarter1_total"] = q1_total
         student["performance_level_q1"] = q1_level
         student["quizzes_chapter_total_q1"] = qc1
@@ -5074,14 +5126,16 @@ async def _build_class_summary_list(
         ]
     # Build both Q1 and Q2 so each class shows insights for each quarter independently
     student_ids = [s["id"] for s in students]
-    scores_full = await build_full_year_score_map(student_ids)
+    scores_q1 = await build_quarter_score_map_with_q1_spillover(student_ids, semester, 1)
+    scores_q2 = await build_quarter_score_map_with_q1_spillover(student_ids, semester, 2)
     for student in students:
-        sw = scores_full.get(student["id"], {})
-        _enrich_student_single_quarter(student, sw, 1)
+        sw1 = scores_q1.get(student["id"], {})
+        sw2 = scores_q2.get(student["id"], {})
+        _enrich_student_single_quarter(student, sw1, 1)
         q1_total = student.get("quarter1_total")
         q1_level = student.get("performance_level_q1")
         qc1 = student.get("quizzes_chapter_total_q1")
-        _enrich_student_single_quarter(student, sw, 2)
+        _enrich_student_single_quarter(student, sw2, 2)
         student["quarter1_total"] = q1_total
         student["performance_level_q1"] = q1_level
         student["quizzes_chapter_total_q1"] = qc1
@@ -5210,7 +5264,7 @@ async def get_grade_report(
             "class_breakdown": [{"class_name": c["name"], "student_count": 0} for c in classes],
         }
 
-    scores_by_student = await build_full_year_score_map([s["id"] for s in students])
+    scores_by_student = await build_quarter_score_map_with_q1_spillover([s["id"] for s in students], sem, q)
     for student in students:
         sw = scores_by_student.get(student["id"], {})
         insights = compute_student_insights(sw, q)

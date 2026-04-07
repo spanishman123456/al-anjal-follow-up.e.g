@@ -484,6 +484,9 @@ export default function FinalExamsAssessment() {
         testIdPrefix="final-exams-assessment"
         action={
           <div className="flex flex-wrap gap-2">
+            <Button type="button" onClick={openBulkSaveConfirm} data-testid="final-exams-bulk-save">
+              {t("save_all_scores")}
+            </Button>
             {bulkEditMode ? (
               <Button variant="outline" onClick={() => setBulkEditMode(false)}>{t("cancel")}</Button>
             ) : (
@@ -558,16 +561,6 @@ export default function FinalExamsAssessment() {
       <p className="text-xs text-muted-foreground" data-testid="final-exams-total-formula-hint">
         {t("final_exams_total_formula_hint")}
       </p>
-
-      <div
-        className="flex flex-col gap-3 rounded-xl border-2 border-primary/25 bg-primary/5 p-4 sm:flex-row sm:items-center sm:justify-between"
-        data-testid="final-exams-save-banner"
-      >
-        <p className="text-sm text-foreground">{t("save_scores_banner_final_exams")}</p>
-        <Button type="button" onClick={openBulkSaveConfirm} className="shrink-0" size="lg" data-testid="final-exams-bulk-save-banner">
-          {t("save_all_scores")}
-        </Button>
-      </div>
 
       <Card data-testid="final-exams-table-card">
         <CardContent className="pt-6">

@@ -520,6 +520,9 @@ export default function AssessmentMarks() {
         testIdPrefix="assessment-marks"
         action={
           <div className="flex flex-wrap gap-2">
+            <Button onClick={openBulkSaveConfirm} data-testid="assessment-bulk-save">
+              {t("save_all_scores")}
+            </Button>
             {bulkEditMode ? (
               <Button variant="outline" onClick={() => setBulkEditMode(false)} data-testid="assessment-bulk-cancel">
                 {t("cancel")}
@@ -624,16 +627,6 @@ export default function AssessmentMarks() {
           </Button>
         </CardContent>
       </Card>
-
-      <div
-        className="flex flex-col gap-3 rounded-xl border-2 border-primary/25 bg-primary/5 p-4 sm:flex-row sm:items-center sm:justify-between"
-        data-testid="assessment-save-banner"
-      >
-        <p className="text-sm text-foreground">{t("save_scores_banner")}</p>
-        <Button type="button" onClick={openBulkSaveConfirm} className="shrink-0" size="lg" data-testid="assessment-bulk-save-banner">
-          {t("save_all_scores")}
-        </Button>
-      </div>
 
       <Card data-testid="assessment-table-card">
         <CardContent className="pt-6">
