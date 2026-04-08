@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import { api, checkBackendHealth, isProductionBackendUrl } from "@/lib/api";
+import { api, checkBackendHealth, isProductionBackendUrl, warmBackendInBackground } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Globe, MessageCircle, Mail } from "lucide-react";
 import { Input } from "@/components/ui/input";
@@ -51,7 +51,19 @@ export default function Login({
     };
   }, [serverStatusProp]);
 
-  const waitForBackendReady = async ({ timeoutMs = 75000, intervalMs = 2500 } = {}) => {
+  // Nudge Render free tier to start waking as soon as the login page opens (cold start can take 1–2 min).
+  useEffect(() => {
+    if (!isProductionBackendUrl) return;
+    warmBackendInBackground();
+    const a = setTimeout(() => warmBackendInBackground(), 3000);
+    const b = setTimeout(() => warmBackendInBackground(), 8000);
+    return () => {
+      clearTimeout(a);
+      clearTimeout(b);
+    };
+  }, []);
+
+  const waitForBackendReady = async ({ timeoutMs = 120000, intervalMs = 3000 } = {}) => {
     const started = Date.now();
     while (Date.now() - started < timeoutMs) {
       const ok = await checkBackendHealth();
@@ -170,7 +182,8 @@ export default function Login({
       let msg = t("login_failed");
       if (isNetwork) {
         if (isProductionBackendUrl) {
-          msg = "Server is waking up (free hosting). Please wait up to a minute and try again.";
+          msg =
+            "Server is waking up (Render free tier). This can take 1–2 minutes after idle. Please wait, then try Login again.";
         } else {
           msg = backendOk
             ? "Login request failed. Keep the Start_App.bat window open and try again in a moment."
@@ -358,7 +371,7 @@ export default function Login({
               {backendOk === false && (
                 <p className="text-xs text-amber-600 dark:text-amber-400 mt-2">
                   {isProductionBackendUrl
-                    ? "Server is waking up (free hosting). Press Login once and the app will retry automatically."
+                    ? "Server may be waking (Render free tier: up to ~2 min after idle). You can press Login — the app will retry automatically."
                     : "Backend or database not reachable. Run Start_App.bat (keep it open). If this persists, open MongoDB Atlas → Network Access and allow your current IP (or 0.0.0.0/0 for testing), and ensure the cluster is not paused."}
                 </p>
               )}
