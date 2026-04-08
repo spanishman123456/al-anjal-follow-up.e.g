@@ -192,6 +192,18 @@ async def health_live():
     return {"status": "ok"}
 
 
+@app.get("/")
+async def public_api_root():
+    """Clarifies that this host is the API; the React app is served from the static site URL."""
+    return {
+        "message": "Al-Anjal School Follow-up API is running",
+        "health": "/health",
+        "health_live": "/health/live",
+        "api_docs": "/docs",
+        "hint": "Open your frontend URL (Render Static Site), not this one, to use the website in a browser.",
+    }
+
+
 PERFORMANCE_THRESHOLDS = {
     "exceeding": 47,
     "meeting": 45,

@@ -58,6 +58,7 @@
   "scripts": {
     "start": "craco start",
     "build": "DISABLE_ESLINT_PLUGIN=true craco build",
+    "postbuild": "node scripts/postbuild-spa.cjs",
     "test": "craco test",
     "postinstall": "node scripts/patch-schema-utils.js"
   },

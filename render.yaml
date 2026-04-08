@@ -1,6 +1,9 @@
-# Optional: Render Blueprint for backend only.
-# Use this if you prefer "New > Blueprint" and connecting the repo;
-# otherwise follow DEPLOYMENT.md and create a Web Service manually.
+# Blueprint: creates static site + backend with SPA rewrite (/* -> /index.html).
+#
+# If you created the frontend as a manual "Static Site" instead, Render does NOT
+# read this file for that service — add one rewrite in the dashboard:
+#   Redirects/Rewrites → Source /*  Destination /index.html  Action Rewrite
+# (Same behavior as vercel.json "rewrites" for React Router.)
 
 services:
   - type: web

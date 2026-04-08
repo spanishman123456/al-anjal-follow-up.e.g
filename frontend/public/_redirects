@@ -1,0 +1,3 @@
+# SPA fallback (Netlify-style). Render Static Sites normally need a dashboard
+# rewrite instead; see DEPLOY-FULL-ON-RENDER.md. Safe to keep for other hosts.
+/*    /index.html   200

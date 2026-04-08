@@ -35,6 +35,23 @@ Set these in Render before first successful run:
 2. Update backend `CORS_ORIGINS` to that exact frontend URL.
 3. Redeploy backend once.
 
+### Fix plain "Not Found" on the frontend (React Router / SPA)
+
+Vercel uses `frontend/vercel.json` to send every path to `index.html`. **Render Static Sites do not do that unless you add a rule.**
+
+- **If you used Blueprint** from this repo: `render.yaml` already includes the rewrite; you should be fine.
+- **If you created the site with New → Static Site** (manual): open the static site in the Render dashboard → **Redirects / Rewrites** → add:
+  - **Source:** `/*`
+  - **Destination:** `/index.html`
+  - **Action:** **Rewrite** (not Redirect)
+
+Without this, opening a path other than `/` (or refreshing) shows a blank **Not Found** page while the API URL still returns JSON.
+
+### Two different URLs (this is normal)
+
+- **Backend (Web Service):** `https://…onrender.com` → JSON from `/`, `/health`, `/docs`. This is **not** the website UI.
+- **Frontend (Static Site):** another `https://…onrender.com` → the login page and app. Use this URL when you “open the website.”
+
 ### Important performance note
 
 Render free backend can sleep after inactivity. First request may take 30-60 seconds.
