@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import { api, checkBackendHealth, isProductionBackendUrl, warmBackendInBackground } from "@/lib/api";
+import { api, checkBackendHealth, checkBackendLive, isProductionBackendUrl, warmBackendInBackground } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Globe, MessageCircle, Mail } from "lucide-react";
 import { Input } from "@/components/ui/input";
@@ -63,10 +63,12 @@ export default function Login({
     };
   }, []);
 
-  const waitForBackendReady = async ({ timeoutMs = 120000, intervalMs = 3000 } = {}) => {
+  // Wait for HTTP only (/health/live). /health also pings Mongo; treating 503 DB errors as "still waking"
+  // made login retry take minutes even when Render was already up.
+  const waitForBackendReady = async ({ timeoutMs = 120000, intervalMs = 1500 } = {}) => {
     const started = Date.now();
     while (Date.now() - started < timeoutMs) {
-      const ok = await checkBackendHealth();
+      const ok = await checkBackendLive();
       if (ok) return true;
       await new Promise((resolve) => setTimeout(resolve, intervalMs));
     }

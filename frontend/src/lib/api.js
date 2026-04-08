@@ -30,9 +30,22 @@ export async function checkBackendHealth() {
   }
 }
 
-/** Fire-and-forget warm-up ping to reduce cold-start delays. */
+/** True when the API accepts HTTP (Render dyno awake). Does not wait on Mongo — see /health for DB. */
+export async function checkBackendLive() {
+  try {
+    const c = new AbortController();
+    const t = setTimeout(() => c.abort(), HEALTH_CHECK_MS);
+    const r = await fetch(`${BACKEND_ROOT}/health/live`, { method: "GET", signal: c.signal });
+    clearTimeout(t);
+    return r.ok;
+  } catch {
+    return false;
+  }
+}
+
+/** Fire-and-forget warm-up ping to reduce cold-start delays (hits /health/live, not /health, so Mongo is not required). */
 export function warmBackendInBackground() {
-  return fetch(`${BACKEND_ROOT}/health`, {
+  return fetch(`${BACKEND_ROOT}/health/live`, {
     method: "GET",
     cache: "no-store",
     keepalive: true,

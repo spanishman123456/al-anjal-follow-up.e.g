@@ -177,13 +177,20 @@ async def health_check():
     only confirmed the process was up, which hid Atlas/network issues from the UI.
     """
     try:
-        await asyncio.wait_for(client.admin.command("ping"), timeout=8.0)
+        await asyncio.wait_for(client.admin.command("ping"), timeout=12.0)
     except Exception:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Database unreachable. Check MongoDB Atlas Network Access (your IP) and that the cluster is not paused.",
         )
     return {"status": "ok", "database": "connected"}
+
+
+@app.get("/health/live")
+async def health_live():
+    """Process is up and accepting HTTP — no Mongo ping. Used to wake Render and retry login without waiting on Atlas."""
+    return {"status": "ok"}
+
 
 PERFORMANCE_THRESHOLDS = {
     "exceeding": 47,
