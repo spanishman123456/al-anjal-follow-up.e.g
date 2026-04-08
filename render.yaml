@@ -4,6 +4,21 @@
 
 services:
   - type: web
+    name: al-anjal-frontend
+    runtime: static
+    rootDir: frontend
+    buildCommand: npm ci && npm run build
+    staticPublishPath: build
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    envVars:
+      - key: REACT_APP_BACKEND_URL
+        # Example: https://al-anjal-follow-up-e-g.onrender.com
+        sync: false
+
+  - type: web
     name: al-anjal-backend
     runtime: python
     rootDir: backend
