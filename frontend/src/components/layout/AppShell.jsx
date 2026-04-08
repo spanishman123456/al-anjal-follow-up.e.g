@@ -90,6 +90,8 @@ export const AppShell = ({
   const location = useLocation();
   const [profile, setProfile] = useState(null);
   const [notifications, setNotifications] = useState([]);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [notificationsLoaded, setNotificationsLoaded] = useState(false);
   const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
   const [expandedNavKey, setExpandedNavKey] = useState(null);
 
@@ -122,14 +124,18 @@ export const AppShell = ({
     try {
       const response = await api.get("/notifications");
       setNotifications(response.data.slice(0, 5));
+      setNotificationsLoaded(true);
     } catch (error) {
       setNotifications([]);
+      setNotificationsLoaded(false);
     }
   };
 
   useEffect(() => {
-    loadNotifications();
-  }, []);
+    if (notificationsOpen && !notificationsLoaded) {
+      loadNotifications();
+    }
+  }, [notificationsOpen, notificationsLoaded]);
 
   // Keep backend warm on hosted/free tiers: interval ping + quick wake on tab focus/visibility.
   useEffect(() => {
@@ -424,7 +430,7 @@ export const AppShell = ({
               >
                 {theme === "dark" ? t("theme_light") : t("theme_dark")}
               </Button>
-              <DropdownMenu>
+              <DropdownMenu onOpenChange={setNotificationsOpen}>
                 <DropdownMenuTrigger asChild>
                   <Button
                     variant="ghost"

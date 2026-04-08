@@ -138,8 +138,9 @@ function App() {
   }, []);
 
   useEffect(() => {
-    if (token && authReady) loadClasses();
-  }, [token, authReady, loadClasses]);
+    // Avoid refetching classes immediately if we already have a fresh session cache.
+    if (token && authReady && !classesLoaded) loadClasses();
+  }, [token, authReady, classesLoaded, loadClasses]);
 
   useEffect(() => {
     const isArabic = language === "ar";
