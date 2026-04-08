@@ -1,21 +1,16 @@
-# Blueprint: creates static site + backend with SPA rewrite (/* -> /index.html).
+# Blueprint: frontend as a Node web service (serve -s build) so React Router works
+# without any Render dashboard "Redirects/Rewrites" (unlike runtime: static CDN).
 #
-# If you created the frontend as a manual "Static Site" instead, Render does NOT
-# read this file for that service — add one rewrite in the dashboard:
-#   Redirects/Rewrites → Source /*  Destination /index.html  Action Rewrite
-# (Same behavior as vercel.json "rewrites" for React Router.)
+# If you keep an old manual "Static Site", you must still add /* -> /index.html rewrite there,
+# or delete it and deploy this Blueprint / recreate frontend as Node using the same commands below.
 
 services:
   - type: web
     name: al-anjal-frontend
-    runtime: static
+    runtime: node
     rootDir: frontend
     buildCommand: npm ci && npm run build
-    staticPublishPath: build
-    routes:
-      - type: rewrite
-        source: /*
-        destination: /index.html
+    startCommand: npm run serve:prod
     envVars:
       - key: REACT_APP_BACKEND_URL
         # Example: https://al-anjal-follow-up-e-g.onrender.com

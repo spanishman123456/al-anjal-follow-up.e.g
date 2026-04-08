@@ -4,7 +4,7 @@ This project can run fully on Render (not Vercel) using the existing `render.yam
 
 ### What is included
 
-- `al-anjal-frontend` (Static Site) from `frontend/`
+- `al-anjal-frontend` (**Node Web Service** — `serve -s build` so SPA routes work without CDN rewrite rules)
 - `al-anjal-backend` (Python Web Service) from `backend/`
 - Optional keep-awake cron for backend
 
@@ -37,20 +37,13 @@ Set these in Render before first successful run:
 
 ### Fix plain "Not Found" on the frontend (React Router / SPA)
 
-Vercel uses `frontend/vercel.json` to send every path to `index.html`. **Render Static Sites do not do that unless you add a rule.**
-
-- **If you used Blueprint** from this repo: `render.yaml` already includes the rewrite; you should be fine.
-- **If you created the site with New → Static Site** (manual): open the static site in the Render dashboard → **Redirects / Rewrites** → add:
-  - **Source:** `/*`
-  - **Destination:** `/index.html`
-  - **Action:** **Rewrite** (not Redirect)
-
-Without this, opening a path other than `/` (or refreshing) shows a blank **Not Found** page while the API URL still returns JSON.
+- **Blueprint from this repo:** the frontend is a **Node** service with `serve -s build`, same idea as Vercel’s rewrites — **no dashboard rewrite needed**.
+- **If you still use an old manual Static Site:** either switch to a Node Web Service (see `render.yaml` for `buildCommand` / `startCommand`) or add **Redirects / Rewrites**: Source `/*`, Destination `/index.html`, Action **Rewrite**.
 
 ### Two different URLs (this is normal)
 
 - **Backend (Web Service):** `https://…onrender.com` → JSON from `/`, `/health`, `/docs`. This is **not** the website UI.
-- **Frontend (Static Site):** another `https://…onrender.com` → the login page and app. Use this URL when you “open the website.”
+- **Frontend (Node Web Service in Blueprint):** another `https://…onrender.com` → the login page and app. Use this URL when you “open the website.”
 
 ### Important performance note
 
