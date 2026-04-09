@@ -209,18 +209,16 @@ export default function Login({
     >
       {theme === "light" && <div className="login-top-sky" aria-hidden />}
       <div className="pointer-events-none absolute inset-0 overflow-hidden opacity-100 dark:opacity-40 z-[1]" aria-hidden>
-        <div className="absolute -top-24 -right-20 h-[24rem] w-[24rem] rounded-full bg-purple-500/20 blur-3xl animate-blob-float" />
+        <div className="absolute -top-24 -right-20 h-[24rem] w-[24rem] rounded-full bg-purple-500/16 blur-3xl" />
         <div
-          className="absolute top-[30%] -left-28 h-[20rem] w-[20rem] rounded-full bg-pink-500/15 blur-3xl animate-blob-float"
-          style={{ animationDelay: "-5s" }}
+          className="absolute top-[30%] -left-28 h-[20rem] w-[20rem] rounded-full bg-pink-500/12 blur-3xl"
         />
         <div
-          className="absolute bottom-0 left-1/3 h-[14rem] w-[14rem] rounded-full bg-secondary/20 blur-3xl animate-blob-float"
-          style={{ animationDelay: "-8s" }}
+          className="absolute bottom-0 left-1/3 h-[14rem] w-[14rem] rounded-full bg-secondary/16 blur-3xl"
         />
       </div>
       <div
-        className="absolute inset-0 opacity-[0.14] mix-blend-multiply dark:opacity-[0.06] dark:mix-blend-overlay"
+        className="absolute inset-0 opacity-[0.1] dark:opacity-[0.05]"
         aria-hidden="true"
         style={{
           backgroundImage: "url('/login-bg.png')",
@@ -294,7 +292,7 @@ export default function Login({
           </Button>
       </div>
 
-      <div className="relative z-10 w-full max-w-lg text-center mt-24 mb-10 animate-fade-in-up" style={{ animationDuration: "0.6s" }} data-testid="login-welcome">
+      <div className="relative z-10 w-full max-w-lg text-center mt-24 mb-10" data-testid="login-welcome">
         <h1 className="font-sans text-3xl sm:text-4xl font-semibold leading-snug tracking-normal text-white drop-shadow-sm dark:text-white">
           {t("login_welcome_title")}
         </h1>
@@ -305,8 +303,7 @@ export default function Login({
 
       {/* Login card – white, shadow, rounded (no hover pop on this page) */}
       <div
-        className="relative z-10 w-full max-w-md rounded-2xl bg-card border border-border shadow-lg p-8 animate-scale-in dark:border-white/10 dark:bg-slate-900/75 dark:backdrop-blur-xl dark:shadow-2xl dark:shadow-black/50"
-        style={{ animationDuration: "0.5s", animationDelay: "0.15s", animationFillMode: "backwards" }}
+        className="relative z-10 w-full max-w-md rounded-2xl bg-card border border-border shadow-lg p-8 dark:border-white/10 dark:bg-slate-900/75 dark:backdrop-blur-xl dark:shadow-2xl dark:shadow-black/50"
         data-testid="login-frame"
       >
         <Card noHoverPop className="rounded-xl border-0 shadow-none bg-transparent">

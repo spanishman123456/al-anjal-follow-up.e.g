@@ -177,7 +177,9 @@ export const AppShell = ({
 
   const confirmLogout = () => {
     sessionStorage.removeItem("auth_token");
-    window.location.href = "/login";
+    setLogoutConfirmOpen(false);
+    window.dispatchEvent(new CustomEvent("auth-logout"));
+    navigate("/", { replace: true });
   };
   const allNavItems = [
     { to: "/", label: t("dashboard"), icon: LayoutDashboard, testId: "nav-dashboard-link", roles: ["Admin", "Teacher"] },
