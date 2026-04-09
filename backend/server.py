@@ -6672,7 +6672,19 @@ app.include_router(auth_router)
 app.include_router(api_router)
 
 _cors_origins_raw = os.environ.get("CORS_ORIGINS", "*").strip()
-_cors_origins = [o.strip() for o in _cors_origins_raw.split(",") if o.strip()] if _cors_origins_raw else ["*"]
+_extra_frontend_origins = [
+    os.environ.get("FRONTEND_URL", "").strip(),
+    os.environ.get("PUBLIC_FRONTEND_URL", "").strip(),
+    # Keep the Render frontend working even if CORS_ORIGINS still points to the old Vercel URL.
+    "https://al-anjal-follow-up-record.onrender.com",
+]
+if _cors_origins_raw == "*":
+    _cors_origins = ["*"]
+else:
+    _cors_origins = []
+    for origin in [o.strip() for o in _cors_origins_raw.split(",") if o.strip()] + _extra_frontend_origins:
+        if origin and origin not in _cors_origins:
+            _cors_origins.append(origin)
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,
