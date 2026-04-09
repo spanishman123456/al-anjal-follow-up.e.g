@@ -204,29 +204,9 @@ export default function Login({
 
   return (
     <div
-      className="login-mubarmij-bg min-h-screen flex flex-col items-center justify-center p-6 relative overflow-hidden"
+      className="login-mubarmij-bg min-h-screen flex flex-col items-center justify-center p-6 relative"
       data-testid="login-page"
     >
-      {theme === "light" && <div className="login-top-sky" aria-hidden />}
-      <div className="pointer-events-none absolute inset-0 overflow-hidden opacity-100 dark:opacity-40 z-[1]" aria-hidden>
-        <div className="absolute -top-24 -right-20 h-[24rem] w-[24rem] rounded-full bg-purple-500/16 blur-3xl" />
-        <div
-          className="absolute top-[30%] -left-28 h-[20rem] w-[20rem] rounded-full bg-pink-500/12 blur-3xl"
-        />
-        <div
-          className="absolute bottom-0 left-1/3 h-[14rem] w-[14rem] rounded-full bg-secondary/16 blur-3xl"
-        />
-      </div>
-      <div
-        className="absolute inset-0 opacity-[0.1] dark:opacity-[0.05]"
-        aria-hidden="true"
-        style={{
-          backgroundImage: "url('/login-bg.png')",
-          backgroundRepeat: "no-repeat",
-          backgroundPosition: "center",
-          backgroundSize: "cover",
-        }}
-      />
       {/* Left column: logos top, social + Contact Us bottom, same horizontal center */}
       <div className="absolute left-0 top-0 bottom-0 z-10 flex flex-col items-center pt-5 pb-6 px-6 w-56 sm:w-60 bg-transparent border-0 shadow-none" data-testid="login-left-column">
         <div className="flex flex-col items-center gap-2">
@@ -303,7 +283,7 @@ export default function Login({
 
       {/* Login card – white, shadow, rounded (no hover pop on this page) */}
       <div
-        className="relative z-10 w-full max-w-md rounded-2xl bg-card border border-border shadow-lg p-8 dark:border-white/10 dark:bg-slate-900/75 dark:backdrop-blur-xl dark:shadow-2xl dark:shadow-black/50"
+        className="relative z-10 w-full max-w-md rounded-2xl bg-card border border-border shadow-lg p-8 dark:border-white/10 dark:bg-slate-900 dark:shadow-2xl dark:shadow-black/50"
         data-testid="login-frame"
       >
         <Card noHoverPop className="rounded-xl border-0 shadow-none bg-transparent">
