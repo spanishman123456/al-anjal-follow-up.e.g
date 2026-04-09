@@ -204,9 +204,31 @@ export default function Login({
 
   return (
     <div
-      className="login-mubarmij-bg min-h-screen flex flex-col items-center justify-center p-6 relative"
+      className="login-mubarmij-bg min-h-screen flex flex-col items-center px-6 pt-6 pb-10 relative overflow-hidden"
       data-testid="login-page"
     >
+      {theme === "light" && <div className="login-top-sky" aria-hidden />}
+      <div className="pointer-events-none absolute inset-0 overflow-hidden opacity-100 dark:opacity-40 z-[1]" aria-hidden>
+        <div className="absolute -top-24 -right-20 h-[24rem] w-[24rem] rounded-full bg-purple-500/20 blur-3xl animate-blob-float" />
+        <div
+          className="absolute top-[30%] -left-28 h-[20rem] w-[20rem] rounded-full bg-pink-500/15 blur-3xl animate-blob-float"
+          style={{ animationDelay: "-5s" }}
+        />
+        <div
+          className="absolute bottom-0 left-1/3 h-[14rem] w-[14rem] rounded-full bg-secondary/20 blur-3xl animate-blob-float"
+          style={{ animationDelay: "-8s" }}
+        />
+      </div>
+      <div
+        className="absolute inset-0 opacity-[0.14] mix-blend-multiply dark:opacity-[0.06] dark:mix-blend-overlay"
+        aria-hidden="true"
+        style={{
+          backgroundImage: "url('/login-bg.png')",
+          backgroundRepeat: "no-repeat",
+          backgroundPosition: "center",
+          backgroundSize: "cover",
+        }}
+      />
       {/* Left column: logos top, social + Contact Us bottom, same horizontal center */}
       <div className="absolute left-0 top-0 bottom-0 z-10 flex flex-col items-center pt-5 pb-6 px-6 w-56 sm:w-60 bg-transparent border-0 shadow-none" data-testid="login-left-column">
         <div className="flex flex-col items-center gap-2">
@@ -272,7 +294,7 @@ export default function Login({
           </Button>
       </div>
 
-      <div className="relative z-10 w-full max-w-lg text-center mt-24 mb-10" data-testid="login-welcome">
+      <div className="relative z-10 w-full max-w-lg text-center mt-24 mb-10 animate-fade-in-up" style={{ animationDuration: "0.6s" }} data-testid="login-welcome">
         <h1 className="font-sans text-3xl sm:text-4xl font-semibold leading-snug tracking-normal text-white drop-shadow-sm dark:text-white">
           {t("login_welcome_title")}
         </h1>
@@ -283,7 +305,8 @@ export default function Login({
 
       {/* Login card – white, shadow, rounded (no hover pop on this page) */}
       <div
-        className="relative z-10 w-full max-w-md rounded-2xl bg-card border border-border shadow-lg p-8 dark:border-white/10 dark:bg-slate-900 dark:shadow-2xl dark:shadow-black/50"
+        className="relative z-10 w-full max-w-md rounded-2xl bg-card border border-border shadow-lg p-8 animate-scale-in dark:border-white/10 dark:bg-slate-900/75 dark:backdrop-blur-xl dark:shadow-2xl dark:shadow-black/50"
+        style={{ animationDuration: "0.5s", animationDelay: "0.15s", animationFillMode: "backwards" }}
         data-testid="login-frame"
       >
         <Card noHoverPop className="rounded-xl border-0 shadow-none bg-transparent">
@@ -338,22 +361,24 @@ export default function Login({
                   {t("sign_in_with_gmail") || "Sign in with Gmail"}
                 </Button>
               )}
-              {isGoogleLoading && (
-                <p className="text-xs text-slate-500 dark:text-slate-400 mt-2 text-center">Signing in with Google...</p>
-              )}
-              {backendOk === null && (
-                <p className="text-xs text-slate-500 dark:text-slate-400 mt-2">Checking server status...</p>
-              )}
-              {backendOk === true && (
-                <p className="text-xs text-green-600 dark:text-emerald-400 mt-2">Server and database connected</p>
-              )}
-              {backendOk === false && (
-                <p className="text-xs text-amber-600 dark:text-amber-400 mt-2">
-                  {isProductionBackendUrl
-                    ? "Server may be waking (Render free tier: up to ~2 min after idle). You can press Login — the app will retry automatically."
-                    : "Backend or database not reachable. Run Start_App.bat (keep it open). If this persists, open MongoDB Atlas → Network Access and allow your current IP (or 0.0.0.0/0 for testing), and ensure the cluster is not paused."}
-                </p>
-              )}
+              <div className="mt-2 min-h-[3.5rem] text-center">
+                {isGoogleLoading && (
+                  <p className="text-xs text-slate-500 dark:text-slate-400">Signing in with Google...</p>
+                )}
+                {backendOk === null && (
+                  <p className="text-xs text-slate-500 dark:text-slate-400">Checking server status...</p>
+                )}
+                {backendOk === true && (
+                  <p className="text-xs text-green-600 dark:text-emerald-400">Server and database connected</p>
+                )}
+                {backendOk === false && (
+                  <p className="text-xs text-amber-600 dark:text-amber-400">
+                    {isProductionBackendUrl
+                      ? "Server may be waking (Render free tier: up to ~2 min after idle). You can press Login — the app will retry automatically."
+                      : "Backend or database not reachable. Run Start_App.bat (keep it open). If this persists, open MongoDB Atlas → Network Access and allow your current IP (or 0.0.0.0/0 for testing), and ensure the cluster is not paused."}
+                  </p>
+                )}
+              </div>
             </form>
           </CardContent>
         </Card>
