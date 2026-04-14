@@ -410,27 +410,10 @@ html:not(.dark) .login-top-sky {
 @layer components {
     /*
      * Grade table inputs: override Input `w-full` (utilities win over this layer without !important).
-     * Hide spinners so decimals (e.g. 2.5) stay visible on Chrome/Edge/Safari.
+     * Keep native number steppers visible so teachers can increment/decrement with arrows.
      */
-    .score-table-input-5,
-    .score-table-input-5-fill,
-    .score-table-input-10,
-    .score-table-input-10-fill {
-        -moz-appearance: textfield;
-    }
-    input.score-table-input-5::-webkit-outer-spin-button,
-    input.score-table-input-5::-webkit-inner-spin-button,
-    input.score-table-input-5-fill::-webkit-outer-spin-button,
-    input.score-table-input-5-fill::-webkit-inner-spin-button,
-    input.score-table-input-10::-webkit-outer-spin-button,
-    input.score-table-input-10::-webkit-inner-spin-button,
-    input.score-table-input-10-fill::-webkit-outer-spin-button,
-    input.score-table-input-10-fill::-webkit-inner-spin-button {
-        -webkit-appearance: none;
-        margin: 0;
-    }
 
-    /* Tight fixed width: enough for decimals (e.g. 3.5, 10.5) without spinners eating space */
+    /* Fixed width with room for native number steppers */
     /* inline-block + centered td so inputs sit in the middle of the column (not stretched by display:flex) */
     .score-table-input-5 {
         @apply shrink-0 text-center tabular-nums;
@@ -459,9 +442,9 @@ html:not(.dark) .login-top-sky {
         display: inline-block !important;
         vertical-align: middle;
         box-sizing: border-box;
-        width: 6.25rem;
-        min-width: 6.25rem;
-        max-width: 6.25rem;
+        width: 7.25rem;
+        min-width: 7.25rem;
+        max-width: 7.25rem;
         padding-left: 0.35rem !important;
         padding-right: 0.35rem !important;
     }
@@ -470,9 +453,9 @@ html:not(.dark) .login-top-sky {
         display: inline-block !important;
         vertical-align: middle;
         box-sizing: border-box;
-        width: 6.25rem;
-        min-width: 6.25rem;
-        max-width: 6.25rem;
+        width: 7.25rem;
+        min-width: 7.25rem;
+        max-width: 7.25rem;
         padding-left: 0.35rem !important;
         padding-right: 0.35rem !important;
     }

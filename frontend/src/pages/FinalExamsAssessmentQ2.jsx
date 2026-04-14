@@ -241,6 +241,26 @@ export default function FinalExamsAssessmentQ2() {
     setBulkScores((prev) => ({ ...prev, [studentId]: { ...prev[studentId], [field]: value } }));
   };
 
+  const warnMarksExceeded = (max) => {
+    toast.warning(
+      t("marks_exceeded")?.replace(/{max}/g, String(max)) ||
+      `This mark cannot exceed ${max}. Please enter a value from 0 to ${max}.`
+    );
+  };
+
+  const handleFillValueChange = (field, value, max) => {
+    if (value === "" || value === null || value === undefined) {
+      setFillValues((prev) => ({ ...prev, [field]: value }));
+      return;
+    }
+    const num = Number(value);
+    if (!Number.isNaN(num) && num > max) {
+      warnMarksExceeded(max);
+      return;
+    }
+    setFillValues((prev) => ({ ...prev, [field]: value }));
+  };
+
   const handleScoreChange = (studentId, field, value, max) => {
     if (value === "" || value === null || value === undefined) {
       updateBulkScore(studentId, field, value);
@@ -248,8 +268,7 @@ export default function FinalExamsAssessmentQ2() {
     }
     const num = Number(value);
     if (!Number.isNaN(num) && num > max) {
-      updateBulkScore(studentId, field, String(max));
-      toast.warning(t("marks_exceeded")?.replace(/{max}/g, String(max)) || `Max is ${max}`);
+      warnMarksExceeded(max);
       return;
     }
     updateBulkScore(studentId, field, value);
@@ -301,8 +320,11 @@ export default function FinalExamsAssessmentQ2() {
       toast.error(t("enter_valid_value") || "Enter a valid number");
       return;
     }
-    const value = num > max ? String(max) : raw;
-    if (num > max) toast.warning(t("marks_exceeded")?.replace(/{max}/g, String(max)));
+    if (num > max) {
+      warnMarksExceeded(max);
+      return;
+    }
+    const value = raw;
     setBulkEditMode(true);
     setBulkScores((prev) => {
       const next = { ...prev };
@@ -609,14 +631,14 @@ export default function FinalExamsAssessmentQ2() {
                 <TableCell className="text-center py-2">
                   <div className="flex items-center justify-center gap-1">
                     <Input type="number" min={0} max={10} step={0.5} className="score-table-input-10-fill" placeholder="0–10"
-                      value={fillValues.quarter2_practical} onChange={(e) => setFillValues((prev) => ({ ...prev, quarter2_practical: e.target.value }))} />
+                      value={fillValues.quarter2_practical} onChange={(e) => handleFillValueChange("quarter2_practical", e.target.value, 10)} />
                     <Button type="button" variant="outline" size="sm" className="h-8" onClick={() => handleFillColumn("quarter2_practical", 10)}>{t("fill_column")}</Button>
                   </div>
                 </TableCell>
                 <TableCell className="text-center py-2">
                   <div className="flex items-center justify-center gap-1">
                     <Input type="number" min={0} max={10} step={0.5} className="score-table-input-10-fill" placeholder="0–10"
-                      value={fillValues.quarter2_theory} onChange={(e) => setFillValues((prev) => ({ ...prev, quarter2_theory: e.target.value }))} />
+                      value={fillValues.quarter2_theory} onChange={(e) => handleFillValueChange("quarter2_theory", e.target.value, 10)} />
                     <Button type="button" variant="outline" size="sm" className="h-8" onClick={() => handleFillColumn("quarter2_theory", 10)}>{t("fill_column")}</Button>
                   </div>
                 </TableCell>
