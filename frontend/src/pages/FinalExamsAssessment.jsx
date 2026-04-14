@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useOutletContext } from "react-router-dom";
+import { useOutletContext, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import { api, getApiErrorMessage, BULK_SAVE_TIMEOUT_MS } from "@/lib/api";
 import { useTranslations } from "@/lib/i18n";
@@ -118,6 +118,7 @@ function computeFinalPerformanceLevel(baseStudent, currentStudent = baseStudent)
 
 export default function FinalExamsAssessment() {
   const { language, semester, quarter, profile, classes: contextClasses, classesLoaded } = useOutletContext();
+  const [searchParams, setSearchParams] = useSearchParams();
   const t = useTranslations(language);
   const semesterNumber = semester === "semester2" ? 2 : 1;
   const [students, setStudents] = useState([]);
@@ -192,10 +193,15 @@ export default function FinalExamsAssessment() {
   }, [weeks, semesterNumber, quarter]);
   useEffect(() => {
     if (!classes?.length) return;
+    const classFromUrl = searchParams.get("class");
+    if (classFromUrl === "all" || classes.some((c) => c.id === classFromUrl)) {
+      setFilterClass(classFromUrl || "all");
+      return;
+    }
     const key = `app_selected_class_id_s${semesterNumber}_q${quarter}`;
     const saved = sessionStorage.getItem(key);
     if (saved === "all" || classes.some((c) => c.id === saved)) setFilterClass(saved || "all");
-  }, [classes, semesterNumber, quarter]);
+  }, [classes, semesterNumber, quarter, searchParams]);
 
   const filteredStudents = useMemo(() => {
     const minValue = scoreMin ? Number(scoreMin) : null;
@@ -215,6 +221,11 @@ export default function FinalExamsAssessment() {
   const resetFilters = () => {
     sessionStorage.setItem(`app_selected_class_id_s${semesterNumber}_q${quarter}`, "all");
     setFilterClass("all");
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.delete("class");
+      return next;
+    }, { replace: true });
     setSearchTerm("");
     setPerformanceFilter("all");
     setScoreMin("");
@@ -312,14 +323,25 @@ export default function FinalExamsAssessment() {
       return;
     }
     try {
-      const updates = filteredStudents.map((student) => {
-        const current = { ...student, ...(bulkScores[student.id] || {}) };
-        return {
-          id: student.id,
-          quarter1_practical: parseScore(current.quarter1_practical),
-          quarter1_theory: parseScore(current.quarter1_theory),
-        };
+      const updates = filteredStudents.flatMap((student) => {
+        const pending = bulkScores[student.id];
+        if (!pending) return [];
+
+        const update = { id: student.id };
+        if (Object.prototype.hasOwnProperty.call(pending, "quarter1_practical")) {
+          update.quarter1_practical = parseScore(pending.quarter1_practical);
+        }
+        if (Object.prototype.hasOwnProperty.call(pending, "quarter1_theory")) {
+          update.quarter1_theory = parseScore(pending.quarter1_theory);
+        }
+
+        return Object.keys(update).length > 1 ? [update] : [];
       });
+      if (!updates.length) {
+        setBulkEditMode(false);
+        setBulkConfirmOpen(false);
+        return;
+      }
       await api.post("/students/bulk-scores", { updates, week_id: activeWeekId }, { timeout: BULK_SAVE_TIMEOUT_MS });
       toast.success(t("student_updated"));
       setBulkEditMode(false);
@@ -532,6 +554,12 @@ export default function FinalExamsAssessment() {
             onValueChange={(value) => {
               sessionStorage.setItem(`app_selected_class_id_s${semesterNumber}_q${quarter}`, value);
               setFilterClass(value);
+              setSearchParams((prev) => {
+                const next = new URLSearchParams(prev);
+                if (value === "all") next.delete("class");
+                else next.set("class", value);
+                return next;
+              }, { replace: true });
             }}
           >
             <SelectTrigger><SelectValue placeholder={t("select_class")} /></SelectTrigger>
