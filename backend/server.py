@@ -3775,6 +3775,8 @@ async def get_students(
                 if q == 1:
                     # Quarter-wide quiz/chapter (not just the selected week) so Finals week matches Quizzes & Chapter page.
                     effective_q1 = _effective_scores_q1(sw)
+                    student["quarter1_practical"] = effective_q1.get("quarter1_practical")
+                    student["quarter1_theory"] = effective_q1.get("quarter1_theory")
                     scores_dict_q1_eff = {
                         "quiz1": effective_q1.get("quiz1"),
                         "quiz2": effective_q1.get("quiz2"),
@@ -3801,14 +3803,8 @@ async def get_students(
                     student["assessment_q2_performance_label"] = None
                     student["assessment_q2_weekly_subtotal"] = None
                     student["assessment_q2_marks_subtotal"] = None
-                    # Use current week's quarter exam values only (no fallback to week 9).
-                    effective_q1_edit = {
-                        **effective_q1,
-                        "quarter1_practical": student.get("quarter1_practical"),
-                        "quarter1_theory": student.get("quarter1_theory"),
-                    }
                     res_final_q1 = compute_final_exams_combined(
-                        effective_q1_edit, avg_first_9_weeks=avg_9, quarter=1, students_total_override=students_total_q1
+                        effective_q1, avg_first_9_weeks=avg_9, quarter=1, students_total_override=students_total_q1
                     )
                     student["final_exams_combined_total"] = res_final_q1.get("combined_total")
                     student["final_exams_performance_level"] = res_final_q1.get("performance_level")
@@ -3823,6 +3819,8 @@ async def get_students(
                     student["assessment_weekly_subtotal"] = None
                     student["assessment_marks_subtotal"] = None
                     effective_q2 = _effective_scores_q2(sw)
+                    student["quarter2_practical"] = effective_q2.get("quarter2_practical")
+                    student["quarter2_theory"] = effective_q2.get("quarter2_theory")
                     scores_dict_q2_eff = {
                         "quiz3": effective_q2.get("quiz3"),
                         "quiz4": effective_q2.get("quiz4"),
@@ -3844,14 +3842,8 @@ async def get_students(
                         )
                     else:
                         student["assessment_q2_marks_subtotal"] = None
-                    # Use current week's quarter exam values only (no cross-week fallback for quarter fields).
-                    effective_q2_edit = {
-                        **effective_q2,
-                        "quarter2_practical": student.get("quarter2_practical"),
-                        "quarter2_theory": student.get("quarter2_theory"),
-                    }
                     res_final_q2 = compute_final_exams_combined(
-                        effective_q2_edit, avg_weeks_10_18=avg_10_18, quarter=2, students_total_override=students_total_q2
+                        effective_q2, avg_weeks_10_18=avg_10_18, quarter=2, students_total_override=students_total_q2
                     )
                     student["final_exams_combined_total"] = None
                     student["final_exams_performance_level"] = None
