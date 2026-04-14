@@ -52,6 +52,14 @@ const parseScore = (value) => {
   return Number.isNaN(parsed) ? null : parsed;
 };
 
+const formatDownloadFilePart = (value, fallback = "all-classes") => {
+  const cleaned = String(value || fallback)
+    .trim()
+    .replace(/[<>:"/\\|?*\u0000-\u001F]/g, "")
+    .replace(/\s+/g, "-");
+  return cleaned || fallback;
+};
+
 const STUDENTS_TOTAL_MAX = 15;
 const ASSESSMENT_TOTAL_MAX = 15;
 const QUARTER_PRACTICAL_MAX = 10;
@@ -114,6 +122,13 @@ function computeFinalPerformanceLevel(baseStudent, currentStudent = baseStudent)
   if (total >= 42) return "on_level";
   if (total >= 35) return "approach";
   return "below";
+}
+
+function computeQuarterExamTotal(currentStudent) {
+  const practical = Number(currentStudent?.quarter1_practical) ?? 0;
+  const theory = Number(currentStudent?.quarter1_theory) ?? 0;
+  const total = (Number.isNaN(practical) ? 0 : practical) + (Number.isNaN(theory) ? 0 : theory);
+  return Math.min(QUARTER_PRACTICAL_MAX + QUARTER_THEORY_MAX, Math.round(total * 100) / 100);
 }
 
 export default function FinalExamsAssessment() {
@@ -459,6 +474,10 @@ export default function FinalExamsAssessment() {
   };
 
   const activeWeek = weeks.find((w) => w.id === activeWeekId);
+  const selectedClassName =
+    filterClass === "all"
+      ? (t("all_classes") || "all-classes")
+      : (classes.find((cls) => cls.id === filterClass)?.name || filterClass);
   const handleDownloadMarks = async () => {
     try {
       const response = await api.get("/students/export", {
@@ -472,7 +491,10 @@ export default function FinalExamsAssessment() {
       const url = window.URL.createObjectURL(new Blob([response.data]));
       const link = document.createElement("a");
       link.href = url;
-      link.setAttribute("download", `final-exams-assessment${activeWeek?.number ? `-week-${activeWeek.number}` : ""}.xlsx`);
+      link.setAttribute(
+        "download",
+        `final-exams-assessment-class-${formatDownloadFilePart(selectedClassName)}${activeWeek?.number ? `-week-${activeWeek.number}` : ""}.xlsx`
+      );
       document.body.appendChild(link);
       link.click();
       link.remove();
@@ -620,6 +642,7 @@ export default function FinalExamsAssessment() {
                 <TableHead className="text-center">{t("quarter1_theoretical_exam")} (10)</TableHead>
                 <TableHead className="text-center">{t("total_score")}</TableHead>
                 <TableHead className="text-center">{t("performance_level")}</TableHead>
+                <TableHead className="text-center">{t("quarter_exams_total")} (20)</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -639,11 +662,12 @@ export default function FinalExamsAssessment() {
                     <Button type="button" variant="outline" size="sm" className="h-8" onClick={() => handleFillColumn("quarter1_theory", 10)}>{t("fill_column")}</Button>
                   </div>
                 </TableCell>
-                <TableCell colSpan={2} />
+                <TableCell colSpan={3} />
               </TableRow>
               {filteredStudents.length ? (
                 filteredStudents.map((student) => {
                   const current = { ...student, ...(bulkScores[student.id] || {}) };
+                  const quarterExamTotal = computeQuarterExamTotal(current);
                   // Use backend final-exams combined total when available (50/50); in bulk edit use local computation for live preview
                   const total =
                     !bulkEditMode &&
@@ -708,12 +732,15 @@ export default function FinalExamsAssessment() {
                       <TableCell className="text-center">
                         <Badge variant="outline" className={levelStyles[perfLevel] ?? levelStyles.no_data}>{t(perfLevel)}</Badge>
                       </TableCell>
+                      <TableCell className="text-center">
+                        <span className="font-semibold tabular-nums">{formatScore(quarterExamTotal, "/20")}</span>
+                      </TableCell>
                     </TableRow>
                   );
                 })
               ) : (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center text-muted-foreground">{t("no_data")}</TableCell>
+                  <TableCell colSpan={7} className="text-center text-muted-foreground">{t("no_data")}</TableCell>
                 </TableRow>
               )}
             </TableBody>

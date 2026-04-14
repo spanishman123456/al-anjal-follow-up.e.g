@@ -198,6 +198,7 @@ export const translations = {
     final_exams_total_formula_hint:
       "Total out of 50 = up to 15 follow-up (9-week average) + 15 quizzes & chapter (best scores recorded anywhere in the quarter) + 20 for the two quarter exams below. The first two parts stay in sync with the Quizzes & Chapter Test page.",
     performance_level: "Performance Level",
+    quarter_exams_total: "Quarter Exams Total",
     actions: "Actions",
     create: "Create",
     cancel: "Cancel",
@@ -594,6 +595,7 @@ export const translations = {
     final_exams_total_formula_hint:
       "المجموع من 50 = حتى 15 متابعة (متوسط 9 أسابيع) + 15 اختبارات قصيرة واختبار فصل (أفضل الدرجات المسجّلة في أي أسبوع من الربع) + 20 لامتحاني الربع أدناه. الجزآن الأولان يتطابقان مع صفحة الاختبارات القصيرة واختبار الفصل.",
     performance_level: "مستوى الأداء",
+    quarter_exams_total: "مجموع امتحاني الربع",
     actions: "الإجراءات",
     create: "إنشاء",
     cancel: "إلغاء",
