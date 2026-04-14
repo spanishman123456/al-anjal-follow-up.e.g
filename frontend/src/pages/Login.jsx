@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import { api, checkBackendHealth, checkBackendLive, isProductionBackendUrl, warmBackendInBackground } from "@/lib/api";
+import { api, checkBackendHealth, checkBackendLive, isProductionBackendUrl, setStoredAuthToken, warmBackendInBackground } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Globe, MessageCircle, Mail } from "lucide-react";
 import { Input } from "@/components/ui/input";
@@ -101,7 +101,7 @@ export default function Login({
       setIsGoogleLoading(true);
       try {
         const response = await api.post("auth/google", { id_token: credential });
-        sessionStorage.setItem("auth_token", response.data.access_token);
+        setStoredAuthToken(response.data.access_token);
         onLogin?.(response.data.access_token);
         navigate("/", { replace: true });
       } catch (error) {
@@ -194,7 +194,7 @@ export default function Login({
           throw error;
         }
       }
-      sessionStorage.setItem("auth_token", response.data.access_token);
+      setStoredAuthToken(response.data.access_token);
       onLogin?.(response.data.access_token);
       navigate("/", { replace: true });
     } catch (error) {

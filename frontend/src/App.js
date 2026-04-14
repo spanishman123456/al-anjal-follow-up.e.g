@@ -2,7 +2,15 @@ import { useCallback, useEffect, useState, lazy, Suspense, Component } from "rea
 import "@/App.css";
 import { HashRouter as BrowserRouter, Routes, Route } from "react-router-dom";
 import { AppShell } from "@/components/layout/AppShell";
-import { api, checkBackendHealth, isProductionBackendUrl } from "@/lib/api";
+import {
+  api,
+  AUTH_TOKEN_KEY,
+  checkBackendHealth,
+  clearStoredAuthToken,
+  getStoredAuthToken,
+  isProductionBackendUrl,
+  setStoredAuthToken,
+} from "@/lib/api";
 import Login from "@/pages/Login";
 import Dashboard from "@/pages/Dashboard";
 import { Toaster } from "@/components/ui/sonner";
@@ -65,8 +73,8 @@ function App() {
     return stored;
   });
   const [theme, setTheme] = useState(() => localStorage.getItem("theme") || "light");
-  const [token, setToken] = useState(() => sessionStorage.getItem("auth_token"));
-  const [authReady, setAuthReady] = useState(() => (sessionStorage.getItem("auth_token") ? null : true));
+  const [token, setToken] = useState(() => getStoredAuthToken());
+  const [authReady, setAuthReady] = useState(() => (getStoredAuthToken() ? null : true));
   const [semester, setSemester] = useState(
     () => localStorage.getItem("semester") || "semester1",
   );
@@ -113,6 +121,13 @@ function App() {
     }
   }, []);
   useEffect(() => {
+    const storedToken = getStoredAuthToken();
+    if (storedToken) {
+      // Migrate existing single-tab sessions so copied URLs open authenticated in new tabs.
+      setStoredAuthToken(storedToken);
+    }
+  }, []);
+  useEffect(() => {
     if (!token) return;
     let cancelled = false;
     api.get("/users/profile", { timeout: 10000 })
@@ -120,7 +135,7 @@ function App() {
       .catch((err) => {
         if (cancelled) return;
         if (err?.response?.status === 401 || err?.code === "ECONNABORTED" || err?.message === "Network Error") {
-          sessionStorage.removeItem("auth_token");
+          clearStoredAuthToken();
           setToken(null);
         }
         setAuthReady(true);
@@ -135,6 +150,16 @@ function App() {
     };
     window.addEventListener("auth-logout", handler);
     return () => window.removeEventListener("auth-logout", handler);
+  }, []);
+  useEffect(() => {
+    const onStorage = (event) => {
+      if (event.key !== AUTH_TOKEN_KEY) return;
+      const nextToken = event.newValue || null;
+      setToken(nextToken);
+      setAuthReady(nextToken ? null : true);
+    };
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
   }, []);
 
   useEffect(() => {
@@ -199,6 +224,7 @@ function App() {
   }, [token]);
 
   const handleLogin = useCallback((newToken) => {
+    setStoredAuthToken(newToken);
     setToken(newToken);
     setAuthReady(true);
   }, []);

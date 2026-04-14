@@ -17,6 +17,42 @@ export const api = axios.create({
   timeout: API_TIMEOUT_MS,
 });
 
+export const AUTH_TOKEN_KEY = "auth_token";
+
+export function getStoredAuthToken() {
+  try {
+    return localStorage.getItem(AUTH_TOKEN_KEY) || sessionStorage.getItem(AUTH_TOKEN_KEY);
+  } catch {
+    return null;
+  }
+}
+
+export function setStoredAuthToken(token) {
+  try {
+    localStorage.setItem(AUTH_TOKEN_KEY, token);
+  } catch {
+    // ignore storage errors
+  }
+  try {
+    sessionStorage.setItem(AUTH_TOKEN_KEY, token);
+  } catch {
+    // ignore storage errors
+  }
+}
+
+export function clearStoredAuthToken() {
+  try {
+    localStorage.removeItem(AUTH_TOKEN_KEY);
+  } catch {
+    // ignore storage errors
+  }
+  try {
+    sessionStorage.removeItem(AUTH_TOKEN_KEY);
+  } catch {
+    // ignore storage errors
+  }
+}
+
 /** Check if backend server is reachable (for login page status). */
 export async function checkBackendHealth() {
   try {
@@ -55,7 +91,7 @@ export function warmBackendInBackground() {
 export const isProductionBackendUrl = isProductionBackend;
 
 api.interceptors.request.use((config) => {
-  const token = sessionStorage.getItem("auth_token");
+  const token = getStoredAuthToken();
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
@@ -66,7 +102,7 @@ api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error?.response?.status === 401) {
-      sessionStorage.removeItem("auth_token");
+      clearStoredAuthToken();
       window.dispatchEvent(new CustomEvent("auth-logout"));
     }
     return Promise.reject(error);

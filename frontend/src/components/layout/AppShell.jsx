@@ -17,6 +17,7 @@ import {
   MessageCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { clearStoredAuthToken } from "@/lib/api";
 import { useTranslations } from "@/lib/i18n";
 import { api, BACKEND_ROOT_URL, isProductionBackendUrl, warmBackendInBackground } from "@/lib/api";
 import {
@@ -176,7 +177,7 @@ export const AppShell = ({
   };
 
   const confirmLogout = () => {
-    sessionStorage.removeItem("auth_token");
+    clearStoredAuthToken();
     setLogoutConfirmOpen(false);
     window.dispatchEvent(new CustomEvent("auth-logout"));
     navigate("/", { replace: true });
