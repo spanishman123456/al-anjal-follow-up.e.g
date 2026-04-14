@@ -624,7 +624,7 @@ export default function FinalExamsAssessmentQ2() {
               </TableRow>
               {filteredStudents.length ? (
                 filteredStudents.map((student) => {
-                  const current = bulkScores[student.id] || student;
+                  const current = { ...student, ...(bulkScores[student.id] || {}) };
                   const total =
                     !bulkEditMode &&
                     student.final_exams_q2_combined_total != null &&

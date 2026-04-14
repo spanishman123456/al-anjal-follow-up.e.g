@@ -621,7 +621,7 @@ export default function FinalExamsAssessment() {
               </TableRow>
               {filteredStudents.length ? (
                 filteredStudents.map((student) => {
-                  const current = bulkScores[student.id] || student;
+                  const current = { ...student, ...(bulkScores[student.id] || {}) };
                   // Use backend final-exams combined total when available (50/50); in bulk edit use local computation for live preview
                   const total =
                     !bulkEditMode &&
