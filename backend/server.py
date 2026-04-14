@@ -4201,6 +4201,15 @@ async def export_students_marks(
     final_exams_view = view_lower == "final_exams"
     final_exams_q2_view = view_lower == "final_exams_q2"
     export_rows = []
+    def _quarter_exam_total_display(practical, theory):
+        values = [practical, theory]
+        if all(v is None or (isinstance(v, float) and pd.isna(v)) for v in values):
+            return ""
+        practical_num = _safe_float_score(practical)
+        theory_num = _safe_float_score(theory)
+        total = min(20.0, max(0.0, practical_num + theory_num))
+        total = round(total, 2)
+        return f"{int(total)}/20" if float(total).is_integer() else f"{total}/20"
     for student in students:
         if assessment_view:
             combined = compute_assessment_combined(
@@ -4276,6 +4285,10 @@ async def export_students_marks(
                     "1st Quarter Theoretical Exam (10)": student.get("quarter1_theory"),
                     "Total Score": total_display,
                     "Performance Level": combined.get("performance_label") or "No Data",
+                    "Quarter Exams Total (20)": _quarter_exam_total_display(
+                        student.get("quarter1_practical"),
+                        student.get("quarter1_theory"),
+                    ),
                 }
             )
         elif final_exams_q2_view:
@@ -4303,6 +4316,10 @@ async def export_students_marks(
                     "2nd Quarter Theoretical Exam (10)": student.get("quarter2_theory"),
                     "Total Score": total_display,
                     "Performance Level": combined.get("performance_label") or "No Data",
+                    "Quarter Exams Total (20)": _quarter_exam_total_display(
+                        student.get("quarter2_practical"),
+                        student.get("quarter2_theory"),
+                    ),
                 }
             )
         else:

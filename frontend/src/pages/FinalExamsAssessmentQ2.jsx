@@ -496,7 +496,7 @@ export default function FinalExamsAssessmentQ2() {
       link.href = url;
       link.setAttribute(
         "download",
-        `final-exams-assessment-q2-class-${formatDownloadFilePart(selectedClassName)}${activeWeek?.number ? `-week-${activeWeek.number}` : ""}.xlsx`
+        `final-exams-q2-class-${formatDownloadFilePart(selectedClassName)}.xlsx`
       );
       document.body.appendChild(link);
       link.click();
