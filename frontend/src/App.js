@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState, lazy, Suspense, Component } from "react";
 import "@/App.css";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { HashRouter as BrowserRouter, Routes, Route } from "react-router-dom";
 import { AppShell } from "@/components/layout/AppShell";
 import { api, checkBackendHealth, isProductionBackendUrl } from "@/lib/api";
 import Login from "@/pages/Login";

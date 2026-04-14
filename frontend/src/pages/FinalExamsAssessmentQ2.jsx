@@ -270,12 +270,12 @@ export default function FinalExamsAssessmentQ2() {
   };
 
   const handleQuarter2PracticalBlur = async (student) => {
-    const current = bulkScores[student.id] || student;
+    const current = { ...student, ...(bulkScores[student.id] || {}) };
     await saveScoreOnBlur(student, "quarter2_practical", parseScore(current.quarter2_practical));
   };
 
   const handleQuarter2TheoryBlur = async (student) => {
-    const current = bulkScores[student.id] || student;
+    const current = { ...student, ...(bulkScores[student.id] || {}) };
     await saveScoreOnBlur(student, "quarter2_theory", parseScore(current.quarter2_theory));
   };
 
@@ -316,7 +316,7 @@ export default function FinalExamsAssessmentQ2() {
     }
     try {
       const updates = filteredStudents.map((student) => {
-        const current = bulkScores[student.id] || student;
+        const current = { ...student, ...(bulkScores[student.id] || {}) };
         return {
           id: student.id,
           quarter2_practical: parseScore(current.quarter2_practical),
