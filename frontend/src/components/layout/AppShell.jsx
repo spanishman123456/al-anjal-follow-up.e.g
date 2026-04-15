@@ -199,6 +199,13 @@ export const AppShell = ({
       testId: "nav-final-exams",
       roles: ["Admin", "Teacher"],
     },
+    {
+      to: "/total-marks",
+      label: t("nav_total_marks"),
+      icon: FileText,
+      testId: "nav-total-marks",
+      roles: ["Admin", "Teacher"],
+    },
     { to: "/teachers", label: t("teachers"), icon: UserRound, testId: "nav-teachers-link", roles: ["Admin"] },
     { to: "/classes", label: t("classes"), icon: GraduationCap, testId: "nav-classes-link", roles: ["Admin", "Teacher"] },
     { to: "/analytics", label: t("analytics"), icon: BarChart3, testId: "nav-analytics-link", roles: ["Admin", "Teacher"] },

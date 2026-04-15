@@ -3777,6 +3777,28 @@ async def get_students(
                     effective_q1 = _effective_scores_q1(sw)
                     student["quarter1_practical"] = effective_q1.get("quarter1_practical")
                     student["quarter1_theory"] = effective_q1.get("quarter1_theory")
+                    q1_best_quiz_candidates = [
+                        v for v in (effective_q1.get("quiz1"), effective_q1.get("quiz2"))
+                        if v is not None and not (isinstance(v, float) and pd.isna(v))
+                    ]
+                    q1_quarter_exam_fields = [
+                        effective_q1.get("quarter1_practical"),
+                        effective_q1.get("quarter1_theory"),
+                    ]
+                    student["total_marks_best_quiz"] = max(q1_best_quiz_candidates) if q1_best_quiz_candidates else None
+                    student["total_marks_chapter_test"] = effective_q1.get("chapter_test1_practical")
+                    student["total_marks_quarter_exams_total"] = (
+                        round(
+                            min(
+                                20.0,
+                                _safe_float_score(effective_q1.get("quarter1_practical"))
+                                + _safe_float_score(effective_q1.get("quarter1_theory")),
+                            ),
+                            2,
+                        )
+                        if any(v is not None and not (isinstance(v, float) and pd.isna(v)) for v in q1_quarter_exam_fields)
+                        else None
+                    )
                     scores_dict_q1_eff = {
                         "quiz1": effective_q1.get("quiz1"),
                         "quiz2": effective_q1.get("quiz2"),
@@ -3821,6 +3843,28 @@ async def get_students(
                     effective_q2 = _effective_scores_q2(sw)
                     student["quarter2_practical"] = effective_q2.get("quarter2_practical")
                     student["quarter2_theory"] = effective_q2.get("quarter2_theory")
+                    q2_best_quiz_candidates = [
+                        v for v in (effective_q2.get("quiz3"), effective_q2.get("quiz4"))
+                        if v is not None and not (isinstance(v, float) and pd.isna(v))
+                    ]
+                    q2_quarter_exam_fields = [
+                        effective_q2.get("quarter2_practical"),
+                        effective_q2.get("quarter2_theory"),
+                    ]
+                    student["total_marks_best_quiz"] = max(q2_best_quiz_candidates) if q2_best_quiz_candidates else None
+                    student["total_marks_chapter_test"] = effective_q2.get("chapter_test2_practical")
+                    student["total_marks_quarter_exams_total"] = (
+                        round(
+                            min(
+                                20.0,
+                                _safe_float_score(effective_q2.get("quarter2_practical"))
+                                + _safe_float_score(effective_q2.get("quarter2_theory")),
+                            ),
+                            2,
+                        )
+                        if any(v is not None and not (isinstance(v, float) and pd.isna(v)) for v in q2_quarter_exam_fields)
+                        else None
+                    )
                     scores_dict_q2_eff = {
                         "quiz3": effective_q2.get("quiz3"),
                         "quiz4": effective_q2.get("quiz4"),

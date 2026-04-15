@@ -19,6 +19,7 @@ import { Toaster } from "@/components/ui/sonner";
 const Students = lazy(() => import("@/pages/Students"));
 const AssessmentMarks = lazy(() => import("@/pages/AssessmentMarks"));
 const FinalExamsAssessment = lazy(() => import("@/pages/FinalExamsAssessment"));
+const TotalMarks = lazy(() => import("@/pages/TotalMarks"));
 const AssessmentMarksQ2 = lazy(() => import("@/pages/AssessmentMarksQ2"));
 const FinalExamsAssessmentQ2 = lazy(() => import("@/pages/FinalExamsAssessmentQ2"));
 const Teachers = lazy(() => import("@/pages/Teachers"));
@@ -259,6 +260,7 @@ function App() {
         <Route path="students" element={<Suspense fallback={<PageFallback />}><Students /></Suspense>} />
         <Route path="assessment-marks" element={<Suspense fallback={<PageFallback />}><AssessmentMarks /></Suspense>} />
         <Route path="final-exams-assessment" element={<Suspense fallback={<PageFallback />}><FinalExamsAssessment /></Suspense>} />
+        <Route path="total-marks" element={<Suspense fallback={<PageFallback />}><TotalMarks /></Suspense>} />
         <Route path="assessment-marks-q2" element={<Suspense fallback={<PageFallback />}><AssessmentMarksQ2 /></Suspense>} />
         <Route path="final-exams-assessment-q2" element={<Suspense fallback={<PageFallback />}><FinalExamsAssessmentQ2 /></Suspense>} />
         <Route path="teachers" element={<Suspense fallback={<PageFallback />}><Teachers /></Suspense>} />
