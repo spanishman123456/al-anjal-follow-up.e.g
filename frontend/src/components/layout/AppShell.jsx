@@ -95,6 +95,7 @@ export const AppShell = ({
   const [notificationsLoaded, setNotificationsLoaded] = useState(false);
   const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
   const [expandedNavKey, setExpandedNavKey] = useState(null);
+  const [isSidebarHovered, setIsSidebarHovered] = useState(false);
 
   // Keep URL in sync with header semester/quarter when on quarter-specific pages
   useEffect(() => {
@@ -222,17 +223,58 @@ export const AppShell = ({
   );
 
   const heroSky = theme === "light";
+  const sidebarExpanded = isSidebarHovered;
 
   return (
     <div className="min-h-screen w-full bg-background text-foreground flex flex-row" dir="ltr" data-testid="app-shell">
       <aside
-        className={`w-64 shrink-0 flex flex-col justify-between border-[hsl(var(--sidebar-border))] bg-[hsl(var(--sidebar-background))] text-[hsl(var(--sidebar-foreground))] shadow-sm ${
-          isRTL ? "order-2 border-s" : "order-1 border-e"
-        }`}
+        className={cn(
+          "group relative shrink-0 overflow-hidden border-[hsl(var(--sidebar-border))] bg-[hsl(var(--sidebar-background))] text-[hsl(var(--sidebar-foreground))] shadow-sm transition-[width] duration-300 ease-out",
+          "w-64 lg:w-4",
+          sidebarExpanded && "lg:w-64",
+          isRTL ? "order-2 border-s" : "order-1 border-e",
+        )}
         data-testid="sidebar"
         dir={isRTL ? "rtl" : undefined}
+        onMouseEnter={() => setIsSidebarHovered(true)}
+        onMouseLeave={() => setIsSidebarHovered(false)}
+        onFocusCapture={() => setIsSidebarHovered(true)}
+        onBlurCapture={(event) => {
+          if (!event.currentTarget.contains(event.relatedTarget)) {
+            setIsSidebarHovered(false);
+          }
+        }}
       >
+        <div
+          className={cn(
+            "pointer-events-none absolute inset-y-0 top-0 hidden w-4 bg-gradient-to-b from-primary/70 via-primary/45 to-primary/70 lg:block",
+            isRTL ? "right-0" : "left-0",
+            sidebarExpanded && "opacity-0",
+          )}
+          aria-hidden
+        />
+        <div
+          className={cn(
+            "pointer-events-none absolute inset-y-0 hidden items-center justify-center lg:flex",
+            isRTL ? "right-0 w-4" : "left-0 w-4",
+            sidebarExpanded && "opacity-0",
+          )}
+          aria-hidden
+        >
+          <ChevronRight
+            className={cn(
+              "h-3.5 w-3.5 text-white/90 transition-transform duration-300",
+              isRTL && "rotate-180",
+            )}
+          />
+        </div>
         <div className="flex flex-col flex-1 min-h-0 justify-between">
+        <div
+          className={cn(
+            "flex min-h-full flex-col justify-between transition-opacity duration-200",
+            sidebarExpanded ? "opacity-100" : "lg:pointer-events-none lg:opacity-0",
+          )}
+        >
         <div>
           <div className="px-6 py-6 border-b border-[hsl(var(--sidebar-border))]">
             <div className="flex items-center animate-fade-in" data-testid="brand-block">
@@ -352,6 +394,7 @@ export const AppShell = ({
           <p className="text-xs text-muted-foreground text-center" data-testid="sidebar-copyright">
             {t("sidebar_copyright")}
           </p>
+        </div>
         </div>
         </div>
       </aside>
