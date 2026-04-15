@@ -79,7 +79,7 @@ export default function Reports() {
       toast.info("Generate the report first to auto-fill comments.");
       return;
     }
-    applyGeneratedInsights(buildAutoInsightsFromReport(reportData));
+    applyGeneratedInsights(buildAutoInsightsFromReport(reportData, language));
   };
 
   const fetchReport = () => {
@@ -89,7 +89,7 @@ export default function Reports() {
       .then((res) => {
         const reportData = res.data;
         setReport(reportData);
-        applyGeneratedInsights(buildAutoInsightsFromReport(reportData));
+        applyGeneratedInsights(buildAutoInsightsFromReport(reportData, language));
       })
       .catch(() => {});
   };
@@ -101,7 +101,7 @@ export default function Reports() {
     });
     const reportData = response.data;
     setReport(reportData);
-    applyGeneratedInsights(buildAutoInsightsFromReport(reportData));
+    applyGeneratedInsights(buildAutoInsightsFromReport(reportData, language));
   };
 
   useEffect(() => {
@@ -125,6 +125,11 @@ export default function Reports() {
     if (!grade || !hasReportRef.current) return;
     fetchReportRef.current();
   }, [grade, termScopeId]);
+
+  useEffect(() => {
+    if (!report) return;
+    applyGeneratedInsights(buildAutoInsightsFromReport(report, language));
+  }, [report, language]);
 
   const handlePrint = () => {
     window.print();

@@ -110,7 +110,7 @@ export default function Analytics() {
 
   const autoFillInsights = () => {
     if (!overview) return;
-    applyGeneratedInsights(buildAutoInsightsFromOverview(overview, apiQuarter));
+    applyGeneratedInsights(buildAutoInsightsFromOverview(overview, apiQuarter, language));
   };
 
   useEffect(() => {
@@ -255,8 +255,8 @@ export default function Analytics() {
 
   useEffect(() => {
     if (!overview) return;
-    applyGeneratedInsights(buildAutoInsightsFromOverview(overview, apiQuarter));
-  }, [overview, apiQuarter]);
+    applyGeneratedInsights(buildAutoInsightsFromOverview(overview, apiQuarter, language));
+  }, [overview, apiQuarter, language]);
 
   useEffect(() => {
     if (activeTab === "quarter2") setActiveTab("quarter1");

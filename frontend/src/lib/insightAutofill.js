@@ -20,8 +20,13 @@ function topNames(items, limit = 3) {
     .slice(0, limit);
 }
 
-function formatNames(names) {
+function formatNames(names, language = "en") {
   if (!names.length) return "";
+  if (language === "ar") {
+    if (names.length === 1) return names[0];
+    if (names.length === 2) return `${names[0]} و${names[1]}`;
+    return `${names[0]}، ${names[1]}، و${names[2]}`;
+  }
   if (names.length === 1) return names[0];
   if (names.length === 2) return `${names[0]} and ${names[1]}`;
   return `${names[0]}, ${names[1]}, and ${names[2]}`;
@@ -33,7 +38,29 @@ function toNumber(value) {
   return Number.isFinite(n) ? n : null;
 }
 
-function buildCommonInsights(payload) {
+function translateInsightLabel(label, language = "en") {
+  if (language !== "ar") return label;
+  const map = {
+    Attendance: "الحضور",
+    Participation: "المشاركة",
+    Project: "المشروع",
+    Homework: "الواجبات",
+    Quizzes: "الاختبارات القصيرة",
+    "Chapter tests": "اختبارات الفصول",
+    "Quarter exams": "اختبارات الربع",
+  };
+  return map[label] || label;
+}
+
+function joinLabels(labels, language = "en") {
+  const translated = (labels || []).map((label) => translateInsightLabel(label, language));
+  if (language === "ar") {
+    return translated.join("، ");
+  }
+  return translated.join(", ");
+}
+
+function buildCommonInsights(payload, language = "en") {
   const excelling = payload?.excelling || [];
   const struggling = payload?.struggling || [];
 
@@ -46,19 +73,40 @@ function buildCommonInsights(payload) {
   const focusAvg = toNumber(payload?.focusAvg);
 
   const strengthsText = strengths.length
-    ? strengths.join(", ")
-    : "consistent completion of core assessments";
+    ? joinLabels(strengths, language)
+    : language === "ar"
+      ? "الاستمرار الجيد في إنجاز التقييمات الأساسية"
+      : "consistent completion of core assessments";
   const weaknessesText = weaknesses.length
-    ? weaknesses.join(", ")
-    : "assessment consistency and foundational revision";
+    ? joinLabels(weaknesses, language)
+    : language === "ar"
+      ? "الانتظام في التقييم والمراجعة التأسيسية"
+      : "assessment consistency and foundational revision";
 
-  const excellingSample = formatNames(topExcellingNames);
-  const supportSample = formatNames(topSupportNames);
+  const excellingSample = formatNames(topExcellingNames, language);
+  const supportSample = formatNames(topSupportNames, language);
 
   const perfLine =
-    focusAvg != null
-      ? `Cohort on-level rate is ${focusRate}% for the selected term, with an average quarter total of ${focusAvg}.`
-      : `Cohort on-level rate is ${focusRate}% for the selected term. Average quarter total is still stabilizing as more scores are recorded.`;
+    language === "ar"
+      ? focusAvg != null
+        ? `نسبة الطلاب على المستوى في الفترة المحددة هي ${focusRate}%، ومتوسط مجموع الربع هو ${focusAvg}.`
+        : `نسبة الطلاب على المستوى في الفترة المحددة هي ${focusRate}%. وما زال متوسط مجموع الربع يتضح مع إدخال درجات إضافية.`
+      : focusAvg != null
+        ? `Cohort on-level rate is ${focusRate}% for the selected term, with an average quarter total of ${focusAvg}.`
+        : `Cohort on-level rate is ${focusRate}% for the selected term. Average quarter total is still stabilizing as more scores are recorded.`;
+
+  if (language === "ar") {
+    return {
+      analysis_strengths: `يظهر الطلاب أفضل نتائجهم في ${strengthsText}. ${excellingSample ? `ويُعد ${excellingSample} من أبرز المتقدمين حاليًا بفضل الأداء المرتفع والثابت وعادات التعلم الإيجابية.` : "ويحافظ عدد من الطلاب على أداء مرتفع ومستقر خلال الربع."}`,
+      analysis_weaknesses: `تتمثل أبرز جوانب الضعف في ${weaknessesText}. ${supportSample ? `ويحتاج ${supportSample} إلى خطط دعم مركزة مع متابعة قصيرة المدى وتواصل مستمر مع الأسرة.` : "وتحتاج مجموعة الدعم الحالية إلى تدخل أسبوعي ومتابعة منتظمة للتقدم."}`,
+      analysis_performance: perfLine,
+      analysis_standout_data: `يوجد ${excelling.length} من الطلاب ضمن مجموعة الأداء المرتفع، بينما يحتاج ${struggling.length} إلى دعم موجه. استخدم تفاصيل الفصل والمهارات لتحديد أولويات المتابعة.`,
+      analysis_actions:
+        "نفذ تدخلات في مجموعات صغيرة لمجالات الضعف مرتين أسبوعيًا، ووزع تدريبات متفاوتة حسب فجوة المهارة، وراجع التقدم كل أسبوع، وتواصل مع أسر الطلاب الذين يظلون دون المستوى المتوقع.",
+      analysis_recommendations:
+        "حافظ على مهام إثرائية للطلاب المتفوقين، وأنشئ خطط علاج فردية للطلاب المحتاجين للدعم. استخدم تقويمات تكوينية قصيرة، ومتابعة المشاركة، واجتماعات مراجعة شهرية للحفاظ على نمو واضح ومستدام.",
+    };
+  }
 
   return {
     analysis_strengths: `Students show strongest outcomes in ${strengthsText}. ${excellingSample ? `${excellingSample} are currently leading with steady high performance and positive learning habits.` : "Several students are maintaining high and stable performance across the quarter."}`,
@@ -73,7 +121,7 @@ function buildCommonInsights(payload) {
 }
 
 /** @param {number} [selectedQuarter] 1 or 2 — which quarter in the semester is in focus */
-export function buildAutoInsightsFromOverview(overview, selectedQuarter = 1) {
+export function buildAutoInsightsFromOverview(overview, selectedQuarter = 1, language = "en") {
   const q =
     selectedQuarter === 2 ? overview?.quarter2 || {} : overview?.quarter1 || {};
   return buildCommonInsights({
@@ -81,14 +129,14 @@ export function buildAutoInsightsFromOverview(overview, selectedQuarter = 1) {
     focusAvg: q.avg_total,
     excelling: overview?.excelling_students || [],
     struggling: overview?.struggling_students || [],
-  });
+  }, language);
 }
 
-export function buildAutoInsightsFromReport(report) {
+export function buildAutoInsightsFromReport(report, language = "en") {
   return buildCommonInsights({
     focusRate: report?.exceeding_rate,
     focusAvg: report?.avg_total_score,
     excelling: report?.top_performers || [],
     struggling: report?.students_needing_support || [],
-  });
+  }, language);
 }
