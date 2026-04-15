@@ -5045,16 +5045,37 @@ def build_summary(students: List[Dict[str, Any]], classes: List[Dict[str, Any]])
     }
 
 
+def _analytics_student_query(class_id: Optional[str], student_id: Optional[str]) -> Dict[str, Any]:
+    query: Dict[str, Any] = {}
+    if class_id:
+        query["class_id"] = class_id
+    if student_id:
+        query["id"] = student_id
+    return query
+
+
+async def _analytics_scope_classes(
+    class_id: Optional[str],
+    students: List[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    if class_id:
+        return await db.classes.find({"id": class_id}, {"_id": 0}).to_list(200)
+    class_ids = sorted({s.get("class_id") for s in students if s.get("class_id")})
+    if not class_ids:
+        return []
+    return await db.classes.find({"id": {"$in": class_ids}}, {"_id": 0}).to_list(200)
+
+
 async def _compute_analytics_summary(
     class_id: Optional[str],
+    student_id: Optional[str],
     semester: Optional[int],
     quarter: Optional[int],
 ):
     """Summary for Dashboard: one (semester, quarter) only. S1/S2 and Q1/Q2 isolated."""
-    student_query = {"class_id": class_id} if class_id else {}
-    class_query = {"id": class_id} if class_id else {}
+    student_query = _analytics_student_query(class_id, student_id)
     students = await db.students.find(student_query, {"_id": 0}).to_list(5000)
-    classes = await db.classes.find(class_query, {"_id": 0}).to_list(200)
+    classes = await _analytics_scope_classes(class_id, students)
     sem = semester or 1
     q = quarter or 1
     if students:
@@ -5083,6 +5104,7 @@ async def _compute_analytics_summary(
 @api_router.get("/analytics/summary")
 async def get_analytics_summary(
     class_id: Optional[str] = Query(default=None),
+    student_id: Optional[str] = Query(default=None),
     semester: Optional[int] = Query(default=1),
     quarter: Optional[int] = Query(default=1),
 ):
@@ -5092,9 +5114,9 @@ async def get_analytics_summary(
         q = quarter or 1
 
         async def _produce():
-            return await _compute_analytics_summary(class_id, semester, quarter)
+            return await _compute_analytics_summary(class_id, student_id, semester, quarter)
 
-        return await cache_get_json(("analytics_summary", class_id, sem, q), CACHE_TTL_JSON, _produce)
+        return await cache_get_json(("analytics_summary", class_id, student_id, sem, q), CACHE_TTL_JSON, _produce)
     except Exception as e:
         logger.exception("Analytics summary failed")
         raise HTTPException(status_code=500, detail=f"Failed to load analytics summary: {str(e)}")
@@ -5350,6 +5372,7 @@ async def get_missed_assessment_students(
 
 async def _compute_analytics_overview(
     class_id: Optional[str],
+    student_id: Optional[str],
     semester: Optional[int],
     quarter: Optional[int],
 ):
@@ -5358,10 +5381,9 @@ async def _compute_analytics_overview(
     independently so the Analytics page can show each quarter's distribution and compare Q1 vs Q2.
     Struggling/excelling lists use the currently selected quarter (q).
     """
-    student_query = {"class_id": class_id} if class_id else {}
-    class_query = {"id": class_id} if class_id else {}
+    student_query = _analytics_student_query(class_id, student_id)
     students = await db.students.find(student_query, {"_id": 0}).to_list(5000)
-    classes = await db.classes.find(class_query, {"_id": 0}).to_list(200)
+    classes = await _analytics_scope_classes(class_id, students)
     sem = semester or 1
     q = quarter or 1
     if not students:
@@ -5375,6 +5397,7 @@ async def _compute_analytics_overview(
             "struggling_students": [],
             "excelling_students": [],
             "students_per_class": [],
+            "selected_student": None,
         }
     class_id_to_name = {c["id"]: c.get("name", c["id"]) for c in classes}
     for s in students:
@@ -5480,6 +5503,21 @@ async def _compute_analytics_overview(
         {"class_name": name, "count": count}
         for name, count in sorted(class_counts_map.items(), key=lambda x: _class_sort_key(x[0]))
     ]
+    selected_student = None
+    if len(students) == 1:
+        student = students[0]
+        selected_student = {
+            "id": student["id"],
+            "full_name": student.get("full_name") or f"{student.get('first_name', '')} {student.get('last_name', '')}".strip(),
+            "class_id": student.get("class_id"),
+            "class_name": student.get("class_name") or "",
+            "quarter1_total": student.get("quarter1_total"),
+            "quarter2_total": student.get("quarter2_total"),
+            "performance_level_q1": student.get("performance_level_q1"),
+            "performance_level_q2": student.get("performance_level_q2"),
+            "weak_areas": student.get("weak_areas") or [],
+            "strengths": student.get("strengths") or [],
+        }
     return {
         "total_students": len(students),
         "classes_count": len(classes),
@@ -5490,12 +5528,14 @@ async def _compute_analytics_overview(
         "struggling_students": struggling_students,
         "excelling_students": excelling_students,
         "students_per_class": students_per_class,
+        "selected_student": selected_student,
     }
 
 
 @api_router.get("/analytics/overview")
 async def get_analytics_overview(
     class_id: Optional[str] = Query(default=None),
+    student_id: Optional[str] = Query(default=None),
     semester: Optional[int] = Query(default=1),
     quarter: Optional[int] = Query(default=1),
 ):
@@ -5503,9 +5543,9 @@ async def get_analytics_overview(
     q = quarter or 1
 
     async def _produce():
-        return await _compute_analytics_overview(class_id, semester, quarter)
+        return await _compute_analytics_overview(class_id, student_id, semester, quarter)
 
-    return await cache_get_json(("analytics_overview", class_id, sem, q), CACHE_TTL_JSON, _produce)
+    return await cache_get_json(("analytics_overview", class_id, student_id, sem, q), CACHE_TTL_JSON, _produce)
 
 
 def overview_to_pdf_report(overview: Dict[str, Any]) -> Dict[str, Any]:
@@ -6288,6 +6328,7 @@ async def export_analytics_summary(
     semester: Optional[int] = Query(default=1),
     quarter: Optional[int] = Query(default=1),
     class_id: Optional[str] = Query(default=None),
+    student_id: Optional[str] = Query(default=None),
 ):
     """
     PDF/Excel aligned with GET /analytics/overview (same semester, quarter, optional class filter).
@@ -6295,20 +6336,34 @@ async def export_analytics_summary(
     sem = semester or 1
     q = quarter or 1
     fmt = (format or "pdf").lower()
-    cache_key = ("analytics_export", fmt, sem, q, class_id or "")
+    cache_key = ("analytics_export", fmt, sem, q, class_id or "", student_id or "")
 
     async def _produce():
-        overview = await get_analytics_overview(class_id=class_id, semester=semester, quarter=quarter)
+        overview = await get_analytics_overview(class_id=class_id, student_id=student_id, semester=semester, quarter=quarter)
         summary = overview_to_pdf_report(overview)
-        class_query = {"id": class_id} if class_id else {}
-        classes_for_charts = await db.classes.find(class_query, {"_id": 0}).to_list(200)
-        class_summaries = await _build_class_summary_list(classes_for_charts, sem, q)
-        class_summaries = sorted(class_summaries, key=lambda x: _class_sort_key(x.get("class_name") or ""))
+        selected_student = overview.get("selected_student") or {}
+        if selected_student:
+            focus_total = selected_student.get("quarter2_total") if q == 2 else selected_student.get("quarter1_total")
+            class_summaries = [
+                {
+                    "class_name": selected_student.get("full_name") or "Student",
+                    "avg_total_score": focus_total,
+                }
+            ]
+        else:
+            class_query = {"id": class_id} if class_id else {}
+            classes_for_charts = await db.classes.find(class_query, {"_id": 0}).to_list(200)
+            class_summaries = await _build_class_summary_list(classes_for_charts, sem, q)
+            class_summaries = sorted(class_summaries, key=lambda x: _class_sort_key(x.get("class_name") or ""))
         scope_label = f"Analytics · Semester {sem} · Q{q}"
         if class_id:
             cls = await db.classes.find_one({"id": class_id}, {"_id": 0, "name": 1})
             cname = (cls or {}).get("name") or class_id
             scope_label = f"{scope_label} · {cname}"
+        if student_id:
+            student = await db.students.find_one({"id": student_id}, {"_id": 0, "full_name": 1})
+            student_name = (student or {}).get("full_name") or student_id
+            scope_label = f"{scope_label} · {student_name}"
         if fmt == "excel":
             return generate_report_excel(summary, scope_label)
         return generate_analytics_dashboard_pdf(summary, scope_label, overview, class_summaries)
@@ -6318,6 +6373,9 @@ async def export_analytics_summary(
     if class_id:
         cid = "".join(c for c in class_id if c.isalnum())[:24] or "class"
         fn_base = f"{fn_base}_{cid}"
+    if student_id:
+        sid = "".join(c for c in student_id if c.isalnum())[:24] or "student"
+        fn_base = f"{fn_base}_{sid}"
     if fmt == "excel":
         filename = f"{fn_base}.xlsx"
         media_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"

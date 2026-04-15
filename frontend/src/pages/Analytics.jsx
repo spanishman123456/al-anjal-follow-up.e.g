@@ -86,6 +86,8 @@ export default function Analytics() {
   const [activeTab, setActiveTab] = useState("overview");
   const [classOptions, setClassOptions] = useState([]);
   const [selectedClassId, setSelectedClassId] = useState("all");
+  const [studentOptions, setStudentOptions] = useState([]);
+  const [selectedStudentId, setSelectedStudentId] = useState("all");
   const [refreshKey, setRefreshKey] = useState(0);
   const [loading, setLoading] = useState(true);
   const [analysisStrengths, setAnalysisStrengths] = useState("");
@@ -119,8 +121,13 @@ export default function Analytics() {
         semester: apiSemester,
         quarter: apiQuarter,
         ...(selectedClassId !== "all" ? { class_id: selectedClassId } : {}),
+        ...(selectedStudentId !== "all" ? { student_id: selectedStudentId } : {}),
       };
-      const classSummaryParams = { semester: apiSemester, quarter: apiQuarter };
+      const classSummaryParams = {
+        semester: apiSemester,
+        quarter: apiQuarter,
+        ...(selectedClassId !== "all" ? { class_id: selectedClassId } : {}),
+      };
 
       try {
         const overviewRes = await api.get("/analytics/overview", { params });
@@ -204,9 +211,34 @@ export default function Analytics() {
           if (latestRequestIdRef.current !== requestId) return;
           setClassOptions([]);
         });
+
+      if (selectedClassId !== "all") {
+        api
+          .get("/students", { params: { class_id: selectedClassId } })
+          .then((res) => {
+            if (latestRequestIdRef.current !== requestId) return;
+            setStudentOptions(res.data || []);
+          })
+          .catch(() => {
+            if (latestRequestIdRef.current !== requestId) return;
+            setStudentOptions([]);
+          });
+      } else {
+        setStudentOptions([]);
+      }
     };
     loadAnalytics();
-  }, [apiSemester, apiQuarter, selectedClassId, refreshKey]);
+  }, [apiSemester, apiQuarter, selectedClassId, selectedStudentId, refreshKey]);
+
+  useEffect(() => {
+    if (selectedClassId === "all") {
+      if (selectedStudentId !== "all") setSelectedStudentId("all");
+      return;
+    }
+    if (selectedStudentId !== "all" && !studentOptions.some((student) => student.id === selectedStudentId)) {
+      setSelectedStudentId("all");
+    }
+  }, [selectedClassId, selectedStudentId, studentOptions]);
 
   useEffect(() => {
     const onVisibility = () => {
@@ -232,6 +264,11 @@ export default function Analytics() {
 
   const q1 = overview?.quarter1 || {};
   const q2 = overview?.quarter2 || {};
+  const selectedStudent = overview?.selected_student || null;
+  const isStudentScoped = selectedStudentId !== "all" && !!selectedStudent;
+  const selectedStudentTermTotal = apiQuarter === 2 ? selectedStudent?.quarter2_total : selectedStudent?.quarter1_total;
+  const selectedStudentPerformanceLevel =
+    apiQuarter === 2 ? selectedStudent?.performance_level_q2 : selectedStudent?.performance_level_q1;
   const selectedQuarterDistribution = useMemo(
     () => (apiQuarter === 1 ? q1.distribution || [] : q2.distribution || []),
     [apiQuarter, q1.distribution, q2.distribution],
@@ -258,14 +295,32 @@ export default function Analytics() {
     }));
   }, [apiQuarter, q1.distribution, q2.distribution, t]);
 
-  const classChartData = sortByClassOrder(
-    classSummary.filter((cls) => selectedClassId === "all" || cls.class_id === selectedClassId)
-  ).map((cls) => ({
-    name: cls.class_name,
-    score: cls.avg_total_score || 0,
-  }));
+  const classChartData = useMemo(() => {
+    if (isStudentScoped && selectedStudent) {
+      return [
+        {
+          name: selectedStudent.full_name,
+          score: selectedStudentTermTotal || 0,
+        },
+      ];
+    }
+    return sortByClassOrder(
+      classSummary.filter((cls) => selectedClassId === "all" || cls.class_id === selectedClassId),
+    ).map((cls) => ({
+      name: cls.class_name,
+      score: cls.avg_total_score || 0,
+    }));
+  }, [classSummary, isStudentScoped, selectedClassId, selectedStudent, selectedStudentTermTotal]);
 
   const gradeSummary = useMemo(() => {
+    if (isStudentScoped && selectedStudent) {
+      return [
+        {
+          grade: t(selectedStudentPerformanceLevel || "no_data"),
+          avg: selectedStudentTermTotal != null ? Number(selectedStudentTermTotal) : 0,
+        },
+      ];
+    }
     const map = {};
     classSummary.forEach((cls) => {
       const grade = cls.grade || 0;
@@ -279,9 +334,36 @@ export default function Analytics() {
       grade: item.grade,
       avg: item.count ? Number((item.total / item.count).toFixed(2)) : 0,
     }));
-  }, [classSummary]);
+  }, [classSummary, isStudentScoped, selectedStudent, selectedStudentPerformanceLevel, selectedStudentTermTotal, t]);
 
   const aiInsightRows = useMemo(() => {
+    if (isStudentScoped && selectedStudent) {
+      return [
+        {
+          icon: TrendingUp,
+          tone: "text-emerald-600 dark:text-emerald-400",
+          text: `${selectedStudent.full_name} is currently ${t(selectedStudentPerformanceLevel || "no_data")} for ${t(`term_${termScopeId}`)}.`,
+        },
+        {
+          icon: Sparkles,
+          tone: "text-sky-600 dark:text-sky-400",
+          text:
+            selectedStudentTermTotal != null
+              ? `Quarter total for ${selectedStudent.full_name} is ${selectedStudentTermTotal}.`
+              : `Quarter total for ${selectedStudent.full_name} is not available yet for the selected term.`,
+        },
+        {
+          icon: AlertTriangle,
+          tone: "text-amber-600 dark:text-amber-400",
+          text:
+            selectedStudent.weak_areas?.length > 0
+              ? `Focus: ${selectedStudent.weak_areas.join(", ")}.`
+              : selectedStudent.strengths?.length > 0
+                ? `Strengths: ${selectedStudent.strengths.join(", ")}.`
+                : "Focus insight will appear once more scored records are available for this student.",
+        },
+      ];
+    }
     const focus = apiQuarter === 1 ? q1 : q2;
     const dist = focus.distribution || [];
     const onLevel = Number(dist.find((d) => d.level === "on_level")?.count ?? 0);
@@ -325,7 +407,20 @@ export default function Analytics() {
             : "Focus: Class-level contrast insight will appear once class averages are available.",
       },
     ];
-  }, [apiQuarter, q1.distribution, q2.distribution, q1.avg_total, q2.avg_total, classSummary]);
+  }, [
+    apiQuarter,
+    q1.distribution,
+    q2.distribution,
+    q1.avg_total,
+    q2.avg_total,
+    classSummary,
+    isStudentScoped,
+    selectedStudent,
+    selectedStudentPerformanceLevel,
+    selectedStudentTermTotal,
+    t,
+    termScopeId,
+  ]);
 
   const handleDownload = async (format) => {
     try {
@@ -335,6 +430,7 @@ export default function Analytics() {
           semester: apiSemester,
           quarter: apiQuarter,
           ...(selectedClassId !== "all" ? { class_id: selectedClassId } : {}),
+          ...(selectedStudentId !== "all" ? { student_id: selectedStudentId } : {}),
         },
         responseType: "blob",
       });
@@ -344,6 +440,10 @@ export default function Analytics() {
       const fnBase = `analytics_s${apiSemester}_q${apiQuarter}${
         selectedClassId !== "all"
           ? `_${selectedClassId.replace(/[^a-zA-Z0-9]/g, "").slice(0, 24)}`
+          : ""
+      }${
+        selectedStudentId !== "all"
+          ? `_${selectedStudentId.replace(/[^a-zA-Z0-9]/g, "").slice(0, 24)}`
           : ""
       }`;
       link.setAttribute("download", `${fnBase}.${format === "excel" ? "xlsx" : "pdf"}`);
@@ -396,7 +496,13 @@ export default function Analytics() {
               <span className="select-none text-xs text-muted-foreground opacity-0" aria-hidden="true">
                 {t("analytics_term_scope")}
               </span>
-              <Select value={selectedClassId} onValueChange={setSelectedClassId}>
+              <Select
+                value={selectedClassId}
+                onValueChange={(value) => {
+                  setSelectedClassId(value);
+                  setSelectedStudentId("all");
+                }}
+              >
                 <SelectTrigger className="w-48" data-testid="analytics-class-filter">
                   <SelectValue placeholder={t("classes")} />
                 </SelectTrigger>
@@ -412,6 +518,32 @@ export default function Analytics() {
                 </SelectContent>
               </Select>
             </div>
+            {selectedClassId !== "all" && (
+              <div className="flex min-w-[220px] flex-col gap-1">
+                <span className="select-none text-xs text-muted-foreground opacity-0" aria-hidden="true">
+                  {t("analytics_term_scope")}
+                </span>
+                <Select value={selectedStudentId} onValueChange={setSelectedStudentId}>
+                  <SelectTrigger className="w-56" data-testid="analytics-student-filter">
+                    <SelectValue placeholder={t("select_student")} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all" data-testid="analytics-student-all">
+                      {t("all_students")}
+                    </SelectItem>
+                    {studentOptions.map((student) => (
+                      <SelectItem
+                        key={student.id}
+                        value={student.id}
+                        data-testid={`analytics-student-${student.id}`}
+                      >
+                        {student.full_name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
             <Button
               variant="secondary"
               onClick={() => handleDownload("pdf")}
@@ -450,6 +582,12 @@ export default function Analytics() {
                   <p className="text-xs font-medium text-muted-foreground">{t("analytics_term_scope")}</p>
                   <p className="font-medium text-foreground">{t(`term_${termScopeId}`)}</p>
                 </div>
+                {isStudentScoped && selectedStudent && (
+                  <div>
+                    <p className="text-xs font-medium text-muted-foreground">{t("student_name")}</p>
+                    <p className="font-medium text-foreground">{selectedStudent.full_name}</p>
+                  </div>
+                )}
                 <div className="rounded-lg border border-border/60 bg-background/80 px-3 py-2">
                   <p className="text-xs text-muted-foreground">{t("analytics_focus_quarter")}</p>
                   <p className="text-lg font-semibold tabular-nums text-primary">
@@ -544,8 +682,8 @@ export default function Analytics() {
       {overview && totalStudents > 0 && (
         <div className="grid gap-4 md:grid-cols-2" data-testid="analytics-visual-board-grid">
           <BoardPanel
-            title={t("visual_board_chart_class_avg")}
-            subtitle={t("visual_board_chart_class_avg_sub")}
+            title={isStudentScoped ? t("analytics_student_total") : t("visual_board_chart_class_avg")}
+            subtitle={isStudentScoped ? t("analytics_student_total_sub") : t("visual_board_chart_class_avg_sub")}
             testId="analytics-board-class-avg"
           >
             <ClassAverageBarChart data={classChartData} height={260} />
@@ -578,8 +716,8 @@ export default function Analytics() {
             />
           </BoardPanel>
           <BoardPanel
-            title={t("visual_board_chart_class_curve")}
-            subtitle={t("visual_board_chart_class_curve_sub")}
+            title={isStudentScoped ? t("analytics_student_profile") : t("visual_board_chart_class_curve")}
+            subtitle={isStudentScoped ? t("analytics_student_profile_sub") : t("visual_board_chart_class_curve_sub")}
             testId="analytics-board-class-area"
           >
             <ClassScoreArea data={classChartData} height={240} />
@@ -839,7 +977,7 @@ export default function Analytics() {
         <TabsContent value="classes" className="mt-6" data-testid="analytics-classes-content">
           <Card className="border-primary/20 shadow-sm">
             <CardHeader>
-              <CardTitle>{t("students_per_class")}</CardTitle>
+              <CardTitle>{isStudentScoped ? t("analytics_student_total") : t("students_per_class")}</CardTitle>
             </CardHeader>
             <CardContent>
               {activeTab === "classes" ? (
@@ -861,7 +999,7 @@ export default function Analytics() {
         <TabsContent value="grades" className="mt-6" data-testid="analytics-grades-content">
           <Card className="border-primary/20 shadow-sm">
             <CardHeader>
-              <CardTitle>{t("grade")}</CardTitle>
+              <CardTitle>{isStudentScoped ? t("performance_level") : t("grade")}</CardTitle>
             </CardHeader>
             <CardContent>
               {activeTab === "grades" ? (
