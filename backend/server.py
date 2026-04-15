@@ -206,9 +206,9 @@ async def public_api_root():
 
 PERFORMANCE_THRESHOLDS = {
     "exceeding": 47,
-    "meeting": 45,
-    "approaching": 43,
-    "below": 40,
+    "meeting": 47,
+    "approaching": 45,
+    "below": 45,
 }
 MAX_RAW_TOTAL = 30
 NORMALIZED_MAX = 50
@@ -469,18 +469,18 @@ def compute_quarter_totals(scores_by_week: Dict[int, Dict[str, Optional[float]]]
     }
 
 
-# Legacy helper thresholds (out of 50): align with _compute_cumulative_final_quarter / final exams bands.
-QUARTER_TOTAL_ON_LEVEL = 42
-QUARTER_TOTAL_APPROACH = 35
+# Quarter-total thresholds (out of 50): On Level 47-50, Approach 45-46.99, Below <45.
+QUARTER_TOTAL_ON_LEVEL = 47
+QUARTER_TOTAL_APPROACH = 45
 
-# Dashboard / class / report lists titled "need support": only "below" (<35/50), not "approach" (35–41.99).
+# Dashboard / class / report lists titled "need support": only "below" (<45/50), not "approach" (45–47.99).
 PERFORMANCE_LEVEL_NEED_SUPPORT = "below"
 
 
 def include_in_need_support_list(student: Dict[str, Any]) -> bool:
     """
     True if this student should appear on 'Students Needing Support' and related lists.
-    Requires performance band 'below' and a quarter total strictly under the approach threshold (35/50).
+    Requires performance band 'below' and a quarter total strictly under the approach threshold (45/50).
     """
     if student.get("performance_level") != PERFORMANCE_LEVEL_NEED_SUPPORT:
         return False
@@ -984,7 +984,7 @@ def compute_inclusive_quarter_exams_q2(
 # Students page total: attendance (2.5) + participation (2.5) + behavior (5) + homework (5) = 15 max.
 # Assessment Marks: Students total (15) + best(Quiz1, Quiz2)(5) + Chapter Test 1 Practical(10) = 30 max.
 # Final Exams: Assessment (30) + Quarter Practical(10) + Quarter Theory(10) = 50 max.
-# Performance: On Level 13-15 (Students), 25-30 (Assessment), 42-50 (Final); Approach/Below per thresholds.
+# Performance: On Level 13-15 (Students), 25-30 (Assessment), 47-50 (Final); Approach/Below per thresholds.
 TOTAL_SCORE_MAX = 15  # 2.5 + 2.5 + 5 + 5
 
 
@@ -1166,9 +1166,9 @@ def compute_final_exams_combined(
     )
     if not has_any:
         return {"combined_total": None, "performance_level": "no_data", "performance_label": "No Data"}
-    if combined >= 42:
+    if combined >= QUARTER_TOTAL_ON_LEVEL:
         level, label = "on_level", "On Level"
-    elif combined >= 35:
+    elif combined >= QUARTER_TOTAL_APPROACH:
         level, label = "approach", "Approach"
     else:
         level, label = "below", "Below"
@@ -1343,9 +1343,9 @@ def _compute_cumulative_final_quarter(
     qc30 = _compute_quizzes_chapter_assessment_sw(scores_by_week, quarter)
     assessment_part = float(qc30) if qc30 is not None else 0.0
     combined = round(min(assessment_part + exam20, 50), 2)
-    if combined >= 42:
+    if combined >= QUARTER_TOTAL_ON_LEVEL:
         level, label = "on_level", "On Level"
-    elif combined >= 35:
+    elif combined >= QUARTER_TOTAL_APPROACH:
         level, label = "approach", "Approach"
     else:
         level, label = "below", "Below"
