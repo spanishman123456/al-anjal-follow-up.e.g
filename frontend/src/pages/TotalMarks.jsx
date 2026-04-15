@@ -620,31 +620,6 @@ export default function TotalMarks() {
         </CardContent>
       </Card>
 
-      <Card data-testid="total-marks-week-selector">
-        <CardContent className="flex flex-wrap items-center gap-3 pt-6">
-          <span className="text-sm text-muted-foreground">{t("week")}</span>
-          <Select
-            value={activeWeekId}
-            onValueChange={(value) => {
-              sessionStorage.setItem(`app_selected_week_id_s${semesterNumber}_q${quarter}`, value);
-              setActiveWeekId(value);
-              setBulkScores({});
-            }}
-          >
-            <SelectTrigger className="w-44">
-              <SelectValue placeholder={t("week")} />
-            </SelectTrigger>
-            <SelectContent>
-              {weeks.map((week) => (
-                <SelectItem key={week.id} value={week.id}>
-                  {week.label || `${t("week")} ${week.number}`}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </CardContent>
-      </Card>
-
       <Card data-testid="total-marks-filter-card">
         <CardContent className="grid gap-4 pt-6 md:grid-cols-2 xl:grid-cols-4">
           <Input
