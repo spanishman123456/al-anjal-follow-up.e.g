@@ -89,6 +89,12 @@ function distributionCounts(distribution = []) {
   };
 }
 
+function formatScore(value) {
+  const num = toNumber(value);
+  if (num == null) return null;
+  return Number.isInteger(num) ? String(num) : String(Math.round(num * 100) / 100);
+}
+
 function buildStudentInsights(payload, language = "en") {
   const student = payload?.selectedStudent || {};
   const name = String(student?.full_name || "").trim() || (language === "ar" ? "الطالب المحدد" : "The selected student");
@@ -96,6 +102,8 @@ function buildStudentInsights(payload, language = "en") {
   const total = toNumber(payload?.focusAvg);
   const performanceLevel = payload?.performanceLevel || "no_data";
   const performanceText = translatePerformanceLevel(performanceLevel, language);
+  const targetThreshold = performanceLevel === "approach" ? 47 : performanceLevel === "below" ? 45 : null;
+  const thresholdGap = total != null && targetThreshold != null ? Math.max(0, Math.round((targetThreshold - total) * 100) / 100) : null;
   const strengthsText = student?.strengths?.length
     ? joinLabels(student.strengths, language)
     : language === "ar"
@@ -107,43 +115,72 @@ function buildStudentInsights(payload, language = "en") {
       ? "لا تظهر نقاط ضعف رئيسية في البيانات الحالية"
       : "no major weakness is currently indicated in the recorded data";
   const needsSupport = performanceLevel === "below" || performanceLevel === "approach";
+  const hasRecordedWeakAreas = (student?.weak_areas?.length || 0) > 0;
+  const fallbackWeaknessText =
+    !hasRecordedWeakAreas && needsSupport && total != null && thresholdGap != null
+      ? language === "ar"
+        ? `لا تظهر البيانات المسجلة مجال ضعف محددًا بعينه، لكن مجموع الربع الحالي ما زال أقل من الحد المطلوب بمقدار ${formatScore(thresholdGap)} درجة.`
+        : `No single weak strand is currently flagged in the recorded components, but the current quarter total is still ${formatScore(thresholdGap)} points below the required threshold.`
+      : null;
+  const standoutGapText =
+    !hasRecordedWeakAreas && needsSupport && total != null && thresholdGap != null
+      ? language === "ar"
+        ? `ولا تزال النتيجة الحالية أقل من الحد المطلوب بمقدار ${formatScore(thresholdGap)} درجة.`
+        : `The current total still sits ${formatScore(thresholdGap)} points below the required threshold.`
+      : "";
+  const actionsText =
+    needsSupport && !hasRecordedWeakAreas && total != null
+      ? language === "ar"
+        ? `ركز على رفع مجموع ${name} الفصلي من خلال مراجعة موجهة قصيرة المدى، وتدريبات علاجية منتظمة، ومتابعة أسبوعية حتى يتجاوز الحد المطلوب.`
+        : `Focus on raising ${name}'s quarter total through short-cycle review, targeted recovery practice, and weekly monitoring until the score moves above the required threshold.`
+      : needsSupport
+        ? language === "ar"
+          ? `ركز على دعم ${name} في ${student?.weak_areas?.length ? weaknessesText : "المهارات الأساسية"} من خلال متابعة قصيرة المدى وتدريب موجه ومراجعة أسبوعية للتقدم.`
+          : `Provide focused support for ${name} in ${student?.weak_areas?.length ? weaknessesText : "core skills"} through short-cycle follow-up, targeted practice, and weekly review of progress.`
+        : language === "ar"
+          ? `استمر في تقديم مهام إثرائية وتحديات مناسبة لـ ${name} مع متابعة دورية للحفاظ على مستوى الأداء الحالي.`
+          : `Maintain enrichment and challenge tasks for ${name}, with periodic review to keep the current level of performance stable.`;
+  const recommendationsText =
+    needsSupport && !hasRecordedWeakAreas && total != null
+      ? language === "ar"
+        ? `يوصى بخطة دعم فردية تركز على رفع مجموع ${name} فوق الحد المطلوب، مع أهداف قصيرة المدى وتقويمات تكوينية متكررة وتواصل منتظم مع الأسرة.`
+        : `Create an individualized support plan for ${name} focused on lifting the quarter total above the required threshold, with short-term targets, frequent formative checks, and regular family communication.`
+      : needsSupport
+        ? language === "ar"
+          ? `يوصى بوضع خطة دعم فردية لـ ${name} تشمل أهدافًا قصيرة المدى، وتقويمات تكوينية متكررة، وتواصلًا منتظمًا مع الأسرة.`
+          : `Create an individualized support plan for ${name} with short-term targets, frequent formative checks, and regular family communication.`
+        : language === "ar"
+          ? `يوصى بالحفاظ على مستوى ${name} من خلال أنشطة إثرائية، ومهام تطبيقية، ومتابعة دورية لضمان استمرار التقدم.`
+          : `Continue extending ${name} with enrichment work, applied tasks, and regular check-ins to sustain growth.`;
 
   if (language === "ar") {
     return {
       analysis_strengths: `تظهر أفضل نقاط قوة ${name} في ${strengthsText}.${className ? ` وينتمي الطالب إلى فصل ${className}.` : ""}`,
-      analysis_weaknesses: student?.weak_areas?.length
+      analysis_weaknesses: hasRecordedWeakAreas
         ? `تحتاج الجوانب التالية إلى متابعة عند ${name}: ${weaknessesText}.`
-        : `لا تظهر البيانات الحالية نقاط ضعف رئيسية عند ${name}، مع ضرورة الاستمرار في المتابعة المنتظمة للحفاظ على هذا المستوى.`,
+        : fallbackWeaknessText || `لا تظهر البيانات الحالية نقاط ضعف رئيسية عند ${name}، مع ضرورة الاستمرار في المتابعة المنتظمة للحفاظ على هذا المستوى.`,
       analysis_performance:
         total != null
           ? `${name} مستواه الحالي هو ${performanceText} في الفترة المحددة، ومجموعه الفصلي الحالي هو ${total} من 50.`
           : `${name} مستواه الحالي هو ${performanceText}، لكن لا توجد درجات كافية حتى الآن لحساب مجموع فصلي دقيق.`,
-      analysis_standout_data: `عدد مجالات القوة المسجلة: ${student?.strengths?.length || 0}. وعدد مجالات الضعف المسجلة: ${student?.weak_areas?.length || 0}.`,
-      analysis_actions: needsSupport
-        ? `ركز على دعم ${name} في ${student?.weak_areas?.length ? weaknessesText : "المهارات الأساسية"} من خلال متابعة قصيرة المدى وتدريب موجه ومراجعة أسبوعية للتقدم.`
-        : `استمر في تقديم مهام إثرائية وتحديات مناسبة لـ ${name} مع متابعة دورية للحفاظ على مستوى الأداء الحالي.`,
-      analysis_recommendations: needsSupport
-        ? `يوصى بوضع خطة دعم فردية لـ ${name} تشمل أهدافًا قصيرة المدى، وتقويمات تكوينية متكررة، وتواصلًا منتظمًا مع الأسرة.`
-        : `يوصى بالحفاظ على مستوى ${name} من خلال أنشطة إثرائية، ومهام تطبيقية، ومتابعة دورية لضمان استمرار التقدم.`,
+      analysis_standout_data: `عدد مجالات القوة المسجلة: ${student?.strengths?.length || 0}. وعدد مجالات الضعف المسجلة: ${student?.weak_areas?.length || 0}.${standoutGapText ? ` ${standoutGapText}` : ""}`,
+      analysis_actions: actionsText,
+      analysis_recommendations: recommendationsText,
     };
   }
 
   return {
     analysis_strengths: `${name} shows strongest outcomes in ${strengthsText}.${className ? ` The student belongs to class ${className}.` : ""}`,
-    analysis_weaknesses: student?.weak_areas?.length
+    analysis_weaknesses: hasRecordedWeakAreas
       ? `The main areas that need follow-up for ${name} are ${weaknessesText}.`
-      : `No major weakness is currently indicated for ${name}, but regular monitoring is still recommended to maintain progress.`,
+      : fallbackWeaknessText || `No major weakness is currently indicated for ${name}, but regular monitoring is still recommended to maintain progress.`,
     analysis_performance:
       total != null
         ? `${name} is currently ${performanceText} for the selected term, with a current quarter total of ${total} out of 50.`
         : `${name} is currently ${performanceText}, but there is not enough scored data yet to compute a reliable quarter total.`,
-    analysis_standout_data: `Recorded strengths: ${student?.strengths?.length || 0}. Recorded weak areas: ${student?.weak_areas?.length || 0}.`,
-    analysis_actions: needsSupport
-      ? `Provide focused support for ${name} in ${student?.weak_areas?.length ? weaknessesText : "core skills"} through short-cycle follow-up, targeted practice, and weekly review of progress.`
-      : `Maintain enrichment and challenge tasks for ${name}, with periodic review to keep the current level of performance stable.`,
-    analysis_recommendations: needsSupport
-      ? `Create an individualized support plan for ${name} with short-term targets, frequent formative checks, and regular family communication.`
-      : `Continue extending ${name} with enrichment work, applied tasks, and regular check-ins to sustain growth.`,
+    analysis_standout_data: `Recorded strengths: ${student?.strengths?.length || 0}. Recorded weak areas: ${student?.weak_areas?.length || 0}.${standoutGapText ? ` ${standoutGapText}` : ""}`,
+    analysis_actions: actionsText,
+    analysis_recommendations: recommendationsText,
   };
 }
 
