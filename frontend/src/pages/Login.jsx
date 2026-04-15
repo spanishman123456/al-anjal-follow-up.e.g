@@ -95,6 +95,9 @@ export default function Login({
     return false;
   };
 
+  const isNetworkLikeError = (error) =>
+    !error?.response || error?.code === "ECONNABORTED" || error?.message === "Network Error";
+
   const handleGoogleSignIn = useCallback(
     async (credential) => {
       if (!credential) return;
@@ -178,15 +181,26 @@ export default function Login({
     setIsSubmitting(true);
     try {
       let response;
+      const submitLoginRequest = () =>
+        api.post("/auth/login", form, {
+          timeout: isProductionBackendUrl ? 180000 : undefined,
+        });
       try {
-        response = await api.post("/auth/login", form);
+        response = await submitLoginRequest();
       } catch (error) {
-        const isNetwork = !error.response;
+        const isNetwork = isNetworkLikeError(error);
         if (isNetwork && isProductionBackendUrl) {
           toast.info("Waking the server and retrying login automatically...");
+          warmBackendInBackground();
           const isReady = await waitForBackendReady();
           if (isReady) {
-            response = await api.post("/auth/login", form);
+            try {
+              response = await submitLoginRequest();
+            } catch (retryError) {
+              if (!isNetworkLikeError(retryError)) throw retryError;
+              await new Promise((resolve) => setTimeout(resolve, 2000));
+              response = await submitLoginRequest();
+            }
           } else {
             throw error;
           }
@@ -200,12 +214,14 @@ export default function Login({
     } catch (error) {
       const status = error?.response?.status;
       const detail = error?.response?.data?.detail;
-      const isNetwork = !error.response;
+      const isNetwork = isNetworkLikeError(error);
       let msg = t("login_failed");
       if (isNetwork) {
         if (isProductionBackendUrl) {
-          msg =
-            "Server is waking up (Render free tier). This can take 1–2 minutes after idle. Please wait, then try Login again.";
+          const backendLive = await checkBackendLive();
+          msg = backendLive
+            ? "The server is awake, but the login request did not complete. Please try Login once more now."
+            : "Server is waking up (Render free tier). This can take 1–2 minutes after idle. Please wait, then try Login again.";
         } else {
           msg = backendOk
             ? "Login request failed. Keep the Start_App.bat window open and try again in a moment."

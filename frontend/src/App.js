@@ -5,11 +5,13 @@ import { AppShell } from "@/components/layout/AppShell";
 import {
   api,
   AUTH_TOKEN_KEY,
+  checkBackendLive,
   checkBackendHealth,
   clearStoredAuthToken,
   getStoredAuthToken,
   isProductionBackendUrl,
   setStoredAuthToken,
+  warmBackendInBackground,
 } from "@/lib/api";
 import Login from "@/pages/Login";
 import Dashboard from "@/pages/Dashboard";
@@ -121,6 +123,15 @@ function App() {
       setClassesLoaded(true);
     }
   }, []);
+  const waitForBackendReady = useCallback(async ({ timeoutMs = 120000, intervalMs = 1500 } = {}) => {
+    const started = Date.now();
+    while (Date.now() - started < timeoutMs) {
+      const ok = await checkBackendLive();
+      if (ok) return true;
+      await new Promise((resolve) => setTimeout(resolve, intervalMs));
+    }
+    return false;
+  }, []);
   useEffect(() => {
     const storedToken = getStoredAuthToken();
     if (storedToken) {
@@ -131,18 +142,46 @@ function App() {
   useEffect(() => {
     if (!token) return;
     let cancelled = false;
-    api.get("/users/profile", { timeout: 10000 })
-      .then(() => { if (!cancelled) setAuthReady(true); })
-      .catch((err) => {
+    const loadProfile = async () => {
+      if (isProductionBackendUrl) {
+        warmBackendInBackground();
+      }
+      try {
+        await api.get("/users/profile", { timeout: isProductionBackendUrl ? 30000 : 10000 });
+        if (!cancelled) setAuthReady(true);
+      } catch (err) {
         if (cancelled) return;
-        if (err?.response?.status === 401 || err?.code === "ECONNABORTED" || err?.message === "Network Error") {
+        const isNetwork = !err?.response || err?.code === "ECONNABORTED" || err?.message === "Network Error";
+        if (isNetwork && isProductionBackendUrl) {
+          const isReady = await waitForBackendReady();
+          if (!cancelled && isReady) {
+            try {
+              await api.get("/users/profile", { timeout: 30000 });
+              if (!cancelled) {
+                setAuthReady(true);
+                return;
+              }
+            } catch (retryErr) {
+              if (cancelled) return;
+              if (retryErr?.response?.status === 401) {
+                clearStoredAuthToken();
+                setToken(null);
+              }
+              setAuthReady(true);
+              return;
+            }
+          }
+        }
+        if (err?.response?.status === 401) {
           clearStoredAuthToken();
           setToken(null);
         }
         setAuthReady(true);
-      });
+      }
+    };
+    loadProfile();
     return () => { cancelled = true; };
-  }, [token]);
+  }, [token, waitForBackendReady]);
 
   useEffect(() => {
     const handler = () => {
