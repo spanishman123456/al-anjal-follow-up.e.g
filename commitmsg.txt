@@ -1,0 +1,3 @@
+Refine analytics filter alignment and hide Total Marks week label.
+
+Keep the Total Marks week syncing behavior intact while removing its redundant label, and align the analytics term and class selectors so the controls sit cleanly on one row.

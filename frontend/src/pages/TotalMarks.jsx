@@ -621,7 +621,7 @@ export default function TotalMarks() {
       </Card>
 
       <Card data-testid="total-marks-filter-card">
-        <CardContent className="grid gap-4 pt-6 md:grid-cols-2 xl:grid-cols-4">
+        <CardContent className="grid gap-4 pt-6 md:grid-cols-2 xl:grid-cols-3">
           <Input
             placeholder={t("search_students")}
             value={searchTerm}
@@ -646,9 +646,6 @@ export default function TotalMarks() {
               ))}
             </SelectContent>
           </Select>
-          <div className="rounded-md border bg-muted/30 px-3 py-2 text-sm text-muted-foreground">
-            {weeks.find((week) => week.id === activeWeekId)?.label || t("no_data")}
-          </div>
           <Button variant="outline" onClick={resetFilters}>
             {t("reset_filters")}
           </Button>

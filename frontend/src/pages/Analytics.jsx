@@ -376,11 +376,11 @@ export default function Analytics() {
         subtitle={t("overview")}
         testIdPrefix="analytics"
         action={
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-end gap-2">
             <div className="flex min-w-[220px] flex-col gap-1">
               <span className="text-xs text-muted-foreground">{t("analytics_term_scope")}</span>
               <Select value={termScopeId} onValueChange={setTermScopeId}>
-                <SelectTrigger className="w-[min(100%,240px)]" data-testid="analytics-term-scope">
+                <SelectTrigger className="w-48" data-testid="analytics-term-scope">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -392,21 +392,26 @@ export default function Analytics() {
                 </SelectContent>
               </Select>
             </div>
-            <Select value={selectedClassId} onValueChange={setSelectedClassId}>
-              <SelectTrigger className="w-48" data-testid="analytics-class-filter">
-                <SelectValue placeholder={t("classes")} />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all" data-testid="analytics-class-all">
-                  {t("all_classes")}
-                </SelectItem>
-                {sortByClassOrder(classOptions).map((cls) => (
-                  <SelectItem key={cls.id} value={cls.id} data-testid={`analytics-class-${cls.id}`}>
-                    {cls.name}
+            <div className="flex min-w-[220px] flex-col gap-1">
+              <span className="select-none text-xs text-muted-foreground opacity-0" aria-hidden="true">
+                {t("analytics_term_scope")}
+              </span>
+              <Select value={selectedClassId} onValueChange={setSelectedClassId}>
+                <SelectTrigger className="w-48" data-testid="analytics-class-filter">
+                  <SelectValue placeholder={t("classes")} />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all" data-testid="analytics-class-all">
+                    {t("all_classes")}
                   </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+                  {sortByClassOrder(classOptions).map((cls) => (
+                    <SelectItem key={cls.id} value={cls.id} data-testid={`analytics-class-${cls.id}`}>
+                      {cls.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
             <Button
               variant="secondary"
               onClick={() => handleDownload("pdf")}
