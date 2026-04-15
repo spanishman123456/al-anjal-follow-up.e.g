@@ -177,9 +177,9 @@ export default function Reports() {
 
   const classBreakdown = report?.class_breakdown || [];
 
-  const reportEnrollmentBars = (report?.class_breakdown || []).map((row) => ({
+  const reportClassAverageBars = (report?.class_breakdown || []).map((row) => ({
     name: row.class_name,
-    score: row.student_count,
+    score: row.avg_total_score || 0,
   }));
 
   const reportQuarterDistribution = report?.distribution || [];
@@ -356,10 +356,10 @@ export default function Reports() {
 
           <div className="grid gap-4 md:grid-cols-2" data-testid="reports-visual-board-grid">
             <BoardPanel
-              title={t("visual_board_chart_enrollment")}
-              subtitle={t("visual_board_chart_enrollment_sub")}
+              title={t("avg_total_score")}
+              subtitle={t("visual_board_chart_class_curve_sub")}
             >
-              <ClassAverageBarChart data={reportEnrollmentBars} height={260} />
+              <ClassAverageBarChart data={reportClassAverageBars} height={260} />
             </BoardPanel>
             <BoardPanel
               title={t("visual_board_chart_pass_split")}
@@ -407,9 +407,9 @@ export default function Reports() {
               </BoardPanel>
               <BoardPanel
                 title={t("visual_board_chart_class_curve")}
-                subtitle={t("visual_board_chart_enrollment_sub")}
+                subtitle={t("visual_board_chart_class_curve_sub")}
               >
-                <ClassScoreArea data={reportEnrollmentBars} height={240} />
+                <ClassScoreArea data={reportClassAverageBars} height={240} />
               </BoardPanel>
             </div>
           )}

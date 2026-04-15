@@ -138,21 +138,17 @@ export default function Analytics() {
             { level: "below", count: 0 },
             { level: "no_data", count: 0 },
           ];
+          const selectedQuarterSummary = {
+            distribution: dist,
+            avg_total: s?.avg_total_score ?? null,
+            on_level_rate: s?.on_level_rate ?? s?.exceeding_rate ?? 0,
+            total_with_data: (s?.total_students ?? 0) - (dist.find((d) => d.level === "no_data")?.count ?? 0),
+          };
           setOverview({
             total_students: s?.total_students ?? 0,
             classes_count: s?.classes_count ?? 0,
-            quarter1: {
-              distribution: dist,
-              avg_total: s?.avg_total_score ?? null,
-              on_level_rate: s?.on_level_rate ?? s?.exceeding_rate ?? 0,
-              total_with_data: (s?.total_students ?? 0) - (dist.find((d) => d.level === "no_data")?.count ?? 0),
-            },
-            quarter2: {
-              distribution: dist,
-              avg_total: s?.avg_total_score ?? null,
-              on_level_rate: s?.on_level_rate ?? s?.exceeding_rate ?? 0,
-              total_with_data: (s?.total_students ?? 0) - (dist.find((d) => d.level === "no_data")?.count ?? 0),
-            },
+            quarter1: apiQuarter === 1 ? selectedQuarterSummary : { distribution: [], avg_total: null, on_level_rate: 0, total_with_data: 0 },
+            quarter2: apiQuarter === 2 ? selectedQuarterSummary : { distribution: [], avg_total: null, on_level_rate: 0, total_with_data: 0 },
             struggling_students: s?.students_needing_support?.map((st) => ({
               id: st.id,
               full_name: st.full_name || [st.first_name, st.last_name].filter(Boolean).join(" "),

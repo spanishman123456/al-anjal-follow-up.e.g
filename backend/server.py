@@ -5839,10 +5839,25 @@ async def _compute_grade_report(
         }
         for s in top_sorted
     ]
-    class_breakdown = [
-        {"class_name": c["name"], "student_count": len([s for s in students if s["class_id"] == c["id"]])}
-        for c in classes
-    ]
+    students_by_class: Dict[str, List[Dict[str, Any]]] = {}
+    for student in students:
+        students_by_class.setdefault(student["class_id"], []).append(student)
+    class_breakdown = []
+    for class_item in classes:
+        class_students = students_by_class.get(class_item["id"], [])
+        class_totals = [float(s["semester_total"]) for s in class_students if s.get("semester_total") is not None]
+        class_level_counts = {"on_level": 0, "approach": 0, "below": 0, "no_data": 0}
+        for student in class_students:
+            level = student.get("performance_level", "no_data")
+            class_level_counts[level] = class_level_counts.get(level, 0) + 1
+        class_breakdown.append(
+            {
+                "class_name": class_item["name"],
+                "student_count": len(class_students),
+                "avg_total_score": round(sum(class_totals) / len(class_totals), 2) if class_totals else None,
+                "distribution": class_level_counts,
+            }
+        )
     return {
         "grade": grade,
         "semester": sem,
