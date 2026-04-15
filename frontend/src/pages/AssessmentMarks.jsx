@@ -63,6 +63,14 @@ const parseScore = (value) => {
   return Number.isNaN(parsed) ? null : parsed;
 };
 
+const formatDownloadFilePart = (value, fallback = "all-classes") => {
+  const cleaned = String(value || fallback)
+    .trim()
+    .replace(/[<>:"/\\|?*\u0000-\u001F]/g, "")
+    .replace(/\s+/g, "-");
+  return cleaned || fallback;
+};
+
 // Students-page total = attendance (2.5) + participation (2.5) + behavior (5) + homework (5), max 15.
 const STUDENTS_TOTAL_MAX = 15;
 function computeStudentsTotal(student) {
@@ -447,6 +455,10 @@ export default function AssessmentMarks() {
   };
 
   const activeWeek = weeks.find((w) => w.id === activeWeekId);
+  const selectedClassName =
+    filterClass === "all"
+      ? (t("all_classes") || "all-classes")
+      : (classes.find((cls) => cls.id === filterClass)?.name || filterClass);
   const handleDownloadMarks = async () => {
     try {
       const response = await api.get("/students/export", {
@@ -462,7 +474,7 @@ export default function AssessmentMarks() {
       link.href = url;
       link.setAttribute(
         "download",
-        `assessment-marks${activeWeek?.number ? `-week-${activeWeek.number}` : ""}.xlsx`
+        `chapter-tests-and-quizzes-class-${formatDownloadFilePart(selectedClassName)}.xlsx`
       );
       document.body.appendChild(link);
       link.click();

@@ -84,6 +84,14 @@ const parseScore = (value) => {
   return Number.isNaN(parsed) ? null : parsed;
 };
 
+const formatDownloadFilePart = (value, fallback = "all-classes") => {
+  const cleaned = String(value || fallback)
+    .trim()
+    .replace(/[<>:"/\\|?*\u0000-\u001F]/g, "")
+    .replace(/\s+/g, "-");
+  return cleaned || fallback;
+};
+
 // Total Score = attendance (2.5) + participation (2.5) + behavior (5) + homework (5), max 15.
 const TOTAL_SCORE_MAX = 15;
 function computeTotalScore(student) {
@@ -751,9 +759,13 @@ export default function Students() {
       const url = window.URL.createObjectURL(new Blob([response.data]));
       const link = document.createElement("a");
       link.href = url;
+      const selectedClassName =
+        filterClass === "all"
+          ? (t("all_classes") || "all-classes")
+          : (classes.find((cls) => cls.id === filterClass)?.name || filterClass);
       link.setAttribute(
         "download",
-        `students-marks-week-${activeWeek?.number || ""}.xlsx`,
+        `assessment-class-${formatDownloadFilePart(selectedClassName)}.xlsx`,
       );
       document.body.appendChild(link);
       link.click();

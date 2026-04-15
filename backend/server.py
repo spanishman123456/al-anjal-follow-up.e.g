@@ -4201,6 +4201,11 @@ async def export_students_marks(
     final_exams_view = view_lower == "final_exams"
     final_exams_q2_view = view_lower == "final_exams_q2"
     export_rows = []
+    def _plain_score_display(value):
+        if value is None or (isinstance(value, float) and pd.isna(value)):
+            return ""
+        num = round(float(value), 2)
+        return int(num) if float(num).is_integer() else num
     def _quarter_exam_total_display(practical, theory):
         values = [practical, theory]
         if all(v is None or (isinstance(v, float) and pd.isna(v)) for v in values):
@@ -4209,7 +4214,7 @@ async def export_students_marks(
         theory_num = _safe_float_score(theory)
         total = min(20.0, max(0.0, practical_num + theory_num))
         total = round(total, 2)
-        return f"{int(total)}/20" if float(total).is_integer() else f"{total}/20"
+        return int(total) if float(total).is_integer() else total
     for student in students:
         if assessment_view:
             combined = compute_assessment_combined(
@@ -4276,7 +4281,7 @@ async def export_students_marks(
                 },
                 avg_first_9_weeks=student.get("avg_first_9_weeks"),
             )
-            total_display = f"{combined['combined_total']}/50" if combined.get("combined_total") is not None else ""
+            total_display = _plain_score_display(combined.get("combined_total"))
             export_rows.append(
                 {
                     "Student Name": student.get("full_name"),
@@ -4307,7 +4312,7 @@ async def export_students_marks(
                 avg_weeks_10_18=student.get("avg_weeks_10_18"),
                 quarter=2,
             )
-            total_display = f"{combined['combined_total']}/50" if combined.get("combined_total") is not None else ""
+            total_display = _plain_score_display(combined.get("combined_total"))
             export_rows.append(
                 {
                     "Student Name": student.get("full_name"),
