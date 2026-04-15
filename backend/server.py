@@ -586,7 +586,7 @@ def compute_student_insights(
     for label, field, max_val in [
         ("Attendance", "attendance", 2.5),
         ("Participation", "participation", 2.5),
-        ("Behavior", "behavior", 5.0),
+        ("Project", "behavior", 5.0),
         ("Homework", "homework", 5.0),
     ]:
         v = avg_followup(field, max_val)
@@ -4139,7 +4139,7 @@ async def download_import_template(
                         "Class": s.get("class_name"),
                         "Attendance (2.5)": "",
                         "Participation (2.5)": "",
-                        "Behavior (5)": "",
+                        "Project (5)": "",
                         "Homework (5)": "",
                         "Total Score": "",
                         "Performance Level": "",
@@ -4156,7 +4156,7 @@ async def download_import_template(
             elif final_exams_q2_view:
                 empty_row = {"Student Name": "", "Class": "", "2nd Quarter Practical Exam (10)": "", "2nd Quarter Theoretical Exam (10)": "", "Total Score": "", "Performance Level": ""}
             else:
-                empty_row = {"Student Name": "", "Class": "", "Attendance (2.5)": "", "Participation (2.5)": "", "Behavior (5)": "", "Homework (5)": "", "Total Score": "", "Performance Level": ""}
+                empty_row = {"Student Name": "", "Class": "", "Attendance (2.5)": "", "Participation (2.5)": "", "Project (5)": "", "Homework (5)": "", "Total Score": "", "Performance Level": ""}
             template_rows = [empty_row]
     else:
         if assessment_view:
@@ -4168,7 +4168,7 @@ async def download_import_template(
         elif final_exams_q2_view:
             empty_row = {"Student Name": "", "Class": "", "2nd Quarter Practical Exam (10)": "", "2nd Quarter Theoretical Exam (10)": "", "Total Score": "", "Performance Level": ""}
         else:
-            empty_row = {"Student Name": "", "Class": "", "Attendance (2.5)": "", "Participation (2.5)": "", "Behavior (5)": "", "Homework (5)": "", "Total Score": "", "Performance Level": ""}
+            empty_row = {"Student Name": "", "Class": "", "Attendance (2.5)": "", "Participation (2.5)": "", "Project (5)": "", "Homework (5)": "", "Total Score": "", "Performance Level": ""}
         template_rows = [empty_row]
     df = pd.DataFrame(template_rows)
     buffer = io.BytesIO()
@@ -4334,7 +4334,7 @@ async def export_students_marks(
                     "Class": student.get("class_name"),
                     "Attendance (2.5)": student.get("attendance"),
                     "Participation (2.5)": student.get("participation"),
-                    "Behavior (5)": student.get("behavior"),
+                    "Project (5)": student.get("behavior"),
                     "Homework (5)": student.get("homework"),
                     "Total Score": student.get("total_score_raw") or student.get("total_score_normalized"),
                     "Performance Level": student.get("performance_label") or student.get("performance_level") or "No Data",
@@ -6176,7 +6176,7 @@ async def import_excel(
         "section": ["section", "الشعبة", "الفصل"],
         "attendance": ["attendance", "attendance25", "حضور"],
         "participation": ["participation", "participation25", "مشاركة"],
-        "behavior": ["behavior", "behavior5", "سلوك"],
+        "behavior": ["behavior", "behavior5", "project", "project5", "projects", "مشروع", "سلوك"],
         "homework": ["homework", "homework5", "واجبات", "واجب"],
         "quiz1": ["quiz1", "quiz15", "q1", "quizone", "اختبار1", "كويز1", "اختبارقصير1", "اختبار قصير 1"],
         "quiz2": ["quiz2", "quiz25", "q2", "quiztwo", "اختبار2", "كويز2", "اختبارقصير2", "اختبار قصير 2"],
