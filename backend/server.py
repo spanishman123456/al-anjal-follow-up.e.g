@@ -3777,6 +3777,8 @@ async def get_students(
                     effective_q1 = _effective_scores_q1(sw)
                     student["quarter1_practical"] = effective_q1.get("quarter1_practical")
                     student["quarter1_theory"] = effective_q1.get("quarter1_theory")
+                    student["total_marks_quiz_primary"] = effective_q1.get("quiz1")
+                    student["total_marks_quiz_secondary"] = effective_q1.get("quiz2")
                     q1_best_quiz_candidates = [
                         v for v in (effective_q1.get("quiz1"), effective_q1.get("quiz2"))
                         if v is not None and not (isinstance(v, float) and pd.isna(v))
@@ -3787,6 +3789,8 @@ async def get_students(
                     ]
                     student["total_marks_best_quiz"] = max(q1_best_quiz_candidates) if q1_best_quiz_candidates else None
                     student["total_marks_chapter_test"] = effective_q1.get("chapter_test1_practical")
+                    student["total_marks_exam_practical"] = effective_q1.get("quarter1_practical")
+                    student["total_marks_exam_theory"] = effective_q1.get("quarter1_theory")
                     student["total_marks_quarter_exams_total"] = (
                         round(
                             min(
@@ -3843,6 +3847,8 @@ async def get_students(
                     effective_q2 = _effective_scores_q2(sw)
                     student["quarter2_practical"] = effective_q2.get("quarter2_practical")
                     student["quarter2_theory"] = effective_q2.get("quarter2_theory")
+                    student["total_marks_quiz_primary"] = effective_q2.get("quiz3")
+                    student["total_marks_quiz_secondary"] = effective_q2.get("quiz4")
                     q2_best_quiz_candidates = [
                         v for v in (effective_q2.get("quiz3"), effective_q2.get("quiz4"))
                         if v is not None and not (isinstance(v, float) and pd.isna(v))
@@ -3853,6 +3859,8 @@ async def get_students(
                     ]
                     student["total_marks_best_quiz"] = max(q2_best_quiz_candidates) if q2_best_quiz_candidates else None
                     student["total_marks_chapter_test"] = effective_q2.get("chapter_test2_practical")
+                    student["total_marks_exam_practical"] = effective_q2.get("quarter2_practical")
+                    student["total_marks_exam_theory"] = effective_q2.get("quarter2_theory")
                     student["total_marks_quarter_exams_total"] = (
                         round(
                             min(
@@ -4123,6 +4131,8 @@ async def download_import_template(
     assessment_q2_view = view_lower == "assessment_q2"
     final_exams_view = view_lower == "final_exams"
     final_exams_q2_view = view_lower == "final_exams_q2"
+    total_marks_view = view_lower == "total_marks"
+    total_marks_q2_view = view_lower == "total_marks_q2"
     if class_id:
         students = await get_students(class_id=class_id, week_id=week_id, current_user=current_user)
         if students:
@@ -4176,6 +4186,44 @@ async def download_import_template(
                     }
                     for s in students
                 ]
+            elif total_marks_view:
+                template_rows = [
+                    {
+                        "Student Name": s.get("full_name"),
+                        "Class": s.get("class_name"),
+                        "Quiz 1 (5)": "",
+                        "Quiz 2 (5)": "",
+                        "Chapter Test 1 (Practical) (10)": "",
+                        "Homework (5)": "",
+                        "Attendance (2.5)": "",
+                        "Participation (2.5)": "",
+                        "Project (5)": "",
+                        "1st Quarter Practical Exam (10)": "",
+                        "1st Quarter Theoretical Exam (10)": "",
+                        "Quarter Exams Total (20)": "",
+                        "Total Marks (50)": "",
+                    }
+                    for s in students
+                ]
+            elif total_marks_q2_view:
+                template_rows = [
+                    {
+                        "Student Name": s.get("full_name"),
+                        "Class": s.get("class_name"),
+                        "Quiz 3 (5)": "",
+                        "Quiz 4 (5)": "",
+                        "Chapter Test 2 (Practical) (10)": "",
+                        "Homework (5)": "",
+                        "Attendance (2.5)": "",
+                        "Participation (2.5)": "",
+                        "Project (5)": "",
+                        "2nd Quarter Practical Exam (10)": "",
+                        "2nd Quarter Theoretical Exam (10)": "",
+                        "Quarter Exams Total (20)": "",
+                        "Total Marks (50)": "",
+                    }
+                    for s in students
+                ]
             else:
                 template_rows = [
                     {
@@ -4199,6 +4247,38 @@ async def download_import_template(
                 empty_row = {"Student Name": "", "Class": "", "1st Quarter Practical Exam (10)": "", "1st Quarter Theoretical Exam (10)": "", "Total Score": "", "Performance Level": ""}
             elif final_exams_q2_view:
                 empty_row = {"Student Name": "", "Class": "", "2nd Quarter Practical Exam (10)": "", "2nd Quarter Theoretical Exam (10)": "", "Total Score": "", "Performance Level": ""}
+            elif total_marks_view:
+                empty_row = {
+                    "Student Name": "",
+                    "Class": "",
+                    "Quiz 1 (5)": "",
+                    "Quiz 2 (5)": "",
+                    "Chapter Test 1 (Practical) (10)": "",
+                    "Homework (5)": "",
+                    "Attendance (2.5)": "",
+                    "Participation (2.5)": "",
+                    "Project (5)": "",
+                    "1st Quarter Practical Exam (10)": "",
+                    "1st Quarter Theoretical Exam (10)": "",
+                    "Quarter Exams Total (20)": "",
+                    "Total Marks (50)": "",
+                }
+            elif total_marks_q2_view:
+                empty_row = {
+                    "Student Name": "",
+                    "Class": "",
+                    "Quiz 3 (5)": "",
+                    "Quiz 4 (5)": "",
+                    "Chapter Test 2 (Practical) (10)": "",
+                    "Homework (5)": "",
+                    "Attendance (2.5)": "",
+                    "Participation (2.5)": "",
+                    "Project (5)": "",
+                    "2nd Quarter Practical Exam (10)": "",
+                    "2nd Quarter Theoretical Exam (10)": "",
+                    "Quarter Exams Total (20)": "",
+                    "Total Marks (50)": "",
+                }
             else:
                 empty_row = {"Student Name": "", "Class": "", "Attendance (2.5)": "", "Participation (2.5)": "", "Project (5)": "", "Homework (5)": "", "Total Score": "", "Performance Level": ""}
             template_rows = [empty_row]
@@ -4211,6 +4291,38 @@ async def download_import_template(
             empty_row = {"Student Name": "", "Class": "", "1st Quarter Practical Exam (10)": "", "1st Quarter Theoretical Exam (10)": "", "Total Score": "", "Performance Level": ""}
         elif final_exams_q2_view:
             empty_row = {"Student Name": "", "Class": "", "2nd Quarter Practical Exam (10)": "", "2nd Quarter Theoretical Exam (10)": "", "Total Score": "", "Performance Level": ""}
+        elif total_marks_view:
+            empty_row = {
+                "Student Name": "",
+                "Class": "",
+                "Quiz 1 (5)": "",
+                "Quiz 2 (5)": "",
+                "Chapter Test 1 (Practical) (10)": "",
+                "Homework (5)": "",
+                "Attendance (2.5)": "",
+                "Participation (2.5)": "",
+                "Project (5)": "",
+                "1st Quarter Practical Exam (10)": "",
+                "1st Quarter Theoretical Exam (10)": "",
+                "Quarter Exams Total (20)": "",
+                "Total Marks (50)": "",
+            }
+        elif total_marks_q2_view:
+            empty_row = {
+                "Student Name": "",
+                "Class": "",
+                "Quiz 3 (5)": "",
+                "Quiz 4 (5)": "",
+                "Chapter Test 2 (Practical) (10)": "",
+                "Homework (5)": "",
+                "Attendance (2.5)": "",
+                "Participation (2.5)": "",
+                "Project (5)": "",
+                "2nd Quarter Practical Exam (10)": "",
+                "2nd Quarter Theoretical Exam (10)": "",
+                "Quarter Exams Total (20)": "",
+                "Total Marks (50)": "",
+            }
         else:
             empty_row = {"Student Name": "", "Class": "", "Attendance (2.5)": "", "Participation (2.5)": "", "Project (5)": "", "Homework (5)": "", "Total Score": "", "Performance Level": ""}
         template_rows = [empty_row]
@@ -4244,6 +4356,8 @@ async def export_students_marks(
     assessment_q2_view = view_lower == "assessment_q2"
     final_exams_view = view_lower == "final_exams"
     final_exams_q2_view = view_lower == "final_exams_q2"
+    total_marks_view = view_lower == "total_marks"
+    total_marks_q2_view = view_lower == "total_marks_q2"
     export_rows = []
     def _plain_score_display(value):
         if value is None or (isinstance(value, float) and pd.isna(value)):
@@ -4371,6 +4485,44 @@ async def export_students_marks(
                     ),
                 }
             )
+        elif total_marks_view:
+            total_display = _plain_score_display(student.get("final_exams_combined_total"))
+            export_rows.append(
+                {
+                    "Student Name": student.get("full_name"),
+                    "Class": student.get("class_name"),
+                    "Quiz 1 (5)": _plain_score_display(student.get("total_marks_quiz_primary")),
+                    "Quiz 2 (5)": _plain_score_display(student.get("total_marks_quiz_secondary")),
+                    "Chapter Test 1 (Practical) (10)": _plain_score_display(student.get("total_marks_chapter_test")),
+                    "Homework (5)": _plain_score_display(student.get("homework")),
+                    "Attendance (2.5)": _plain_score_display(student.get("attendance")),
+                    "Participation (2.5)": _plain_score_display(student.get("participation")),
+                    "Project (5)": _plain_score_display(student.get("behavior")),
+                    "1st Quarter Practical Exam (10)": _plain_score_display(student.get("total_marks_exam_practical")),
+                    "1st Quarter Theoretical Exam (10)": _plain_score_display(student.get("total_marks_exam_theory")),
+                    "Quarter Exams Total (20)": _plain_score_display(student.get("total_marks_quarter_exams_total")),
+                    "Total Marks (50)": total_display,
+                }
+            )
+        elif total_marks_q2_view:
+            total_display = _plain_score_display(student.get("final_exams_q2_combined_total"))
+            export_rows.append(
+                {
+                    "Student Name": student.get("full_name"),
+                    "Class": student.get("class_name"),
+                    "Quiz 3 (5)": _plain_score_display(student.get("total_marks_quiz_primary")),
+                    "Quiz 4 (5)": _plain_score_display(student.get("total_marks_quiz_secondary")),
+                    "Chapter Test 2 (Practical) (10)": _plain_score_display(student.get("total_marks_chapter_test")),
+                    "Homework (5)": _plain_score_display(student.get("homework")),
+                    "Attendance (2.5)": _plain_score_display(student.get("attendance")),
+                    "Participation (2.5)": _plain_score_display(student.get("participation")),
+                    "Project (5)": _plain_score_display(student.get("behavior")),
+                    "2nd Quarter Practical Exam (10)": _plain_score_display(student.get("total_marks_exam_practical")),
+                    "2nd Quarter Theoretical Exam (10)": _plain_score_display(student.get("total_marks_exam_theory")),
+                    "Quarter Exams Total (20)": _plain_score_display(student.get("total_marks_quarter_exams_total")),
+                    "Total Marks (50)": total_display,
+                }
+            )
         else:
             export_rows.append(
                 {
@@ -4398,6 +4550,8 @@ async def export_students_marks(
         else "assessment-marks-q2.xlsx" if assessment_q2_view
         else "final-exams-assessment.xlsx" if final_exams_view
         else "final-exams-assessment-q2.xlsx" if final_exams_q2_view
+        else "total-marks.xlsx" if total_marks_view
+        else "total-marks-q2.xlsx" if total_marks_q2_view
         else "students-marks.xlsx"
     )
     headers = {"Content-Disposition": f"attachment; filename={filename}"}
