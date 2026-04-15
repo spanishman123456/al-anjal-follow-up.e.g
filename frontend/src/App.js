@@ -16,6 +16,7 @@ import {
 import Login from "@/pages/Login";
 import Dashboard from "@/pages/Dashboard";
 import { Toaster } from "@/components/ui/sonner";
+import { toast } from "sonner";
 
 // Dashboard is eager-loaded so first paint after login does not flash Suspense fallback (major flicker source).
 const Students = lazy(() => import("@/pages/Students"));
@@ -78,6 +79,7 @@ function App() {
   const [theme, setTheme] = useState(() => localStorage.getItem("theme") || "light");
   const [token, setToken] = useState(() => getStoredAuthToken());
   const [authReady, setAuthReady] = useState(() => (getStoredAuthToken() ? null : true));
+  const [logoutReason, setLogoutReason] = useState(null);
   const [semester, setSemester] = useState(
     () => localStorage.getItem("semester") || "semester1",
   );
@@ -166,6 +168,7 @@ function App() {
               if (retryErr?.response?.status === 401) {
                 clearStoredAuthToken();
                 setToken(null);
+                setLogoutReason("session_replaced");
               }
               setAuthReady(true);
               return;
@@ -175,6 +178,7 @@ function App() {
         if (err?.response?.status === 401) {
           clearStoredAuthToken();
           setToken(null);
+          setLogoutReason("session_replaced");
         }
         setAuthReady(true);
       }
@@ -184,9 +188,14 @@ function App() {
   }, [token, waitForBackendReady]);
 
   useEffect(() => {
-    const handler = () => {
+    const handler = (event) => {
+      const reason = event?.detail?.reason || "unauthorized";
+      setLogoutReason(reason);
       setToken(null);
       setAuthReady(true);
+      if (reason === "session_replaced") {
+        toast.error("You were signed out because this account was used to log in somewhere else.");
+      }
     };
     window.addEventListener("auth-logout", handler);
     return () => window.removeEventListener("auth-logout", handler);
@@ -264,6 +273,7 @@ function App() {
   }, [token]);
 
   const handleLogin = useCallback((newToken) => {
+    setLogoutReason(null);
     setStoredAuthToken(newToken);
     setToken(newToken);
     setAuthReady(true);
@@ -331,6 +341,7 @@ function App() {
               onLogin={handleLogin}
               onLanguageChange={setLanguage}
               serverStatus={backendOk}
+              logoutReason={logoutReason}
             />
           ) : (
             authenticatedRoutes

@@ -123,6 +123,39 @@ def create_access_token(data: Dict[str, Any], expires_minutes: int = 60 * 24 * 3
     return jwt.encode(to_encode, secret, algorithm="HS256")
 
 
+def _coerce_auth_version(value: Any) -> int:
+    try:
+        return max(0, int(value or 0))
+    except (TypeError, ValueError):
+        return 0
+
+
+async def _ensure_user_auth_version(user: Dict[str, Any]) -> int:
+    version = _coerce_auth_version(user.get("auth_version"))
+    if user.get("auth_version") == version:
+        return version
+    user_id = user.get("id")
+    if user_id:
+        await db.users.update_one({"id": user_id}, {"$set": {"auth_version": version, "updated_at": iso_now()}})
+    user["auth_version"] = version
+    return version
+
+
+async def _bump_user_auth_version(user_id: str) -> int:
+    if not user_id:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid account")
+    existing = await db.users.find_one({"id": user_id}, {"_id": 0, "auth_version": 1})
+    current_version = _coerce_auth_version((existing or {}).get("auth_version"))
+    next_version = current_version + 1
+    result = await db.users.update_one(
+        {"id": user_id},
+        {"$set": {"auth_version": next_version, "updated_at": iso_now()}},
+    )
+    if result.matched_count == 0:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
+    return next_version
+
+
 async def get_current_user(credentials: Optional[HTTPAuthorizationCredentials] = Depends(security)):
     if not credentials:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing token")
@@ -133,6 +166,7 @@ async def get_current_user(credentials: Optional[HTTPAuthorizationCredentials] =
     try:
         payload = jwt.decode(token, secret, algorithms=["HS256"])
         user_id = payload.get("sub")
+        token_auth_version = payload.get("av")
     except Exception:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
     if not user_id:
@@ -140,6 +174,12 @@ async def get_current_user(credentials: Optional[HTTPAuthorizationCredentials] =
     user = await db.users.find_one({"id": user_id}, {"_id": 0})
     if not user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
+    current_auth_version = await _ensure_user_auth_version(user)
+    if token_auth_version is None:
+        if current_auth_version > 0:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Session expired by a newer login")
+    elif _coerce_auth_version(token_auth_version) != current_auth_version:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Session expired by a newer login")
     return user
 
 
@@ -3267,6 +3307,7 @@ class UserRecord(UserBase):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     created_at: str = Field(default_factory=iso_now)
     updated_at: str = Field(default_factory=iso_now)
+    auth_version: int = 0
     password_hash: Optional[str] = Field(default=None, exclude=True)
 
 
@@ -4684,6 +4725,7 @@ async def create_user(payload: UserCreate, current_user: Dict[str, Any] = Depend
     password = user_data.pop("password")
     user_data["password_hash"] = get_password_hash(password)
     user_data["role_name"] = role_doc["name"]
+    user_data["auth_version"] = _coerce_auth_version(user_data.get("auth_version"))
     if user_data.get("permissions") is None:
         user_data["permissions"] = role_doc.get("permissions", [])
     user_data["schedule"] = normalize_schedule(user_data.get("schedule"))
@@ -6109,12 +6151,14 @@ async def login(payload: AuthLogin):
                     "role_name": admin_role["name"],
                     "active": True,
                     "permissions": admin_role.get("permissions", ["all"]),
+                    "auth_version": 0,
                     "password_hash": get_password_hash(recovery_password),
                     "created_at": iso_now(),
                     "updated_at": iso_now(),
                 }
                 await db.users.insert_one(new_user)
-                token = create_access_token({"sub": new_user["id"], "role": new_user["role_name"]})
+                auth_version = await _bump_user_auth_version(new_user["id"])
+                token = create_access_token({"sub": new_user["id"], "role": new_user["role_name"], "av": auth_version})
                 return AuthToken(access_token=token)
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
 
@@ -6145,7 +6189,8 @@ async def login(payload: AuthLogin):
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Account profile is incomplete. Contact an administrator.",
             )
-        token = create_access_token({"sub": uid, "role": role_name})
+        auth_version = await _bump_user_auth_version(uid)
+        token = create_access_token({"sub": uid, "role": role_name, "av": auth_version})
         return AuthToken(access_token=token)
     except HTTPException:
         raise
@@ -6204,7 +6249,8 @@ async def login_google(payload: AuthGooglePayload):
         {"_id": 0},
     )
     if user:
-        token = create_access_token({"sub": user["id"], "role": user["role_name"]})
+        auth_version = await _bump_user_auth_version(user["id"])
+        token = create_access_token({"sub": user["id"], "role": user["role_name"], "av": auth_version})
         return AuthToken(access_token=token)
     teacher_role = await db.roles.find_one({"name": "Teacher"}, {"_id": 0})
     if not teacher_role:
@@ -6230,6 +6276,7 @@ async def login_google(payload: AuthGooglePayload):
         "role_name": "Teacher",
         "active": True,
         "permissions": teacher_permissions,
+        "auth_version": 0,
         "password_hash": None,
         "created_at": iso_now(),
         "updated_at": iso_now(),
@@ -6240,7 +6287,8 @@ async def login_google(payload: AuthGooglePayload):
         "schedule": default_schedule(),
     }
     await db.users.insert_one(new_user)
-    token = create_access_token({"sub": new_user["id"], "role": new_user["role_name"]})
+    auth_version = await _bump_user_auth_version(new_user["id"])
+    token = create_access_token({"sub": new_user["id"], "role": new_user["role_name"], "av": auth_version})
     return AuthToken(access_token=token)
 
 
@@ -6871,6 +6919,7 @@ async def seed_defaults():
         await db.classes.create_index([("name", 1)])
         await db.users.create_index([("id", 1)])
         await db.users.create_index([("role_name", 1)])
+        await db.users.update_many({"auth_version": {"$exists": False}}, {"$set": {"auth_version": 0}})
 
         if await db.classes.count_documents({}) == 0:
             default_classes = []
@@ -6926,6 +6975,7 @@ async def seed_defaults():
                     role_name=admin_role["name"],
                     active=True,
                     permissions=admin_role.get("permissions", []),
+                    auth_version=0,
                     password_hash=get_password_hash("Admin@123"),
                 )
                 await db.users.insert_one(admin_user.model_dump())

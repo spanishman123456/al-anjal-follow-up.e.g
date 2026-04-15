@@ -102,8 +102,14 @@ api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error?.response?.status === 401) {
+      const detail = error?.response?.data?.detail;
       clearStoredAuthToken();
-      window.dispatchEvent(new CustomEvent("auth-logout"));
+      window.dispatchEvent(new CustomEvent("auth-logout", {
+        detail: {
+          reason: detail === "Session expired by a newer login" ? "session_replaced" : "unauthorized",
+          message: typeof detail === "string" ? detail : null,
+        },
+      }));
     }
     return Promise.reject(error);
   },
