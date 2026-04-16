@@ -510,6 +510,7 @@ export default function TotalMarks() {
         headers: { "Content-Type": "multipart/form-data" },
         params: { week_id: activeWeekId },
       });
+      sessionStorage.setItem(`app_selected_week_id_s${semesterNumber}_q${quarter}`, activeWeekId);
       if (bulkFileInputRef.current) bulkFileInputRef.current.value = "";
       setBulkScores({});
       setBulkEditMode(false);

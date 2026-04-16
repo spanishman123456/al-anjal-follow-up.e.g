@@ -1153,6 +1153,10 @@ def compute_assessment_combined_q2(
             v is not None and not (isinstance(v, float) and pd.isna(v))
             for v in [scores.get("quiz3"), scores.get("quiz4"), scores.get("chapter_test2_practical")]
         )
+        or any(
+            v is not None and not (isinstance(v, float) and pd.isna(v))
+            for v in [scores.get("attendance"), scores.get("participation"), scores.get("behavior"), scores.get("homework")]
+        )
     )
     if not has_any:
         return {"combined_total": None, "students_total": None, "performance_level": "no_data", "performance_label": "No Data"}
@@ -5463,6 +5467,7 @@ async def _compute_analytics_overview(
         student["quizzes_chapter_total_q1"] = qc1
         student["performance_level"] = student.get("performance_level_q2") if q == 2 else q1_level
         student["semester_total"] = student.get("quarter2_total") if q == 2 else q1_total
+        student["total_score_normalized"] = student.get("semester_total")
     # Quarter 1 distribution (from each student's Q1 level/total)
     counts_q1 = {"on_level": 0, "approach": 0, "below": 0, "no_data": 0}
     totals_q1: List[float] = []
@@ -5709,6 +5714,7 @@ async def _build_class_summary_list(
         student["quizzes_chapter_total_q1"] = qc1
         student["performance_level"] = student.get("performance_level_q2") if quarter == 2 else q1_level
         student["semester_total"] = student.get("quarter2_total") if quarter == 2 else q1_total
+        student["total_score_normalized"] = student.get("semester_total")
     student_map: Dict[str, List[Dict[str, Any]]] = {}
     for student in students:
         student_map.setdefault(student["class_id"], []).append(student)

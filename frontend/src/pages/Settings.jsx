@@ -213,7 +213,9 @@ export default function Settings() {
       const detail = error?.response?.data?.detail;
       let msg = t("profile_failed");
       if (status === 401) {
-        msg = "Please log in again (backend must be running) and try saving.";
+        msg = detail === "Session expired by a newer login"
+          ? t("session_replaced_message")
+          : "Please log in again and try saving.";
       } else if (detail && typeof detail === "string") {
         msg = detail;
       } else if (detail && Array.isArray(detail) && detail[0]?.msg) {

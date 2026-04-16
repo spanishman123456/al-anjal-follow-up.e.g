@@ -444,7 +444,7 @@ export default function AssessmentMarksQ2() {
       const url = window.URL.createObjectURL(new Blob([response.data]));
       const link = document.createElement("a");
       link.href = url;
-      link.setAttribute("download", "assessment_marks_template.xlsx");
+      link.setAttribute("download", "assessment_marks_q2_template.xlsx");
       document.body.appendChild(link);
       link.click();
       link.remove();
@@ -739,9 +739,12 @@ export default function AssessmentMarksQ2() {
               {filteredStudents.length ? (
                 filteredStudents.map((student) => {
                   const current = bulkScores[student.id] || student;
+                  const hasPendingChanges = Boolean(
+                    bulkScores[student.id] && Object.keys(bulkScores[student.id]).length
+                  );
                   let weeklyPart = computeWeeklySubtotalQ2(student);
                   let marksPart = computeAssessmentTotal(current);
-                  if (!bulkEditMode) {
+                  if (!bulkEditMode && !hasPendingChanges) {
                     const ws = parseApiSubtotal(student.assessment_q2_weekly_subtotal);
                     const ms = parseApiSubtotal(student.assessment_q2_marks_subtotal);
                     if (ws != null && ms != null) {
@@ -751,12 +754,13 @@ export default function AssessmentMarksQ2() {
                   }
                   const total =
                     !bulkEditMode &&
+                    !hasPendingChanges &&
                     student.assessment_q2_combined_total != null &&
                     !Number.isNaN(Number(student.assessment_q2_combined_total))
                       ? Number(student.assessment_q2_combined_total)
                       : computeCombinedTotal(student, current);
                   const perfLevel =
-                    !bulkEditMode && student.assessment_q2_performance_level
+                    !bulkEditMode && !hasPendingChanges && student.assessment_q2_performance_level
                       ? student.assessment_q2_performance_level
                       : computeAssessmentPerformanceLevel(student, current);
                   const partsLine = t("combined_total_parts")

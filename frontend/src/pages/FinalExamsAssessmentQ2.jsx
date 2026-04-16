@@ -670,15 +670,19 @@ export default function FinalExamsAssessmentQ2() {
               {filteredStudents.length ? (
                 filteredStudents.map((student) => {
                   const current = { ...student, ...(bulkScores[student.id] || {}) };
+                  const hasPendingChanges = Boolean(
+                    bulkScores[student.id] && Object.keys(bulkScores[student.id]).length
+                  );
                   const quarterExamTotal = computeQuarterExamTotal(current);
                   const total =
                     !bulkEditMode &&
+                    !hasPendingChanges &&
                     student.final_exams_q2_combined_total != null &&
                     !Number.isNaN(Number(student.final_exams_q2_combined_total))
                       ? Number(student.final_exams_q2_combined_total)
                       : computeFinalTotal(student, current);
                   const perfLevel =
-                    !bulkEditMode && student.final_exams_q2_performance_level
+                    !bulkEditMode && !hasPendingChanges && student.final_exams_q2_performance_level
                       ? student.final_exams_q2_performance_level
                       : computeFinalPerformanceLevel(student, current);
                   return (

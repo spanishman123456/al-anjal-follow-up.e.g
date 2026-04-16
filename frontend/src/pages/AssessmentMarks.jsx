@@ -743,9 +743,12 @@ export default function AssessmentMarks() {
               {filteredStudents.length ? (
                 filteredStudents.map((student) => {
                   const current = bulkScores[student.id] || student;
+                  const hasPendingChanges = Boolean(
+                    bulkScores[student.id] && Object.keys(bulkScores[student.id]).length
+                  );
                   let weeklyPart = computeWeeklySubtotalQ1(student);
                   let marksPart = computeAssessmentTotal(current);
-                  if (!bulkEditMode) {
+                  if (!bulkEditMode && !hasPendingChanges) {
                     const ws = parseApiSubtotal(student.assessment_weekly_subtotal);
                     const ms = parseApiSubtotal(student.assessment_marks_subtotal);
                     if (ws != null && ms != null) {
@@ -755,11 +758,14 @@ export default function AssessmentMarks() {
                   }
                   // Use backend combined total when available (so 30/30 shows correctly); in bulk edit use local computation for live preview
                   const total =
-                    !bulkEditMode && student.assessment_combined_total != null && !Number.isNaN(Number(student.assessment_combined_total))
+                    !bulkEditMode &&
+                    !hasPendingChanges &&
+                    student.assessment_combined_total != null &&
+                    !Number.isNaN(Number(student.assessment_combined_total))
                       ? Number(student.assessment_combined_total)
                       : computeCombinedTotal(student, current);
                   const perfLevel =
-                    !bulkEditMode && student.assessment_performance_level
+                    !bulkEditMode && !hasPendingChanges && student.assessment_performance_level
                       ? student.assessment_performance_level
                       : computeAssessmentPerformanceLevel(student, current);
                   const partsLine = t("combined_total_parts")

@@ -164,20 +164,10 @@ function App() {
               }
             } catch (retryErr) {
               if (cancelled) return;
-              if (retryErr?.response?.status === 401) {
-                clearStoredAuthToken();
-                setToken(null);
-                setLogoutReason("session_replaced");
-              }
               setAuthReady(true);
               return;
             }
           }
-        }
-        if (err?.response?.status === 401) {
-          clearStoredAuthToken();
-          setToken(null);
-          setLogoutReason("session_replaced");
         }
         setAuthReady(true);
       }
@@ -193,12 +183,16 @@ function App() {
       setToken(null);
       setAuthReady(true);
       if (reason === "session_replaced") {
-        toast.error("You were signed out because this account was used to log in somewhere else.");
+        toast.error(
+          language === "ar"
+            ? "تم تسجيل خروجك لأن هذا الحساب تم استخدامه لتسجيل الدخول من مكان آخر."
+            : "You were signed out because this account was used to log in somewhere else."
+        );
       }
     };
     window.addEventListener("auth-logout", handler);
     return () => window.removeEventListener("auth-logout", handler);
-  }, []);
+  }, [language]);
   useEffect(() => {
     const onStorage = (event) => {
       if (event.key !== AUTH_TOKEN_KEY) return;
@@ -275,7 +269,7 @@ function App() {
     setLogoutReason(null);
     setStoredAuthToken(newToken);
     setToken(newToken);
-    setAuthReady(true);
+    setAuthReady(null);
   }, []);
 
   // Single BrowserRouter for the whole app — avoids tearing down/remounting the router on login.
