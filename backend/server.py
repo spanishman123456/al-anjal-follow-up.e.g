@@ -5712,10 +5712,14 @@ async def _compute_analytics_overview(
         q1_total = student.get("quarter1_total")
         q1_level = student.get("performance_level_q1")
         qc1 = student.get("quizzes_chapter_total_q1")
+        q1_focus_snapshot = _focus_component_snapshot(student)
         _enrich_student_single_quarter(student, sw2, 2)
         student["quarter1_total"] = q1_total
         student["performance_level_q1"] = q1_level
         student["quizzes_chapter_total_q1"] = qc1
+        if q == 1:
+            for key, value in q1_focus_snapshot.items():
+                student[key] = value
         student["performance_level"] = student.get("performance_level_q2") if q == 2 else q1_level
         student["semester_total"] = student.get("quarter2_total") if q == 2 else q1_total
         student["total_score_normalized"] = student.get("semester_total")
