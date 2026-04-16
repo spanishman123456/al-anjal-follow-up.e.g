@@ -181,6 +181,31 @@ export default function Reports() {
   };
 
   const classBreakdown = report?.class_breakdown || [];
+  const focusComponentLabels = apiQuarter === 2
+    ? [
+        { key: "focus_quiz_primary", label: t("quiz3") },
+        { key: "focus_quiz_secondary", label: t("quiz4") },
+        { key: "focus_chapter_test", label: t("chapter_test2_practical") },
+        { key: "focus_final_practical", label: t("quarter2_practical") },
+        { key: "focus_final_theory", label: t("quarter2_theory") },
+      ]
+    : [
+        { key: "focus_quiz_primary", label: t("quiz1") },
+        { key: "focus_quiz_secondary", label: t("quiz2") },
+        { key: "focus_chapter_test", label: t("chapter_test1_practical") },
+        { key: "focus_final_practical", label: t("quarter1_practical") },
+        { key: "focus_final_theory", label: t("quarter1_theory") },
+      ];
+  const renderMarksBreakdown = (student) => (
+    <div className="space-y-1 text-xs text-muted-foreground">
+      {focusComponentLabels.map((item) => (
+        <div key={item.key}>
+          <span className="font-medium text-foreground">{item.label}:</span>{" "}
+          {student?.[item.key] != null ? student[item.key] : "—"}
+        </div>
+      ))}
+    </div>
+  );
 
   const reportClassAverageBars = (report?.class_breakdown || []).map((row) => ({
     name: row.class_name,
@@ -259,6 +284,13 @@ export default function Reports() {
               data-testid="reports-download-pdf-button"
             >
               {t("download_pdf")}
+            </Button>
+            <Button
+              variant="secondary"
+              onClick={() => handleDownload("excel")}
+              data-testid="reports-download-excel-button"
+            >
+              {t("download_excel")}
             </Button>
             <Button
               onClick={handleSchedule}
@@ -462,6 +494,7 @@ export default function Reports() {
                         <TableHead>{t("class_name")}</TableHead>
                         <TableHead>{t("focus_quarter_total")}</TableHead>
                         <TableHead>{t("total_score")}</TableHead>
+                        <TableHead>{t("analytics_student_marks_breakdown")}</TableHead>
                         <TableHead>{t("strengths")}</TableHead>
                       </TableRow>
                     </TableHeader>
@@ -472,6 +505,7 @@ export default function Reports() {
                           <TableCell>{student.class_name}</TableCell>
                           <TableCell>{focusQuarterStudentTotal(student)}</TableCell>
                           <TableCell>{student.total_score_normalized != null ? student.total_score_normalized : "-"}</TableCell>
+                          <TableCell>{renderMarksBreakdown(student)}</TableCell>
                           <TableCell>
                             {(student.strengths || []).length > 0 ? (
                               <span className="flex flex-wrap gap-1">
@@ -502,6 +536,7 @@ export default function Reports() {
                         <TableHead>{t("class_name")}</TableHead>
                         <TableHead>{t("focus_quarter_total")}</TableHead>
                         <TableHead>{t("performance_level")}</TableHead>
+                        <TableHead>{t("analytics_student_marks_breakdown")}</TableHead>
                         <TableHead>{t("weaknesses")}</TableHead>
                       </TableRow>
                     </TableHeader>
@@ -512,6 +547,7 @@ export default function Reports() {
                           <TableCell>{student.class_name}</TableCell>
                           <TableCell>{focusQuarterStudentTotal(student)}</TableCell>
                           <TableCell>{t(student.performance_level)}</TableCell>
+                          <TableCell>{renderMarksBreakdown(student)}</TableCell>
                           <TableCell>
                             {(student.weak_areas || []).length > 0 ? (
                               <span className="flex flex-wrap gap-1">

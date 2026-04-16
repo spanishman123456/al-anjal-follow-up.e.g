@@ -190,6 +190,75 @@ export function PassSplitDonut({
   );
 }
 
+export function ScoreBreakdownDonut({
+  data,
+  centerCaption,
+  height = 240,
+  showLegend = true,
+}) {
+  const list = Array.isArray(data) ? data.filter((item) => Number(item?.value || 0) > 0) : [];
+  const total = list.reduce((sum, item) => sum + Number(item?.value || 0), 0);
+  const legendSpace = showLegend ? 108 : 0;
+  const chartHeight = Math.max(height - legendSpace, 150);
+
+  if (total <= 0) {
+    return (
+      <div className="flex h-[240px] items-center justify-center text-sm text-muted-foreground">
+        —
+      </div>
+    );
+  }
+
+  return (
+    <div className="mx-auto w-full max-w-sm overflow-hidden" style={{ height }}>
+      {showLegend ? (
+        <div className="mb-2 space-y-1 text-sm font-semibold">
+          {list.map((item) => (
+            <div key={item.name} className="flex items-center gap-2" style={{ color: item.fill }}>
+              <span className="inline-block h-3 w-3 rounded-sm" style={{ backgroundColor: item.fill }} />
+              <span>
+                {item.name}: {item.value}
+              </span>
+            </div>
+          ))}
+        </div>
+      ) : null}
+      <div className="relative" style={{ height: chartHeight }}>
+        <ResponsiveContainer width="100%" height="100%">
+          <PieChart>
+            <Pie
+              data={list}
+              dataKey="value"
+              nameKey="name"
+              cx="50%"
+              cy="45%"
+              innerRadius={52}
+              outerRadius={74}
+              paddingAngle={2}
+            >
+              {list.map((item) => (
+                <Cell key={item.name} fill={item.fill} stroke="white" strokeWidth={1} />
+              ))}
+            </Pie>
+            <Tooltip content={boardTooltip} />
+          </PieChart>
+        </ResponsiveContainer>
+        <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center -translate-y-3">
+          <span className="text-2xl font-semibold tabular-nums text-slate-800 dark:text-foreground">
+            {Math.round(total * 10) / 10}
+          </span>
+          {centerCaption ? (
+            <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+              {centerCaption}
+            </span>
+          ) : null}
+          <span className="text-[10px] text-muted-foreground">100%</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /** Single-quarter cohort on-level % (no Quarter 1 vs Quarter 2 comparison). */
 export function QuarterOnLevelFocus({ rate, termLabel, lineName, height = 220 }) {
   const label = termLabel || "—";

@@ -44,6 +44,7 @@ import {
   BoardHighlightsCard,
   ClassAverageBarChart,
   PassSplitDonut,
+  ScoreBreakdownDonut,
   QuarterOnLevelFocus,
   ClassScoreArea,
 } from "@/components/dashboard/VisualBoard";
@@ -54,6 +55,45 @@ const PERFORMANCE_COLORS = {
   below: "#ef4444",
   no_data: "#94a3b8",
 };
+
+const STUDENT_BREAKDOWN_COLORS = ["#38bdf8", "#22c55e", "#f59e0b", "#8b5cf6", "#ef4444"];
+
+function toChartNumber(value) {
+  if (value == null || value === "") return 0;
+  const num = Number(value);
+  return Number.isFinite(num) ? num : 0;
+}
+
+function buildStudentBreakdownData(student, apiQuarter, t) {
+  if (!student) return [];
+  const defs = apiQuarter === 2
+    ? [
+        { label: t("quiz3"), value: student.focus_quiz_primary, max: 5 },
+        { label: t("quiz4"), value: student.focus_quiz_secondary, max: 5 },
+        { label: t("chapter_test2_practical"), value: student.focus_chapter_test, max: 10 },
+        { label: t("quarter2_practical"), value: student.focus_final_practical, max: 10 },
+        { label: t("quarter2_theory"), value: student.focus_final_theory, max: 10 },
+      ]
+    : [
+        { label: t("quiz1"), value: student.focus_quiz_primary, max: 5 },
+        { label: t("quiz2"), value: student.focus_quiz_secondary, max: 5 },
+        { label: t("chapter_test1_practical"), value: student.focus_chapter_test, max: 10 },
+        { label: t("quarter1_practical"), value: student.focus_final_practical, max: 10 },
+        { label: t("quarter1_theory"), value: student.focus_final_theory, max: 10 },
+      ];
+  const rows = defs.map((item, index) => ({
+    name: item.label,
+    score: toChartNumber(item.value),
+    max: item.max,
+    fill: STUDENT_BREAKDOWN_COLORS[index % STUDENT_BREAKDOWN_COLORS.length],
+  }));
+  const total = rows.reduce((sum, row) => sum + row.score, 0);
+  return rows.map((row) => ({
+    ...row,
+    share: total > 0 ? Math.round((row.score / total) * 1000) / 10 : 0,
+    pctOfMax: row.max > 0 ? Math.round((row.score / row.max) * 1000) / 10 : 0,
+  }));
+}
 
 const AnalyticsTooltip = ({ active, payload, label }) => {
   if (!active || !payload?.length) return null;
@@ -269,23 +309,56 @@ export default function Analytics() {
   const selectedStudentTermTotal = apiQuarter === 2 ? selectedStudent?.quarter2_total : selectedStudent?.quarter1_total;
   const selectedStudentPerformanceLevel =
     apiQuarter === 2 ? selectedStudent?.performance_level_q2 : selectedStudent?.performance_level_q1;
+  const studentBreakdownData = useMemo(
+    () => (isStudentScoped && selectedStudent ? buildStudentBreakdownData(selectedStudent, apiQuarter, t) : []),
+    [apiQuarter, isStudentScoped, selectedStudent, t],
+  );
+  const selectedStudentAchievementRate = useMemo(() => {
+    if (!isStudentScoped) return 0;
+    const total = Number(selectedStudentTermTotal);
+    return Number.isFinite(total) ? Math.round((total / 50) * 1000) / 10 : 0;
+  }, [isStudentScoped, selectedStudentTermTotal]);
+  const selectedStudentStrongestComponent = useMemo(() => {
+    if (!studentBreakdownData.length) return null;
+    return [...studentBreakdownData].sort((a, b) => b.score - a.score)[0] || null;
+  }, [studentBreakdownData]);
+  const selectedStudentWeakestComponent = useMemo(() => {
+    if (!studentBreakdownData.length) return null;
+    return [...studentBreakdownData].sort((a, b) => a.score - b.score)[0] || null;
+  }, [studentBreakdownData]);
   const selectedQuarterDistribution = useMemo(
     () => (apiQuarter === 1 ? q1.distribution || [] : q2.distribution || []),
     [apiQuarter, q1.distribution, q2.distribution],
   );
   const focusOnLevelRate = useMemo(() => {
+    if (isStudentScoped) return selectedStudentAchievementRate;
     const dist = selectedQuarterDistribution || [];
     const onLevel = Number(dist.find((d) => d.level === "on_level")?.count ?? 0);
     const total = dist.reduce((sum, d) => sum + Number(d?.count ?? 0), 0);
     return total > 0 ? Math.round((onLevel / total) * 1000) / 10 : 0;
-  }, [selectedQuarterDistribution]);
-  const q1Distribution = (q1.distribution || []).map((item) => ({
-    name: t(item.level),
-    value: item.count,
-    level: item.level,
-  }));
+  }, [isStudentScoped, selectedQuarterDistribution, selectedStudentAchievementRate]);
+  const q1Distribution = isStudentScoped
+    ? studentBreakdownData.map((item) => ({
+        name: item.name,
+        value: item.score,
+        level: item.name,
+        fill: item.fill,
+      }))
+    : (q1.distribution || []).map((item) => ({
+        name: t(item.level),
+        value: item.count,
+        level: item.level,
+      }));
 
   const distributionBarData = useMemo(() => {
+    if (isStudentScoped) {
+      return studentBreakdownData.map((item) => ({
+        level: item.name,
+        levelKey: item.name,
+        count: item.score,
+        fill: item.fill,
+      }));
+    }
     const dist = apiQuarter === 1 ? q1.distribution : q2.distribution;
     const levels = ["on_level", "approach", "below"];
     return levels.map((level) => ({
@@ -293,16 +366,14 @@ export default function Analytics() {
       levelKey: level,
       count: dist?.find((d) => d.level === level)?.count ?? 0,
     }));
-  }, [apiQuarter, q1.distribution, q2.distribution, t]);
+  }, [apiQuarter, isStudentScoped, q1.distribution, q2.distribution, studentBreakdownData, t]);
 
   const classChartData = useMemo(() => {
     if (isStudentScoped && selectedStudent) {
-      return [
-        {
-          name: selectedStudent.full_name,
-          score: selectedStudentTermTotal || 0,
-        },
-      ];
+      return studentBreakdownData.map((item) => ({
+        name: item.name,
+        score: item.score,
+      }));
     }
     return sortByClassOrder(
       classSummary.filter((cls) => selectedClassId === "all" || cls.class_id === selectedClassId),
@@ -310,7 +381,7 @@ export default function Analytics() {
       name: cls.class_name,
       score: cls.avg_total_score || 0,
     }));
-  }, [classSummary, isStudentScoped, selectedClassId, selectedStudent, selectedStudentTermTotal]);
+  }, [classSummary, isStudentScoped, selectedClassId, selectedStudent, studentBreakdownData]);
 
   const gradeSummary = useMemo(() => {
     if (isStudentScoped && selectedStudent) {
@@ -342,25 +413,30 @@ export default function Analytics() {
         {
           icon: TrendingUp,
           tone: "text-emerald-600 dark:text-emerald-400",
-          text: `${selectedStudent.full_name} is currently ${t(selectedStudentPerformanceLevel || "no_data")} for ${t(`term_${termScopeId}`)}.`,
+          text:
+            selectedStudentTermTotal != null
+              ? `${selectedStudent.full_name} scored ${selectedStudentTermTotal}/50 and is currently ${t(selectedStudentPerformanceLevel || "no_data")} for ${t(`term_${termScopeId}`)}.`
+              : `${selectedStudent.full_name} is currently ${t(selectedStudentPerformanceLevel || "no_data")} for ${t(`term_${termScopeId}`)}.`,
         },
         {
           icon: Sparkles,
           tone: "text-sky-600 dark:text-sky-400",
           text:
-            selectedStudentTermTotal != null
-              ? `Quarter total for ${selectedStudent.full_name} is ${selectedStudentTermTotal}.`
-              : `Quarter total for ${selectedStudent.full_name} is not available yet for the selected term.`,
+            selectedStudentStrongestComponent
+              ? `Strongest scored area so far is ${selectedStudentStrongestComponent.name} with ${selectedStudentStrongestComponent.score}${selectedStudentStrongestComponent.max ? `/${selectedStudentStrongestComponent.max}` : ""}.`
+              : `The strongest scored area will appear once component marks are available for ${selectedStudent.full_name}.`,
         },
         {
           icon: AlertTriangle,
           tone: "text-amber-600 dark:text-amber-400",
           text:
-            selectedStudent.weak_areas?.length > 0
-              ? `Focus: ${selectedStudent.weak_areas.join(", ")}.`
-              : selectedStudent.strengths?.length > 0
-                ? `Strengths: ${selectedStudent.strengths.join(", ")}.`
-                : "Focus insight will appear once more scored records are available for this student.",
+            selectedStudentWeakestComponent
+              ? `Lowest scored area so far is ${selectedStudentWeakestComponent.name} with ${selectedStudentWeakestComponent.score}${selectedStudentWeakestComponent.max ? `/${selectedStudentWeakestComponent.max}` : ""}.`
+              : selectedStudent.weak_areas?.length > 0
+                ? `Focus: ${selectedStudent.weak_areas.join(", ")}.`
+                : selectedStudent.strengths?.length > 0
+                  ? `Strengths: ${selectedStudent.strengths.join(", ")}.`
+                  : "Focus insight will appear once more scored records are available for this student.",
         },
       ];
     }
@@ -416,8 +492,10 @@ export default function Analytics() {
     classSummary,
     isStudentScoped,
     selectedStudent,
+    selectedStudentStrongestComponent,
     selectedStudentPerformanceLevel,
     selectedStudentTermTotal,
+    selectedStudentWeakestComponent,
     t,
     termScopeId,
   ]);
@@ -589,11 +667,22 @@ export default function Analytics() {
                   </div>
                 )}
                 <div className="rounded-lg border border-border/60 bg-background/80 px-3 py-2">
-                  <p className="text-xs text-muted-foreground">{t("analytics_focus_quarter")}</p>
-                  <p className="text-lg font-semibold tabular-nums text-primary">
-                    {focusOnLevelRate}%
-                    <span className="ml-1 text-sm font-normal text-muted-foreground">{t("on_level")}</span>
+                  <p className="text-xs text-muted-foreground">
+                    {isStudentScoped ? t("analytics_student_total") : t("analytics_focus_quarter")}
                   </p>
+                  <p className="text-lg font-semibold tabular-nums text-primary">
+                    {isStudentScoped
+                      ? `${selectedStudentTermTotal != null ? selectedStudentTermTotal : "—"}/50`
+                      : `${focusOnLevelRate}%`}
+                    {!isStudentScoped && (
+                      <span className="ml-1 text-sm font-normal text-muted-foreground">{t("on_level")}</span>
+                    )}
+                  </p>
+                  {isStudentScoped && (
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {selectedStudentAchievementRate}% {t("analytics_student_achievement_caption")}
+                    </p>
+                  )}
                 </div>
                 <ul className="space-y-2 border-t border-border/50 pt-2 text-xs text-muted-foreground">
                   <li>
@@ -617,11 +706,19 @@ export default function Analytics() {
               <BoardHighlightsCard title={t("key_insights")}>
                 <p>
                   <span className="font-medium text-foreground">{t(`term_${termScopeId}`)}:</span>{" "}
-                  {focusOnLevelRate}% {t("on_level")}
-                  {(apiQuarter === 1 ? q1.avg_total : q2.avg_total) != null && (
+                  {isStudentScoped
+                    ? `${selectedStudentTermTotal != null ? selectedStudentTermTotal : "—"}/50`
+                    : `${focusOnLevelRate}% ${t("on_level")}`}
+                  {!isStudentScoped && (apiQuarter === 1 ? q1.avg_total : q2.avg_total) != null && (
                     <span className="text-muted-foreground">
                       {" "}
                       · {t("avg_quarter_total")}: {apiQuarter === 1 ? q1.avg_total : q2.avg_total}
+                    </span>
+                  )}
+                  {isStudentScoped && selectedStudentStrongestComponent && (
+                    <span className="text-muted-foreground">
+                      {" "}
+                      · {selectedStudentStrongestComponent.name}: {selectedStudentStrongestComponent.score}
                     </span>
                   )}
                 </p>
@@ -663,16 +760,23 @@ export default function Analytics() {
         <Card data-testid="analytics-focus-quarter" className="ring-2 ring-primary ring-offset-2 ring-offset-background">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
-              {t(`term_${termScopeId}`)} — {t("on_level_rate")}
+              {isStudentScoped ? t("analytics_student_total") : `${t(`term_${termScopeId}`)} — ${t("on_level_rate")}`}
             </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-semibold text-emerald-600 dark:text-emerald-400">
-              {focusOnLevelRate}%
+              {isStudentScoped
+                ? `${selectedStudentTermTotal != null ? selectedStudentTermTotal : "—"}/50`
+                : `${focusOnLevelRate}%`}
             </div>
-            {(apiQuarter === 1 ? q1.avg_total : q2.avg_total) != null && (
+            {!isStudentScoped && (apiQuarter === 1 ? q1.avg_total : q2.avg_total) != null && (
               <p className="mt-1 text-xs text-muted-foreground">
                 {t("avg_quarter_total")}: {apiQuarter === 1 ? q1.avg_total : q2.avg_total}
+              </p>
+            )}
+            {isStudentScoped && (
+              <p className="mt-1 text-xs text-muted-foreground">
+                {selectedStudentAchievementRate}% {t("analytics_student_achievement_caption")}
               </p>
             )}
           </CardContent>
@@ -682,42 +786,54 @@ export default function Analytics() {
       {overview && totalStudents > 0 && (
         <div className="grid gap-4 md:grid-cols-2" data-testid="analytics-visual-board-grid">
           <BoardPanel
-            title={isStudentScoped ? t("analytics_student_total") : t("visual_board_chart_class_avg")}
-            subtitle={isStudentScoped ? t("analytics_student_total_sub") : t("visual_board_chart_class_avg_sub")}
+            title={isStudentScoped ? t("analytics_student_marks_breakdown") : t("visual_board_chart_class_avg")}
+            subtitle={isStudentScoped ? t("analytics_student_marks_breakdown_sub") : t("visual_board_chart_class_avg_sub")}
             testId="analytics-board-class-avg"
           >
             <ClassAverageBarChart data={classChartData} height={260} />
           </BoardPanel>
           <BoardPanel
-            title={t("visual_board_chart_pass_split")}
-            subtitle={t("visual_board_chart_pass_split_sub")}
+            title={isStudentScoped ? t("analytics_student_component_share") : t("visual_board_chart_pass_split")}
+            subtitle={isStudentScoped ? t("analytics_student_component_share_sub") : t("visual_board_chart_pass_split_sub")}
             testId="analytics-board-donut"
           >
-            <PassSplitDonut
-              distribution={selectedQuarterDistribution}
-              onLevelLabel={t("on_level")}
-              approachingLabel={t("visual_board_approaching_full_score")}
-              belowLabel={t("visual_board_below_level")}
-              noDataLabel={t("no_data")}
-              centerCaption={t("on_level")}
-              height={260}
-            />
+            {isStudentScoped ? (
+              <ScoreBreakdownDonut
+                data={studentBreakdownData.map((item) => ({
+                  name: item.name,
+                  value: item.score,
+                  fill: item.fill,
+                }))}
+                centerCaption={t("total_score")}
+                height={260}
+              />
+            ) : (
+              <PassSplitDonut
+                distribution={selectedQuarterDistribution}
+                onLevelLabel={t("on_level")}
+                approachingLabel={t("visual_board_approaching_full_score")}
+                belowLabel={t("visual_board_below_level")}
+                noDataLabel={t("no_data")}
+                centerCaption={t("on_level")}
+                height={260}
+              />
+            )}
           </BoardPanel>
           <BoardPanel
-            title={t("visual_board_chart_q_focus")}
-            subtitle={t("visual_board_chart_q_focus_sub")}
+            title={isStudentScoped ? t("analytics_student_achievement") : t("visual_board_chart_q_focus")}
+            subtitle={isStudentScoped ? t("analytics_student_achievement_sub") : t("visual_board_chart_q_focus_sub")}
             testId="analytics-board-q-focus"
           >
             <QuarterOnLevelFocus
               rate={focusOnLevelRate}
-              termLabel={t(`term_${termScopeId}`)}
-              lineName={t("visual_board_line_cohort")}
+              termLabel={isStudentScoped ? selectedStudent?.full_name : t(`term_${termScopeId}`)}
+              lineName={isStudentScoped ? t("analytics_student_achievement_caption") : t("visual_board_line_cohort")}
               height={240}
             />
           </BoardPanel>
           <BoardPanel
-            title={isStudentScoped ? t("analytics_student_profile") : t("visual_board_chart_class_curve")}
-            subtitle={isStudentScoped ? t("analytics_student_profile_sub") : t("visual_board_chart_class_curve_sub")}
+            title={isStudentScoped ? t("analytics_student_component_profile") : t("visual_board_chart_class_curve")}
+            subtitle={isStudentScoped ? t("analytics_student_component_profile_sub") : t("visual_board_chart_class_curve_sub")}
             testId="analytics-board-class-area"
           >
             <ClassScoreArea data={classChartData} height={240} />
@@ -785,12 +901,16 @@ export default function Analytics() {
 
         <TabsContent value="overview" className="mt-6" data-testid="analytics-overview-content">
           <BoardPanel
-            title={`${t("performance_distribution")} — ${t(`term_${termScopeId}`)}`}
+            title={
+              isStudentScoped
+                ? `${t("analytics_student_marks_breakdown")} — ${t(`term_${termScopeId}`)}`
+                : `${t("performance_distribution")} — ${t(`term_${termScopeId}`)}`
+            }
             subtitle={
               <span className="inline-flex items-center gap-2">
                 <Sparkles className="h-3.5 w-3.5 text-primary" />
                 <Badge variant="outline" className="font-normal">
-                  {t(apiSemester === 1 ? "semester_one" : "semester_two")} · {t("analytics_charts_semester_badge")}
+                  {t(apiSemester === 1 ? "semester_one" : "semester_two")} · {isStudentScoped ? t("analytics_student_marks_breakdown_sub") : t("analytics_charts_semester_badge")}
                 </Badge>
               </span>
             }
@@ -803,9 +923,9 @@ export default function Analytics() {
                   <YAxis tick={{ fontSize: 11 }} />
                   <Tooltip content={<AnalyticsTooltip />} />
                   <Legend />
-                  <Bar dataKey="count" name={t("students")} radius={[6, 6, 0, 0]} maxBarSize={56}>
+                  <Bar dataKey="count" name={isStudentScoped ? t("total_score") : t("students")} radius={[6, 6, 0, 0]} maxBarSize={56}>
                     {distributionBarData.map((entry, index) => (
-                      <Cell key={`d-${index}`} fill={PERFORMANCE_COLORS[entry.levelKey]} />
+                      <Cell key={`d-${index}`} fill={isStudentScoped ? entry.fill : PERFORMANCE_COLORS[entry.levelKey]} />
                     ))}
                   </Bar>
                 </BarChart>
@@ -817,7 +937,9 @@ export default function Analytics() {
         <TabsContent value="quarter1" className="mt-6" data-testid="analytics-quarter1-content">
           <Card className="border-primary/20 shadow-sm">
             <CardHeader>
-              <CardTitle>{t("quarter_1")} — {t("performance_distribution")}</CardTitle>
+              <CardTitle>
+                {isStudentScoped ? t("analytics_student_component_share") : `${t("quarter_1")} — ${t("performance_distribution")}`}
+              </CardTitle>
             </CardHeader>
             <CardContent className="grid gap-6 md:grid-cols-2">
               <div className="h-64" data-testid="analytics-q1-chart">
@@ -825,7 +947,7 @@ export default function Analytics() {
                   <PieChart>
                     <Pie data={q1Distribution} dataKey="value" innerRadius={60} outerRadius={90}>
                       {q1Distribution.map((entry) => (
-                        <Cell key={entry.level} fill={PERFORMANCE_COLORS[entry.level]} />
+                        <Cell key={entry.level} fill={isStudentScoped ? entry.fill : PERFORMANCE_COLORS[entry.level]} />
                       ))}
                     </Pie>
                     <Tooltip content={<AnalyticsTooltip />} />
