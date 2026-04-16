@@ -245,10 +245,10 @@ async def public_api_root():
 
 
 PERFORMANCE_THRESHOLDS = {
-    "exceeding": 47,
-    "meeting": 47,
-    "approaching": 45,
-    "below": 45,
+    "exceeding": 46,
+    "meeting": 46,
+    "approaching": 43,
+    "below": 43,
 }
 MAX_RAW_TOTAL = 30
 NORMALIZED_MAX = 50
@@ -509,18 +509,18 @@ def compute_quarter_totals(scores_by_week: Dict[int, Dict[str, Optional[float]]]
     }
 
 
-# Quarter-total thresholds (out of 50): On Level 47-50, Approach 45-46.99, Below <45.
-QUARTER_TOTAL_ON_LEVEL = 47
-QUARTER_TOTAL_APPROACH = 45
+# Quarter-total thresholds (out of 50): On Level 46-50, Approach 43-45.99, Below <43.
+QUARTER_TOTAL_ON_LEVEL = 46
+QUARTER_TOTAL_APPROACH = 43
 
-# Dashboard / class / report lists titled "need support": only "below" (<45/50), not "approach" (45–47.99).
+# Dashboard / class / report lists titled "need support": only "below" (<43/50), not "approach" (43–45.99).
 PERFORMANCE_LEVEL_NEED_SUPPORT = "below"
 
 
 def include_in_need_support_list(student: Dict[str, Any]) -> bool:
     """
     True if this student should appear on 'Students Needing Support' and related lists.
-    Requires performance band 'below' and a quarter total strictly under the approach threshold (45/50).
+    Requires performance band 'below' and a quarter total strictly under the approach threshold (43/50).
     """
     if student.get("performance_level") != PERFORMANCE_LEVEL_NEED_SUPPORT:
         return False
@@ -1024,7 +1024,7 @@ def compute_inclusive_quarter_exams_q2(
 # Students page total: attendance (2.5) + participation (2.5) + behavior (5) + homework (5) = 15 max.
 # Assessment Marks: Students total (15) + best(Quiz1, Quiz2)(5) + Chapter Test 1 Practical(10) = 30 max.
 # Final Exams: Assessment (30) + Quarter Practical(10) + Quarter Theory(10) = 50 max.
-# Performance: On Level 13-15 (Students), 25-30 (Assessment), 47-50 (Final); Approach/Below per thresholds.
+# Performance: On Level 13-15 (Students), 25-30 (Assessment), 46-50 (Final); Approach/Below per thresholds.
 TOTAL_SCORE_MAX = 15  # 2.5 + 2.5 + 5 + 5
 
 

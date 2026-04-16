@@ -102,7 +102,7 @@ function buildStudentInsights(payload, language = "en") {
   const total = toNumber(payload?.focusAvg);
   const performanceLevel = payload?.performanceLevel || "no_data";
   const performanceText = translatePerformanceLevel(performanceLevel, language);
-  const targetThreshold = performanceLevel === "approach" ? 47 : performanceLevel === "below" ? 45 : null;
+  const targetThreshold = performanceLevel === "approach" ? 46 : performanceLevel === "below" ? 43 : null;
   const thresholdGap = total != null && targetThreshold != null ? Math.max(0, Math.round((targetThreshold - total) * 100) / 100) : null;
   const strengthsText = student?.strengths?.length
     ? joinLabels(student.strengths, language)

@@ -119,8 +119,8 @@ function computeFinalPerformanceLevel(baseStudent, currentStudent = baseStudent)
     (v) => v != null && v !== "" && !Number.isNaN(Number(v))
   );
   if (!hasAssessment && !hasQuarter) return "no_data";
-  if (total >= 47) return "on_level";
-  if (total >= 45) return "approach";
+  if (total >= 46) return "on_level";
+  if (total >= 43) return "approach";
   return "below";
 }
 
