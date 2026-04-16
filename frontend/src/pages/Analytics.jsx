@@ -509,6 +509,12 @@ export default function Analytics() {
           quarter: apiQuarter,
           ...(selectedClassId !== "all" ? { class_id: selectedClassId } : {}),
           ...(selectedStudentId !== "all" ? { student_id: selectedStudentId } : {}),
+          analysis_strengths: analysisStrengths,
+          analysis_weaknesses: analysisWeaknesses,
+          analysis_performance: analysisPerformance,
+          analysis_standout_data: analysisStandoutData,
+          analysis_actions: analysisActions,
+          analysis_recommendations: analysisRecommendations,
         },
         responseType: "blob",
       });
@@ -919,7 +925,14 @@ export default function Analytics() {
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={distributionBarData} barCategoryGap="22%" margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke={BOARD.grid} vertical={false} />
-                  <XAxis dataKey="level" tick={{ fontSize: 11 }} />
+                  <XAxis
+                    dataKey="level"
+                    tick={{ fontSize: 11 }}
+                    interval={0}
+                    angle={isStudentScoped ? -18 : 0}
+                    textAnchor={isStudentScoped ? "end" : "middle"}
+                    height={isStudentScoped ? 64 : 30}
+                  />
                   <YAxis tick={{ fontSize: 11 }} />
                   <Tooltip content={<AnalyticsTooltip />} />
                   <Legend />

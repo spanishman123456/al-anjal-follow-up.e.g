@@ -309,24 +309,11 @@ html.dark .App {
 html:not(.dark) .main-hero-sky {
     position: relative;
     background-color: #0a0e1a;
-    background-image:
-        radial-gradient(1px 1px at 12% 18%, rgba(255, 255, 255, 0.5), transparent),
-        radial-gradient(1px 1px at 28% 42%, rgba(255, 255, 255, 0.35), transparent),
-        radial-gradient(1px 1px at 55% 12%, rgba(255, 255, 255, 0.45), transparent),
-        radial-gradient(1px 1px at 78% 28%, rgba(255, 255, 255, 0.4), transparent),
-        radial-gradient(1px 1px at 90% 55%, rgba(255, 255, 255, 0.32), transparent),
-        radial-gradient(1px 1px at 40% 68%, rgba(255, 255, 255, 0.28), transparent),
-        radial-gradient(1.5px 1.5px at 66% 38%, rgba(165, 243, 252, 0.55), transparent),
-        radial-gradient(ellipse 90% 80% at 80% -30%, rgba(124, 58, 237, 0.2), transparent),
-        linear-gradient(180deg, #0a0e1a 0%, #131c30 88%, #1a233a 100%);
+    background-image: linear-gradient(180deg, #0a0e1a 0%, #131c30 100%);
 }
 
 html:not(.dark) .main-hero-sky::before {
-    content: "";
-    position: absolute;
-    inset: 0;
-    pointer-events: none;
-    background: radial-gradient(ellipse 60% 50% at 20% 120%, rgba(6, 182, 212, 0.12), transparent);
+    content: none;
 }
 
 /* Login (light): top sky strip only */

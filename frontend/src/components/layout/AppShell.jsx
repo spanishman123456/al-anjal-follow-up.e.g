@@ -452,7 +452,7 @@ export const AppShell = ({
         data-testid="main-panel"
         dir={isRTL ? "rtl" : undefined}
       >
-        <div className={cn(heroSky && "main-hero-sky pb-2")}>
+        <div className={cn(heroSky && "main-hero-sky")}>
         <header
           className={cn(
             "relative z-10 flex flex-col gap-4 px-6 py-4 backdrop-blur-sm",
@@ -467,14 +467,14 @@ export const AppShell = ({
             <div className="flex items-center gap-4" data-testid="school-header">
               <div
                 className={cn(
-                  "flex items-center justify-center rounded-xl bg-white p-2.5 shadow-md",
-                  heroSky ? "ring-1 ring-black/10" : "shadow-sm ring-1 ring-black/5 dark:shadow-md dark:ring-white/20",
+                    "flex items-center justify-center",
+                    heroSky ? "p-0" : "rounded-xl bg-white p-2.5 shadow-sm ring-1 ring-black/5 dark:bg-transparent dark:p-0 dark:shadow-none dark:ring-0",
                 )}
               >
                 <img
-                  src={`${process.env.PUBLIC_URL || ""}/logo.png`}
+                    src="/logo-al-anjal.png"
                   alt="School Logo"
-                  className="h-12 w-auto max-h-[3.25rem] object-contain [filter:none]"
+                    className="h-14 w-auto max-h-[3.5rem] object-contain [filter:none]"
                   data-testid="school-logo"
                 />
               </div>
@@ -687,19 +687,6 @@ export const AppShell = ({
             {t("refresh_data")}
           </Button>
         </div>
-        {heroSky && (
-          <svg
-            className="relative z-[5] -mb-px block w-full text-[hsl(210_40%_98.5%)]"
-            viewBox="0 0 1440 56"
-            preserveAspectRatio="none"
-            aria-hidden
-          >
-            <path
-              fill="currentColor"
-              d="M0,28 C240,52 480,8 720,28 C960,48 1200,12 1440,32 L1440,56 L0,56 Z"
-            />
-          </svg>
-        )}
         </div>
         <main
           className="page-content-bg flex-1 px-6 py-8 page-enter"

@@ -1884,13 +1884,13 @@ def create_component_breakdown_bar_chart(student: Dict[str, Any], quarter: int) 
             color="#475569",
         )
     ax.set_xticks(list(x))
-    ax.set_xticklabels(names, fontsize=9, color="#64748b", rotation=18 if len(names) > 4 else 0)
+    ax.set_xticklabels(names, fontsize=9, color="#64748b", rotation=16 if len(names) > 4 else 0)
     ax.yaxis.grid(True, linestyle="--", color=BOARD_ANALYTICS["grid"], linewidth=0.8)
     ax.set_axisbelow(True)
     ax.spines["top"].set_visible(False)
     ax.spines["right"].set_visible(False)
     buf = io.BytesIO()
-    fig.subplots_adjust(left=0.08, right=0.98, top=0.92, bottom=0.2)
+    fig.subplots_adjust(left=0.08, right=0.98, top=0.92, bottom=0.24)
     plt.savefig(buf, format="png", dpi=PDF_EXPORT_CHART_DPI, facecolor="white")
     plt.close(fig)
     buf.seek(0)
@@ -1908,6 +1908,7 @@ def create_component_breakdown_donut(student: Dict[str, Any], quarter: int) -> i
         [row["value"] for row in rows],
         colors=[row["color"] for row in rows],
         startangle=90,
+        center=(0.58, 0.02),
         wedgeprops=dict(width=0.38, edgecolor="white", linewidth=2),
     )
     ax.axis("equal")
@@ -1915,11 +1916,11 @@ def create_component_breakdown_donut(student: Dict[str, Any], quarter: int) -> i
         Patch(facecolor=row["color"], edgecolor="white", label=f"{row['label']}: {row['value']:.1f}")
         for row in rows
     ]
-    ax.legend(handles=legend_handles, loc="upper left", fontsize=8, frameon=False, bbox_to_anchor=(0.0, 1.02))
-    ax.text(0, 0.02, f"{total:.1f}", ha="center", va="center", fontsize=20, fontweight="bold", color="#0f172a")
-    ax.text(0, -0.12, "TOTAL", ha="center", va="center", fontsize=8, color="#64748b")
+    ax.legend(handles=legend_handles, loc="upper left", fontsize=8, frameon=False, bbox_to_anchor=(-0.02, 1.02))
+    ax.text(0.58, 0.04, f"{total:.1f}", ha="center", va="center", fontsize=20, fontweight="bold", color="#0f172a")
+    ax.text(0.58, -0.10, "TOTAL", ha="center", va="center", fontsize=8, color="#64748b")
     buf = io.BytesIO()
-    fig.subplots_adjust(left=0.08, right=0.98, top=0.92, bottom=0.16)
+    fig.subplots_adjust(left=0.16, right=0.98, top=0.92, bottom=0.16)
     plt.savefig(buf, format="png", dpi=PDF_EXPORT_CHART_DPI, facecolor="white")
     plt.close(fig)
     buf.seek(0)
@@ -1939,14 +1940,14 @@ def create_component_breakdown_area_chart(student: Dict[str, Any], quarter: int)
     ax.fill_between(xs, ys, color=BOARD_ANALYTICS["area_fill"], alpha=0.55, linewidth=0)
     ax.plot(xs, ys, color=BOARD_ANALYTICS["area_line"], linewidth=2.2, marker="o", markersize=7)
     ax.set_xticks(xs)
-    ax.set_xticklabels(names, fontsize=9, color="#64748b", rotation=18 if len(rows) > 4 else 0)
+    ax.set_xticklabels(names, fontsize=9, color="#64748b", rotation=16 if len(rows) > 4 else 0)
     ax.set_ylim(0, max(ymax * 1.15, 5))
     ax.yaxis.grid(True, linestyle="--", color=BOARD_ANALYTICS["grid"], linewidth=0.8)
     ax.set_axisbelow(True)
     ax.spines["top"].set_visible(False)
     ax.spines["right"].set_visible(False)
     buf = io.BytesIO()
-    fig.subplots_adjust(left=0.08, right=0.98, top=0.92, bottom=0.2)
+    fig.subplots_adjust(left=0.08, right=0.98, top=0.92, bottom=0.24)
     plt.savefig(buf, format="png", dpi=PDF_EXPORT_CHART_DPI, facecolor="white")
     plt.close(fig)
     buf.seek(0)
@@ -6646,6 +6647,12 @@ async def export_analytics_summary(
     quarter: Optional[int] = Query(default=1),
     class_id: Optional[str] = Query(default=None),
     student_id: Optional[str] = Query(default=None),
+    analysis_strengths: Optional[str] = Query(default=None),
+    analysis_weaknesses: Optional[str] = Query(default=None),
+    analysis_performance: Optional[str] = Query(default=None),
+    analysis_standout_data: Optional[str] = Query(default=None),
+    analysis_actions: Optional[str] = Query(default=None),
+    analysis_recommendations: Optional[str] = Query(default=None),
 ):
     """
     PDF/Excel aligned with GET /analytics/overview (same semester, quarter, optional class filter).
@@ -6653,7 +6660,20 @@ async def export_analytics_summary(
     sem = semester or 1
     q = quarter or 1
     fmt = (format or "pdf").lower()
-    cache_key = ("analytics_export", fmt, sem, q, class_id or "", student_id or "")
+    cache_key = (
+        "analytics_export",
+        fmt,
+        sem,
+        q,
+        class_id or "",
+        student_id or "",
+        analysis_strengths or "",
+        analysis_weaknesses or "",
+        analysis_performance or "",
+        analysis_standout_data or "",
+        analysis_actions or "",
+        analysis_recommendations or "",
+    )
 
     async def _produce():
         overview = await get_analytics_overview(class_id=class_id, student_id=student_id, semester=semester, quarter=quarter)
@@ -6683,7 +6703,15 @@ async def export_analytics_summary(
             scope_label = f"{scope_label} · {student_name}"
         if fmt == "excel":
             return generate_report_excel(summary, scope_label)
-        return generate_analytics_dashboard_pdf(summary, scope_label, overview, class_summaries)
+        insights = {
+            "analysis_strengths": analysis_strengths or "",
+            "analysis_weaknesses": analysis_weaknesses or "",
+            "analysis_performance": analysis_performance or "",
+            "analysis_standout_data": analysis_standout_data or "",
+            "analysis_actions": analysis_actions or "",
+            "analysis_recommendations": analysis_recommendations or "",
+        }
+        return generate_analytics_dashboard_pdf(summary, scope_label, overview, class_summaries, insights=insights)
 
     content = await cache_get_bytes(cache_key, CACHE_TTL_PDF, _produce)
     fn_base = f"analytics_s{sem}_q{q}"

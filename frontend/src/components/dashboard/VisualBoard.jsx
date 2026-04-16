@@ -73,15 +73,27 @@ export function BoardPanel({ title, subtitle, children, className = "", testId }
 
 export function ClassAverageBarChart({ data, valueKey = "score", labelKey = "name", height = 260 }) {
   const chartData = Array.isArray(data) ? data : [];
+  const needsAngledTicks =
+    chartData.length > 4 || chartData.some((item) => String(item?.[labelKey] || "").length > 14);
   return (
     <div style={{ height }} className="w-full">
       <ResponsiveContainer width="100%" height="100%">
-        <BarChart data={chartData} margin={{ top: 28, right: 8, left: 0, bottom: 4 }} barCategoryGap="18%">
+        <BarChart data={chartData} margin={{ top: 28, right: 8, left: 0, bottom: needsAngledTicks ? 20 : 4 }} barCategoryGap="18%">
           <CartesianGrid strokeDasharray="3 3" stroke={BOARD.grid} vertical={false} />
-          <XAxis dataKey={labelKey} tick={{ fontSize: 11, fill: BOARD.axis }} interval={0} angle={chartData.length > 6 ? -25 : 0} textAnchor={chartData.length > 6 ? "end" : "middle"} height={chartData.length > 6 ? 48 : 28} />
+          <XAxis
+            dataKey={labelKey}
+            tick={{ fontSize: 11, fill: BOARD.axis }}
+            interval={0}
+            angle={needsAngledTicks ? -18 : 0}
+            textAnchor={needsAngledTicks ? "end" : "middle"}
+            height={needsAngledTicks ? 64 : 28}
+          />
           <YAxis tick={{ fontSize: 11, fill: BOARD.axis }} domain={[0, "auto"]} />
           <Tooltip content={boardTooltip} />
           <Bar dataKey={valueKey} fill={BOARD.barFill} radius={[6, 6, 0, 0]} maxBarSize={48}>
+            {chartData.map((entry, index) => (
+              <Cell key={`bar-${index}`} fill={entry?.fill || BOARD.barFill} />
+            ))}
             <LabelList dataKey={valueKey} position="top" fill="#64748b" fontSize={11} />
           </Bar>
         </BarChart>
@@ -198,8 +210,8 @@ export function ScoreBreakdownDonut({
 }) {
   const list = Array.isArray(data) ? data.filter((item) => Number(item?.value || 0) > 0) : [];
   const total = list.reduce((sum, item) => sum + Number(item?.value || 0), 0);
-  const legendSpace = showLegend ? 108 : 0;
-  const chartHeight = Math.max(height - legendSpace, 150);
+  const legendSpace = showLegend ? 92 : 0;
+  const chartHeight = Math.max(height - legendSpace, 190);
 
   if (total <= 0) {
     return (
@@ -210,7 +222,7 @@ export function ScoreBreakdownDonut({
   }
 
   return (
-    <div className="mx-auto w-full max-w-sm overflow-hidden" style={{ height }}>
+    <div className="mx-auto w-full max-w-md overflow-visible" style={{ height }}>
       {showLegend ? (
         <div className="mb-2 space-y-1 text-sm font-semibold">
           {list.map((item) => (
@@ -230,10 +242,10 @@ export function ScoreBreakdownDonut({
               data={list}
               dataKey="value"
               nameKey="name"
-              cx="50%"
-              cy="45%"
+              cx="58%"
+              cy="54%"
               innerRadius={52}
-              outerRadius={74}
+              outerRadius={68}
               paddingAngle={2}
             >
               {list.map((item) => (
@@ -243,7 +255,7 @@ export function ScoreBreakdownDonut({
             <Tooltip content={boardTooltip} />
           </PieChart>
         </ResponsiveContainer>
-        <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center -translate-y-3">
+        <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
           <span className="text-2xl font-semibold tabular-nums text-slate-800 dark:text-foreground">
             {Math.round(total * 10) / 10}
           </span>
@@ -288,10 +300,12 @@ export function QuarterOnLevelFocus({ rate, termLabel, lineName, height = 220 })
 /** Smooth “trend” across classes — area under average score by class. */
 export function ClassScoreArea({ data, valueKey = "score", labelKey = "name", height = 240 }) {
   const chartData = Array.isArray(data) ? data : [];
+  const needsAngledTicks =
+    chartData.length > 4 || chartData.some((item) => String(item?.[labelKey] || "").length > 14);
   return (
     <div style={{ height }} className="w-full">
       <ResponsiveContainer width="100%" height="100%">
-        <AreaChart data={chartData} margin={{ top: 12, right: 8, left: 0, bottom: chartData.length > 6 ? 36 : 8 }}>
+        <AreaChart data={chartData} margin={{ top: 12, right: 8, left: 0, bottom: needsAngledTicks ? 44 : 8 }}>
           <defs>
             <linearGradient id="boardAreaGrad" x1="0" y1="0" x2="0" y2="1">
               <stop offset="0%" stopColor={BOARD.area} stopOpacity={0.55} />
@@ -303,9 +317,9 @@ export function ClassScoreArea({ data, valueKey = "score", labelKey = "name", he
             dataKey={labelKey}
             tick={{ fontSize: 10, fill: BOARD.axis }}
             interval={0}
-            angle={chartData.length > 5 ? -30 : 0}
-            textAnchor={chartData.length > 5 ? "end" : "middle"}
-            height={chartData.length > 5 ? 48 : 28}
+            angle={needsAngledTicks ? -18 : 0}
+            textAnchor={needsAngledTicks ? "end" : "middle"}
+            height={needsAngledTicks ? 60 : 28}
           />
           <YAxis tick={{ fontSize: 11, fill: BOARD.axis }} domain={[0, "auto"]} />
           <Tooltip content={boardTooltip} />
