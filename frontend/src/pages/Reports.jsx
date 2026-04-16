@@ -183,6 +183,7 @@ export default function Reports() {
   const classBreakdown = report?.class_breakdown || [];
   const focusComponentLabels = apiQuarter === 2
     ? [
+        { key: "focus_assessment", label: t("assessment") },
         { key: "focus_quiz_primary", label: t("quiz3") },
         { key: "focus_quiz_secondary", label: t("quiz4") },
         { key: "focus_chapter_test", label: t("chapter_test2_practical") },
@@ -190,6 +191,7 @@ export default function Reports() {
         { key: "focus_final_theory", label: t("quarter2_theory") },
       ]
     : [
+        { key: "focus_assessment", label: t("assessment") },
         { key: "focus_quiz_primary", label: t("quiz1") },
         { key: "focus_quiz_secondary", label: t("quiz2") },
         { key: "focus_chapter_test", label: t("chapter_test1_practical") },

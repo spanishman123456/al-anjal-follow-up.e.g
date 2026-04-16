@@ -56,7 +56,7 @@ const PERFORMANCE_COLORS = {
   no_data: "#94a3b8",
 };
 
-const STUDENT_BREAKDOWN_COLORS = ["#38bdf8", "#22c55e", "#f59e0b", "#8b5cf6", "#ef4444"];
+const STUDENT_BREAKDOWN_COLORS = ["#0ea5e9", "#38bdf8", "#22c55e", "#f59e0b", "#8b5cf6", "#ef4444"];
 
 function toChartNumber(value) {
   if (value == null || value === "") return 0;
@@ -68,29 +68,44 @@ function buildStudentBreakdownData(student, apiQuarter, t) {
   if (!student) return [];
   const defs = apiQuarter === 2
     ? [
-        { label: t("quiz3"), value: student.focus_quiz_primary, max: 5 },
-        { label: t("quiz4"), value: student.focus_quiz_secondary, max: 5 },
-        { label: t("chapter_test2_practical"), value: student.focus_chapter_test, max: 10 },
-        { label: t("quarter2_practical"), value: student.focus_final_practical, max: 10 },
-        { label: t("quarter2_theory"), value: student.focus_final_theory, max: 10 },
+        { key: "assessment", label: t("assessment"), value: student.focus_assessment, max: 15, kind: "assessment" },
+        { key: "quiz3", label: t("quiz3"), value: student.focus_quiz_primary, max: 5, kind: "quiz" },
+        { key: "quiz4", label: t("quiz4"), value: student.focus_quiz_secondary, max: 5, kind: "quiz" },
+        { key: "chapter_test2", label: t("chapter_test2_practical"), value: student.focus_chapter_test, max: 10, kind: "chapter" },
+        { key: "quarter2_practical", label: t("quarter2_practical"), value: student.focus_final_practical, max: 10, kind: "final" },
+        { key: "quarter2_theory", label: t("quarter2_theory"), value: student.focus_final_theory, max: 10, kind: "final" },
       ]
     : [
-        { label: t("quiz1"), value: student.focus_quiz_primary, max: 5 },
-        { label: t("quiz2"), value: student.focus_quiz_secondary, max: 5 },
-        { label: t("chapter_test1_practical"), value: student.focus_chapter_test, max: 10 },
-        { label: t("quarter1_practical"), value: student.focus_final_practical, max: 10 },
-        { label: t("quarter1_theory"), value: student.focus_final_theory, max: 10 },
+        { key: "assessment", label: t("assessment"), value: student.focus_assessment, max: 15, kind: "assessment" },
+        { key: "quiz1", label: t("quiz1"), value: student.focus_quiz_primary, max: 5, kind: "quiz" },
+        { key: "quiz2", label: t("quiz2"), value: student.focus_quiz_secondary, max: 5, kind: "quiz" },
+        { key: "chapter_test1", label: t("chapter_test1_practical"), value: student.focus_chapter_test, max: 10, kind: "chapter" },
+        { key: "quarter1_practical", label: t("quarter1_practical"), value: student.focus_final_practical, max: 10, kind: "final" },
+        { key: "quarter1_theory", label: t("quarter1_theory"), value: student.focus_final_theory, max: 10, kind: "final" },
       ];
-  const rows = defs.map((item, index) => ({
-    name: item.label,
-    score: toChartNumber(item.value),
-    max: item.max,
-    fill: STUDENT_BREAKDOWN_COLORS[index % STUDENT_BREAKDOWN_COLORS.length],
-  }));
-  const total = rows.reduce((sum, row) => sum + row.score, 0);
+  const quizDefs = defs.filter((item) => item.kind === "quiz");
+  const quizScores = quizDefs.map((item) => toChartNumber(item.value));
+  const bestQuizIndex = quizScores.length ? (quizScores[0] >= quizScores[1] ? 0 : 1) : -1;
+  const rows = defs.map((item, index) => {
+    const score = toChartNumber(item.value);
+    const quizIndex = quizDefs.findIndex((entry) => entry.key === item.key);
+    const excludedFromTotal = item.kind === "quiz" && score > 0 && quizIndex !== bestQuizIndex;
+    const countedScore = excludedFromTotal ? 0 : score;
+    return {
+      name: item.label,
+      legendName: excludedFromTotal ? `${item.label} (${t("analytics_shown_not_counted")})` : item.label,
+      score,
+      countedScore,
+      max: item.max,
+      fill: STUDENT_BREAKDOWN_COLORS[index % STUDENT_BREAKDOWN_COLORS.length],
+      opacity: excludedFromTotal ? 0.4 : 1,
+      excludedFromTotal,
+    };
+  });
+  const total = rows.reduce((sum, row) => sum + row.countedScore, 0);
   return rows.map((row) => ({
     ...row,
-    share: total > 0 ? Math.round((row.score / total) * 1000) / 10 : 0,
+    share: total > 0 ? Math.round((row.countedScore / total) * 1000) / 10 : 0,
     pctOfMax: row.max > 0 ? Math.round((row.score / row.max) * 1000) / 10 : 0,
   }));
 }
@@ -105,6 +120,9 @@ const AnalyticsTooltip = ({ active, payload, label }) => {
           {entry.name}: <span className="font-semibold text-foreground">{entry.value}</span>
         </p>
       ))}
+      {payload.some((entry) => entry?.payload?.excludedFromTotal) && (
+        <p className="mt-1 text-muted-foreground">{payload.find((entry) => entry?.payload?.excludedFromTotal)?.payload?.legendName}</p>
+      )}
     </div>
   );
 };
@@ -340,9 +358,12 @@ export default function Analytics() {
   const q1Distribution = isStudentScoped
     ? studentBreakdownData.map((item) => ({
         name: item.name,
+        legendName: item.legendName,
         value: item.score,
         level: item.name,
         fill: item.fill,
+        opacity: item.opacity,
+        excludedFromTotal: item.excludedFromTotal,
       }))
     : (q1.distribution || []).map((item) => ({
         name: t(item.level),
@@ -357,6 +378,8 @@ export default function Analytics() {
         levelKey: item.name,
         count: item.score,
         fill: item.fill,
+        opacity: item.opacity,
+        excludedFromTotal: item.excludedFromTotal,
       }));
     }
     const dist = apiQuarter === 1 ? q1.distribution : q2.distribution;
@@ -373,6 +396,8 @@ export default function Analytics() {
       return studentBreakdownData.map((item) => ({
         name: item.name,
         score: item.score,
+        fill: item.fill,
+        opacity: item.opacity,
       }));
     }
     return sortByClassOrder(
@@ -807,9 +832,12 @@ export default function Analytics() {
               <ScoreBreakdownDonut
                 data={studentBreakdownData.map((item) => ({
                   name: item.name,
+                  legendName: item.legendName,
                   value: item.score,
                   fill: item.fill,
+                  opacity: item.opacity,
                 }))}
+                centerValue={selectedStudentTermTotal}
                 centerCaption={t("total_score")}
                 height={260}
               />
@@ -938,7 +966,11 @@ export default function Analytics() {
                   <Legend />
                   <Bar dataKey="count" name={isStudentScoped ? t("total_score") : t("students")} radius={[6, 6, 0, 0]} maxBarSize={56}>
                     {distributionBarData.map((entry, index) => (
-                      <Cell key={`d-${index}`} fill={isStudentScoped ? entry.fill : PERFORMANCE_COLORS[entry.levelKey]} />
+                      <Cell
+                        key={`d-${index}`}
+                        fill={isStudentScoped ? entry.fill : PERFORMANCE_COLORS[entry.levelKey]}
+                        fillOpacity={isStudentScoped ? (entry.opacity ?? 1) : 1}
+                      />
                     ))}
                   </Bar>
                 </BarChart>
@@ -960,7 +992,11 @@ export default function Analytics() {
                   <PieChart>
                     <Pie data={q1Distribution} dataKey="value" innerRadius={60} outerRadius={90}>
                       {q1Distribution.map((entry) => (
-                        <Cell key={entry.level} fill={isStudentScoped ? entry.fill : PERFORMANCE_COLORS[entry.level]} />
+                        <Cell
+                          key={entry.level}
+                          fill={isStudentScoped ? entry.fill : PERFORMANCE_COLORS[entry.level]}
+                          fillOpacity={isStudentScoped ? (entry.opacity ?? 1) : 1}
+                        />
                       ))}
                     </Pie>
                     <Tooltip content={<AnalyticsTooltip />} />
@@ -973,7 +1009,7 @@ export default function Analytics() {
                     key={item.level}
                     className="flex items-center justify-between rounded-lg border border-border/60 px-3 py-2"
                   >
-                    <span className="text-sm font-medium">{item.name}</span>
+                    <span className="text-sm font-medium">{item.legendName || item.name}</span>
                     <span className="text-sm text-muted-foreground">{item.value}</span>
                   </div>
                 ))}

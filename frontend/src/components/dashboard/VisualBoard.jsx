@@ -92,7 +92,7 @@ export function ClassAverageBarChart({ data, valueKey = "score", labelKey = "nam
           <Tooltip content={boardTooltip} />
           <Bar dataKey={valueKey} fill={BOARD.barFill} radius={[6, 6, 0, 0]} maxBarSize={48}>
             {chartData.map((entry, index) => (
-              <Cell key={`bar-${index}`} fill={entry?.fill || BOARD.barFill} />
+              <Cell key={`bar-${index}`} fill={entry?.fill || BOARD.barFill} fillOpacity={entry?.opacity ?? 1} />
             ))}
             <LabelList dataKey={valueKey} position="top" fill="#64748b" fontSize={11} />
           </Bar>
@@ -205,6 +205,7 @@ export function PassSplitDonut({
 export function ScoreBreakdownDonut({
   data,
   centerCaption,
+  centerValue,
   height = 240,
   showLegend = true,
 }) {
@@ -232,7 +233,7 @@ export function ScoreBreakdownDonut({
               <div key={item.name} className="flex items-center gap-2" style={{ color: item.fill }}>
                 <span className="inline-block h-3 w-3 rounded-sm shrink-0" style={{ backgroundColor: item.fill }} />
                 <span className="leading-5">
-                  {item.name}: {item.value}
+                  {(item.legendName || item.name)}: {item.value}
                 </span>
               </div>
             ))}
@@ -252,7 +253,7 @@ export function ScoreBreakdownDonut({
                 paddingAngle={2}
               >
                 {list.map((item) => (
-                  <Cell key={item.name} fill={item.fill} stroke="white" strokeWidth={1} />
+                  <Cell key={item.name} fill={item.fill} fillOpacity={item.opacity ?? 1} stroke="white" strokeWidth={1} />
                 ))}
               </Pie>
               <Tooltip content={boardTooltip} />
@@ -260,7 +261,7 @@ export function ScoreBreakdownDonut({
           </ResponsiveContainer>
           <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
             <span className="text-2xl font-semibold tabular-nums text-slate-800 dark:text-foreground">
-              {Math.round(total * 10) / 10}
+              {Math.round(Number(centerValue ?? total) * 10) / 10}
             </span>
             {centerCaption ? (
               <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">

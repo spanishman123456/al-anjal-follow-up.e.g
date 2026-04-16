@@ -1453,6 +1453,7 @@ def _enrich_student_single_quarter(
         for k in ("quarter1_practical", "quarter1_theory", "quarter2_practical", "quarter2_theory"):
             student[k] = None
         for k in (
+            "focus_assessment",
             "focus_quiz_primary",
             "focus_quiz_secondary",
             "focus_chapter_test",
@@ -1466,6 +1467,8 @@ def _enrich_student_single_quarter(
     if quarter == 2:
         effective = _effective_scores_q2(sw)
         res = _compute_cumulative_final_quarter(sw, quarter=2)
+        avg_10 = compute_avg_weeks_10_18(sw)
+        assessment_followup = compute_students_total_for_assessment(sw, avg_weeks_10_18=avg_10, weeks_10_18=True)
         student["quarter1_total"] = None
         student["quarter2_total"] = res.get("combined_total")
         student["performance_level_q1"] = "no_data"
@@ -1484,6 +1487,7 @@ def _enrich_student_single_quarter(
         student["quarter2_theory"] = effective.get("quarter2_theory")
         student["quarter1_practical"] = None
         student["quarter1_theory"] = None
+        student["focus_assessment"] = assessment_followup
         student["focus_quiz_primary"] = effective.get("quiz3")
         student["focus_quiz_secondary"] = effective.get("quiz4")
         student["focus_chapter_test"] = effective.get("chapter_test2_practical")
@@ -1494,6 +1498,8 @@ def _enrich_student_single_quarter(
     else:
         effective = _effective_scores_q1(sw)
         res = _compute_cumulative_final_quarter(sw, quarter=1)
+        avg_9 = compute_avg_first_9_weeks(sw)
+        assessment_followup = compute_students_total_for_assessment(sw, avg_first_9_weeks=avg_9, weeks_10_18=False)
         student["quarter1_total"] = res.get("combined_total")
         student["quarter2_total"] = None
         student["performance_level_q1"] = res.get("performance_level", "no_data")
@@ -1512,6 +1518,7 @@ def _enrich_student_single_quarter(
         student["quarter1_theory"] = effective.get("quarter1_theory")
         student["quarter2_practical"] = None
         student["quarter2_theory"] = None
+        student["focus_assessment"] = assessment_followup
         student["focus_quiz_primary"] = effective.get("quiz1")
         student["focus_quiz_secondary"] = effective.get("quiz2")
         student["focus_chapter_test"] = effective.get("chapter_test1_practical")
@@ -1525,6 +1532,7 @@ def _enrich_student_single_quarter(
 
 def _focus_component_snapshot(student: Dict[str, Any]) -> Dict[str, Any]:
     return {
+        "focus_assessment": student.get("focus_assessment"),
         "focus_quiz_primary": student.get("focus_quiz_primary"),
         "focus_quiz_secondary": student.get("focus_quiz_secondary"),
         "focus_chapter_test": student.get("focus_chapter_test"),
@@ -1536,6 +1544,7 @@ def _focus_component_snapshot(student: Dict[str, Any]) -> Dict[str, Any]:
 def _focus_component_column_defs(quarter: int) -> List[Tuple[str, str]]:
     if int(quarter or 1) == 2:
         return [
+            ("Assessment", "focus_assessment"),
             ("Quiz 3", "focus_quiz_primary"),
             ("Quiz 4", "focus_quiz_secondary"),
             ("Chapter Test 2", "focus_chapter_test"),
@@ -1543,6 +1552,7 @@ def _focus_component_column_defs(quarter: int) -> List[Tuple[str, str]]:
             ("Final Theory", "focus_final_theory"),
         ]
     return [
+        ("Assessment", "focus_assessment"),
         ("Quiz 1", "focus_quiz_primary"),
         ("Quiz 2", "focus_quiz_secondary"),
         ("Chapter Test 1", "focus_chapter_test"),
@@ -1552,8 +1562,22 @@ def _focus_component_column_defs(quarter: int) -> List[Tuple[str, str]]:
 
 
 def _focus_component_chart_rows(student: Dict[str, Any], quarter: int) -> List[Dict[str, Any]]:
-    palette = ["#38bdf8", "#22c55e", "#f59e0b", "#8b5cf6", "#ef4444"]
+    palette = ["#0ea5e9", "#38bdf8", "#22c55e", "#f59e0b", "#8b5cf6", "#ef4444"]
     rows: List[Dict[str, Any]] = []
+    quiz_values: List[float] = []
+    for _, key in _focus_component_column_defs(quarter):
+        if key not in ("focus_quiz_primary", "focus_quiz_secondary"):
+            continue
+        raw_quiz_value = student.get(key)
+        quiz_value = 0.0
+        if raw_quiz_value is not None:
+            try:
+                quiz_value = max(0.0, float(raw_quiz_value))
+            except (TypeError, ValueError):
+                quiz_value = 0.0
+        quiz_values.append(quiz_value)
+    best_quiz_index = 0 if len(quiz_values) == 2 and quiz_values[0] >= quiz_values[1] else 1
+    current_quiz_index = 0
     for idx, (label, key) in enumerate(_focus_component_column_defs(quarter)):
         raw_value = student.get(key)
         value = 0.0
@@ -1562,15 +1586,37 @@ def _focus_component_chart_rows(student: Dict[str, Any], quarter: int) -> List[D
                 value = max(0.0, float(raw_value))
             except (TypeError, ValueError):
                 value = 0.0
-        rows.append({"label": label, "value": value, "color": palette[idx % len(palette)]})
+        excluded_from_total = False
+        counted_value = value
+        if key in ("focus_quiz_primary", "focus_quiz_secondary") and value > 0:
+            excluded_from_total = current_quiz_index != best_quiz_index
+            counted_value = 0.0 if excluded_from_total else value
+            current_quiz_index += 1
+        elif key in ("focus_quiz_primary", "focus_quiz_secondary"):
+            excluded_from_total = current_quiz_index != best_quiz_index
+            counted_value = 0.0 if excluded_from_total else value
+            current_quiz_index += 1
+        rows.append(
+            {
+                "label": label,
+                "raw_value": raw_value,
+                "value": value,
+                "counted_value": counted_value,
+                "excluded_from_total": excluded_from_total,
+                "color": palette[idx % len(palette)],
+            }
+        )
     return rows
 
 
 def _focus_component_summary_text(student: Dict[str, Any], quarter: int) -> str:
     parts: List[str] = []
-    for label, key in _focus_component_column_defs(quarter):
-        value = student.get(key)
-        parts.append(f"{label}: {'-' if value is None else value}")
+    for row in _focus_component_chart_rows(student, quarter):
+        value = "-" if row.get("raw_value") is None else row["value"]
+        if row.get("excluded_from_total") and row["value"] > 0:
+            parts.append(f"{row['label']}: {value} (shown only)")
+        else:
+            parts.append(f"{row['label']}: {value}")
     return ", ".join(parts)
 
 
@@ -1901,7 +1947,7 @@ def create_component_breakdown_donut(student: Dict[str, Any], quarter: int) -> i
     rows = [row for row in _focus_component_chart_rows(student, quarter) if float(row["value"]) > 0]
     if not rows:
         return _analytics_empty_chart("No score breakdown data")
-    total = sum(float(row["value"]) for row in rows)
+    total = sum(float(row.get("counted_value") or 0) for row in rows)
     fig, ax = plt.subplots(figsize=(5.4, 3.6))
     ax.set_facecolor("white")
     ax.set_position([0.42, 0.12, 0.54, 0.76])
@@ -1913,7 +1959,11 @@ def create_component_breakdown_donut(student: Dict[str, Any], quarter: int) -> i
     )
     ax.axis("equal")
     legend_handles = [
-        Patch(facecolor=row["color"], edgecolor="white", label=f"{row['label']}: {row['value']:.1f}")
+        Patch(
+            facecolor=row["color"],
+            edgecolor="white",
+            label=f"{row['label']}: {row['value']:.1f}" + (" (shown only)" if row.get("excluded_from_total") else ""),
+        )
         for row in rows
     ]
     fig.legend(handles=legend_handles, loc="upper left", fontsize=8, frameon=False, bbox_to_anchor=(0.03, 0.92))
@@ -2516,7 +2566,7 @@ def generate_analytics_dashboard_pdf(
                     cap_style,
                 ),
                 Paragraph(
-                    "<b>Score contribution by component</b>" if is_student_scope else "<b>On-level, approaching full score, and below level</b>",
+                    "<b>Assessment included; lower quiz is shown but not counted in total</b>" if is_student_scope else "<b>On-level, approaching full score, and below level</b>",
                     cap_style,
                 ),
             ],
