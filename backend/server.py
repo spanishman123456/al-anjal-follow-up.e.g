@@ -1902,13 +1902,13 @@ def create_component_breakdown_donut(student: Dict[str, Any], quarter: int) -> i
     if not rows:
         return _analytics_empty_chart("No score breakdown data")
     total = sum(float(row["value"]) for row in rows)
-    fig, ax = plt.subplots(figsize=(4.8, 3.6))
+    fig, ax = plt.subplots(figsize=(5.4, 3.6))
     ax.set_facecolor("white")
+    ax.set_position([0.42, 0.12, 0.54, 0.76])
     ax.pie(
         [row["value"] for row in rows],
         colors=[row["color"] for row in rows],
         startangle=90,
-        center=(0.58, 0.02),
         wedgeprops=dict(width=0.38, edgecolor="white", linewidth=2),
     )
     ax.axis("equal")
@@ -1916,11 +1916,11 @@ def create_component_breakdown_donut(student: Dict[str, Any], quarter: int) -> i
         Patch(facecolor=row["color"], edgecolor="white", label=f"{row['label']}: {row['value']:.1f}")
         for row in rows
     ]
-    ax.legend(handles=legend_handles, loc="upper left", fontsize=8, frameon=False, bbox_to_anchor=(-0.02, 1.02))
-    ax.text(0.58, 0.04, f"{total:.1f}", ha="center", va="center", fontsize=20, fontweight="bold", color="#0f172a")
-    ax.text(0.58, -0.10, "TOTAL", ha="center", va="center", fontsize=8, color="#64748b")
+    fig.legend(handles=legend_handles, loc="upper left", fontsize=8, frameon=False, bbox_to_anchor=(0.03, 0.92))
+    ax.text(0, 0.04, f"{total:.1f}", ha="center", va="center", fontsize=20, fontweight="bold", color="#0f172a")
+    ax.text(0, -0.10, "TOTAL", ha="center", va="center", fontsize=8, color="#64748b")
     buf = io.BytesIO()
-    fig.subplots_adjust(left=0.16, right=0.98, top=0.92, bottom=0.16)
+    fig.subplots_adjust(left=0.02, right=0.98, top=0.92, bottom=0.16)
     plt.savefig(buf, format="png", dpi=PDF_EXPORT_CHART_DPI, facecolor="white")
     plt.close(fig)
     buf.seek(0)

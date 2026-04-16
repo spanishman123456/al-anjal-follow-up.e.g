@@ -210,8 +210,7 @@ export function ScoreBreakdownDonut({
 }) {
   const list = Array.isArray(data) ? data.filter((item) => Number(item?.value || 0) > 0) : [];
   const total = list.reduce((sum, item) => sum + Number(item?.value || 0), 0);
-  const legendSpace = showLegend ? 92 : 0;
-  const chartHeight = Math.max(height - legendSpace, 190);
+  const chartHeight = Math.max(height, 220);
 
   if (total <= 0) {
     return (
@@ -222,49 +221,54 @@ export function ScoreBreakdownDonut({
   }
 
   return (
-    <div className="mx-auto w-full max-w-md overflow-visible" style={{ height }}>
-      {showLegend ? (
-        <div className="mb-2 space-y-1 text-sm font-semibold">
-          {list.map((item) => (
-            <div key={item.name} className="flex items-center gap-2" style={{ color: item.fill }}>
-              <span className="inline-block h-3 w-3 rounded-sm" style={{ backgroundColor: item.fill }} />
-              <span>
-                {item.name}: {item.value}
-              </span>
-            </div>
-          ))}
-        </div>
-      ) : null}
-      <div className="relative" style={{ height: chartHeight }}>
-        <ResponsiveContainer width="100%" height="100%">
-          <PieChart>
-            <Pie
-              data={list}
-              dataKey="value"
-              nameKey="name"
-              cx="58%"
-              cy="54%"
-              innerRadius={52}
-              outerRadius={68}
-              paddingAngle={2}
-            >
-              {list.map((item) => (
-                <Cell key={item.name} fill={item.fill} stroke="white" strokeWidth={1} />
-              ))}
-            </Pie>
-            <Tooltip content={boardTooltip} />
-          </PieChart>
-        </ResponsiveContainer>
-        <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
-          <span className="text-2xl font-semibold tabular-nums text-slate-800 dark:text-foreground">
-            {Math.round(total * 10) / 10}
-          </span>
-          {centerCaption ? (
-            <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-              {centerCaption}
+    <div
+      className={`mx-auto w-full ${showLegend ? "max-w-2xl" : "max-w-md"} overflow-visible`}
+      style={{ height: chartHeight }}
+    >
+      <div className={`grid h-full items-center gap-4 ${showLegend ? "grid-cols-[minmax(0,1fr)_minmax(220px,1.35fr)]" : "grid-cols-1"}`}>
+        {showLegend ? (
+          <div className="space-y-1 text-sm font-semibold">
+            {list.map((item) => (
+              <div key={item.name} className="flex items-center gap-2" style={{ color: item.fill }}>
+                <span className="inline-block h-3 w-3 rounded-sm shrink-0" style={{ backgroundColor: item.fill }} />
+                <span className="leading-5">
+                  {item.name}: {item.value}
+                </span>
+              </div>
+            ))}
+          </div>
+        ) : null}
+        <div className="relative h-full min-w-0">
+          <ResponsiveContainer width="100%" height="100%">
+            <PieChart>
+              <Pie
+                data={list}
+                dataKey="value"
+                nameKey="name"
+                cx="52%"
+                cy="50%"
+                innerRadius={52}
+                outerRadius={78}
+                paddingAngle={2}
+              >
+                {list.map((item) => (
+                  <Cell key={item.name} fill={item.fill} stroke="white" strokeWidth={1} />
+                ))}
+              </Pie>
+              <Tooltip content={boardTooltip} />
+            </PieChart>
+          </ResponsiveContainer>
+          <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
+            <span className="text-2xl font-semibold tabular-nums text-slate-800 dark:text-foreground">
+              {Math.round(total * 10) / 10}
             </span>
-          ) : null}
-          <span className="text-[10px] text-muted-foreground">100%</span>
+            {centerCaption ? (
+              <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                {centerCaption}
+              </span>
+            ) : null}
+            <span className="text-[10px] text-muted-foreground">100%</span>
+          </div>
         </div>
       </div>
     </div>
