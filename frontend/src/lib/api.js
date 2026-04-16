@@ -101,7 +101,9 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error?.response?.status === 401) {
+    const requestUrl = `${error?.config?.baseURL || ""}${error?.config?.url || ""}`;
+    const isAuthRequest = /\/auth\/(login|google)(\/|$)/.test(requestUrl);
+    if (error?.response?.status === 401 && !isAuthRequest) {
       const detail = error?.response?.data?.detail;
       clearStoredAuthToken();
       window.dispatchEvent(new CustomEvent("auth-logout", {

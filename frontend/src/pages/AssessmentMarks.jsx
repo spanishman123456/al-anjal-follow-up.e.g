@@ -347,16 +347,21 @@ export default function AssessmentMarks() {
       return;
     }
     try {
-      // Include all visible students so both quiz scores are saved; total uses best of Quiz 1 and Quiz 2
-      const updates = filteredStudents.map((student) => {
-        const current = bulkScores[student.id] || student;
-        return {
+      const updates = students.flatMap((student) => {
+        const pending = bulkScores[student.id];
+        if (!pending) return [];
+        const current = { ...student, ...pending };
+        return [{
           id: student.id,
           quiz1: parseScore(current.quiz1),
           quiz2: parseScore(current.quiz2),
           chapter_test1_practical: parseScore(current.chapter_test1_practical),
-        };
+        }];
       });
+      if (!updates.length) {
+        toast.info("No score changes to save.");
+        return;
+      }
       await api.post("/students/bulk-scores", { updates, week_id: activeWeekId }, { timeout: BULK_SAVE_TIMEOUT_MS });
       toast.success(t("student_updated"));
       setBulkEditMode(false);

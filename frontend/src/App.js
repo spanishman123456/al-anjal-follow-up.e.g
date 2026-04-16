@@ -7,7 +7,6 @@ import {
   AUTH_TOKEN_KEY,
   checkBackendLive,
   checkBackendHealth,
-  clearStoredAuthToken,
   getStoredAuthToken,
   isProductionBackendUrl,
   setStoredAuthToken,

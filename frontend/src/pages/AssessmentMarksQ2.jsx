@@ -343,16 +343,21 @@ export default function AssessmentMarksQ2() {
       return;
     }
     try {
-      // 2nd quarter: save quiz3, quiz4, chapter_test2_practical (separate from Q1's quiz1/quiz2/chapter_test1)
-      const updates = filteredStudents.map((student) => {
-        const current = bulkScores[student.id] || student;
-        return {
+      const updates = students.flatMap((student) => {
+        const pending = bulkScores[student.id];
+        if (!pending) return [];
+        const current = { ...student, ...pending };
+        return [{
           id: student.id,
           quiz3: parseScore(current.quiz3),
           quiz4: parseScore(current.quiz4),
           chapter_test2_practical: parseScore(current.chapter_test2_practical),
-        };
+        }];
       });
+      if (!updates.length) {
+        toast.info("No score changes to save.");
+        return;
+      }
       await api.post("/students/bulk-scores", { updates, week_id: activeWeekId }, { timeout: BULK_SAVE_TIMEOUT_MS });
       toast.success(t("student_updated"));
       setBulkEditMode(false);

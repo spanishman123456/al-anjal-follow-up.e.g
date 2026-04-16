@@ -246,7 +246,7 @@ export default function TotalMarks() {
     const attendanceParticipation = sumOrNull(attendance, participation);
     const quizBest = maxOrNull(quizPrimary, quizSecondary);
     const quarterExamTotal = sumOrNull(examPractical, examTheory);
-    const computedTotal = sumOrNull(
+    const rawComputedTotal = sumOrNull(
       attendanceParticipation,
       behavior,
       homework,
@@ -254,6 +254,7 @@ export default function TotalMarks() {
       chapter,
       quarterExamTotal
     );
+    const computedTotal = rawComputedTotal == null ? null : Math.min(50, rawComputedTotal);
     const backendTotal = toNumberOrNull(student[quarterConfig.totalField]);
     return {
       ...student,
@@ -632,6 +633,8 @@ export default function TotalMarks() {
             onValueChange={(value) => {
               sessionStorage.setItem(`app_selected_class_id_s${semesterNumber}_q${quarter}`, value);
               setFilterClass(value);
+              setBulkScores({});
+              setBulkEditMode(false);
             }}
           >
             <SelectTrigger>

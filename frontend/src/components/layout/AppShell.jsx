@@ -15,6 +15,7 @@ import {
   ChevronDown,
   ChevronRight,
   MessageCircle,
+  Menu,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { clearStoredAuthToken } from "@/lib/api";
@@ -61,10 +62,11 @@ const SIDEBAR_NAV_GRADIENTS = [
   "from-pink-500 to-orange-400",
 ];
 
-function sidebarNavButtonClass(isActive, index) {
+function sidebarNavButtonClass(isActive, index, collapsed = false) {
   const g = SIDEBAR_NAV_GRADIENTS[index % SIDEBAR_NAV_GRADIENTS.length];
   return cn(
-    "pointer-events-auto flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-semibold text-white shadow-md nav-item-pop bg-gradient-to-r hover:brightness-110 hover:shadow-lg transition-shadow",
+    "pointer-events-auto flex w-full items-center rounded-xl text-sm font-semibold text-white shadow-md nav-item-pop bg-gradient-to-r hover:brightness-110 hover:shadow-lg transition-all duration-200",
+    collapsed ? "justify-center px-2 py-3" : "gap-3 px-3 py-2.5",
     g,
     isActive &&
       "ring-2 ring-white ring-offset-2 ring-offset-zinc-100 dark:ring-offset-slate-950 brightness-110 scale-[1.02]",
@@ -95,7 +97,21 @@ export const AppShell = ({
   const [notificationsLoaded, setNotificationsLoaded] = useState(false);
   const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
   const [expandedNavKey, setExpandedNavKey] = useState(null);
-  const [isSidebarHovered, setIsSidebarHovered] = useState(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => {
+    try {
+      return localStorage.getItem("app_sidebar_collapsed") === "true";
+    } catch {
+      return false;
+    }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem("app_sidebar_collapsed", String(isSidebarCollapsed));
+    } catch {
+      // ignore storage errors
+    }
+  }, [isSidebarCollapsed]);
 
   // Keep URL in sync with header semester/quarter when on quarter-specific pages
   useEffect(() => {
@@ -223,179 +239,212 @@ export const AppShell = ({
   );
 
   const heroSky = theme === "light";
-  const sidebarExpanded = isSidebarHovered;
+  const sidebarExpanded = !isSidebarCollapsed;
 
   return (
     <div className="min-h-screen w-full bg-background text-foreground flex flex-row" dir="ltr" data-testid="app-shell">
       <aside
         className={cn(
-          "group relative shrink-0 overflow-hidden border-[hsl(var(--sidebar-border))] bg-[hsl(var(--sidebar-background))] text-[hsl(var(--sidebar-foreground))] shadow-sm transition-[width] duration-300 ease-out",
-          "w-64 lg:w-4",
-          sidebarExpanded && "lg:w-64",
+          "relative shrink-0 overflow-hidden border-[hsl(var(--sidebar-border))] bg-[hsl(var(--sidebar-background))] text-[hsl(var(--sidebar-foreground))] shadow-sm transition-[width] duration-300 ease-out",
+          sidebarExpanded ? "w-72" : "w-20",
           isRTL ? "order-2 border-s" : "order-1 border-e",
         )}
         data-testid="sidebar"
         dir={isRTL ? "rtl" : undefined}
-        onMouseEnter={() => setIsSidebarHovered(true)}
-        onMouseLeave={() => setIsSidebarHovered(false)}
-        onFocusCapture={() => setIsSidebarHovered(true)}
-        onBlurCapture={(event) => {
-          if (!event.currentTarget.contains(event.relatedTarget)) {
-            setIsSidebarHovered(false);
-          }
-        }}
       >
-        <div
-          className={cn(
-            "pointer-events-none absolute inset-y-0 top-0 hidden w-4 bg-gradient-to-b from-primary/70 via-primary/45 to-primary/70 lg:block",
-            isRTL ? "right-0" : "left-0",
-            sidebarExpanded && "opacity-0",
-          )}
-          aria-hidden
-        />
-        <div
-          className={cn(
-            "pointer-events-none absolute inset-y-0 hidden items-center justify-center lg:flex",
-            isRTL ? "right-0 w-4" : "left-0 w-4",
-            sidebarExpanded && "opacity-0",
-          )}
-          aria-hidden
-        >
-          <ChevronRight
+        <div className="flex min-h-screen flex-col">
+          <div
             className={cn(
-              "h-3.5 w-3.5 text-white/90 transition-transform duration-300",
-              isRTL && "rotate-180",
+              "border-b border-[hsl(var(--sidebar-border))]",
+              sidebarExpanded ? "px-5 py-5" : "px-3 py-5",
             )}
-          />
-        </div>
-        <div className="flex flex-col flex-1 min-h-0 justify-between">
-        <div
-          className={cn(
-            "flex min-h-full flex-col justify-between transition-opacity duration-200",
-            sidebarExpanded ? "opacity-100" : "lg:pointer-events-none lg:opacity-0",
-          )}
-        >
-        <div>
-          <div className="px-6 py-6 border-b border-[hsl(var(--sidebar-border))]">
-            <div className="flex items-center animate-fade-in" data-testid="brand-block">
-              <div>
-                <p
-                  className="text-sm font-semibold text-[hsl(var(--sidebar-foreground))]"
-                  data-testid="brand-name"
-                >
-                  {t("app_name")}
-                </p>
-                <p
-                  className="text-xs text-muted-foreground"
-                  data-testid="brand-subtitle"
-                >
-                  {t("app_subtitle")}
-                </p>
-              </div>
+          >
+            <div
+              className={cn(
+                "flex items-center",
+                sidebarExpanded ? "justify-between gap-3" : "justify-center",
+              )}
+            >
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                onClick={() => setIsSidebarCollapsed((prev) => !prev)}
+                className="rounded-xl border border-[hsl(var(--sidebar-border))] bg-[hsl(var(--sidebar-accent))] text-[hsl(var(--sidebar-foreground))] shadow-sm hover:bg-[hsl(var(--sidebar-accent))]"
+                aria-label={sidebarExpanded ? "Collapse navigation menu" : "Expand navigation menu"}
+                data-testid="sidebar-toggle-button"
+              >
+                <Menu className="h-5 w-5" />
+              </Button>
+              {sidebarExpanded && (
+                <div className="min-w-0 flex-1 animate-fade-in" data-testid="brand-block">
+                  <p
+                    className="truncate text-sm font-semibold text-[hsl(var(--sidebar-foreground))]"
+                    data-testid="brand-name"
+                  >
+                    {t("app_name")}
+                  </p>
+                  <p
+                    className="truncate text-xs text-muted-foreground"
+                    data-testid="brand-subtitle"
+                  >
+                    {t("app_subtitle")}
+                  </p>
+                </div>
+              )}
             </div>
           </div>
-          <nav className="px-3 py-5 space-y-2.5" data-testid="sidebar-nav">
-            {navItems.map((item, navIndex) => {
-              const Icon = item.icon;
-              const isExpandableGroup = item.children;
-              const isChildActive =
-                item.children?.some((child) => child.to === location.pathname);
+          <div className="flex min-h-0 flex-1 flex-col justify-between">
+            <div className="min-h-0 overflow-y-auto">
+              <nav
+                className={cn("space-y-2.5 py-5", sidebarExpanded ? "px-3" : "px-2")}
+                data-testid="sidebar-nav"
+              >
+                {navItems.map((item, navIndex) => {
+                  const Icon = item.icon;
+                  const isExpandableGroup = item.children;
+                  const isChildActive =
+                    item.children?.some((child) => child.to === location.pathname);
 
-              if (isExpandableGroup) {
-                const isOpen = expandedNavKey === item.testId;
-                return (
-                  <div key={item.testId || item.label} className="space-y-1">
-                    <button
-                      type="button"
+                  if (isExpandableGroup) {
+                    const isOpen = expandedNavKey === item.testId;
+                    return (
+                      <div key={item.testId || item.label} className="space-y-1">
+                        <button
+                          type="button"
+                          data-testid={item.testId}
+                          title={item.label}
+                          aria-label={item.label}
+                          onClick={() => {
+                            if (!sidebarExpanded) {
+                              setIsSidebarCollapsed(false);
+                              setExpandedNavKey(item.testId);
+                              return;
+                            }
+                            setExpandedNavKey((k) => (k === item.testId ? null : item.testId));
+                          }}
+                          className={sidebarNavButtonClass(isChildActive, navIndex, !sidebarExpanded)}
+                        >
+                          <Icon className="h-4 w-4 shrink-0 opacity-95" />
+                          {sidebarExpanded && <span className="flex-1 text-start">{item.label}</span>}
+                          {sidebarExpanded && (
+                            isOpen ? (
+                              <ChevronDown className="h-4 w-4 shrink-0 opacity-90" />
+                            ) : (
+                              <ChevronRight className="h-4 w-4 shrink-0 opacity-90" />
+                            )
+                          )}
+                        </button>
+                        {sidebarExpanded && isOpen && (
+                          <div className="ms-3 space-y-1.5 border-s border-white/20 ps-3 dark:border-white/10" data-testid="quarter-marks-submenu">
+                            {item.children.map((child, ci) => (
+                              <NavLink
+                                key={child.to}
+                                to={child.to}
+                                data-testid={child.testId}
+                                className={({ isActive }) =>
+                                  cn(
+                                    "flex items-center gap-2 rounded-md px-3 py-1.5 text-xs font-semibold text-white shadow nav-item-pop bg-gradient-to-r",
+                                    SIDEBAR_NAV_GRADIENTS[(navIndex + ci + 1) % SIDEBAR_NAV_GRADIENTS.length],
+                                    "hover:brightness-110",
+                                    isActive && "ring-2 ring-white/90 ring-offset-1 ring-offset-zinc-100 dark:ring-offset-slate-950",
+                                  )
+                                }
+                              >
+                                {child.label}
+                              </NavLink>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <NavLink
+                      key={item.testId || `${item.to}-${item.label}`}
+                      to={item.to}
                       data-testid={item.testId}
-                      onClick={() => setExpandedNavKey((k) => (k === item.testId ? null : item.testId))}
-                      className={sidebarNavButtonClass(isChildActive, navIndex)}
+                      title={item.label}
+                      aria-label={item.label}
+                      className={({ isActive }) => sidebarNavButtonClass(isActive, navIndex, !sidebarExpanded)}
                     >
                       <Icon className="h-4 w-4 shrink-0 opacity-95" />
-                      <span className="flex-1 text-start">{item.label}</span>
-                      {isOpen ? (
-                        <ChevronDown className="h-4 w-4 shrink-0 opacity-90" />
-                      ) : (
-                        <ChevronRight className="h-4 w-4 shrink-0 opacity-90" />
-                      )}
-                    </button>
-                    {isOpen && (
-                      <div className="ms-3 space-y-1.5 border-s border-white/20 ps-3 dark:border-white/10" data-testid="quarter-marks-submenu">
-                        {item.children.map((child, ci) => (
-                          <NavLink
-                            key={child.to}
-                            to={child.to}
-                            data-testid={child.testId}
-                            className={({ isActive }) =>
-                              cn(
-                                "flex items-center gap-2 rounded-md px-3 py-1.5 text-xs font-semibold text-white shadow nav-item-pop bg-gradient-to-r",
-                                SIDEBAR_NAV_GRADIENTS[(navIndex + ci + 1) % SIDEBAR_NAV_GRADIENTS.length],
-                                "hover:brightness-110",
-                                isActive && "ring-2 ring-white/90 ring-offset-1 ring-offset-zinc-100 dark:ring-offset-slate-950",
-                              )
-                            }
-                          >
-                            {child.label}
-                          </NavLink>
-                        ))}
-                      </div>
-                    )}
+                      {sidebarExpanded && <span className="truncate">{item.label}</span>}
+                    </NavLink>
+                  );
+                })}
+              </nav>
+            </div>
+            <div
+              className={cn("pb-6", sidebarExpanded ? "space-y-4 px-4" : "px-2")}
+              data-testid="sidebar-footer"
+            >
+              {sidebarExpanded ? (
+                <>
+                  <div className="rounded-md bg-[hsl(var(--sidebar-accent))] px-4 py-4 border border-[hsl(var(--sidebar-border))] shadow-sm">
+                    <p
+                      className="text-xs uppercase tracking-[0.2em] text-muted-foreground"
+                      data-testid="sidebar-login-label"
+                    >
+                      Logged in as
+                    </p>
+                    <p
+                      className="text-sm font-semibold text-[hsl(var(--sidebar-foreground))]"
+                      data-testid="sidebar-login-name"
+                    >
+                      {profile?.name || "Administrator"}
+                    </p>
+                    <p
+                      className="text-xs text-muted-foreground" data-testid="sidebar-login-role">
+                      {profile?.role_name || "Admin"}
+                    </p>
                   </div>
-                );
-              }
-
-              return (
-                <NavLink
-                  key={item.testId || `${item.to}-${item.label}`}
-                  to={item.to}
-                  data-testid={item.testId}
-                  className={({ isActive }) => sidebarNavButtonClass(isActive, navIndex)}
-                >
-                  <Icon className="h-4 w-4 shrink-0 opacity-95" />
-                  <span className="truncate">{item.label}</span>
-                </NavLink>
-              );
-            })}
-          </nav>
-        </div>
-        <div className="px-4 pb-6 space-y-4" data-testid="sidebar-footer">
-          <div className="rounded-md bg-[hsl(var(--sidebar-accent))] px-4 py-4 border border-[hsl(var(--sidebar-border))] shadow-sm">
-            <p
-              className="text-xs uppercase tracking-[0.2em] text-muted-foreground"
-              data-testid="sidebar-login-label"
-            >
-              Logged in as
-            </p>
-            <p
-              className="text-sm font-semibold text-[hsl(var(--sidebar-foreground))]"
-              data-testid="sidebar-login-name"
-            >
-              {profile?.name || "Administrator"}
-            </p>
-            <p
-              className="text-xs text-muted-foreground" data-testid="sidebar-login-role">
-              {profile?.role_name || "Admin"}
-            </p>
+                  <a
+                    href="#contact"
+                    className="flex items-center justify-center gap-2 w-full rounded-lg bg-gradient-to-r from-violet-600 to-purple-600 text-white py-2.5 px-4 font-semibold text-sm shadow-md hover:brightness-110 transition-all duration-200 hover:translate-y-[-2px] hover:scale-[1.02] active:translate-y-0 active:scale-[0.98]"
+                    data-testid="sidebar-contact-us"
+                  >
+                    <span className="relative flex items-center">
+                      <MessageCircle className="h-4 w-4 shrink-0" />
+                      <MessageCircle className="h-4 w-4 shrink-0 -ml-2.5 opacity-90" aria-hidden />
+                    </span>
+                    <span>{t("contact_us")}</span>
+                  </a>
+                  <div data-testid="sidebar-social">
+                    <SocialLinks layout="row" className="flex-wrap" />
+                  </div>
+                  <p className="text-xs text-muted-foreground text-center" data-testid="sidebar-copyright">
+                    {t("sidebar_copyright")}
+                  </p>
+                </>
+              ) : (
+                <div className="flex flex-col items-center gap-3">
+                  <button
+                    type="button"
+                    className="flex h-11 w-11 items-center justify-center overflow-hidden rounded-full bg-primary text-primary-foreground shadow-sm"
+                    data-testid="sidebar-collapsed-profile"
+                    onClick={() => navigate("/settings?section=profile")}
+                    title={profile?.name || "Administrator"}
+                    aria-label={profile?.name || "Administrator"}
+                  >
+                    {profile?.avatar_base64 ? (
+                      <img
+                        src={profile.avatar_base64}
+                        alt="Avatar"
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      <span>{(profile?.name || "A").charAt(0)}</span>
+                    )}
+                  </button>
+                  <div data-testid="sidebar-social-collapsed">
+                    <SocialLinks layout="column" className="items-center" />
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
-          <a
-            href="#contact"
-            className="flex items-center justify-center gap-2 w-full rounded-lg bg-gradient-to-r from-violet-600 to-purple-600 text-white py-2.5 px-4 font-semibold text-sm shadow-md hover:brightness-110 transition-all duration-200 hover:translate-y-[-2px] hover:scale-[1.02] active:translate-y-0 active:scale-[0.98]"
-            data-testid="sidebar-contact-us"
-          >
-            <span className="relative flex items-center">
-              <MessageCircle className="h-4 w-4 shrink-0" />
-              <MessageCircle className="h-4 w-4 shrink-0 -ml-2.5 opacity-90" aria-hidden />
-            </span>
-            <span>{t("contact_us")}</span>
-          </a>
-          <div data-testid="sidebar-social">
-            <SocialLinks layout="row" className="flex-wrap" />
-          </div>
-          <p className="text-xs text-muted-foreground text-center" data-testid="sidebar-copyright">
-            {t("sidebar_copyright")}
-          </p>
-        </div>
-        </div>
         </div>
       </aside>
       <div
