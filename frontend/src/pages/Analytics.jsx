@@ -711,7 +711,7 @@ export default function Analytics() {
                   </p>
                   {isStudentScoped && (
                     <p className="mt-1 text-xs text-muted-foreground">
-                      {selectedStudentAchievementRate}% {t("analytics_student_achievement_caption")}
+                      {selectedStudentAchievementRate}%
                     </p>
                   )}
                 </div>
@@ -807,7 +807,7 @@ export default function Analytics() {
             )}
             {isStudentScoped && (
               <p className="mt-1 text-xs text-muted-foreground">
-                {selectedStudentAchievementRate}% {t("analytics_student_achievement_caption")}
+                {selectedStudentAchievementRate}%
               </p>
             )}
           </CardContent>
@@ -859,9 +859,11 @@ export default function Analytics() {
             testId="analytics-board-q-focus"
           >
             <QuarterOnLevelFocus
-              rate={focusOnLevelRate}
+              rate={isStudentScoped ? selectedStudentTermTotal : focusOnLevelRate}
               termLabel={isStudentScoped ? selectedStudent?.full_name : t(`term_${termScopeId}`)}
-              lineName={isStudentScoped ? t("analytics_student_achievement_caption") : t("visual_board_line_cohort")}
+              lineName={isStudentScoped ? t("focus_quarter_total") : t("visual_board_line_cohort")}
+              maxValue={isStudentScoped ? 50 : 100}
+              labelFormatter={isStudentScoped ? ((value) => `${value}/50`) : undefined}
               height={240}
             />
           </BoardPanel>

@@ -1948,9 +1948,9 @@ def create_component_breakdown_donut(student: Dict[str, Any], quarter: int) -> i
     if not rows:
         return _analytics_empty_chart("No score breakdown data")
     total = sum(float(row.get("counted_value") or 0) for row in rows)
-    fig, ax = plt.subplots(figsize=(5.4, 3.6))
+    fig, ax = plt.subplots(figsize=(5.8, 3.6))
     ax.set_facecolor("white")
-    ax.set_position([0.42, 0.12, 0.54, 0.76])
+    ax.set_position([0.50, 0.12, 0.46, 0.76])
     ax.pie(
         [row["value"] for row in rows],
         colors=[row["color"] for row in rows],
@@ -1966,7 +1966,7 @@ def create_component_breakdown_donut(student: Dict[str, Any], quarter: int) -> i
         )
         for row in rows
     ]
-    fig.legend(handles=legend_handles, loc="upper left", fontsize=8, frameon=False, bbox_to_anchor=(0.03, 0.92))
+    fig.legend(handles=legend_handles, loc="upper left", fontsize=8, frameon=False, bbox_to_anchor=(0.02, 0.92))
     ax.text(0, 0.04, f"{total:.1f}", ha="center", va="center", fontsize=20, fontweight="bold", color="#0f172a")
     ax.text(0, -0.10, "TOTAL", ha="center", va="center", fontsize=8, color="#64748b")
     buf = io.BytesIO()
@@ -2040,8 +2040,14 @@ def create_analytics_quarter_line_chart(q1_rate: Any, q2_rate: Any) -> io.BytesI
     return buf
 
 
-def create_analytics_quarter_focus_bar_chart(rate: Any, xlabel: str = "Focus") -> io.BytesIO:
-    """Single bar: cohort on-level % for the selected term only (no Q1 vs Q2 line)."""
+def create_analytics_quarter_focus_bar_chart(
+    rate: Any,
+    xlabel: str = "Focus",
+    max_value: float = 100.0,
+    label_suffix: str = "%",
+    legend_label: str = "Cohort on-level %",
+) -> io.BytesIO:
+    """Single bar for either cohort percentage or student total, depending on the provided scale."""
     r = float(rate or 0)
     label = (xlabel or "Focus")[:22]
     fig, ax = plt.subplots(figsize=(5.2, 3.4))
@@ -2056,8 +2062,8 @@ def create_analytics_quarter_focus_bar_chart(rate: Any, xlabel: str = "Focus") -
     )
     ax.text(
         0,
-        min(r + 4, 100),
-        f"{round(r, 1)}%",
+        min(r + (4 if max_value == 100 else 1.5), max_value),
+        f"{round(r, 1)}{label_suffix}",
         ha="center",
         va="bottom",
         fontsize=10,
@@ -2065,14 +2071,20 @@ def create_analytics_quarter_focus_bar_chart(rate: Any, xlabel: str = "Focus") -
     )
     ax.set_xticks([0])
     ax.set_xticklabels([label], fontsize=9, color="#64748b")
-    ax.set_ylim(0, 105)
-    ax.set_yticks([0, 25, 50, 75, 100])
-    ax.set_yticklabels(["0%", "25%", "50%", "75%", "100%"], fontsize=8, color="#64748b")
+    if max_value == 100:
+        ax.set_ylim(0, 105)
+        ax.set_yticks([0, 25, 50, 75, 100])
+        ax.set_yticklabels(["0%", "25%", "50%", "75%", "100%"], fontsize=8, color="#64748b")
+    else:
+        ax.set_ylim(0, max_value + 2)
+        marks_ticks = [0, 10, 20, 30, 40, 50]
+        ax.set_yticks(marks_ticks)
+        ax.set_yticklabels([str(v) for v in marks_ticks], fontsize=8, color="#64748b")
     ax.yaxis.grid(True, linestyle="--", color=BOARD_ANALYTICS["grid"], linewidth=0.8)
     ax.set_axisbelow(True)
     ax.spines["top"].set_visible(False)
     ax.spines["right"].set_visible(False)
-    ax.legend(["Cohort on-level %"], loc="lower center", fontsize=8, frameon=False)
+    ax.legend([legend_label], loc="lower center", fontsize=8, frameon=False)
     buf = io.BytesIO()
     fig.subplots_adjust(left=0.08, right=0.98, top=0.92, bottom=0.16)
     plt.savefig(buf, format="png", dpi=PDF_EXPORT_CHART_DPI, facecolor="white")
@@ -2533,10 +2545,12 @@ def generate_analytics_dashboard_pdf(
     qn_o = int(overview.get("quarter") or 1)
     if is_student_scope:
         focus_total = _pdf_focus_quarter_total(selected_student, qn_o)
-        achievement_rate = round((float(focus_total or 0) / 50.0) * 100, 1) if focus_total is not None else 0
         line_buf = create_analytics_quarter_focus_bar_chart(
-            achievement_rate,
+            focus_total,
             (selected_student.get("full_name") or "Student")[:22],
+            max_value=50.0,
+            label_suffix="/50",
+            legend_label="Quarter total (max 50)",
         )
         area_buf = create_component_breakdown_area_chart(selected_student, qn)
     else:

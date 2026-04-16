@@ -277,9 +277,22 @@ export function ScoreBreakdownDonut({
 }
 
 /** Single-quarter cohort on-level % (no Quarter 1 vs Quarter 2 comparison). */
-export function QuarterOnLevelFocus({ rate, termLabel, lineName, height = 220 }) {
+export function QuarterOnLevelFocus({
+  rate,
+  termLabel,
+  lineName,
+  height = 220,
+  maxValue = 100,
+  tickFormatter,
+  labelFormatter,
+}) {
   const label = termLabel || "—";
   const data = [{ name: label, rate: Number(rate ?? 0) }];
+  const resolvedTickFormatter =
+    tickFormatter || ((value) => (maxValue === 100 ? `${value}%` : `${value}`));
+  const resolvedLabelFormatter =
+    labelFormatter || ((value) => (maxValue === 100 ? `${value}%` : `${value}`));
+  const yTicks = maxValue === 100 ? [0, 25, 50, 75, 100] : [0, 10, 20, 30, 40, 50];
   return (
     <div style={{ height }} className="w-full">
       <ResponsiveContainer width="100%" height="100%">
@@ -288,13 +301,14 @@ export function QuarterOnLevelFocus({ rate, termLabel, lineName, height = 220 })
           <XAxis dataKey="name" tick={{ fontSize: 10, fill: BOARD.axis }} interval={0} />
           <YAxis
             tick={{ fontSize: 11, fill: BOARD.axis }}
-            domain={[0, 100]}
-            tickFormatter={(v) => `${v}%`}
+            domain={[0, maxValue]}
+            ticks={yTicks}
+            tickFormatter={resolvedTickFormatter}
           />
           <Tooltip content={boardTooltip} />
           <Legend wrapperStyle={{ fontSize: 12 }} />
           <Bar dataKey="rate" name={lineName} fill={BOARD.lineQ1} radius={[6, 6, 0, 0]} maxBarSize={72}>
-            <LabelList dataKey="rate" position="top" formatter={(v) => `${v}%`} fill="#64748b" fontSize={11} />
+            <LabelList dataKey="rate" position="top" formatter={resolvedLabelFormatter} fill="#64748b" fontSize={11} />
           </Bar>
         </BarChart>
       </ResponsiveContainer>

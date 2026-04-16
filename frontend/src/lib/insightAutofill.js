@@ -95,12 +95,69 @@ function formatScore(value) {
   return Number.isInteger(num) ? String(num) : String(Math.round(num * 100) / 100);
 }
 
+function buildStudentComponentRows(student, selectedQuarter = 1, language = "en") {
+  const defs = selectedQuarter === 2
+    ? [
+        { label: language === "ar" ? "التقييم" : "Assessment", value: student?.focus_assessment, max: 15 },
+        { label: language === "ar" ? "الاختبار القصير 3" : "Quiz 3", value: student?.focus_quiz_primary, max: 5 },
+        { label: language === "ar" ? "الاختبار القصير 4" : "Quiz 4", value: student?.focus_quiz_secondary, max: 5 },
+        { label: language === "ar" ? "اختبار الفصل 2" : "Chapter Test 2", value: student?.focus_chapter_test, max: 10 },
+        { label: language === "ar" ? "النهائي العملي" : "Final Practical", value: student?.focus_final_practical, max: 10 },
+        { label: language === "ar" ? "النهائي النظري" : "Final Theory", value: student?.focus_final_theory, max: 10 },
+      ]
+    : [
+        { label: language === "ar" ? "التقييم" : "Assessment", value: student?.focus_assessment, max: 15 },
+        { label: language === "ar" ? "الاختبار القصير 1" : "Quiz 1", value: student?.focus_quiz_primary, max: 5 },
+        { label: language === "ar" ? "الاختبار القصير 2" : "Quiz 2", value: student?.focus_quiz_secondary, max: 5 },
+        { label: language === "ar" ? "اختبار الفصل 1" : "Chapter Test 1", value: student?.focus_chapter_test, max: 10 },
+        { label: language === "ar" ? "النهائي العملي" : "Final Practical", value: student?.focus_final_practical, max: 10 },
+        { label: language === "ar" ? "النهائي النظري" : "Final Theory", value: student?.focus_final_theory, max: 10 },
+      ];
+
+  return defs
+    .map((item) => {
+      const score = toNumber(item.value);
+      if (score == null) return null;
+      return {
+        ...item,
+        score,
+        gap: Math.max(0, item.max - score),
+        pct: item.max > 0 ? score / item.max : 0,
+      };
+    })
+    .filter(Boolean);
+}
+
+function buildComponentWeaknessText(student, selectedQuarter = 1, language = "en") {
+  const rows = buildStudentComponentRows(student, selectedQuarter, language)
+    .filter((row) => row.gap > 0)
+    .sort((a, b) => {
+      if (a.pct !== b.pct) return a.pct - b.pct;
+      return b.gap - a.gap;
+    })
+    .slice(0, 2);
+
+  if (!rows.length) return null;
+
+  const parts = rows.map((row) =>
+    language === "ar"
+      ? `${row.label} (${formatScore(row.score)}/${row.max})`
+      : `${row.label} (${formatScore(row.score)}/${row.max})`
+  );
+
+  if (language === "ar") {
+    return `ويظهر أكبر فقد في الدرجات في ${parts.join(" و")}، وهو ما خفّض المجموع الإجمالي.`;
+  }
+  return `The largest mark losses came in ${parts.join(" and ")}, which held the overall total back.`;
+}
+
 function buildStudentInsights(payload, language = "en") {
   const student = payload?.selectedStudent || {};
   const name = String(student?.full_name || "").trim() || (language === "ar" ? "الطالب المحدد" : "The selected student");
   const className = String(student?.class_name || "").trim();
   const total = toNumber(payload?.focusAvg);
   const performanceLevel = payload?.performanceLevel || "no_data";
+  const selectedQuarter = payload?.selectedQuarter === 2 ? 2 : 1;
   const performanceText = translatePerformanceLevel(performanceLevel, language);
   const targetThreshold = performanceLevel === "approach" ? 46 : performanceLevel === "below" ? 43 : null;
   const thresholdGap = total != null && targetThreshold != null ? Math.max(0, Math.round((targetThreshold - total) * 100) / 100) : null;
@@ -128,6 +185,7 @@ function buildStudentInsights(payload, language = "en") {
         ? `ولا تزال النتيجة الحالية أقل من الحد المطلوب بمقدار ${formatScore(thresholdGap)} درجة.`
         : `The current total still sits ${formatScore(thresholdGap)} points below the required threshold.`
       : "";
+  const componentWeaknessText = buildComponentWeaknessText(student, selectedQuarter, language);
   const actionsText =
     needsSupport && !hasRecordedWeakAreas && total != null
       ? language === "ar"
@@ -158,7 +216,9 @@ function buildStudentInsights(payload, language = "en") {
       analysis_strengths: `تظهر أفضل نقاط قوة ${name} في ${strengthsText}.${className ? ` وينتمي الطالب إلى فصل ${className}.` : ""}`,
       analysis_weaknesses: hasRecordedWeakAreas
         ? `تحتاج الجوانب التالية إلى متابعة عند ${name}: ${weaknessesText}.`
-        : fallbackWeaknessText || `لا تظهر البيانات الحالية نقاط ضعف رئيسية عند ${name}، مع ضرورة الاستمرار في المتابعة المنتظمة للحفاظ على هذا المستوى.`,
+        : fallbackWeaknessText
+          ? `${fallbackWeaknessText}${componentWeaknessText ? ` ${componentWeaknessText}` : ""}`
+          : `لا تظهر البيانات الحالية نقاط ضعف رئيسية عند ${name}، مع ضرورة الاستمرار في المتابعة المنتظمة للحفاظ على هذا المستوى.`,
       analysis_performance:
         total != null
           ? `${name} مستواه الحالي هو ${performanceText} في الفترة المحددة، ومجموعه الفصلي الحالي هو ${total} من 50.`
@@ -173,7 +233,9 @@ function buildStudentInsights(payload, language = "en") {
     analysis_strengths: `${name} shows strongest outcomes in ${strengthsText}.${className ? ` The student belongs to class ${className}.` : ""}`,
     analysis_weaknesses: hasRecordedWeakAreas
       ? `The main areas that need follow-up for ${name} are ${weaknessesText}.`
-      : fallbackWeaknessText || `No major weakness is currently indicated for ${name}, but regular monitoring is still recommended to maintain progress.`,
+      : fallbackWeaknessText
+        ? `${fallbackWeaknessText}${componentWeaknessText ? ` ${componentWeaknessText}` : ""}`
+        : `No major weakness is currently indicated for ${name}, but regular monitoring is still recommended to maintain progress.`,
     analysis_performance:
       total != null
         ? `${name} is currently ${performanceText} for the selected term, with a current quarter total of ${total} out of 50.`
@@ -271,6 +333,7 @@ export function buildAutoInsightsFromOverview(overview, selectedQuarter = 1, lan
     distribution: q.distribution || [],
     selectedStudent,
     performanceLevel,
+    selectedQuarter,
   }, language);
 }
 
