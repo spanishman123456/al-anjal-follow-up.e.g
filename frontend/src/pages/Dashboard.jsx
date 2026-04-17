@@ -195,11 +195,11 @@ export default function Dashboard() {
       />
 
       <section
-        className="section-bg-alt-1 grid gap-4 rounded-xl border border-border/50 p-4 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7"
+        className="section-bg-alt-1 grid items-stretch gap-4 rounded-xl border border-border/50 p-4 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7"
         data-testid="dashboard-metrics"
       >
-        <Card data-testid="metric-total-students">
-          <CardHeader className="pb-2">
+        <Card className="flex h-full flex-col" data-testid="metric-total-students">
+          <CardHeader className="flex-1 pb-2">
             <CardTitle
               className="text-sm text-muted-foreground"
               data-testid="metric-total-students-label"
@@ -207,7 +207,7 @@ export default function Dashboard() {
               {t("total_enrolled_students")}
             </CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="mt-auto shrink-0">
             <div
               className="text-3xl font-bold"
               data-testid="metric-total-students-value"
@@ -216,32 +216,32 @@ export default function Dashboard() {
             </div>
           </CardContent>
         </Card>
-        <Card data-testid="metric-assessed-students">
-          <CardHeader className="pb-2">
+        <Card className="flex h-full flex-col" data-testid="metric-assessed-students">
+          <CardHeader className="flex-1 pb-2">
             <CardTitle className="text-sm text-muted-foreground">
               {t("assessed_students")}
             </CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="mt-auto shrink-0">
             <div className="text-3xl font-bold text-sky-600" data-testid="metric-assessed-students-value">
               {summary?.students_with_data ?? 0}
             </div>
           </CardContent>
         </Card>
-        <Card data-testid="metric-no-data-students">
-          <CardHeader className="pb-2">
+        <Card className="flex h-full flex-col" data-testid="metric-no-data-students">
+          <CardHeader className="flex-1 pb-2">
             <CardTitle className="text-sm text-muted-foreground">
               {t("no_data_students")}
             </CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="mt-auto shrink-0">
             <div className="text-3xl font-bold text-slate-600" data-testid="metric-no-data-students-value">
               {summary?.students_no_data ?? 0}
             </div>
           </CardContent>
         </Card>
-        <Card data-testid="metric-exceeding">
-          <CardHeader className="pb-2">
+        <Card className="flex h-full flex-col" data-testid="metric-exceeding">
+          <CardHeader className="flex-1 pb-2">
             <CardTitle
               className="text-sm text-muted-foreground"
               data-testid="metric-exceeding-label"
@@ -249,7 +249,7 @@ export default function Dashboard() {
               {t("on_level")}
             </CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="mt-auto shrink-0">
             <div
               className="text-3xl font-bold text-emerald-600"
               data-testid="metric-exceeding-value"
@@ -258,8 +258,8 @@ export default function Dashboard() {
             </div>
           </CardContent>
         </Card>
-        <Card data-testid="metric-support">
-          <CardHeader className="pb-2">
+        <Card className="flex h-full flex-col" data-testid="metric-support">
+          <CardHeader className="flex-1 pb-2">
             <CardTitle
               className="text-sm text-muted-foreground"
               data-testid="metric-support-label"
@@ -267,7 +267,7 @@ export default function Dashboard() {
               {t("need_support")}
             </CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="mt-auto shrink-0">
             <div
               className="text-3xl font-bold text-amber-600"
               data-testid="metric-support-value"
@@ -276,8 +276,8 @@ export default function Dashboard() {
             </div>
           </CardContent>
         </Card>
-        <Card data-testid="metric-avg-quiz">
-          <CardHeader className="pb-2">
+        <Card className="flex h-full flex-col" data-testid="metric-avg-quiz">
+          <CardHeader className="flex-1 pb-2">
             <CardTitle
               className="text-sm text-muted-foreground"
               data-testid="metric-avg-quiz-label"
@@ -285,7 +285,7 @@ export default function Dashboard() {
               {t("avg_quiz_score")}
             </CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="mt-auto shrink-0">
             <div
               className="text-3xl font-bold text-primary"
               data-testid="metric-avg-quiz-value"
@@ -294,8 +294,8 @@ export default function Dashboard() {
             </div>
           </CardContent>
         </Card>
-        <Card data-testid="metric-avg-chapter">
-          <CardHeader className="pb-2">
+        <Card className="flex h-full flex-col" data-testid="metric-avg-chapter">
+          <CardHeader className="flex-1 pb-2">
             <CardTitle
               className="text-sm text-muted-foreground"
               data-testid="metric-avg-chapter-label"
@@ -303,7 +303,7 @@ export default function Dashboard() {
               {t("avg_chapter_score")}
             </CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="mt-auto shrink-0">
             <div
               className="text-3xl font-bold text-sky-600"
               data-testid="metric-avg-chapter-value"
