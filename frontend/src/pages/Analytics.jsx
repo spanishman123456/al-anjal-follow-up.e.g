@@ -540,6 +540,7 @@ export default function Analytics() {
           analysis_standout_data: analysisStandoutData,
           analysis_actions: analysisActions,
           analysis_recommendations: analysisRecommendations,
+          lang: language,
         },
         responseType: "blob",
       });

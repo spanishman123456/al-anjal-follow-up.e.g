@@ -345,6 +345,242 @@ FRONTEND_PUBLIC_DIR = ROOT_DIR.parent / "frontend" / "public"
 AL_ANJAL_LOGO_PATH = FRONTEND_PUBLIC_DIR / "logo.png"
 COGNIA_LOGO_PATH = FRONTEND_PUBLIC_DIR / "logo-cognia.png"
 
+# ---- Arabic-capable PDF font setup ----------------------------------------
+# ReportLab's built-in Helvetica does not contain Arabic glyphs, so any Arabic
+# text rendered in a PDF shows up as ".notdef" boxes ("tofu"). We register
+# Amiri (regular + bold) — it covers both Arabic and basic Latin — and shape
+# Arabic strings with arabic_reshaper + python-bidi before drawing them so the
+# characters connect and run right-to-left correctly.
+from reportlab.pdfbase import pdfmetrics as _pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont as _TTFont
+from reportlab.lib.fonts import addMapping as _addMapping
+
+PDF_FONTS_DIR = ROOT_DIR / "assets" / "fonts"
+PDF_FONTS_DIR.mkdir(parents=True, exist_ok=True)
+AMIRI_REGULAR_PATH = PDF_FONTS_DIR / "Amiri-Regular.ttf"
+AMIRI_BOLD_PATH = PDF_FONTS_DIR / "Amiri-Bold.ttf"
+# The Amiri release bundles all weights in a single zip; we extract the two we need.
+AMIRI_RELEASE_ZIP_URL = (
+    "https://github.com/aliftype/amiri/releases/download/1.003/Amiri-1.003.zip"
+)
+
+PDF_LATIN_FONT = "Helvetica"
+PDF_LATIN_FONT_BOLD = "Helvetica-Bold"
+# Updated to "Amiri" / "Amiri-Bold" if registration succeeds.
+PDF_ARABIC_FONT = PDF_LATIN_FONT
+PDF_ARABIC_FONT_BOLD = PDF_LATIN_FONT_BOLD
+_PDF_ARABIC_FONT_READY = False
+
+
+def _download_amiri_from_release() -> None:
+    """Fetch the Amiri release zip and extract Regular + Bold TTFs to PDF_FONTS_DIR.
+
+    Only invoked as a fallback when the TTFs aren't already bundled with the repo.
+    """
+    try:
+        import urllib.request
+        import zipfile
+        import io as _io
+        req = urllib.request.Request(
+            AMIRI_RELEASE_ZIP_URL,
+            headers={"User-Agent": "al-anjal-pdf-fonts/1.0"},
+        )
+        with urllib.request.urlopen(req, timeout=90) as resp:
+            data = resp.read()
+        with zipfile.ZipFile(_io.BytesIO(data)) as zf:
+            for name in zf.namelist():
+                if name.endswith("Amiri-Regular.ttf"):
+                    AMIRI_REGULAR_PATH.write_bytes(zf.read(name))
+                elif name.endswith("Amiri-Bold.ttf"):
+                    AMIRI_BOLD_PATH.write_bytes(zf.read(name))
+    except Exception as exc:
+        logger.warning(f"Failed to download Amiri release zip: {exc}")
+
+
+def _ensure_pdf_arabic_fonts() -> None:
+    """Register Amiri fonts with ReportLab, downloading them once if missing."""
+    global PDF_ARABIC_FONT, PDF_ARABIC_FONT_BOLD, _PDF_ARABIC_FONT_READY
+    if _PDF_ARABIC_FONT_READY:
+        return
+    try:
+        needs_download = (
+            not AMIRI_REGULAR_PATH.exists()
+            or AMIRI_REGULAR_PATH.stat().st_size < 50_000
+            or not AMIRI_BOLD_PATH.exists()
+            or AMIRI_BOLD_PATH.stat().st_size < 50_000
+        )
+        if needs_download:
+            _download_amiri_from_release()
+        if (
+            AMIRI_REGULAR_PATH.exists()
+            and AMIRI_REGULAR_PATH.stat().st_size > 50_000
+            and AMIRI_BOLD_PATH.exists()
+            and AMIRI_BOLD_PATH.stat().st_size > 50_000
+        ):
+            _pdfmetrics.registerFont(_TTFont("Amiri", str(AMIRI_REGULAR_PATH)))
+            _pdfmetrics.registerFont(_TTFont("Amiri-Bold", str(AMIRI_BOLD_PATH)))
+            _addMapping("Amiri", 0, 0, "Amiri")
+            _addMapping("Amiri", 1, 0, "Amiri-Bold")
+            PDF_ARABIC_FONT = "Amiri"
+            PDF_ARABIC_FONT_BOLD = "Amiri-Bold"
+            _PDF_ARABIC_FONT_READY = True
+            logger.info("Registered Amiri fonts for Arabic PDF rendering")
+    except Exception as exc:
+        logger.warning(f"Arabic PDF font registration failed; falling back to Helvetica: {exc}")
+
+
+_ARABIC_CHAR_RE = re.compile(
+    r"[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]"
+)
+
+
+def _has_arabic(value: Any) -> bool:
+    if value is None:
+        return False
+    return bool(_ARABIC_CHAR_RE.search(str(value)))
+
+
+def _shape_arabic(text: str) -> str:
+    """Apply Arabic contextual shaping + bidi reordering so ReportLab renders RTL correctly."""
+    if not text:
+        return text
+    try:
+        import arabic_reshaper  # type: ignore
+        from bidi.algorithm import get_display  # type: ignore
+        return get_display(arabic_reshaper.reshape(text))
+    except Exception:
+        return text
+
+
+# Translations used only inside generated PDFs. Kept in sync with frontend/src/lib/i18n.js
+# labels that appear in the Reports / Analytics dashboards. Lang is "en" or "ar".
+PDF_LABELS: Dict[str, Dict[str, str]] = {
+    "en": {
+        "Report": "Report",
+        "Analytics Dashboard": "Analytics Dashboard",
+        "Professional Performance Summary": "Professional Performance Summary",
+        "Generated on": "Generated on",
+        "Summary metrics": "Summary metrics",
+        "Performance distribution (focus quarter)": "Performance distribution (focus quarter)",
+        "Class breakdown": "Class breakdown",
+        "Top Performers": "Top Performers",
+        "Students Needing Support": "Students Needing Support",
+        "Key Insights": "Key Insights",
+        "Visual dashboard": "Visual dashboard",
+        "Grade": "Grade",
+        "Semester": "Semester",
+        "Quarter": "Quarter",
+        "Metric": "Metric",
+        "Value": "Value",
+        "Scope": "Scope",
+        "Term": "Term",
+        "Total Students": "Total Students",
+        "Average Total Score": "Average Total Score",
+        "On Level % (focus quarter)": "On Level % (focus quarter)",
+        "Avg quarter total (focus)": "Avg quarter total (focus)",
+        "Students with data (focus)": "Students with data (focus)",
+        "Level": "Level",
+        "Count": "Count",
+        "No Data": "No Data",
+        "Class": "Class",
+        "Students": "Students",
+        "Student": "Student",
+        "Quarter total (50)": "Quarter total (50)",
+        "Total": "Total",
+        "Marks breakdown": "Marks breakdown",
+        "Strengths": "Strengths",
+        "Performance": "Performance",
+        "Areas to Improve": "Areas to Improve",
+        "Weaknesses": "Weaknesses",
+        "Student Performance": "Student Performance",
+        "Standout Data": "Standout Data",
+        "Recommended Actions": "Recommended Actions",
+        "Recommendations": "Recommendations",
+        "Insight": "Insight",
+        "Details": "Details",
+    },
+    "ar": {
+        "Report": "تقرير",
+        "Analytics Dashboard": "لوحة التحليلات",
+        "Professional Performance Summary": "ملخص الأداء المهني",
+        "Generated on": "تاريخ الإصدار",
+        "Summary metrics": "المؤشرات الرئيسية",
+        "Performance distribution (focus quarter)": "توزيع الأداء (الربع الحالي)",
+        "Class breakdown": "توزيع الصفوف",
+        "Top Performers": "الطلاب المتفوقون",
+        "Students Needing Support": "الطلاب الذين يحتاجون إلى دعم",
+        "Key Insights": "أهم الملاحظات",
+        "Visual dashboard": "اللوحة البصرية",
+        "Grade": "الصف",
+        "Semester": "الفصل الدراسي",
+        "Quarter": "الربع",
+        "Metric": "المؤشر",
+        "Value": "القيمة",
+        "Scope": "النطاق",
+        "Term": "الفترة",
+        "Total Students": "عدد الطلاب",
+        "Average Total Score": "متوسط الدرجات الكلية",
+        "On Level % (focus quarter)": "نسبة المستوى المطلوب (الربع الحالي)",
+        "Avg quarter total (focus)": "متوسط إجمالي الربع",
+        "Students with data (focus)": "الطلاب ذوو بيانات (الربع الحالي)",
+        "Level": "المستوى",
+        "Count": "العدد",
+        "No Data": "لا توجد بيانات",
+        "Class": "الصف",
+        "Students": "الطلاب",
+        "Student": "الطالب",
+        "Quarter total (50)": "إجمالي الربع (50)",
+        "Total": "الإجمالي",
+        "Marks breakdown": "تفصيل الدرجات",
+        "Strengths": "نقاط القوة",
+        "Performance": "الأداء",
+        "Areas to Improve": "مجالات التحسين",
+        "Weaknesses": "نقاط الضعف",
+        "Student Performance": "أداء الطالب",
+        "Standout Data": "بيانات مميزة",
+        "Recommended Actions": "إجراءات موصى بها",
+        "Recommendations": "التوصيات",
+        "Insight": "المؤشر",
+        "Details": "التفاصيل",
+    },
+}
+
+
+def _normalize_lang(lang: Optional[str]) -> str:
+    if not lang:
+        return "en"
+    code = str(lang).strip().lower()[:2]
+    return "ar" if code == "ar" else "en"
+
+
+def _tr(key: str, lang: Optional[str] = "en") -> str:
+    code = _normalize_lang(lang)
+    return PDF_LABELS.get(code, PDF_LABELS["en"]).get(key, key)
+
+
+def _pdf_paragraph_text(value: Any, bold: bool = False) -> str:
+    """
+    Return an escaped, ReportLab-paragraph-ready string for arbitrary user input.
+    Any line that contains Arabic characters is shaped, bidi-reordered, and wrapped with
+    a <font name="Amiri"> tag so the glyphs render properly even when the surrounding
+    paragraph style uses Helvetica. Newlines become <br/> tags.
+    """
+    _ensure_pdf_arabic_fonts()
+    raw = "" if value is None else str(value)
+    raw = raw.replace("\r\n", "\n").replace("\r", "\n")
+    lines: List[str] = []
+    for line in raw.split("\n"):
+        if _has_arabic(line):
+            shaped = _shape_arabic(line)
+            font_name = PDF_ARABIC_FONT_BOLD if bold else PDF_ARABIC_FONT
+            lines.append(f'<font name="{font_name}">{escape(shaped)}</font>')
+        else:
+            lines.append(escape(line))
+    return "<br/>".join(lines)
+
+
+# ---------------------------------------------------------------------------
+
 
 def build_branded_certificate_pdf(
     student_name: str,
@@ -2211,7 +2447,9 @@ def generate_report_pdf(
     report: Dict[str, Any],
     scope: Any,
     insights: Optional[Dict[str, str]] = None,
+    lang: str = "en",
 ) -> bytes:
+    lang = _normalize_lang(lang)
     def _fmt(value: Any, suffix: str = "") -> str:
         if value is None or value == "":
             return "-"
@@ -2225,8 +2463,9 @@ def generate_report_pdf(
                 if isinstance(cell, Paragraph):
                     wrapped_row.append(cell)
                     continue
-                text = escape("" if cell is None else str(cell)).replace("\n", "<br/>")
-                if row_idx == 0:
+                is_header = row_idx == 0
+                text = _pdf_paragraph_text(cell, bold=is_header)
+                if is_header:
                     wrapped_row.append(Paragraph(text, table_header_style))
                 else:
                     wrapped_row.append(Paragraph(text, table_body_style))
@@ -2299,10 +2538,14 @@ def generate_report_pdf(
     elements: List[Any] = []
     scope_label = format_scope_label(scope)
 
-    elements.append(Paragraph(f"{scope_label} Report", title_style))
+    elements.append(Paragraph(f"{_pdf_paragraph_text(scope_label)} {_pdf_paragraph_text(_tr('Report', lang))}", title_style))
     elements.append(
         Paragraph(
-            f"Generated on {datetime.now(REPORT_TIMEZONE).strftime('%Y-%m-%d %H:%M')} | Professional Performance Summary",
+            _pdf_paragraph_text(
+                f"{_tr('Generated on', lang)} "
+                f"{datetime.now(REPORT_TIMEZONE).strftime('%Y-%m-%d %H:%M')} | "
+                f"{_tr('Professional Performance Summary', lang)}"
+            ),
             subtitle_style,
         )
     )
@@ -2312,25 +2555,25 @@ def generate_report_pdf(
     rq = int(report.get("quarter") or 1)
     focus_q = q1 if rq == 1 else q2
     summary_data = [
-        ["Metric", "Value"],
-        ["Scope", scope_label],
-        ["Term", f"Semester {report.get('semester', 1)} · Quarter {rq}"],
-        ["Total Students", _fmt(report.get("total_students"))],
-        ["Average Total Score", _fmt(report.get("avg_total_score"))],
-        ["On Level % (focus quarter)", _fmt(report.get("exceeding_rate"), "%")],
-        ["Avg quarter total (focus)", _fmt(focus_q.get("avg_total"))],
-        ["Students with data (focus)", _fmt(focus_q.get("total_with_data"))],
+        [_tr("Metric", lang), _tr("Value", lang)],
+        [_tr("Scope", lang), scope_label],
+        [_tr("Term", lang), f"{_tr('Semester', lang)} {report.get('semester', 1)} · {_tr('Quarter', lang)} {rq}"],
+        [_tr("Total Students", lang), _fmt(report.get("total_students"))],
+        [_tr("Average Total Score", lang), _fmt(report.get("avg_total_score"))],
+        [_tr("On Level % (focus quarter)", lang), _fmt(report.get("exceeding_rate"), "%")],
+        [_tr("Avg quarter total (focus)", lang), _fmt(focus_q.get("avg_total"))],
+        [_tr("Students with data (focus)", lang), _fmt(focus_q.get("total_with_data"))],
     ]
     elements.append(_styled_table(summary_data, col_widths=[210, 320]))
     elements.append(Spacer(1, 10))
 
-    elements.append(Paragraph("Performance Distribution", section_style))
+    elements.append(Paragraph(_pdf_paragraph_text(_tr("Performance distribution (focus quarter)", lang), bold=True), section_style))
     distribution = report.get("distribution") or []
-    dist_rows = [["Level", "Count"]]
+    dist_rows = [[_tr("Level", lang), _tr("Count", lang)]]
     for item in distribution:
         dist_rows.append([str(item.get("level", "")).replace("_", " ").title(), _fmt(item.get("count"))])
     if len(dist_rows) == 1:
-        dist_rows.append(["No Data", "0"])
+        dist_rows.append([_tr("No Data", lang), "0"])
     elements.append(_styled_table(dist_rows, col_widths=[260, 270]))
     elements.append(Spacer(1, 8))
 
@@ -2357,8 +2600,8 @@ def generate_report_pdf(
     elements.append(chart_table)
     elements.append(Spacer(1, 10))
 
-    elements.append(Paragraph("Class Breakdown", section_style))
-    class_table_data = [["Class", "Students"]]
+    elements.append(Paragraph(_pdf_paragraph_text(_tr("Class breakdown", lang), bold=True), section_style))
+    class_table_data = [[_tr("Class", lang), _tr("Students", lang)]]
     for item in class_breakdown:
         class_table_data.append([_fmt(item.get("class_name")), _fmt(item.get("student_count"))])
     if len(class_table_data) == 1:
@@ -2367,8 +2610,11 @@ def generate_report_pdf(
     elements.append(PageBreak())
 
     top_performers = report.get("top_performers", []) or []
-    elements.append(Paragraph("Top Performers", section_style))
-    top_table_data = [["Student", "Class", "Quarter total (50)", "Total", "Marks breakdown", "Strengths"]]
+    elements.append(Paragraph(_pdf_paragraph_text(_tr("Top Performers", lang), bold=True), section_style))
+    top_table_data = [[
+        _tr("Student", lang), _tr("Class", lang), _tr("Quarter total (50)", lang),
+        _tr("Total", lang), _tr("Marks breakdown", lang), _tr("Strengths", lang),
+    ]]
     for student in top_performers:
         strengths = ", ".join(student.get("strengths") or []) or "-"
         breakdown = _focus_component_summary_text(student, rq)
@@ -2388,8 +2634,11 @@ def generate_report_pdf(
     elements.append(Spacer(1, 10))
 
     support_students = report.get("students_needing_support", []) or []
-    elements.append(Paragraph("Students Needing Support", section_style))
-    support_table_data = [["Student", "Class", "Quarter total (50)", "Performance", "Marks breakdown", "Areas to Improve"]]
+    elements.append(Paragraph(_pdf_paragraph_text(_tr("Students Needing Support", lang), bold=True), section_style))
+    support_table_data = [[
+        _tr("Student", lang), _tr("Class", lang), _tr("Quarter total (50)", lang),
+        _tr("Performance", lang), _tr("Marks breakdown", lang), _tr("Areas to Improve", lang),
+    ]]
     for student in support_students:
         weak_areas = ", ".join(student.get("weak_areas") or []) or "-"
         breakdown = _focus_component_summary_text(student, rq)
@@ -2409,16 +2658,16 @@ def generate_report_pdf(
 
     insights = insights or {}
     insight_rows = [
-        ["Insight", "Details"],
-        ["Strengths", (insights.get("analysis_strengths") or "").strip() or "-"],
-        ["Weaknesses", (insights.get("analysis_weaknesses") or "").strip() or "-"],
-        ["Student Performance", (insights.get("analysis_performance") or "").strip() or "-"],
-        ["Standout Data", (insights.get("analysis_standout_data") or "").strip() or "-"],
-        ["Recommended Actions", (insights.get("analysis_actions") or "").strip() or "-"],
-        ["Recommendations", (insights.get("analysis_recommendations") or "").strip() or "-"],
+        [_tr("Insight", lang), _tr("Details", lang)],
+        [_tr("Strengths", lang), (insights.get("analysis_strengths") or "").strip() or "-"],
+        [_tr("Weaknesses", lang), (insights.get("analysis_weaknesses") or "").strip() or "-"],
+        [_tr("Student Performance", lang), (insights.get("analysis_performance") or "").strip() or "-"],
+        [_tr("Standout Data", lang), (insights.get("analysis_standout_data") or "").strip() or "-"],
+        [_tr("Recommended Actions", lang), (insights.get("analysis_actions") or "").strip() or "-"],
+        [_tr("Recommendations", lang), (insights.get("analysis_recommendations") or "").strip() or "-"],
     ]
     elements.append(Spacer(1, 10))
-    elements.append(Paragraph("Key Insights", section_style))
+    elements.append(Paragraph(_pdf_paragraph_text(_tr("Key Insights", lang), bold=True), section_style))
     elements.append(_styled_table(insight_rows, col_widths=[130, 380], repeat_header=True))
 
     doc.build(elements)
@@ -2433,11 +2682,13 @@ def generate_analytics_dashboard_pdf(
     overview: Dict[str, Any],
     class_summaries: List[Dict[str, Any]],
     insights: Optional[Dict[str, str]] = None,
+    lang: str = "en",
 ) -> bytes:
     """
     PDF for Analytics export: four dashboard charts (same palette as the web Visual Board),
     then the same metric tables as the standard report (without legacy pie/enrollment charts).
     """
+    lang = _normalize_lang(lang)
     def _fmt(value: Any, suffix: str = "") -> str:
         if value is None or value == "":
             return "-"
@@ -2451,8 +2702,9 @@ def generate_analytics_dashboard_pdf(
                 if isinstance(cell, Paragraph):
                     wrapped_row.append(cell)
                     continue
-                text = escape("" if cell is None else str(cell)).replace("\n", "<br/>")
-                if row_idx == 0:
+                is_header = row_idx == 0
+                text = _pdf_paragraph_text(cell, bold=is_header)
+                if is_header:
                     wrapped_row.append(Paragraph(text, table_header_style))
                 else:
                     wrapped_row.append(Paragraph(text, table_body_style))
@@ -2561,17 +2813,19 @@ def generate_analytics_dashboard_pdf(
     doc = SimpleDocTemplate(buffer, pagesize=A4, leftMargin=28, rightMargin=28, topMargin=28, bottomMargin=28)
     elements: List[Any] = []
 
-    elements.append(Paragraph("Analytics Dashboard", title_style))
-    elements.append(Paragraph(f"<b>{scope_label}</b>", subtitle_style))
+    elements.append(Paragraph(_pdf_paragraph_text(_tr("Analytics Dashboard", lang), bold=True), title_style))
+    elements.append(Paragraph(f"<b>{_pdf_paragraph_text(scope_label)}</b>", subtitle_style))
     elements.append(
         Paragraph(
-            f"Generated on {datetime.now(REPORT_TIMEZONE).strftime('%Y-%m-%d %H:%M')} · "
-            "Charts use the same colors and layout as the Analytics page (Visual Board).",
+            _pdf_paragraph_text(
+                f"{_tr('Generated on', lang)} "
+                f"{datetime.now(REPORT_TIMEZONE).strftime('%Y-%m-%d %H:%M')}"
+            ),
             subtitle_style,
         )
     )
 
-    elements.append(Paragraph("Visual dashboard", section_style))
+    elements.append(Paragraph(_pdf_paragraph_text(_tr("Visual dashboard", lang), bold=True), section_style))
     dashboard_grid = Table(
         [
             [
@@ -2627,32 +2881,32 @@ def generate_analytics_dashboard_pdf(
     rq = int(report.get("quarter") or 1)
     focus_q = q1 if rq == 1 else q2
     summary_data = [
-        ["Metric", "Value"],
-        ["Scope", scope_label],
-        ["Term", f"Semester {report.get('semester', 1)} · Quarter {rq}"],
-        ["Total Students", _fmt(report.get("total_students"))],
-        ["Average Total Score", _fmt(report.get("avg_total_score"))],
-        ["On Level % (focus quarter)", _fmt(report.get("exceeding_rate"), "%")],
-        ["Avg quarter total (focus)", _fmt(focus_q.get("avg_total"))],
-        ["Students with data (focus)", _fmt(focus_q.get("total_with_data"))],
+        [_tr("Metric", lang), _tr("Value", lang)],
+        [_tr("Scope", lang), scope_label],
+        [_tr("Term", lang), f"{_tr('Semester', lang)} {report.get('semester', 1)} · {_tr('Quarter', lang)} {rq}"],
+        [_tr("Total Students", lang), _fmt(report.get("total_students"))],
+        [_tr("Average Total Score", lang), _fmt(report.get("avg_total_score"))],
+        [_tr("On Level % (focus quarter)", lang), _fmt(report.get("exceeding_rate"), "%")],
+        [_tr("Avg quarter total (focus)", lang), _fmt(focus_q.get("avg_total"))],
+        [_tr("Students with data (focus)", lang), _fmt(focus_q.get("total_with_data"))],
     ]
-    elements.append(Paragraph("Summary metrics", section_style))
+    elements.append(Paragraph(_pdf_paragraph_text(_tr("Summary metrics", lang), bold=True), section_style))
     elements.append(_styled_table(summary_data, col_widths=[210, 320]))
     elements.append(Spacer(1, 10))
 
-    elements.append(Paragraph("Performance distribution (focus quarter)", section_style))
+    elements.append(Paragraph(_pdf_paragraph_text(_tr("Performance distribution (focus quarter)", lang), bold=True), section_style))
     distribution = report.get("distribution") or []
-    dist_rows = [["Level", "Count"]]
+    dist_rows = [[_tr("Level", lang), _tr("Count", lang)]]
     for item in distribution:
         dist_rows.append([str(item.get("level", "")).replace("_", " ").title(), _fmt(item.get("count"))])
     if len(dist_rows) == 1:
-        dist_rows.append(["No Data", "0"])
+        dist_rows.append([_tr("No Data", lang), "0"])
     elements.append(_styled_table(dist_rows, col_widths=[260, 270]))
     elements.append(Spacer(1, 10))
 
     class_breakdown = report.get("class_breakdown", []) or []
-    elements.append(Paragraph("Class breakdown", section_style))
-    class_table_data = [["Class", "Students"]]
+    elements.append(Paragraph(_pdf_paragraph_text(_tr("Class breakdown", lang), bold=True), section_style))
+    class_table_data = [[_tr("Class", lang), _tr("Students", lang)]]
     for item in class_breakdown:
         class_table_data.append([_fmt(item.get("class_name")), _fmt(item.get("student_count"))])
     if len(class_table_data) == 1:
@@ -2661,8 +2915,11 @@ def generate_analytics_dashboard_pdf(
     elements.append(PageBreak())
 
     top_performers = report.get("top_performers", []) or []
-    elements.append(Paragraph("Top Performers", section_style))
-    top_table_data = [["Student", "Class", "Quarter total (50)", "Total", "Marks breakdown", "Strengths"]]
+    elements.append(Paragraph(_pdf_paragraph_text(_tr("Top Performers", lang), bold=True), section_style))
+    top_table_data = [[
+        _tr("Student", lang), _tr("Class", lang), _tr("Quarter total (50)", lang),
+        _tr("Total", lang), _tr("Marks breakdown", lang), _tr("Strengths", lang),
+    ]]
     for student in top_performers:
         strengths = ", ".join(student.get("strengths") or []) or "-"
         breakdown = _focus_component_summary_text(student, rq)
@@ -2682,8 +2939,11 @@ def generate_analytics_dashboard_pdf(
     elements.append(Spacer(1, 10))
 
     support_students = report.get("students_needing_support", []) or []
-    elements.append(Paragraph("Students Needing Support", section_style))
-    support_table_data = [["Student", "Class", "Quarter total (50)", "Performance", "Marks breakdown", "Areas to Improve"]]
+    elements.append(Paragraph(_pdf_paragraph_text(_tr("Students Needing Support", lang), bold=True), section_style))
+    support_table_data = [[
+        _tr("Student", lang), _tr("Class", lang), _tr("Quarter total (50)", lang),
+        _tr("Performance", lang), _tr("Marks breakdown", lang), _tr("Areas to Improve", lang),
+    ]]
     for student in support_students:
         weak_areas = ", ".join(student.get("weak_areas") or []) or "-"
         breakdown = _focus_component_summary_text(student, rq)
@@ -2703,16 +2963,16 @@ def generate_analytics_dashboard_pdf(
 
     insights = insights or {}
     insight_rows = [
-        ["Insight", "Details"],
-        ["Strengths", (insights.get("analysis_strengths") or "").strip() or "-"],
-        ["Weaknesses", (insights.get("analysis_weaknesses") or "").strip() or "-"],
-        ["Student Performance", (insights.get("analysis_performance") or "").strip() or "-"],
-        ["Standout Data", (insights.get("analysis_standout_data") or "").strip() or "-"],
-        ["Recommended Actions", (insights.get("analysis_actions") or "").strip() or "-"],
-        ["Recommendations", (insights.get("analysis_recommendations") or "").strip() or "-"],
+        [_tr("Insight", lang), _tr("Details", lang)],
+        [_tr("Strengths", lang), (insights.get("analysis_strengths") or "").strip() or "-"],
+        [_tr("Weaknesses", lang), (insights.get("analysis_weaknesses") or "").strip() or "-"],
+        [_tr("Student Performance", lang), (insights.get("analysis_performance") or "").strip() or "-"],
+        [_tr("Standout Data", lang), (insights.get("analysis_standout_data") or "").strip() or "-"],
+        [_tr("Recommended Actions", lang), (insights.get("analysis_actions") or "").strip() or "-"],
+        [_tr("Recommendations", lang), (insights.get("analysis_recommendations") or "").strip() or "-"],
     ]
     elements.append(Spacer(1, 10))
-    elements.append(Paragraph("Key Insights", section_style))
+    elements.append(Paragraph(_pdf_paragraph_text(_tr("Key Insights", lang), bold=True), section_style))
     elements.append(_styled_table(insight_rows, col_widths=[130, 380], repeat_header=True))
 
     doc.build(elements)
@@ -2726,6 +2986,7 @@ def generate_reports_dashboard_pdf(
     scope: Any,
     insights: Optional[Dict[str, str]] = None,
     report_type: str = "full",
+    lang: str = "en",
 ) -> bytes:
     """
     PDF for Reports page export: four Visual Board charts (enrollment bars/area, donut, quarter line)
@@ -2735,6 +2996,7 @@ def generate_reports_dashboard_pdf(
     enrollment + performance donut, distribution and class counts only (no per-student tables or insights).
     """
     is_summary = str(report_type or "full").lower() == "summary"
+    lang = _normalize_lang(lang)
     def _fmt(value: Any, suffix: str = "") -> str:
         if value is None or value == "":
             return "-"
@@ -2748,8 +3010,9 @@ def generate_reports_dashboard_pdf(
                 if isinstance(cell, Paragraph):
                     wrapped_row.append(cell)
                     continue
-                text = escape("" if cell is None else str(cell)).replace("\n", "<br/>")
-                if row_idx == 0:
+                is_header = row_idx == 0
+                text = _pdf_paragraph_text(cell, bold=is_header)
+                if is_header:
                     wrapped_row.append(Paragraph(text, table_header_style))
                 else:
                     wrapped_row.append(Paragraph(text, table_body_style))
@@ -2833,6 +3096,8 @@ def generate_reports_dashboard_pdf(
     distribution = report.get("distribution") or []
     q1 = report.get("quarter1") or {}
     q2 = report.get("quarter2") or {}
+    selected_student = report.get("selected_student") or {}
+    is_student_scope = bool(selected_student)
 
     bar_buf = create_reports_enrollment_bar_chart(class_breakdown)
     donut_buf = create_analytics_pass_donut(distribution)
@@ -2847,29 +3112,30 @@ def generate_reports_dashboard_pdf(
             cap_style,
         )
 
-    term_sub = f"Semester {sem} · Quarter {qn}"
+    term_sub = f"{_tr('Semester', lang)} {sem} · {_tr('Quarter', lang)} {qn}"
 
     doc = SimpleDocTemplate(buffer, pagesize=A4, leftMargin=28, rightMargin=28, topMargin=28, bottomMargin=28)
     elements: List[Any] = []
 
-    elements.append(
-        Paragraph("Reports (Summary)" if is_summary else "Reports", title_style)
-    )
-    elements.append(Paragraph(f"<b>{scope_label}</b>", subtitle_style))
+    reports_title_key = "Report"  # "Reports" is rare in our label dict; reuse "Report".
+    reports_title_text = _tr(reports_title_key, lang)
     if is_summary:
-        sub_note = (
-            "Summary: key metrics, enrollment, and performance split only—no student lists or written insights."
-        )
-    else:
-        sub_note = "Charts match the Reports page Visual Board (enrollment, performance donut, focus quarter)."
+        reports_title_text = f"{reports_title_text} ({_tr('Summary metrics', lang)})"
+    elements.append(
+        Paragraph(_pdf_paragraph_text(reports_title_text, bold=True), title_style)
+    )
+    elements.append(Paragraph(f"<b>{_pdf_paragraph_text(scope_label)}</b>", subtitle_style))
     elements.append(
         Paragraph(
-            f"Generated on {datetime.now(REPORT_TIMEZONE).strftime('%Y-%m-%d %H:%M')} · {sub_note}",
+            _pdf_paragraph_text(
+                f"{_tr('Generated on', lang)} "
+                f"{datetime.now(REPORT_TIMEZONE).strftime('%Y-%m-%d %H:%M')}"
+            ),
             subtitle_style,
         )
     )
 
-    elements.append(Paragraph("Visual dashboard", section_style))
+    elements.append(Paragraph(_pdf_paragraph_text(_tr("Visual dashboard", lang), bold=True), section_style))
     rq = qn
     focus_q = q1 if rq == 1 else q2
     if is_summary:
@@ -2927,7 +3193,7 @@ def generate_reports_dashboard_pdf(
     elements.append(Spacer(1, 14))
 
     if is_student_scope:
-        breakdown_rows = [["Student", "Class", "Quarter total (50)"] + [label for label, _ in _focus_component_column_defs(qn)]]
+        breakdown_rows = [[_tr("Student", lang), _tr("Class", lang), _tr("Quarter total (50)", lang)] + [label for label, _ in _focus_component_column_defs(qn)]]
         breakdown_rows.append(
             [
                 _fmt(selected_student.get("full_name")),
@@ -2936,35 +3202,35 @@ def generate_reports_dashboard_pdf(
                 *[_fmt(selected_student.get(key)) for _, key in _focus_component_column_defs(qn)],
             ]
         )
-        elements.append(Paragraph("Selected student marks breakdown", section_style))
+        elements.append(Paragraph(_pdf_paragraph_text(_tr("Marks breakdown", lang), bold=True), section_style))
         elements.append(_styled_table(breakdown_rows, col_widths=[100, 70, 62, 58, 58, 70, 60, 60]))
         elements.append(Spacer(1, 10))
 
     summary_data = [
-        ["Metric", "Value"],
-        ["Scope", scope_label],
-        ["Term", f"Semester {sem} · Quarter {rq}"],
-        ["Total Students", _fmt(report.get("total_students"))],
-        ["Average Total Score", _fmt(report.get("avg_total_score"))],
-        ["On Level % (focus quarter)", _fmt(report.get("exceeding_rate"), "%")],
-        ["Avg quarter total (focus)", _fmt(focus_q.get("avg_total"))],
-        ["Students with data (focus)", _fmt(focus_q.get("total_with_data"))],
+        [_tr("Metric", lang), _tr("Value", lang)],
+        [_tr("Scope", lang), scope_label],
+        [_tr("Term", lang), f"{_tr('Semester', lang)} {sem} · {_tr('Quarter', lang)} {rq}"],
+        [_tr("Total Students", lang), _fmt(report.get("total_students"))],
+        [_tr("Average Total Score", lang), _fmt(report.get("avg_total_score"))],
+        [_tr("On Level % (focus quarter)", lang), _fmt(report.get("exceeding_rate"), "%")],
+        [_tr("Avg quarter total (focus)", lang), _fmt(focus_q.get("avg_total"))],
+        [_tr("Students with data (focus)", lang), _fmt(focus_q.get("total_with_data"))],
     ]
-    elements.append(Paragraph("Summary metrics", section_style))
+    elements.append(Paragraph(_pdf_paragraph_text(_tr("Summary metrics", lang), bold=True), section_style))
     elements.append(_styled_table(summary_data, col_widths=[210, 320]))
     elements.append(Spacer(1, 10))
 
-    elements.append(Paragraph("Performance distribution (focus quarter)", section_style))
-    dist_rows = [["Level", "Count"]]
+    elements.append(Paragraph(_pdf_paragraph_text(_tr("Performance distribution (focus quarter)", lang), bold=True), section_style))
+    dist_rows = [[_tr("Level", lang), _tr("Count", lang)]]
     for item in distribution:
         dist_rows.append([str(item.get("level", "")).replace("_", " ").title(), _fmt(item.get("count"))])
     if len(dist_rows) == 1:
-        dist_rows.append(["No Data", "0"])
+        dist_rows.append([_tr("No Data", lang), "0"])
     elements.append(_styled_table(dist_rows, col_widths=[260, 270]))
     elements.append(Spacer(1, 10))
 
-    elements.append(Paragraph("Class breakdown", section_style))
-    class_table_data = [["Class", "Students"]]
+    elements.append(Paragraph(_pdf_paragraph_text(_tr("Class breakdown", lang), bold=True), section_style))
+    class_table_data = [[_tr("Class", lang), _tr("Students", lang)]]
     for item in class_breakdown:
         class_table_data.append([_fmt(item.get("class_name")), _fmt(item.get("student_count"))])
     if len(class_table_data) == 1:
@@ -2975,8 +3241,11 @@ def generate_reports_dashboard_pdf(
         elements.append(PageBreak())
 
         top_performers = report.get("top_performers", []) or []
-        elements.append(Paragraph("Top Performers", section_style))
-        top_table_data = [["Student", "Class", "Quarter total (50)", "Total", "Marks breakdown", "Strengths"]]
+        elements.append(Paragraph(_pdf_paragraph_text(_tr("Top Performers", lang), bold=True), section_style))
+        top_table_data = [[
+            _tr("Student", lang), _tr("Class", lang), _tr("Quarter total (50)", lang),
+            _tr("Total", lang), _tr("Marks breakdown", lang), _tr("Strengths", lang),
+        ]]
         for student in top_performers:
             strengths = ", ".join(student.get("strengths") or []) or "-"
             breakdown = _focus_component_summary_text(student, rq)
@@ -2996,8 +3265,11 @@ def generate_reports_dashboard_pdf(
         elements.append(Spacer(1, 10))
 
         support_students = report.get("students_needing_support", []) or []
-        elements.append(Paragraph("Students Needing Support", section_style))
-        support_table_data = [["Student", "Class", "Quarter total (50)", "Performance", "Marks breakdown", "Areas to Improve"]]
+        elements.append(Paragraph(_pdf_paragraph_text(_tr("Students Needing Support", lang), bold=True), section_style))
+        support_table_data = [[
+            _tr("Student", lang), _tr("Class", lang), _tr("Quarter total (50)", lang),
+            _tr("Performance", lang), _tr("Marks breakdown", lang), _tr("Areas to Improve", lang),
+        ]]
         for student in support_students:
             weak_areas = ", ".join(student.get("weak_areas") or []) or "-"
             breakdown = _focus_component_summary_text(student, rq)
@@ -3017,16 +3289,16 @@ def generate_reports_dashboard_pdf(
 
         insights = insights or {}
         insight_rows = [
-            ["Insight", "Details"],
-            ["Strengths", (insights.get("analysis_strengths") or "").strip() or "-"],
-            ["Weaknesses", (insights.get("analysis_weaknesses") or "").strip() or "-"],
-            ["Student Performance", (insights.get("analysis_performance") or "").strip() or "-"],
-            ["Standout Data", (insights.get("analysis_standout_data") or "").strip() or "-"],
-            ["Recommended Actions", (insights.get("analysis_actions") or "").strip() or "-"],
-            ["Recommendations", (insights.get("analysis_recommendations") or "").strip() or "-"],
+            [_tr("Insight", lang), _tr("Details", lang)],
+            [_tr("Strengths", lang), (insights.get("analysis_strengths") or "").strip() or "-"],
+            [_tr("Weaknesses", lang), (insights.get("analysis_weaknesses") or "").strip() or "-"],
+            [_tr("Student Performance", lang), (insights.get("analysis_performance") or "").strip() or "-"],
+            [_tr("Standout Data", lang), (insights.get("analysis_standout_data") or "").strip() or "-"],
+            [_tr("Recommended Actions", lang), (insights.get("analysis_actions") or "").strip() or "-"],
+            [_tr("Recommendations", lang), (insights.get("analysis_recommendations") or "").strip() or "-"],
         ]
         elements.append(Spacer(1, 10))
-        elements.append(Paragraph("Key Insights", section_style))
+        elements.append(Paragraph(_pdf_paragraph_text(_tr("Key Insights", lang), bold=True), section_style))
         elements.append(_styled_table(insight_rows, col_widths=[130, 380], repeat_header=True))
 
     doc.build(elements)
@@ -6602,10 +6874,12 @@ async def export_grade_report(
     analysis_standout_data: Optional[str] = Query(default=None),
     analysis_actions: Optional[str] = Query(default=None),
     analysis_recommendations: Optional[str] = Query(default=None),
+    lang: Optional[str] = Query(default="en"),
 ):
     sem = semester or 1
     q = quarter or 1
     fmt = (format or "pdf").lower()
+    lang_code = _normalize_lang(lang)
     cache_key = (
         "grade_export",
         fmt,
@@ -6619,6 +6893,7 @@ async def export_grade_report(
         analysis_standout_data or "",
         analysis_actions or "",
         analysis_recommendations or "",
+        lang_code,
     )
 
     rt = (report_type or "full").lower()
@@ -6635,7 +6910,7 @@ async def export_grade_report(
             "analysis_actions": analysis_actions or "",
             "analysis_recommendations": analysis_recommendations or "",
         }
-        return generate_reports_dashboard_pdf(summary, grade, insights=insights, report_type=rt)
+        return generate_reports_dashboard_pdf(summary, grade, insights=insights, report_type=rt, lang=lang_code)
 
     content = await cache_get_bytes(cache_key, CACHE_TTL_PDF, _produce)
     if fmt == "excel":
@@ -6661,6 +6936,7 @@ async def export_analytics_summary(
     analysis_standout_data: Optional[str] = Query(default=None),
     analysis_actions: Optional[str] = Query(default=None),
     analysis_recommendations: Optional[str] = Query(default=None),
+    lang: Optional[str] = Query(default="en"),
 ):
     """
     PDF/Excel aligned with GET /analytics/overview (same semester, quarter, optional class filter).
@@ -6668,6 +6944,7 @@ async def export_analytics_summary(
     sem = semester or 1
     q = quarter or 1
     fmt = (format or "pdf").lower()
+    lang_code = _normalize_lang(lang)
     cache_key = (
         "analytics_export",
         fmt,
@@ -6681,6 +6958,7 @@ async def export_analytics_summary(
         analysis_standout_data or "",
         analysis_actions or "",
         analysis_recommendations or "",
+        lang_code,
     )
 
     async def _produce():
@@ -6719,7 +6997,7 @@ async def export_analytics_summary(
             "analysis_actions": analysis_actions or "",
             "analysis_recommendations": analysis_recommendations or "",
         }
-        return generate_analytics_dashboard_pdf(summary, scope_label, overview, class_summaries, insights=insights)
+        return generate_analytics_dashboard_pdf(summary, scope_label, overview, class_summaries, insights=insights, lang=lang_code)
 
     content = await cache_get_bytes(cache_key, CACHE_TTL_PDF, _produce)
     fn_base = f"analytics_s{sem}_q{q}"
