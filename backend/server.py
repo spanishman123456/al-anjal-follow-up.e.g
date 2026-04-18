@@ -4085,7 +4085,12 @@ async def get_students(
         query["class_id"] = {"$in": assigned} if assigned else {"$in": []}
     if class_id:
         query["class_id"] = class_id
-    students = await db.students.find(query, {"_id": 0}).sort("full_name", 1).to_list(5000)
+    # sort_order lets us pin specific students above the default alphabetical order (lower sort_order wins).
+    students = (
+        await db.students.find(query, {"_id": 0})
+        .sort([("sort_order", 1), ("full_name", 1)])
+        .to_list(5000)
+    )
     if week_id and students:
         student_ids = [student["id"] for student in students]
         scores = await db.student_scores.find(
@@ -7298,6 +7303,27 @@ async def seed_defaults():
                 await db.student_scores.delete_many({"student_id": sid})
                 await db.students.delete_one({"id": sid})
                 logger.info("Removed legacy sample student Sara Ali (4A)")
+
+        # Migration: default every student's sort_order to 100 so alphabetical order is preserved
+        # unless a student is explicitly pinned with a lower value.
+        await db.students.update_many(
+            {"sort_order": {"$exists": False}}, {"$set": {"sort_order": 100}}
+        )
+        # Pin "Satam Bander Alyouef" (a.k.a. Sattam Bandar Al Youssef) to the top of class 8A.
+        # Spelling in the DB varies (Satam/Sattam, Bander/Bandar, Alyouef/Al Youssef) so we match
+        # loosely on the normalized name: strip non-letters, lowercase, and look for "satam" + "bande"/"banda" + "you".
+        class_8a_students = await db.students.find(
+            {"class_name": "8A"}, {"_id": 0, "id": 1, "full_name": 1}
+        ).to_list(500)
+        for stu in class_8a_students:
+            normalized = re.sub(r"[^a-z]", "", (stu.get("full_name") or "").lower())
+            if "satam" in normalized and ("bande" in normalized or "banda" in normalized) and "you" in normalized:
+                await db.students.update_one(
+                    {"id": stu["id"]}, {"$set": {"sort_order": 0}}
+                )
+                logger.info(
+                    f"Pinned student '{stu.get('full_name')}' (8A) to top of class via sort_order=0"
+                )
     except Exception as e:
         logger.error(f"Error during database seeding: {e}")
         logger.warning("Continuing without seeding defaults. Some features may not work correctly.")

@@ -736,7 +736,14 @@ export default function Students() {
       const url = window.URL.createObjectURL(new Blob([response.data]));
       const link = document.createElement("a");
       link.href = url;
-      link.setAttribute("download", "student_score_sheet_template.xlsx");
+      const selectedClassName =
+        filterClass === "all"
+          ? (t("all_classes") || "all-classes")
+          : (classes.find((cls) => cls.id === filterClass)?.name || filterClass);
+      link.setAttribute(
+        "download",
+        `assessment-class-${formatDownloadFilePart(selectedClassName)}-template.xlsx`,
+      );
       document.body.appendChild(link);
       link.click();
       link.remove();

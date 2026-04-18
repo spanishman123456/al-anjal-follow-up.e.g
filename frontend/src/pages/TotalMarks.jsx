@@ -446,12 +446,16 @@ export default function TotalMarks() {
         },
         responseType: "blob",
       });
+      const selectedClassName =
+        filterClass === "all"
+          ? (t("all_classes") || "all-classes")
+          : (classes.find((cls) => cls.id === filterClass)?.name || filterClass);
       const url = window.URL.createObjectURL(new Blob([response.data]));
       const link = document.createElement("a");
       link.href = url;
       link.setAttribute(
         "download",
-        quarter === 2 ? "total-marks-q2-template.xlsx" : "total-marks-template.xlsx"
+        `${quarter === 2 ? "total-marks-q2-class" : "total-marks-class"}-${formatDownloadFilePart(selectedClassName)}-template.xlsx`
       );
       document.body.appendChild(link);
       link.click();

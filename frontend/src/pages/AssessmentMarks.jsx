@@ -435,6 +435,12 @@ export default function AssessmentMarks() {
     }
   };
 
+  const activeWeek = weeks.find((w) => w.id === activeWeekId);
+  const selectedClassName =
+    filterClass === "all"
+      ? (t("all_classes") || "all-classes")
+      : (classes.find((cls) => cls.id === filterClass)?.name || filterClass);
+
   const handleDownloadTemplate = async () => {
     try {
       const response = await api.get("/students/import-template", {
@@ -448,7 +454,10 @@ export default function AssessmentMarks() {
       const url = window.URL.createObjectURL(new Blob([response.data]));
       const link = document.createElement("a");
       link.href = url;
-      link.setAttribute("download", "assessment_marks_template.xlsx");
+      link.setAttribute(
+        "download",
+        `chapter-tests-and-quizzes-class-${formatDownloadFilePart(selectedClassName)}-template.xlsx`
+      );
       document.body.appendChild(link);
       link.click();
       link.remove();
@@ -458,12 +467,6 @@ export default function AssessmentMarks() {
       toast.error(error?.response?.data?.detail || t("export_failed"));
     }
   };
-
-  const activeWeek = weeks.find((w) => w.id === activeWeekId);
-  const selectedClassName =
-    filterClass === "all"
-      ? (t("all_classes") || "all-classes")
-      : (classes.find((cls) => cls.id === filterClass)?.name || filterClass);
   const handleDownloadMarks = async () => {
     try {
       const response = await api.get("/students/export", {
