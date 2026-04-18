@@ -38,6 +38,7 @@ from matplotlib.patches import Patch
 from reportlab.lib.pagesizes import A4
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image as RLImage, PageBreak
 from reportlab.lib import colors
+from reportlab.lib.enums import TA_RIGHT
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.utils import ImageReader
 from reportlab.pdfgen import canvas
@@ -350,9 +351,7 @@ COGNIA_LOGO_PATH = FRONTEND_PUBLIC_DIR / "logo-cognia.png"
 # text rendered in a PDF shows up as ".notdef" boxes ("tofu"). We register
 # Amiri (regular + bold) — it covers both Arabic and basic Latin — and shape
 # Arabic strings before drawing them so the characters connect and render in a
-# usable RTL visual order. If python-bidi is available we use it; otherwise we
-# fall back to a lightweight token-order reversal so deployment never depends on
-# that package.
+# usable RTL visual order. We use arabic_reshaper + python-bidi for this.
 from reportlab.pdfbase import pdfmetrics as _pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont as _TTFont
 from reportlab.lib.fonts import addMapping as _addMapping
@@ -443,32 +442,13 @@ def _has_arabic(value: Any) -> bool:
 
 
 def _shape_arabic(text: str) -> str:
-    """Apply Arabic contextual shaping and a usable RTL visual ordering."""
+    """Apply Arabic contextual shaping and bidi reordering."""
     if not text:
         return text
     try:
         import arabic_reshaper  # type: ignore
-        shaped = arabic_reshaper.reshape(text)
-        try:
-            from bidi.algorithm import get_display  # type: ignore
-            return get_display(shaped)
-        except Exception:
-            # Fallback when python-bidi is unavailable in the deploy image:
-            # reverse token order so Arabic appears in a readable visual order.
-            parts = re.split(r"(\s+)", shaped)
-            chunks = [part for part in parts if part and not part.isspace()]
-            spaces = [part for part in parts if part.isspace()]
-            chunks.reverse()
-            rebuilt: List[str] = []
-            ci = si = 0
-            for part in parts:
-                if part.isspace():
-                    rebuilt.append(spaces[si])
-                    si += 1
-                else:
-                    rebuilt.append(chunks[ci])
-                    ci += 1
-            return "".join(rebuilt)
+        from bidi.algorithm import get_display  # type: ignore
+        return get_display(arabic_reshaper.reshape(text))
     except Exception:
         return text
 
@@ -2491,7 +2471,12 @@ def generate_report_pdf(
                 else:
                     wrapped_row.append(Paragraph(text, table_body_style))
             wrapped_rows.append(wrapped_row)
-        tbl = Table(wrapped_rows, colWidths=col_widths, repeatRows=1 if repeat_header else 0, hAlign="LEFT")
+        tbl = Table(
+            wrapped_rows,
+            colWidths=col_widths,
+            repeatRows=1 if repeat_header else 0,
+            hAlign="RIGHT" if lang == "ar" else "LEFT",
+        )
         tbl.setStyle(
             TableStyle(
                 [
@@ -2500,7 +2485,7 @@ def generate_report_pdf(
                     ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
                     ("FONTSIZE", (0, 0), (-1, 0), 9),
                     ("FONTSIZE", (0, 1), (-1, -1), 8),
-                    ("ALIGN", (0, 0), (-1, -1), "LEFT"),
+                    ("ALIGN", (0, 0), (-1, -1), "RIGHT" if lang == "ar" else "LEFT"),
                     ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
                     ("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#9ca3af")),
                     ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#f8fafc")]),
@@ -2554,6 +2539,14 @@ def generate_report_pdf(
         leading=10,
         wordWrap="CJK",
     )
+    if lang == "ar":
+        title_style.alignment = TA_RIGHT
+        subtitle_style.alignment = TA_RIGHT
+        section_style.alignment = TA_RIGHT
+        table_header_style.alignment = TA_RIGHT
+        table_body_style.alignment = TA_RIGHT
+        table_header_style.wordWrap = "RTL"
+        table_body_style.wordWrap = "RTL"
 
     doc = SimpleDocTemplate(buffer, pagesize=A4, leftMargin=28, rightMargin=28, topMargin=28, bottomMargin=28)
     elements: List[Any] = []
@@ -2730,7 +2723,12 @@ def generate_analytics_dashboard_pdf(
                 else:
                     wrapped_row.append(Paragraph(text, table_body_style))
             wrapped_rows.append(wrapped_row)
-        tbl = Table(wrapped_rows, colWidths=col_widths, repeatRows=1 if repeat_header else 0, hAlign="LEFT")
+        tbl = Table(
+            wrapped_rows,
+            colWidths=col_widths,
+            repeatRows=1 if repeat_header else 0,
+            hAlign="RIGHT" if lang == "ar" else "LEFT",
+        )
         tbl.setStyle(
             TableStyle(
                 [
@@ -2739,7 +2737,7 @@ def generate_analytics_dashboard_pdf(
                     ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
                     ("FONTSIZE", (0, 0), (-1, 0), 9),
                     ("FONTSIZE", (0, 1), (-1, -1), 8),
-                    ("ALIGN", (0, 0), (-1, -1), "LEFT"),
+                    ("ALIGN", (0, 0), (-1, -1), "RIGHT" if lang == "ar" else "LEFT"),
                     ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
                     ("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#9ca3af")),
                     ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#f8fafc")]),
@@ -2800,6 +2798,15 @@ def generate_analytics_dashboard_pdf(
         leading=10,
         wordWrap="CJK",
     )
+    if lang == "ar":
+        title_style.alignment = TA_RIGHT
+        subtitle_style.alignment = TA_RIGHT
+        section_style.alignment = TA_RIGHT
+        cap_style.alignment = TA_RIGHT
+        table_header_style.alignment = TA_RIGHT
+        table_body_style.alignment = TA_RIGHT
+        table_header_style.wordWrap = "RTL"
+        table_body_style.wordWrap = "RTL"
 
     scope_label = format_scope_label(scope)
     qn = overview.get("quarter") or 1
@@ -3038,7 +3045,12 @@ def generate_reports_dashboard_pdf(
                 else:
                     wrapped_row.append(Paragraph(text, table_body_style))
             wrapped_rows.append(wrapped_row)
-        tbl = Table(wrapped_rows, colWidths=col_widths, repeatRows=1 if repeat_header else 0, hAlign="LEFT")
+        tbl = Table(
+            wrapped_rows,
+            colWidths=col_widths,
+            repeatRows=1 if repeat_header else 0,
+            hAlign="RIGHT" if lang == "ar" else "LEFT",
+        )
         tbl.setStyle(
             TableStyle(
                 [
@@ -3047,7 +3059,7 @@ def generate_reports_dashboard_pdf(
                     ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
                     ("FONTSIZE", (0, 0), (-1, 0), 9),
                     ("FONTSIZE", (0, 1), (-1, -1), 8),
-                    ("ALIGN", (0, 0), (-1, -1), "LEFT"),
+                    ("ALIGN", (0, 0), (-1, -1), "RIGHT" if lang == "ar" else "LEFT"),
                     ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
                     ("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#9ca3af")),
                     ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#f8fafc")]),
@@ -3109,6 +3121,15 @@ def generate_reports_dashboard_pdf(
         leading=10,
         wordWrap="CJK",
     )
+    if lang == "ar":
+        title_style.alignment = TA_RIGHT
+        subtitle_style.alignment = TA_RIGHT
+        section_style.alignment = TA_RIGHT
+        cap_style.alignment = TA_RIGHT
+        table_header_style.alignment = TA_RIGHT
+        table_body_style.alignment = TA_RIGHT
+        table_header_style.wordWrap = "RTL"
+        table_body_style.wordWrap = "RTL"
 
     scope_label = format_scope_label(scope)
     sem = int(report.get("semester") or 1)
