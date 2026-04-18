@@ -83,6 +83,7 @@ export default function Dashboard() {
           toast.warning(
             t("missed_assessment_toast")
               .replace("{count}", String(missedCount))
+              .replace("{semester}", String(semesterNumber))
               .replace("{quarter}", String(quarter)),
           );
         }
@@ -92,6 +93,7 @@ export default function Dashboard() {
   };
 
   useEffect(() => {
+    lastMissedCountRef.current = null;
     fetchSummary();
     api
       .get("/users/profile")
