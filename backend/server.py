@@ -19,7 +19,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 from pydantic import BaseModel, Field, ConfigDict
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Tuple
 import uuid
 from datetime import datetime, timezone, timedelta
 import pandas as pd
@@ -349,8 +349,10 @@ COGNIA_LOGO_PATH = FRONTEND_PUBLIC_DIR / "logo-cognia.png"
 # ReportLab's built-in Helvetica does not contain Arabic glyphs, so any Arabic
 # text rendered in a PDF shows up as ".notdef" boxes ("tofu"). We register
 # Amiri (regular + bold) — it covers both Arabic and basic Latin — and shape
-# Arabic strings with arabic_reshaper + python-bidi before drawing them so the
-# characters connect and run right-to-left correctly.
+# Arabic strings before drawing them so the characters connect and render in a
+# usable RTL visual order. If python-bidi is available we use it; otherwise we
+# fall back to a lightweight token-order reversal so deployment never depends on
+# that package.
 from reportlab.pdfbase import pdfmetrics as _pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont as _TTFont
 from reportlab.lib.fonts import addMapping as _addMapping
@@ -441,13 +443,32 @@ def _has_arabic(value: Any) -> bool:
 
 
 def _shape_arabic(text: str) -> str:
-    """Apply Arabic contextual shaping + bidi reordering so ReportLab renders RTL correctly."""
+    """Apply Arabic contextual shaping and a usable RTL visual ordering."""
     if not text:
         return text
     try:
         import arabic_reshaper  # type: ignore
-        from bidi.algorithm import get_display  # type: ignore
-        return get_display(arabic_reshaper.reshape(text))
+        shaped = arabic_reshaper.reshape(text)
+        try:
+            from bidi.algorithm import get_display  # type: ignore
+            return get_display(shaped)
+        except Exception:
+            # Fallback when python-bidi is unavailable in the deploy image:
+            # reverse token order so Arabic appears in a readable visual order.
+            parts = re.split(r"(\s+)", shaped)
+            chunks = [part for part in parts if part and not part.isspace()]
+            spaces = [part for part in parts if part.isspace()]
+            chunks.reverse()
+            rebuilt: List[str] = []
+            ci = si = 0
+            for part in parts:
+                if part.isspace():
+                    rebuilt.append(spaces[si])
+                    si += 1
+                else:
+                    rebuilt.append(chunks[ci])
+                    ci += 1
+            return "".join(rebuilt)
     except Exception:
         return text
 
