@@ -32,6 +32,15 @@ export default function Classes() {
   const [classToClear, setClassToClear] = useState(null);
   const latestLoadRequestIdRef = useRef(0);
 
+  const selectedTermLabel =
+    semesterNumber === 2
+      ? quarter === 2
+        ? t("semester_two_quarter_two")
+        : t("semester_two_quarter_one")
+      : quarter === 2
+        ? t("semester_one_quarter_two")
+        : t("semester_one_quarter_one");
+
   const filterTeacherClasses = (data) => {
     if (!isTeacher || !profile?.assigned_class_ids?.length) return data;
     const ids = new Set(profile.assigned_class_ids);
@@ -299,6 +308,9 @@ export default function Classes() {
                 <div className="rounded-md bg-emerald-50 px-2 py-1 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">
                   {t("quarter_2")}: {(cls.quarter2_on_level_rate ?? 0)}% {t("on_level")}
                 </div>
+              </div>
+              <div className="text-xs text-muted-foreground" data-testid={`class-card-selected-term-${cls.class_id}`}>
+                {t("performance_distribution")} - {selectedTermLabel}
               </div>
               <div className="grid grid-cols-2 gap-2 text-xs" data-testid={`class-card-distribution-${cls.class_id}`}>
                 <div className="rounded-md bg-emerald-50 px-2 py-1 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">
