@@ -1,6 +1,6 @@
 import time
 
-from fastapi import FastAPI, APIRouter, UploadFile, File, HTTPException, Query, Depends, status, Request
+from fastapi import FastAPI, APIRouter, UploadFile, File, Form, HTTPException, Query, Depends, status, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.responses import StreamingResponse, FileResponse
 from fastapi.middleware.gzip import GZipMiddleware
@@ -10,6 +10,7 @@ from motor.motor_asyncio import AsyncIOMotorClient
 import os
 import asyncio
 import logging
+import json
 from pathlib import Path
 
 # Setup logging early
@@ -71,6 +72,17 @@ except ImportError:
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
+from lesson_plan_service import (
+    LESSON_PLAN_OUTPUT_DIR,
+    apply_replacements_to_document,
+    ensure_docx_file,
+    ensure_pdf_file,
+    extract_docx_template,
+    extract_pdf_text,
+    generate_lesson_plan_replacements,
+    sanitize_filename,
+    save_generated_docx,
+)
 
 mongo_url = os.environ.get('MONGO_URL')
 if not mongo_url:
@@ -188,6 +200,12 @@ async def require_admin(current_user: Dict[str, Any] = Depends(get_current_user)
     """Restrict route to Admin only. Teachers cannot modify admin settings or manage users/roles."""
     if (current_user.get("role_name") or "").strip() != "Admin":
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
+    return current_user
+
+
+async def require_lesson_plan_access(current_user: Dict[str, Any] = Depends(get_current_user)):
+    if (current_user.get("role_name") or "").strip() not in {"Admin", "Teacher"}:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Lesson Plan Generator access required")
     return current_user
 
 
@@ -7572,6 +7590,157 @@ async def import_excel(
         "updated_students": updated_students,
         "created_classes": created_classes,
     }
+
+
+@api_router.post("/lesson-plan/preview-word")
+async def preview_lesson_plan_word(
+    word_file: UploadFile = File(...),
+    current_user: Dict[str, Any] = Depends(require_lesson_plan_access),
+):
+    try:
+        filename = ensure_docx_file(word_file.filename or "")
+        content = await word_file.read()
+        template_data = extract_docx_template(content)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception as exc:
+        logger.exception("Lesson plan Word preview failed")
+        raise HTTPException(status_code=500, detail=f"Failed to preview Word file: {exc}")
+
+    return {
+        "filename": filename,
+        "paragraph_count": template_data["paragraph_count"],
+        "table_count": template_data["table_count"],
+        "editable_block_count": len(template_data["non_empty_blocks"]),
+        "preview_text": template_data["preview_text"],
+        "preview_html": template_data["preview_html"],
+        "table_previews": template_data["table_previews"],
+    }
+
+
+@api_router.post("/lesson-plan/preview-pdf")
+async def preview_lesson_plan_pdf(
+    pdf_file: UploadFile = File(...),
+    current_user: Dict[str, Any] = Depends(require_lesson_plan_access),
+):
+    try:
+        filename = ensure_pdf_file(pdf_file.filename or "")
+        content = await pdf_file.read()
+        pdf_data = extract_pdf_text(content)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception as exc:
+        logger.exception("Lesson plan PDF preview failed")
+        raise HTTPException(status_code=500, detail=f"Failed to preview PDF file: {exc}")
+
+    if not pdf_data["text"]:
+        raise HTTPException(
+            status_code=400,
+            detail="The uploaded PDF does not contain selectable text. Please use a text-based PDF for the first version of Lesson Plan Generator.",
+        )
+
+    return {
+        "filename": filename,
+        "page_count": pdf_data["page_count"],
+        "text_length": len(pdf_data["text"]),
+        "preview_text": pdf_data["preview_text"],
+    }
+
+
+@api_router.post("/lesson-plan/generate")
+async def generate_lesson_plan(
+    word_file: UploadFile = File(...),
+    pdf_file: UploadFile = File(...),
+    model: Optional[str] = Form(default=None),
+    current_user: Dict[str, Any] = Depends(require_lesson_plan_access),
+):
+    try:
+        word_filename = ensure_docx_file(word_file.filename or "")
+        pdf_filename = ensure_pdf_file(pdf_file.filename or "")
+        word_content = await word_file.read()
+        pdf_content = await pdf_file.read()
+        template_data = extract_docx_template(word_content)
+        pdf_data = extract_pdf_text(pdf_content)
+        if not pdf_data["text"]:
+            raise HTTPException(
+                status_code=400,
+                detail="The uploaded PDF does not contain selectable text. Please use a text-based PDF for the first version of Lesson Plan Generator.",
+            )
+        ai_result = generate_lesson_plan_replacements(
+            pdf_data["text"],
+            template_data["non_empty_blocks"],
+            model=model,
+        )
+        if not ai_result["replacements"]:
+            raise HTTPException(
+                status_code=502,
+                detail="The AI model returned no editable lesson-plan replacements. Try a clearer PDF or a more structured Word template.",
+            )
+        generated_content, updated_blocks = apply_replacements_to_document(
+            word_content,
+            ai_result["replacements"],
+        )
+        base_name = Path(word_filename).stem
+        saved = save_generated_docx(
+            current_user.get("id") or "user",
+            f"{base_name}-generated.docx",
+            generated_content,
+        )
+        await log_user_action(
+            current_user,
+            "generate_lesson_plan",
+            f"Generated lesson plan from {word_filename} using {pdf_filename}",
+        )
+    except HTTPException:
+        raise
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
+    except Exception as exc:
+        logger.exception("Lesson plan generation failed")
+        raise HTTPException(status_code=500, detail=f"Lesson plan generation failed: {exc}")
+
+    return {
+        "generated_document_id": saved["document_id"],
+        "generated_filename": saved["filename"],
+        "model": ai_result["model"],
+        "provider": ai_result["provider"],
+        "summary": ai_result["summary"],
+        "updated_blocks": updated_blocks,
+        "replacement_count": len(ai_result["replacements"]),
+        "source_pdf_pages": pdf_data["page_count"],
+        "template_blocks": len(template_data["non_empty_blocks"]),
+    }
+
+
+@api_router.get("/lesson-plan/generated/{document_id}")
+async def download_generated_lesson_plan(
+    document_id: str,
+    current_user: Dict[str, Any] = Depends(require_lesson_plan_access),
+):
+    user_prefix = sanitize_filename(current_user.get("id") or "user", "user").replace(".", "-")
+    safe_document_id = sanitize_filename(document_id, "document")
+    if not safe_document_id.startswith(f"{user_prefix}-"):
+        raise HTTPException(status_code=404, detail="Generated lesson plan not found")
+
+    path = LESSON_PLAN_OUTPUT_DIR / f"{safe_document_id}.docx"
+    if not path.exists():
+        raise HTTPException(status_code=404, detail="Generated lesson plan not found")
+    metadata_path = LESSON_PLAN_OUTPUT_DIR / f"{safe_document_id}.json"
+    download_name = path.name
+    if metadata_path.exists():
+        try:
+            metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+            download_name = metadata.get("filename") or download_name
+        except Exception:
+            download_name = path.name
+
+    return FileResponse(
+        path,
+        media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        filename=download_name,
+    )
 
 
 async def send_weekly_admin_reports():

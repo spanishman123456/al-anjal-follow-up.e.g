@@ -26,6 +26,7 @@ const AssessmentMarksQ2 = lazy(() => import("@/pages/AssessmentMarksQ2"));
 const FinalExamsAssessmentQ2 = lazy(() => import("@/pages/FinalExamsAssessmentQ2"));
 const Teachers = lazy(() => import("@/pages/Teachers"));
 const TeacherProfile = lazy(() => import("@/pages/TeacherProfile"));
+const LessonPlanGenerator = lazy(() => import("@/pages/LessonPlanGenerator"));
 const Classes = lazy(() => import("@/pages/Classes"));
 const Analytics = lazy(() => import("@/pages/Analytics"));
 const RemedialPlans = lazy(() => import("@/pages/RemedialPlans"));
@@ -314,6 +315,7 @@ function App() {
         <Route path="final-exams-assessment-q2" element={<Suspense fallback={<PageFallback />}><FinalExamsAssessmentQ2 /></Suspense>} />
         <Route path="teachers" element={<Suspense fallback={<PageFallback />}><Teachers /></Suspense>} />
         <Route path="teachers/:teacherId" element={<Suspense fallback={<PageFallback />}><TeacherProfile /></Suspense>} />
+        <Route path="lesson-plan-generator" element={<Suspense fallback={<PageFallback />}><LessonPlanGenerator /></Suspense>} />
         <Route path="classes" element={<Suspense fallback={<PageFallback />}><Classes /></Suspense>} />
         <Route path="analytics" element={<Suspense fallback={<PageFallback />}><Analytics /></Suspense>} />
         <Route path="remedial-plans" element={<Suspense fallback={<PageFallback />}><RemedialPlans /></Suspense>} />

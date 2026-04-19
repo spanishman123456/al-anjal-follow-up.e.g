@@ -224,6 +224,13 @@ export const AppShell = ({
       roles: ["Admin", "Teacher"],
     },
     { to: "/teachers", label: t("teachers"), icon: UserRound, testId: "nav-teachers-link", roles: ["Admin"] },
+    {
+      to: "/lesson-plan-generator",
+      label: t("lesson_plan_generator"),
+      icon: FileText,
+      testId: "nav-lesson-plan-generator-link",
+      roles: ["Admin", "Teacher"],
+    },
     { to: "/classes", label: t("classes"), icon: GraduationCap, testId: "nav-classes-link", roles: ["Admin", "Teacher"] },
     { to: "/analytics", label: t("analytics"), icon: BarChart3, testId: "nav-analytics-link", roles: ["Admin", "Teacher"] },
     { to: "/remedial-plans", label: t("remedial_plans"), icon: ClipboardList, testId: "nav-remedial-link", roles: ["Admin", "Teacher"] },
