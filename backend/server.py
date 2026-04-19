@@ -4162,8 +4162,15 @@ async def get_classes(current_user: Dict[str, Any] = Depends(get_current_user)):
 
 
 @api_router.post("/classes", response_model=ClassRecord)
-async def create_class(payload: ClassBase, current_user: Dict[str, Any] = Depends(require_admin)):
-    """Only Admin can create classes. Teachers only see and work with classes assigned to them."""
+async def create_class(payload: ClassBase, current_user: Dict[str, Any] = Depends(get_current_user)):
+    """
+    Admins can create any class.
+    Teachers may also create classes; each newly created class is automatically assigned to
+    the teacher who created it so they can immediately enroll students and record marks.
+    """
+    role = (current_user.get("role_name") or "").strip().lower()
+    if role not in {"admin", "teacher"}:
+        raise HTTPException(status_code=403, detail="Not allowed to create classes")
     data = payload.model_dump()
     if not data.get("grade") or not data.get("section"):
         parsed = parse_class_name(payload.name)
@@ -4182,6 +4189,11 @@ async def create_class(payload: ClassBase, current_user: Dict[str, Any] = Depend
                 )
     class_record = ClassRecord(**data)
     await db.classes.insert_one(class_record.model_dump())
+    if role == "teacher":
+        await db.users.update_one(
+            {"id": current_user.get("id")},
+            {"$addToSet": {"assigned_class_ids": class_record.id}},
+        )
     await log_user_action(current_user, "class_add", f"Added class {class_record.name}")
     return class_record
 

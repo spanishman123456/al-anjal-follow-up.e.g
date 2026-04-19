@@ -235,9 +235,6 @@ export default function Classes() {
             </Button>
             {!isTeacher && (
               <>
-                <Button onClick={() => setIsAddOpen(true)} data-testid="add-class-button">
-                  {t("add_class")}
-                </Button>
                 <Button
                   variant="destructive"
                   onClick={() => setDeleteAllDialogOpen(true)}
@@ -247,6 +244,9 @@ export default function Classes() {
                 </Button>
               </>
             )}
+            <Button onClick={() => setIsAddOpen(true)} data-testid="add-class-button">
+              {t("add_class")}
+            </Button>
           </div>
         }
       />
