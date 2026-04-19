@@ -124,6 +124,13 @@ function App() {
       setClassesLoaded(true);
     }
   }, []);
+  useEffect(() => {
+    setClasses([]);
+    setClassesLoaded(false);
+    try {
+      sessionStorage.removeItem(CLASSES_CACHE_KEY);
+    } catch { /* ignore */ }
+  }, [token]);
   const waitForBackendReady = useCallback(async ({ timeoutMs = 120000, intervalMs = 1500 } = {}) => {
     const started = Date.now();
     while (Date.now() - started < timeoutMs) {

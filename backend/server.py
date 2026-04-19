@@ -4133,13 +4133,21 @@ async def root():
 
 def _teacher_class_filter(current_user: Dict[str, Any]) -> Dict[str, Any]:
     """Return MongoDB query to restrict classes for teachers to assigned_class_ids only."""
-    role = (current_user.get("role_name") or "").strip().lower()
-    if role != "teacher":
+    assigned = _teacher_assigned_class_ids(current_user)
+    if assigned is None:
         return {}
-    assigned = current_user.get("assigned_class_ids")
+    return {"id": {"$in": assigned}} if assigned else {"id": {"$in": []}}
+
+
+def _teacher_assigned_class_ids(current_user: Optional[Dict[str, Any]]) -> Optional[List[str]]:
+    """Return assigned class ids for teachers, or None for non-teachers."""
+    role = ((current_user or {}).get("role_name") or "").strip().lower()
+    if role != "teacher":
+        return None
+    assigned = (current_user or {}).get("assigned_class_ids")
     if not isinstance(assigned, list):
         assigned = list(assigned) if assigned else []
-    return {"id": {"$in": assigned}} if assigned else {"id": {"$in": []}}
+    return assigned
 
 
 @api_router.get("/classes", response_model=List[ClassRecord])
@@ -5726,9 +5734,18 @@ def build_summary(students: List[Dict[str, Any]], classes: List[Dict[str, Any]])
     }
 
 
-def _analytics_student_query(class_id: Optional[str], student_id: Optional[str]) -> Dict[str, Any]:
+def _analytics_student_query(
+    class_id: Optional[str],
+    student_id: Optional[str],
+    current_user: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
     query: Dict[str, Any] = {}
+    assigned = _teacher_assigned_class_ids(current_user)
+    if assigned is not None:
+        query["class_id"] = {"$in": assigned} if assigned else {"$in": []}
     if class_id:
+        if assigned is not None and class_id not in assigned:
+            return {"class_id": {"$in": []}}
         query["class_id"] = class_id
     if student_id:
         query["id"] = student_id
@@ -5752,9 +5769,10 @@ async def _compute_analytics_summary(
     student_id: Optional[str],
     semester: Optional[int],
     quarter: Optional[int],
+    current_user: Optional[Dict[str, Any]] = None,
 ):
     """Summary for Dashboard: one (semester, quarter) only. S1/S2 and Q1/Q2 isolated."""
-    student_query = _analytics_student_query(class_id, student_id)
+    student_query = _analytics_student_query(class_id, student_id, current_user)
     students = await db.students.find(student_query, {"_id": 0}).to_list(5000)
     classes = await _analytics_scope_classes(class_id, students)
     sem = semester or 1
@@ -5788,16 +5806,18 @@ async def get_analytics_summary(
     student_id: Optional[str] = Query(default=None),
     semester: Optional[int] = Query(default=1),
     quarter: Optional[int] = Query(default=1),
+    current_user: Dict[str, Any] = Depends(get_current_user),
 ):
     """Summary for Dashboard: one (semester, quarter) only. Cached briefly; invalidated on writes."""
     try:
         sem = semester or 1
         q = quarter or 1
+        uid = current_user.get("id")
 
         async def _produce():
-            return await _compute_analytics_summary(class_id, student_id, semester, quarter)
+            return await _compute_analytics_summary(class_id, student_id, semester, quarter, current_user)
 
-        return await cache_get_json(("analytics_summary", class_id, student_id, sem, q), CACHE_TTL_JSON, _produce)
+        return await cache_get_json(("analytics_summary", uid, class_id, student_id, sem, q), CACHE_TTL_JSON, _produce)
     except Exception as e:
         logger.exception("Analytics summary failed")
         raise HTTPException(status_code=500, detail=f"Failed to load analytics summary: {str(e)}")
@@ -5808,6 +5828,7 @@ async def get_missed_quiz_students(
     class_id: Optional[str] = Query(default=None),
     semester: Optional[int] = Query(default=1),
     quarter: Optional[int] = Query(default=1),
+    current_user: Dict[str, Any] = Depends(get_current_user),
 ):
     """
     Returns students who have no quiz attempt recorded for the target quiz week in the selected (semester, quarter).
@@ -5816,8 +5837,24 @@ async def get_missed_quiz_students(
     """
     sem = semester or 1
     q = quarter or 1
-    student_query = {"class_id": class_id} if class_id else {}
-    class_query = {"id": class_id} if class_id else {}
+    assigned = _teacher_assigned_class_ids(current_user)
+    if assigned is not None and class_id and class_id not in assigned:
+        return {
+            "semester": sem,
+            "quarter": q,
+            "quiz_fields": ["quiz3", "quiz4"] if q == 2 else ["quiz1", "quiz2"],
+            "week": None,
+            "total_students": 0,
+            "submitted_count": 0,
+            "missed_count": 0,
+            "students": [],
+        }
+    if assigned is not None:
+        student_query = {"class_id": class_id} if class_id else {"class_id": {"$in": assigned}}
+        class_query = {"id": class_id} if class_id else {"id": {"$in": assigned}}
+    else:
+        student_query = {"class_id": class_id} if class_id else {}
+        class_query = {"id": class_id} if class_id else {}
     students = await db.students.find(
         student_query, {"_id": 0, "id": 1, "full_name": 1, "class_id": 1, "class_name": 1}
     ).to_list(5000)
@@ -5897,6 +5934,7 @@ async def get_missed_assessment_students(
     class_id: Optional[str] = Query(default=None),
     semester: Optional[int] = Query(default=1),
     quarter: Optional[int] = Query(default=1),
+    current_user: Dict[str, Any] = Depends(get_current_user),
 ):
     """
     Returns missed-attempt detection for quiz, chapter test, final practical, and final theory
@@ -5911,8 +5949,25 @@ async def get_missed_assessment_students(
     """
     sem = semester or 1
     q = quarter or 1
-    student_query = {"class_id": class_id} if class_id else {}
-    class_query = {"id": class_id} if class_id else {}
+    assigned = _teacher_assigned_class_ids(current_user)
+    if assigned is not None and class_id and class_id not in assigned:
+        return {
+            "semester": sem,
+            "quarter": q,
+            "total_students": 0,
+            "quiz_fields": ["quiz3", "quiz4"] if q == 2 else ["quiz1", "quiz2"],
+            "week": None,
+            "submitted_count": 0,
+            "missed_count": 0,
+            "students": [],
+            "groups": {},
+        }
+    if assigned is not None:
+        student_query = {"class_id": class_id} if class_id else {"class_id": {"$in": assigned}}
+        class_query = {"id": class_id} if class_id else {"id": {"$in": assigned}}
+    else:
+        student_query = {"class_id": class_id} if class_id else {}
+        class_query = {"id": class_id} if class_id else {}
     students = await db.students.find(
         student_query, {"_id": 0, "id": 1, "full_name": 1, "class_id": 1, "class_name": 1}
     ).to_list(5000)
@@ -5995,13 +6050,14 @@ async def _compute_analytics_overview(
     student_id: Optional[str],
     semester: Optional[int],
     quarter: Optional[int],
+    current_user: Optional[Dict[str, Any]] = None,
 ):
     """
     Analytics overview for the selected semester. Returns insights for BOTH quarter 1 and quarter 2
     independently so the Analytics page can show each quarter's distribution and compare Q1 vs Q2.
     Struggling/excelling lists use the currently selected quarter (q).
     """
-    student_query = _analytics_student_query(class_id, student_id)
+    student_query = _analytics_student_query(class_id, student_id, current_user)
     students = await db.students.find(student_query, {"_id": 0}).to_list(5000)
     classes = await _analytics_scope_classes(class_id, students)
     sem = semester or 1
@@ -6166,14 +6222,16 @@ async def get_analytics_overview(
     student_id: Optional[str] = Query(default=None),
     semester: Optional[int] = Query(default=1),
     quarter: Optional[int] = Query(default=1),
+    current_user: Dict[str, Any] = Depends(get_current_user),
 ):
     sem = semester or 1
     q = quarter or 1
+    uid = current_user.get("id")
 
     async def _produce():
-        return await _compute_analytics_overview(class_id, student_id, semester, quarter)
+        return await _compute_analytics_overview(class_id, student_id, semester, quarter, current_user)
 
-    return await cache_get_json(("analytics_overview", class_id, student_id, sem, q), CACHE_TTL_JSON, _produce)
+    return await cache_get_json(("analytics_overview", uid, class_id, student_id, sem, q), CACHE_TTL_JSON, _produce)
 
 
 def overview_to_pdf_report(overview: Dict[str, Any]) -> Dict[str, Any]:
@@ -6400,11 +6458,16 @@ async def _compute_grade_report(
     grade: int,
     semester: Optional[int],
     quarter: Optional[int],
+    current_user: Optional[Dict[str, Any]] = None,
 ):
     """Grade report for one (semester, quarter) only. Full separation S1Q1, S1Q2, S2Q1, S2Q2."""
     sem = semester or 1
     q = quarter or 1
-    classes = await db.classes.find({"grade": grade}, {"_id": 0}).to_list(200)
+    class_query: Dict[str, Any] = {"grade": grade}
+    assigned = _teacher_assigned_class_ids(current_user)
+    if assigned is not None:
+        class_query["id"] = {"$in": assigned} if assigned else {"$in": []}
+    classes = await db.classes.find(class_query, {"_id": 0}).to_list(200)
     class_ids = [c["id"] for c in classes]
     students = await db.students.find({"class_id": {"$in": class_ids}}, {"_id": 0}).to_list(5000)
     class_id_to_name = {c["id"]: c.get("name", c["id"]) for c in classes}
@@ -6553,14 +6616,16 @@ async def get_grade_report_data(
     grade: int,
     semester: Optional[int] = None,
     quarter: Optional[int] = None,
+    current_user: Optional[Dict[str, Any]] = None,
 ):
     sem = semester or 1
     q = quarter or 1
+    uid = (current_user or {}).get("id")
 
     async def _produce():
-        return await _compute_grade_report(grade, semester, quarter)
+        return await _compute_grade_report(grade, semester, quarter, current_user)
 
-    return await cache_get_json(("grade_report", grade, sem, q), CACHE_TTL_JSON, _produce)
+    return await cache_get_json(("grade_report", uid, grade, sem, q), CACHE_TTL_JSON, _produce)
 
 
 @api_router.get("/reports/grade")
@@ -6568,9 +6633,10 @@ async def get_grade_report(
     grade: int = Query(...),
     semester: Optional[int] = Query(default=1),
     quarter: Optional[int] = Query(default=1),
+    current_user: Dict[str, Any] = Depends(get_current_user),
 ):
     """Grade report for one (semester, quarter) only. Cached briefly; invalidated on writes."""
-    return await get_grade_report_data(grade, semester, quarter)
+    return await get_grade_report_data(grade, semester, quarter, current_user)
 
 
 async def get_report_settings() -> Dict[str, Any]:
@@ -6917,6 +6983,7 @@ async def export_grade_report(
     analysis_actions: Optional[str] = Query(default=None),
     analysis_recommendations: Optional[str] = Query(default=None),
     lang: Optional[str] = Query(default="en"),
+    current_user: Dict[str, Any] = Depends(get_current_user),
 ):
     sem = semester or 1
     q = quarter or 1
@@ -6936,12 +7003,13 @@ async def export_grade_report(
         analysis_actions or "",
         analysis_recommendations or "",
         lang_code,
+        current_user.get("id"),
     )
 
     rt = (report_type or "full").lower()
 
     async def _produce():
-        summary = await get_grade_report_data(grade, semester, quarter)
+        summary = await get_grade_report_data(grade, semester, quarter, current_user)
         if fmt == "excel":
             return generate_report_excel(summary, grade, report_type=rt)
         insights = {
@@ -6979,6 +7047,7 @@ async def export_analytics_summary(
     analysis_actions: Optional[str] = Query(default=None),
     analysis_recommendations: Optional[str] = Query(default=None),
     lang: Optional[str] = Query(default="en"),
+    current_user: Dict[str, Any] = Depends(get_current_user),
 ):
     """
     PDF/Excel aligned with GET /analytics/overview (same semester, quarter, optional class filter).
@@ -7001,10 +7070,11 @@ async def export_analytics_summary(
         analysis_actions or "",
         analysis_recommendations or "",
         lang_code,
+        current_user.get("id"),
     )
 
     async def _produce():
-        overview = await get_analytics_overview(class_id=class_id, student_id=student_id, semester=semester, quarter=quarter)
+        overview = await _compute_analytics_overview(class_id, student_id, semester, quarter, current_user)
         summary = overview_to_pdf_report(overview)
         selected_student = overview.get("selected_student") or {}
         if selected_student:

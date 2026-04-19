@@ -40,8 +40,9 @@ import {
 } from "@/components/dashboard/VisualBoard";
 
 export default function Reports() {
-  const { language, semester, quarter } = useOutletContext();
+  const { language, semester, quarter, profile, classes: contextClasses = [] } = useOutletContext();
   const t = useTranslations(language);
+  const isTeacher = profile?.role_name === "Teacher";
   const [termScopeId, setTermScopeId] = useState(() =>
     termScopeIdFromOutlet(semester, quarter),
   );
@@ -63,6 +64,24 @@ export default function Reports() {
   const [analysisRecommendations, setAnalysisRecommendations] = useState("");
   const fetchReportRef = useRef(() => {});
   const hasReportRef = useRef(false);
+  const availableGrades = Array.from(
+    new Set(
+      (contextClasses || [])
+        .map((cls) => Number(cls?.grade))
+        .filter((value) => Number.isFinite(value)),
+    ),
+  ).sort((a, b) => a - b);
+
+  useEffect(() => {
+    if (!availableGrades.length) {
+      setGrade("");
+      setReport(null);
+      return;
+    }
+    if (!availableGrades.includes(Number(grade))) {
+      setGrade(String(availableGrades[0]));
+    }
+  }, [availableGrades, grade]);
 
   const applyGeneratedInsights = (generated) => {
     if (!generated) return;
@@ -96,6 +115,7 @@ export default function Reports() {
   fetchReportRef.current = fetchReport;
 
   const handleGenerate = async () => {
+    if (!grade) return;
     const response = await api.get("/reports/grade", {
       params: { grade, semester: apiSemester, quarter: apiQuarter },
     });
@@ -243,12 +263,12 @@ export default function Reports() {
                 </SelectContent>
               </Select>
             </div>
-            <Select value={grade} onValueChange={setGrade}>
+            <Select value={grade} onValueChange={setGrade} disabled={!availableGrades.length}>
               <SelectTrigger data-testid="reports-grade-select">
                 <SelectValue placeholder={t("grade")} />
               </SelectTrigger>
               <SelectContent>
-                {[4, 5, 6, 7, 8].map((value) => (
+                {availableGrades.map((value) => (
                   <SelectItem key={value} value={String(value)} data-testid={`reports-grade-${value}`}>
                     Grade {value}
                   </SelectItem>
@@ -268,23 +288,25 @@ export default function Reports() {
                 </SelectItem>
               </SelectContent>
             </Select>
-            <Button onClick={handleGenerate} data-testid="reports-generate-button">
+            <Button onClick={handleGenerate} data-testid="reports-generate-button" disabled={isTeacher && !availableGrades.length}>
               {t("generate_report")}
             </Button>
             <Button
               variant="outline"
               onClick={() => autoFillInsights()}
               data-testid="reports-autofill-insights-button"
+              disabled={!report}
             >
               Auto-fill AI comments
             </Button>
-            <Button variant="outline" onClick={handlePrint} data-testid="reports-print-button">
+            <Button variant="outline" onClick={handlePrint} data-testid="reports-print-button" disabled={!report}>
               {t("print")}
             </Button>
             <Button
               variant="secondary"
               onClick={() => handleDownload("pdf")}
               data-testid="reports-download-pdf-button"
+              disabled={!report}
             >
               {t("download_pdf")}
             </Button>
@@ -292,6 +314,7 @@ export default function Reports() {
               variant="secondary"
               onClick={() => handleDownload("excel")}
               data-testid="reports-download-excel-button"
+              disabled={!report}
             >
               {t("download_excel")}
             </Button>

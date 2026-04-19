@@ -42,7 +42,8 @@ export default function Classes() {
         : t("semester_one_quarter_one");
 
   const filterTeacherClasses = (data) => {
-    if (!isTeacher || !profile?.assigned_class_ids?.length) return data;
+    if (!isTeacher) return data;
+    if (!profile?.assigned_class_ids?.length) return [];
     const ids = new Set(profile.assigned_class_ids);
     return data.filter((c) => ids.has(c.class_id));
   };
