@@ -168,11 +168,6 @@ export default function Dashboard() {
         testIdPrefix="dashboard"
         action={
           <div className="flex flex-wrap items-center gap-4">
-            {isTeacher && (
-              <Button asChild variant="secondary" data-testid="dashboard-add-student-button">
-                <Link to="/students">{t("student_enrollment")}</Link>
-              </Button>
-            )}
             <Badge variant="outline" data-testid="academic-year-badge">
               {t("academic_year")}: {academicYear}
             </Badge>
@@ -347,13 +342,6 @@ export default function Dashboard() {
             <div className="rounded-lg border border-border/60 p-3">
               <p className="text-sm font-semibold">{t("no_students_enrolled_yet")}</p>
               <p className="text-sm text-muted-foreground">{t("add_students_to_begin_tracking")}</p>
-              {isTeacher && (
-                <div className="mt-2">
-                  <Button asChild size="sm" variant="outline">
-                    <Link to="/students">{t("student_enrollment")}</Link>
-                  </Button>
-                </div>
-              )}
             </div>
           ) : (
             [
