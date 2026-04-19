@@ -1093,6 +1093,12 @@ export default function Students() {
               ) : (
                 <>
                   <Button
+                    onClick={() => setIsAddOpen(true)}
+                    data-testid="add-student-button"
+                  >
+                    {t("add_student")}
+                  </Button>
+                  <Button
                     variant="outline"
                     onClick={startBulkEdit}
                     data-testid="bulk-edit-scores"
