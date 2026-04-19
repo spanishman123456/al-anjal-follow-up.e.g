@@ -170,7 +170,7 @@ export default function Dashboard() {
           <div className="flex flex-wrap items-center gap-4">
             {isTeacher && (
               <Button asChild variant="secondary" data-testid="dashboard-add-student-button">
-                <Link to="/assessment">{t("add_student")}</Link>
+                <Link to="/students">{t("student_enrollment")}</Link>
               </Button>
             )}
             <Badge variant="outline" data-testid="academic-year-badge">
@@ -350,7 +350,7 @@ export default function Dashboard() {
               {isTeacher && (
                 <div className="mt-2">
                   <Button asChild size="sm" variant="outline">
-                    <Link to="/assessment">{t("add_student")}</Link>
+                    <Link to="/students">{t("student_enrollment")}</Link>
                   </Button>
                 </div>
               )}
@@ -460,36 +460,34 @@ export default function Dashboard() {
           </CardContent>
         </Card>
 
-        {!isTeacher && (
-          <Card className="card-hover" data-testid="dashboard-import">
-            <CardHeader>
-              <CardTitle data-testid="dashboard-import-title">
-                {t("import_excel")}
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <p className="text-sm text-muted-foreground" data-testid="dashboard-import-instructions">
-                {t("import_instructions")}
-              </p>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept=".xlsx,.xls,.csv"
-                onChange={handleFileSelected}
-                style={{ display: "none" }}
-                aria-hidden="true"
-                data-testid="dashboard-import-file-input"
-              />
-              <Button
-                className="w-full"
-                onClick={handleImportClick}
-                data-testid="dashboard-import-submit-button"
-              >
-                {t("import_excel")}
-              </Button>
-            </CardContent>
-          </Card>
-        )}
+        <Card className="card-hover" data-testid="dashboard-import">
+          <CardHeader>
+            <CardTitle data-testid="dashboard-import-title">
+              {t("import_excel")}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <p className="text-sm text-muted-foreground" data-testid="dashboard-import-instructions">
+              {t("import_instructions")}
+            </p>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".xlsx,.xls,.csv"
+              onChange={handleFileSelected}
+              style={{ display: "none" }}
+              aria-hidden="true"
+              data-testid="dashboard-import-file-input"
+            />
+            <Button
+              className="w-full"
+              onClick={handleImportClick}
+              data-testid="dashboard-import-submit-button"
+            >
+              {t("import_excel")}
+            </Button>
+          </CardContent>
+        </Card>
       </section>
 
       <section className="grid gap-6 lg:grid-cols-3" data-testid="dashboard-lists">
