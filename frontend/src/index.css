@@ -10,6 +10,10 @@
     --font-body: "Tajawal", sans-serif;
 }
 
+html {
+    scroll-behavior: smooth;
+}
+
 body {
     margin: 0;
     font-family: var(--font-body);
@@ -244,6 +248,32 @@ code {
     animation: fade-in-up 0.45s var(--motion-ease-out) forwards;
 }
 
+.route-fallback-panel {
+    overflow: hidden;
+}
+
+.route-fallback-line {
+    position: relative;
+    overflow: hidden;
+}
+
+.route-fallback-line::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    transform: translateX(-100%);
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.45), transparent);
+    animation: route-fallback-shimmer 1.2s ease-in-out infinite;
+}
+
+.dark .route-fallback-line::after {
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.12), transparent);
+}
+
+@keyframes route-fallback-shimmer {
+    100% { transform: translateX(100%); }
+}
+
 .page-content-bg {
     background: hsl(var(--section-main)) !important;
 }
@@ -332,6 +362,21 @@ html:not(.dark) .login-top-sky {
         linear-gradient(180deg, #0a0e1a 0%, #152038 70%, transparent 100%);
     pointer-events: none;
     z-index: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    html {
+        scroll-behavior: auto;
+    }
+
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+    }
 }
 
 /* Distinct section backgrounds + section pop on hover */

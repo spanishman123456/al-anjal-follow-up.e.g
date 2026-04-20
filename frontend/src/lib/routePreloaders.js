@@ -1,0 +1,17 @@
+export const loadStudentsPage = () => import("@/pages/Students");
+export const loadAssessmentMarksPage = () => import("@/pages/AssessmentMarks");
+export const loadFinalExamsAssessmentPage = () => import("@/pages/FinalExamsAssessment");
+export const loadTotalMarksPage = () => import("@/pages/TotalMarks");
+export const loadAssessmentMarksQ2Page = () => import("@/pages/AssessmentMarksQ2");
+export const loadFinalExamsAssessmentQ2Page = () => import("@/pages/FinalExamsAssessmentQ2");
+export const loadTeachersPage = () => import("@/pages/Teachers");
+export const loadTeacherProfilePage = () => import("@/pages/TeacherProfile");
+export const loadLessonPlanGeneratorPage = () => import("@/pages/LessonPlanGenerator");
+export const loadClassesPage = () => import("@/pages/Classes");
+export const loadAnalyticsPage = () => import("@/pages/Analytics");
+export const loadRemedialPlansPage = () => import("@/pages/RemedialPlans");
+export const loadRewardsPage = () => import("@/pages/Rewards");
+export const loadReportsPage = () => import("@/pages/Reports");
+export const loadSettingsPage = () => import("@/pages/Settings");
+export const loadCalendarPage = () => import("@/pages/Calendar");
+export const loadNotificationsPage = () => import("@/pages/Notifications");

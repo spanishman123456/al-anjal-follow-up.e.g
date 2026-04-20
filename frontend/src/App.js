@@ -16,29 +16,50 @@ import Login from "@/pages/Login";
 import Dashboard from "@/pages/Dashboard";
 import { Toaster } from "@/components/ui/sonner";
 import { toast } from "sonner";
+import {
+  loadAnalyticsPage,
+  loadAssessmentMarksPage,
+  loadAssessmentMarksQ2Page,
+  loadCalendarPage,
+  loadClassesPage,
+  loadFinalExamsAssessmentPage,
+  loadFinalExamsAssessmentQ2Page,
+  loadLessonPlanGeneratorPage,
+  loadNotificationsPage,
+  loadRemedialPlansPage,
+  loadReportsPage,
+  loadRewardsPage,
+  loadSettingsPage,
+  loadStudentsPage,
+  loadTeachersPage,
+  loadTeacherProfilePage,
+  loadTotalMarksPage,
+} from "@/lib/routePreloaders";
 
 // Dashboard is eager-loaded so first paint after login does not flash Suspense fallback (major flicker source).
-const Students = lazy(() => import("@/pages/Students"));
-const AssessmentMarks = lazy(() => import("@/pages/AssessmentMarks"));
-const FinalExamsAssessment = lazy(() => import("@/pages/FinalExamsAssessment"));
-const TotalMarks = lazy(() => import("@/pages/TotalMarks"));
-const AssessmentMarksQ2 = lazy(() => import("@/pages/AssessmentMarksQ2"));
-const FinalExamsAssessmentQ2 = lazy(() => import("@/pages/FinalExamsAssessmentQ2"));
-const Teachers = lazy(() => import("@/pages/Teachers"));
-const TeacherProfile = lazy(() => import("@/pages/TeacherProfile"));
-const LessonPlanGenerator = lazy(() => import("@/pages/LessonPlanGenerator"));
-const Classes = lazy(() => import("@/pages/Classes"));
-const Analytics = lazy(() => import("@/pages/Analytics"));
-const RemedialPlans = lazy(() => import("@/pages/RemedialPlans"));
-const Rewards = lazy(() => import("@/pages/Rewards"));
-const Reports = lazy(() => import("@/pages/Reports"));
-const Settings = lazy(() => import("@/pages/Settings"));
-const Calendar = lazy(() => import("@/pages/Calendar"));
-const Notifications = lazy(() => import("@/pages/Notifications"));
+const Students = lazy(loadStudentsPage);
+const AssessmentMarks = lazy(loadAssessmentMarksPage);
+const FinalExamsAssessment = lazy(loadFinalExamsAssessmentPage);
+const TotalMarks = lazy(loadTotalMarksPage);
+const AssessmentMarksQ2 = lazy(loadAssessmentMarksQ2Page);
+const FinalExamsAssessmentQ2 = lazy(loadFinalExamsAssessmentQ2Page);
+const Teachers = lazy(loadTeachersPage);
+const TeacherProfile = lazy(loadTeacherProfilePage);
+const LessonPlanGenerator = lazy(loadLessonPlanGeneratorPage);
+const Classes = lazy(loadClassesPage);
+const Analytics = lazy(loadAnalyticsPage);
+const RemedialPlans = lazy(loadRemedialPlansPage);
+const Rewards = lazy(loadRewardsPage);
+const Reports = lazy(loadReportsPage);
+const Settings = lazy(loadSettingsPage);
+const Calendar = lazy(loadCalendarPage);
+const Notifications = lazy(loadNotificationsPage);
 
 const PageFallback = () => (
-  <div className="flex min-h-screen w-full items-center justify-center bg-background text-muted-foreground">
-    <span className="animate-pulse">Loading…</span>
+  <div className="route-fallback-panel flex min-h-[46vh] w-full flex-col justify-center rounded-[28px] border border-border/60 bg-card/70 p-6 text-muted-foreground shadow-sm">
+    <div className="route-fallback-line h-4 w-32 rounded-full bg-muted/90" />
+    <div className="route-fallback-line mt-5 h-24 rounded-3xl bg-muted/80" />
+    <div className="route-fallback-line mt-4 h-24 rounded-3xl bg-muted/70" />
   </div>
 );
 

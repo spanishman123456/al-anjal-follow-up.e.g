@@ -1,5 +1,5 @@
 import { NavLink, Outlet, useNavigate, Link, useLocation } from "react-router-dom";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   LayoutDashboard,
   GraduationCap,
@@ -45,6 +45,24 @@ import {
 } from "@/components/ui/select";
 import { SocialLinks } from "@/components/SocialLinks";
 import { cn } from "@/lib/utils";
+import {
+  loadAnalyticsPage,
+  loadAssessmentMarksPage,
+  loadAssessmentMarksQ2Page,
+  loadCalendarPage,
+  loadClassesPage,
+  loadFinalExamsAssessmentPage,
+  loadFinalExamsAssessmentQ2Page,
+  loadLessonPlanGeneratorPage,
+  loadNotificationsPage,
+  loadRemedialPlansPage,
+  loadReportsPage,
+  loadRewardsPage,
+  loadSettingsPage,
+  loadStudentsPage,
+  loadTeachersPage,
+  loadTotalMarksPage,
+} from "@/lib/routePreloaders";
 
 /** Rotating gradient fills (reference: colorful path / CTA buttons) */
 const SIDEBAR_NAV_GRADIENTS = [
@@ -97,6 +115,7 @@ export const AppShell = ({
   const [notificationsLoaded, setNotificationsLoaded] = useState(false);
   const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
   const [expandedNavKey, setExpandedNavKey] = useState(null);
+  const prefetchedRoutesRef = useRef(new Set());
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => {
     try {
       return localStorage.getItem("app_sidebar_collapsed") === "true";
@@ -113,6 +132,36 @@ export const AppShell = ({
     }
   }, [isSidebarCollapsed]);
 
+  const routePreloaders = {
+    "/students": loadStudentsPage,
+    "/assessment-marks": loadAssessmentMarksPage,
+    "/assessment-marks-q2": loadAssessmentMarksQ2Page,
+    "/final-exams-assessment": loadFinalExamsAssessmentPage,
+    "/final-exams-assessment-q2": loadFinalExamsAssessmentQ2Page,
+    "/total-marks": loadTotalMarksPage,
+    "/teachers": loadTeachersPage,
+    "/lesson-plan-generator": loadLessonPlanGeneratorPage,
+    "/classes": loadClassesPage,
+    "/analytics": loadAnalyticsPage,
+    "/remedial-plans": loadRemedialPlansPage,
+    "/rewards": loadRewardsPage,
+    "/reports": loadReportsPage,
+    "/notifications": loadNotificationsPage,
+    "/calendar": loadCalendarPage,
+    "/settings": loadSettingsPage,
+  };
+
+  const prefetchRoute = (path) => {
+    const normalizedPath = (path || "").split("?")[0];
+    if (!normalizedPath || prefetchedRoutesRef.current.has(normalizedPath)) return;
+    const loader = routePreloaders[normalizedPath];
+    if (!loader) return;
+    prefetchedRoutesRef.current.add(normalizedPath);
+    loader().catch(() => {
+      prefetchedRoutesRef.current.delete(normalizedPath);
+    });
+  };
+
   // Keep URL in sync with header semester/quarter when on quarter-specific pages
   useEffect(() => {
     const path = location.pathname;
@@ -121,6 +170,10 @@ export const AppShell = ({
     else if (quarter === 1 && path === "/assessment-marks-q2") navigate("/assessment-marks", { replace: true });
     else if (quarter === 1 && path === "/final-exams-assessment-q2") navigate("/final-exams-assessment", { replace: true });
   }, [quarter, location.pathname, navigate]);
+
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }, [location.pathname, location.search]);
 
   const loadProfile = async () => {
     try {
@@ -349,6 +402,9 @@ export const AppShell = ({
                                 key={child.to}
                                 to={child.to}
                                 data-testid={child.testId}
+                                onMouseEnter={() => prefetchRoute(child.to)}
+                                onFocus={() => prefetchRoute(child.to)}
+                                onTouchStart={() => prefetchRoute(child.to)}
                                 className={({ isActive }) =>
                                   cn(
                                     "flex items-center gap-2 rounded-md px-3 py-1.5 text-xs font-semibold text-white shadow nav-item-pop bg-gradient-to-r",
@@ -374,6 +430,9 @@ export const AppShell = ({
                       data-testid={item.testId}
                       title={item.label}
                       aria-label={item.label}
+                      onMouseEnter={() => prefetchRoute(item.to)}
+                      onFocus={() => prefetchRoute(item.to)}
+                      onTouchStart={() => prefetchRoute(item.to)}
                       className={({ isActive }) => sidebarNavButtonClass(isActive, navIndex, !sidebarExpanded)}
                     >
                       <Icon className="h-4 w-4 shrink-0 opacity-95" />
@@ -696,26 +755,28 @@ export const AppShell = ({
         </div>
         </div>
         <main
-          className="page-content-bg flex-1 px-6 py-8 page-enter"
+          className="page-content-bg flex-1 px-6 py-8"
           data-testid="main-content"
         >
-          <Outlet
-            context={{
-              language,
-              setLanguage,
-              theme,
-              setTheme,
-              semester,
-              setSemester,
-              quarter,
-              setQuarter,
-              academicYear,
-              profile,
-              classes,
-              classesLoaded,
-              loadClasses: loadClasses || (() => {}),
-            }}
-          />
+          <div key={`${location.pathname}${location.search}`} className="page-enter">
+            <Outlet
+              context={{
+                language,
+                setLanguage,
+                theme,
+                setTheme,
+                semester,
+                setSemester,
+                quarter,
+                setQuarter,
+                academicYear,
+                profile,
+                classes,
+                classesLoaded,
+                loadClasses: loadClasses || (() => {}),
+              }}
+            />
+          </div>
         </main>
         <Dialog open={logoutConfirmOpen} onOpenChange={setLogoutConfirmOpen}>
           <DialogContent data-testid="logout-dialog">
