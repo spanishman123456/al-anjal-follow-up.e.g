@@ -19,6 +19,18 @@ LESSON_PLAN_OUTPUT_DIR = Path(__file__).parent / "generated" / "lesson-plans"
 RULE_BASED_PROVIDER = "rule-based"
 RULE_BASED_MODEL = "template-mapper-v1"
 MAX_PDF_TEXT_CHARS = 24000
+LABEL_ALIASES = {
+    "lesson title": ["lesson", "title", "lesson title", "chapter", "topic"],
+    "objectives": ["objectives", "lesson objectives", "aims", "learning objectives"],
+    "aids": ["check list", "what you need for this lesson", "hardware", "software", "resources", "aids"],
+    "lesson procedure": ["overview steps to follow", "steps to follow", "overview", "procedure", "lesson procedure"],
+    "time pacing": ["duration", "time pacing", "periods", "timing"],
+    "activities": ["activities", "project", "projects", "flashback", "steps to follow"],
+    "group projects": ["project", "projects", "group projects"],
+    "formative assessment": ["assessment", "formative assessment", "observation", "check", "evaluation"],
+    "observation": ["observation", "assessment", "evaluation"],
+    "warmup": ["warmup questions", "warm up questions", "warm up", "starter", "introduction"],
+}
 
 
 def sanitize_filename(filename: str, fallback: str) -> str:
@@ -301,19 +313,32 @@ def _best_pdf_match(label: str, labeled_map: Dict[str, str]) -> str | None:
     key = _normalize_key(label)
     if not key:
         return None
-    if key in labeled_map:
-        return labeled_map[key]
+    candidate_keys = [key]
+    for alias_key, aliases in LABEL_ALIASES.items():
+        if alias_key in key or key in alias_key:
+            candidate_keys.extend(_normalize_key(alias) for alias in aliases)
+    expanded = []
+    for candidate in candidate_keys:
+        if candidate and candidate not in expanded:
+            expanded.append(candidate)
 
-    label_tokens = set(key.split())
+    for candidate in expanded:
+        if candidate in labeled_map:
+            return labeled_map[candidate]
+
     best_value = None
     best_score = 0
-    for candidate_key, candidate_value in labeled_map.items():
-        candidate_tokens = set(candidate_key.split())
-        overlap = len(label_tokens & candidate_tokens)
-        if overlap > best_score:
-            best_score = overlap
-            best_value = candidate_value
-    return best_value if best_score >= max(1, min(2, len(label_tokens))) else None
+    for candidate in expanded:
+        label_tokens = set(candidate.split())
+        if not label_tokens:
+            continue
+        for candidate_key, candidate_value in labeled_map.items():
+            candidate_tokens = set(candidate_key.split())
+            overlap = len(label_tokens & candidate_tokens)
+            if overlap > best_score:
+                best_score = overlap
+                best_value = candidate_value
+    return best_value if best_score >= 1 else None
 
 
 def _replace_after_colon(template_text: str, new_value: str) -> str:
@@ -353,6 +378,7 @@ def generate_lesson_plan_replacements(
     replacements: List[Dict[str, str]] = []
     label_matches = 0
     sequential_matches = 0
+    used_values: set[str] = set()
 
     for block in template_blocks:
         text = _normalize_text(block.get("text"))
@@ -367,17 +393,25 @@ def generate_lesson_plan_replacements(
             if matched:
                 replacement_text = _replace_after_colon(text, matched)
                 label_matches += 1
+                used_values.add(_normalize_text(matched))
         elif block.get("context_label"):
             matched = _best_pdf_match(block["context_label"], labeled_map)
             if matched:
                 replacement_text = matched
                 label_matches += 1
-        elif queue_index < len(ordered_units):
-            candidate = ordered_units[queue_index]
-            queue_index += 1
+                used_values.add(_normalize_text(matched))
+            else:
+                candidate, queue_index = _next_ordered_unit(ordered_units, queue_index, used_values)
+                if candidate:
+                    replacement_text = candidate
+                    sequential_matches += 1
+                    used_values.add(candidate)
+        else:
+            candidate, queue_index = _next_ordered_unit(ordered_units, queue_index, used_values)
             if candidate:
                 replacement_text = candidate
                 sequential_matches += 1
+                used_values.add(candidate)
 
         replacement_text = _normalize_text(replacement_text)
         if replacement_text and replacement_text != text:
@@ -393,6 +427,16 @@ def generate_lesson_plan_replacements(
         "summary": summary,
         "replacements": replacements,
     }
+
+
+def _next_ordered_unit(ordered_units: List[str], start_index: int, used_values: set[str]) -> Tuple[str | None, int]:
+    index = start_index
+    while index < len(ordered_units):
+        candidate = _normalize_text(ordered_units[index])
+        index += 1
+        if candidate and candidate not in used_values:
+            return candidate, index
+    return None, index
 
 
 def _replace_paragraph_text(paragraph: Paragraph, text: str) -> None:
