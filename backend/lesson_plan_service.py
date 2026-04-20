@@ -369,6 +369,27 @@ def _fit_items_to_block_count(items: List[str], count: int) -> List[str]:
     return head + [tail]
 
 
+def _strip_question_prefix(text: str) -> str:
+    normalized = _normalize_text(text)
+    if not normalized:
+        return ""
+    return _normalize_text(re.sub(r"^\s*question\s*\d+\s*:\s*", "", normalized, flags=re.I))
+
+
+def _merge_warmup_prompt(template_text: str, question_text: str) -> str:
+    template = _normalize_text(template_text)
+    question = _strip_question_prefix(question_text)
+    if not template:
+        return question
+    if not question:
+        return template
+    match = re.match(r"^(.*?\bif we)\b.*$", template, flags=re.I)
+    if match:
+        prefix = match.group(1).rstrip()
+        return f"{prefix} {question}".strip()
+    return question
+
+
 def _derive_header_topic(title: str) -> str:
     normalized = _normalize_text(title)
     if not normalized:
@@ -606,7 +627,11 @@ def _build_targeted_section_replacements(
 
         if "lesson procedure" in label and "group projects" in label:
             warmup_heading = _normalize_text(right_blocks[0].get("text")) if right_blocks else ""
-            warmup_body = pdf_sections.get("warmup_question") or ""
+            warmup_template_line = _normalize_text(right_blocks[1].get("text")) if len(right_blocks) > 1 else ""
+            warmup_body = _merge_warmup_prompt(
+                warmup_template_line,
+                pdf_sections.get("warmup_question") or "",
+            )
             overview_intro = pdf_sections.get("overview_intro") or ""
 
             numbered_section_starts = [
