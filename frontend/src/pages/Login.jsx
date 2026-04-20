@@ -110,7 +110,16 @@ export default function Login({
         navigate("/", { replace: true });
       } catch (error) {
         const detail = error?.response?.data?.detail;
-        const msg = typeof detail === "string" ? detail : t("login_failed");
+        let msg = typeof detail === "string" ? detail : t("login_failed");
+        if (typeof detail === "string") {
+          if (detail.includes("request was sent to the administrator")) {
+            msg = t("gmail_pending_approval_login");
+          } else if (detail.includes("waiting for admin approval")) {
+            msg = t("gmail_waiting_approval_login");
+          } else if (detail.includes("request was rejected")) {
+            msg = t("gmail_rejected_login");
+          }
+        }
         toast.error(msg);
       } finally {
         setIsGoogleLoading(false);

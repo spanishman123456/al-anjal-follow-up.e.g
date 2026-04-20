@@ -83,11 +83,19 @@ export default function Settings() {
   const [permissionDraft, setPermissionDraft] = useState([]);
   const [resetDialogOpen, setResetDialogOpen] = useState(false);
   const [resetPassword, setResetPassword] = useState("");
+  const [pendingGmailUsers, setPendingGmailUsers] = useState([]);
   const latestLoadRequestIdRef = useRef(0);
 
   const getPermissionLabel = (key) => {
     const found = PERMISSIONS.find((item) => item.key === key);
     return found ? t(found.labelKey) : key;
+  };
+
+  const getGmailStatusLabel = (status) => {
+    if (status === "pending") return t("gmail_approval_pending");
+    if (status === "approved") return t("gmail_approval_status_approved");
+    if (status === "rejected") return t("gmail_approval_status_rejected");
+    return status;
   };
 
   const loadData = async () => {
@@ -108,6 +116,7 @@ export default function Settings() {
       if (p?.role_name === "Teacher") {
         setRoles([]);
         setUsers([]);
+        setPendingGmailUsers([]);
         setPromotionEnabled(false);
         return;
       }
@@ -125,6 +134,14 @@ export default function Settings() {
         .then((usersRes) => {
           if (latestLoadRequestIdRef.current !== requestId) return;
           setUsers(usersRes.data || []);
+        })
+        .catch(() => null);
+
+      api
+        .get("/gmail-pending-users")
+        .then((pendingRes) => {
+          if (latestLoadRequestIdRef.current !== requestId) return;
+          setPendingGmailUsers(pendingRes.data || []);
         })
         .catch(() => null);
 
@@ -326,6 +343,26 @@ export default function Settings() {
     loadData();
   };
 
+  const handleApproveGmailUser = async (userId) => {
+    try {
+      await api.post(`/gmail-pending-users/${userId}/approve`, {});
+      toast.success(t("gmail_approval_approved"));
+      loadData();
+    } catch (error) {
+      toast.error(getApiErrorMessage(error) || t("gmail_approval_action_failed"));
+    }
+  };
+
+  const handleRejectGmailUser = async (userId) => {
+    try {
+      await api.post(`/gmail-pending-users/${userId}/reject`, {});
+      toast.success(t("gmail_approval_rejected"));
+      loadData();
+    } catch (error) {
+      toast.error(getApiErrorMessage(error) || t("gmail_approval_action_failed"));
+    }
+  };
+
   return (
     <div className="space-y-8" data-testid="settings-page">
       <PageHeader
@@ -497,6 +534,65 @@ export default function Settings() {
         </Card>
 
         <Card>
+          <CardHeader>
+            <CardTitle>{t("gmail_approval_requests")}</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {pendingGmailUsers.length ? (
+              <Table data-testid="gmail-pending-users-table">
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>{t("name")}</TableHead>
+                    <TableHead>{t("email")}</TableHead>
+                    <TableHead>{t("username")}</TableHead>
+                    <TableHead>{t("gmail_requested_at")}</TableHead>
+                    <TableHead>{t("status")}</TableHead>
+                    <TableHead>{t("actions")}</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {pendingGmailUsers.map((user) => (
+                    <TableRow key={user.id} data-testid={`gmail-pending-row-${user.id}`}>
+                      <TableCell>{user.name}</TableCell>
+                      <TableCell>{user.email}</TableCell>
+                      <TableCell>{user.username || "—"}</TableCell>
+                      <TableCell>{user.gmail_requested_at || "—"}</TableCell>
+                      <TableCell>
+                        <Badge variant="secondary">{t("gmail_approval_pending")}</Badge>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex flex-wrap gap-2">
+                          <Button
+                            size="sm"
+                            variant="success"
+                            onClick={() => handleApproveGmailUser(user.id)}
+                            data-testid={`gmail-approve-${user.id}`}
+                          >
+                            {t("approve")}
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="destructive"
+                            onClick={() => handleRejectGmailUser(user.id)}
+                            data-testid={`gmail-reject-${user.id}`}
+                          >
+                            {t("reject")}
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            ) : (
+              <p className="text-sm text-muted-foreground" data-testid="gmail-pending-empty">
+                {t("gmail_approval_no_requests")}
+              </p>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
           <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle>{t("user_management")}</CardTitle>
             <Button onClick={() => setUserDialogOpen(true)} data-testid="add-user-button">
@@ -529,6 +625,17 @@ export default function Settings() {
                             {getPermissionLabel(permission)}
                           </Badge>
                         ))}
+                      </div>
+                      <div className="mt-2 flex flex-wrap gap-1">
+                        {(user.auth_provider || "") === "google" ? (
+                          <Badge variant="outline">{t("gmail_user_badge")}</Badge>
+                        ) : null}
+                        {user.gmail_approval_status ? (
+                          <Badge variant="secondary">{getGmailStatusLabel(user.gmail_approval_status)}</Badge>
+                        ) : null}
+                        {user.active === false ? (
+                          <Badge variant="destructive">{t("inactive_account")}</Badge>
+                        ) : null}
                       </div>
                     </TableCell>
                     <TableCell>
