@@ -1,6 +1,6 @@
 import time
 
-from fastapi import FastAPI, APIRouter, UploadFile, File, Form, HTTPException, Query, Depends, status, Request
+from fastapi import FastAPI, APIRouter, UploadFile, File, HTTPException, Query, Depends, status, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.responses import StreamingResponse, FileResponse
 from fastapi.middleware.gzip import GZipMiddleware
@@ -7651,7 +7651,6 @@ async def preview_lesson_plan_pdf(
 async def generate_lesson_plan(
     word_file: UploadFile = File(...),
     pdf_file: UploadFile = File(...),
-    model: Optional[str] = Form(default=None),
     current_user: Dict[str, Any] = Depends(require_lesson_plan_access),
 ):
     try:
@@ -7669,7 +7668,6 @@ async def generate_lesson_plan(
         ai_result = generate_lesson_plan_replacements(
             pdf_data["text"],
             template_data["non_empty_blocks"],
-            model=model,
         )
         if not ai_result["replacements"]:
             raise HTTPException(

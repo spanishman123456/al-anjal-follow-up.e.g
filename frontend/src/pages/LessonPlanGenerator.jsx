@@ -12,8 +12,6 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
-const DEFAULT_MODEL = "gpt-5.4";
-
 function formatFileSize(bytes) {
   if (!Number.isFinite(bytes)) return "0 B";
   if (bytes < 1024) return `${bytes} B`;
@@ -101,7 +99,6 @@ export default function LessonPlanGenerator() {
       const formData = new FormData();
       formData.append("word_file", wordFile);
       formData.append("pdf_file", pdfFile);
-      formData.append("model", DEFAULT_MODEL);
       const response = await api.post("/lesson-plan/generate", formData, {
         headers: { "Content-Type": "multipart/form-data" },
       });
@@ -144,7 +141,7 @@ export default function LessonPlanGenerator() {
         action={
           <div className="flex flex-wrap items-center gap-3">
             <Badge variant="outline" data-testid="lesson-plan-model-badge">
-              {t("lesson_plan_ai_model")}: {generatedResult?.model || DEFAULT_MODEL}
+              {t("lesson_plan_generation_mode")}: {t("lesson_plan_rule_based_mode")}
             </Badge>
             <Button
               onClick={handleGenerate}
@@ -331,8 +328,7 @@ export default function LessonPlanGenerator() {
             <>
               <div className="flex flex-wrap items-center gap-2">
                 <Badge>{generatedResult.generated_filename}</Badge>
-                <Badge variant="outline">{generatedResult.provider}</Badge>
-                <Badge variant="outline">{generatedResult.model}</Badge>
+                <Badge variant="outline">{t("lesson_plan_rule_based_mode")}</Badge>
               </div>
               <div className="grid gap-3 md:grid-cols-3">
                 <div className="rounded-lg border border-border/60 p-3">

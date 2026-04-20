@@ -12,19 +12,13 @@ from docx.oxml.table import CT_Tbl
 from docx.oxml.text.paragraph import CT_P
 from docx.table import Table as DocxTable, _Cell
 from docx.text.paragraph import Paragraph
-from openai import OpenAI
 from pypdf import PdfReader
 
 
-DEFAULT_PROVIDER = os.environ.get("LESSON_PLAN_AI_PROVIDER", "openai").strip().lower() or "openai"
-DEFAULT_MODEL = os.environ.get("LESSON_PLAN_AI_MODEL", "gpt-5.4").strip() or "gpt-5.4"
-OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "").strip()
-OPENAI_BASE_URL = os.environ.get("OPENAI_BASE_URL", "").strip() or None
 LESSON_PLAN_OUTPUT_DIR = Path(__file__).parent / "generated" / "lesson-plans"
-
+RULE_BASED_PROVIDER = "rule-based"
+RULE_BASED_MODEL = "template-mapper-v1"
 MAX_PDF_TEXT_CHARS = 24000
-MAX_TEMPLATE_BLOCKS = 120
-MAX_TEMPLATE_TEXT_CHARS = 24000
 
 
 def sanitize_filename(filename: str, fallback: str) -> str:
@@ -62,6 +56,52 @@ def _truncate(text: str, limit: int) -> str:
     if len(text) <= limit:
         return text
     return f"{text[:limit].rstrip()}\n\n[truncated]"
+
+
+def _normalize_key(value: Any) -> str:
+    text = _normalize_text(value).lower()
+    text = re.sub(r"[:：]", " ", text)
+    text = re.sub(r"[^a-z0-9\u0600-\u06ff]+", " ", text)
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def _looks_like_heading(text: str) -> bool:
+    line = _normalize_text(text)
+    if not line or len(line) > 80:
+        return False
+    if ":" in line or "：" in line:
+        return False
+    if re.search(r"[.!?]$", line):
+        return False
+    words = line.split()
+    if len(words) > 8:
+        return False
+    return any(ch.isalpha() for ch in line)
+
+
+def _looks_like_label(text: str) -> bool:
+    line = _normalize_text(text)
+    if not line or len(line) > 60:
+        return False
+    if ":" in line or "：" in line:
+        return False
+    if len(line.split()) > 6:
+        return False
+    return any(ch.isalpha() for ch in line)
+
+
+def _extract_labeled_value(text: str) -> Tuple[str, str] | None:
+    line = _normalize_text(text)
+    if not line:
+        return None
+    match = re.match(r"^\s*([^:：]{1,60})\s*[:：]\s*(.+?)\s*$", line, flags=re.S)
+    if not match:
+        return None
+    label = _normalize_text(match.group(1))
+    value = _normalize_text(match.group(2))
+    if not label or not value:
+        return None
+    return label, value
 
 
 def _iter_block_items(parent: DocxDocument | _Cell) -> Iterable[Paragraph | DocxTable]:
@@ -128,6 +168,8 @@ def extract_docx_template(docx_bytes: bytes) -> Dict[str, Any]:
                     "kind": "paragraph",
                     "text": text,
                     "style": (block.style.name if block.style is not None else "") or "",
+                    "order": len(editable_blocks),
+                    "context_label": "",
                 }
             )
             paragraph_count += 1
@@ -135,6 +177,7 @@ def extract_docx_template(docx_bytes: bytes) -> Dict[str, Any]:
 
         table_id = table_count
         table_count += 1
+        row_text_cache: Dict[Tuple[int, int], str] = {}
         rows_preview: List[List[str]] = []
         for row_index, row in enumerate(block.rows):
             row_preview: List[str] = []
@@ -149,13 +192,28 @@ def extract_docx_template(docx_bytes: bytes) -> Dict[str, Any]:
                             "kind": "table_cell",
                             "text": text,
                             "style": (paragraph.style.name if paragraph.style is not None else "") or "",
+                            "order": len(editable_blocks),
+                            "context_label": "",
+                            "table_id": table_id,
+                            "row_index": row_index,
+                            "cell_index": cell_index,
                         }
                     )
                     if text:
                         cell_texts.append(text)
-                row_preview.append("\n".join(cell_texts).strip())
+                cell_joined = "\n".join(cell_texts).strip()
+                row_text_cache[(row_index, cell_index)] = cell_joined
+                row_preview.append(cell_joined)
             rows_preview.append(row_preview)
         table_previews.append({"table_id": f"t-{table_id}", "rows": rows_preview})
+
+        for item in editable_blocks:
+            if item.get("kind") != "table_cell" or item.get("table_id") != table_id:
+                continue
+            row_index = item.get("row_index", 0)
+            cell_index = item.get("cell_index", 0)
+            if cell_index > 0:
+                item["context_label"] = row_text_cache.get((row_index, cell_index - 1), "")
 
     non_empty_blocks = [block for block in editable_blocks if block["text"]]
     preview_text = "\n\n".join(block["text"] for block in non_empty_blocks[:20])
@@ -177,48 +235,107 @@ def extract_pdf_text(pdf_bytes: bytes) -> Dict[str, Any]:
     for page in reader.pages:
         pages.append(_normalize_text(page.extract_text() or ""))
     joined = "\n\n".join(page for page in pages if page)
+    lines = [_normalize_text(line) for line in joined.split("\n") if _normalize_text(line)]
+    paragraphs = [_normalize_text(part) for part in re.split(r"\n\s*\n+", joined) if _normalize_text(part)]
     return {
         "page_count": len(reader.pages),
         "text": joined,
         "preview_text": _truncate(joined, 5000),
+        "lines": lines,
+        "paragraphs": paragraphs,
     }
 
 
-def _make_openai_client() -> OpenAI:
-    if not OPENAI_API_KEY:
-        raise RuntimeError("OPENAI_API_KEY is not configured on the backend.")
-    kwargs: Dict[str, Any] = {"api_key": OPENAI_API_KEY}
-    if OPENAI_BASE_URL:
-        kwargs["base_url"] = OPENAI_BASE_URL
-    return OpenAI(**kwargs)
-
-
-def _strip_json_wrappers(content: str) -> str:
-    text = (content or "").strip()
-    if text.startswith("```"):
-        text = re.sub(r"^```(?:json)?\s*", "", text)
-        text = re.sub(r"\s*```$", "", text)
-    return text.strip()
-
-
-def _prepare_ai_payload(pdf_text: str, template_blocks: List[Dict[str, Any]]) -> Dict[str, Any]:
+def _extract_pdf_structured_content(pdf_text: str) -> Dict[str, Any]:
     trimmed_pdf = _truncate(pdf_text, MAX_PDF_TEXT_CHARS)
-    selected_blocks: List[Dict[str, Any]] = []
-    char_count = 0
-    for block in template_blocks[:MAX_TEMPLATE_BLOCKS]:
-        text = block.get("text") or ""
-        char_count += len(text)
-        if char_count > MAX_TEMPLATE_TEXT_CHARS:
-            break
-        selected_blocks.append(
-            {
-                "block_id": block["block_id"],
-                "kind": block["kind"],
-                "style": block.get("style") or "",
-                "text": text,
-            }
-        )
-    return {"pdf_text": trimmed_pdf, "template_blocks": selected_blocks}
+    lines = [_normalize_text(line) for line in trimmed_pdf.split("\n") if _normalize_text(line)]
+    paragraphs = [_normalize_text(part) for part in re.split(r"\n\s*\n+", trimmed_pdf) if _normalize_text(part)]
+    labeled_map: Dict[str, str] = {}
+    ordered_units: List[str] = []
+    seen_units: set[str] = set()
+
+    def remember_unit(text: str) -> None:
+        clean = _normalize_text(text)
+        if clean and clean not in seen_units:
+            ordered_units.append(clean)
+            seen_units.add(clean)
+
+    for index, line in enumerate(lines):
+        labeled = _extract_labeled_value(line)
+        if labeled:
+            label, value = labeled
+            labeled_map.setdefault(_normalize_key(label), value)
+            remember_unit(value)
+            continue
+        if _looks_like_label(line) and index + 1 < len(lines):
+            next_line = lines[index + 1]
+            if next_line and len(next_line) > 10:
+                labeled_map.setdefault(_normalize_key(line), next_line)
+                remember_unit(next_line)
+
+    for paragraph in paragraphs:
+        labeled = _extract_labeled_value(paragraph) if "\n" not in paragraph else None
+        if labeled:
+            label, value = labeled
+            labeled_map.setdefault(_normalize_key(label), value)
+            remember_unit(value)
+        else:
+            remember_unit(paragraph)
+
+    for index, line in enumerate(lines[:-1]):
+        if _looks_like_heading(line) and not _extract_labeled_value(line):
+            next_line = lines[index + 1]
+            if next_line and len(next_line) > 10:
+                labeled_map.setdefault(_normalize_key(line), next_line)
+
+    return {
+        "text": trimmed_pdf,
+        "paragraphs": paragraphs,
+        "lines": lines,
+        "labeled_map": labeled_map,
+        "ordered_units": ordered_units,
+    }
+
+
+def _best_pdf_match(label: str, labeled_map: Dict[str, str]) -> str | None:
+    key = _normalize_key(label)
+    if not key:
+        return None
+    if key in labeled_map:
+        return labeled_map[key]
+
+    label_tokens = set(key.split())
+    best_value = None
+    best_score = 0
+    for candidate_key, candidate_value in labeled_map.items():
+        candidate_tokens = set(candidate_key.split())
+        overlap = len(label_tokens & candidate_tokens)
+        if overlap > best_score:
+            best_score = overlap
+            best_value = candidate_value
+    return best_value if best_score >= max(1, min(2, len(label_tokens))) else None
+
+
+def _replace_after_colon(template_text: str, new_value: str) -> str:
+    match = re.match(r"^(\s*[^:：]{1,60}\s*[:：]\s*)(.+?)\s*$", template_text, flags=re.S)
+    if not match:
+        return new_value
+    return f"{match.group(1)}{new_value}"
+
+
+def _is_static_heading(block: Dict[str, Any]) -> bool:
+    text = _normalize_text(block.get("text"))
+    if not text:
+        return True
+    if block.get("kind") == "table_cell" and block.get("cell_index", 0) > 0 and block.get("context_label"):
+        return False
+    if _extract_labeled_value(text):
+        return False
+    if block.get("kind") == "table_cell" and block.get("cell_index", 0) == 0 and _looks_like_label(text):
+        return True
+    if _looks_like_heading(text):
+        return True
+    return len(text.split()) <= 3 and len(text) <= 32
 
 
 def generate_lesson_plan_replacements(
@@ -228,50 +345,53 @@ def generate_lesson_plan_replacements(
     provider: str | None = None,
     model: str | None = None,
 ) -> Dict[str, Any]:
-    resolved_provider = (provider or DEFAULT_PROVIDER).strip().lower() or DEFAULT_PROVIDER
-    resolved_model = (model or DEFAULT_MODEL).strip() or DEFAULT_MODEL
+    _ = provider, model
+    structured_pdf = _extract_pdf_structured_content(pdf_text)
+    labeled_map = structured_pdf["labeled_map"]
+    ordered_units = structured_pdf["ordered_units"]
+    queue_index = 0
+    replacements: List[Dict[str, str]] = []
+    label_matches = 0
+    sequential_matches = 0
 
-    if resolved_provider != "openai":
-        raise RuntimeError(f"Unsupported lesson-plan AI provider: {resolved_provider}")
+    for block in template_blocks:
+        text = _normalize_text(block.get("text"))
+        if not text or _is_static_heading(block):
+            continue
 
-    client = _make_openai_client()
-    payload = _prepare_ai_payload(pdf_text, template_blocks)
-    system_prompt = (
-        "You rewrite lesson-plan content inside an existing Word template. "
-        "Keep the template layout unchanged. Do not invent a new structure. "
-        "Return strict JSON with keys 'summary' and 'replacements'. "
-        "Each replacement must include block_id and text. "
-        "Only replace text content. Preserve labels, ordering, tables, and the overall meaning of the template. "
-        "Use the PDF content as the source of truth. "
-        "If a block should stay the same, either omit it or return its original text unchanged. "
-        "Do not return markdown."
+        replacement_text = None
+        labeled = _extract_labeled_value(text)
+        if labeled:
+            label, _current_value = labeled
+            matched = _best_pdf_match(label, labeled_map)
+            if matched:
+                replacement_text = _replace_after_colon(text, matched)
+                label_matches += 1
+        elif block.get("context_label"):
+            matched = _best_pdf_match(block["context_label"], labeled_map)
+            if matched:
+                replacement_text = matched
+                label_matches += 1
+        elif queue_index < len(ordered_units):
+            candidate = ordered_units[queue_index]
+            queue_index += 1
+            if candidate:
+                replacement_text = candidate
+                sequential_matches += 1
+
+        replacement_text = _normalize_text(replacement_text)
+        if replacement_text and replacement_text != text:
+            replacements.append({"block_id": block["block_id"], "text": replacement_text})
+
+    summary = (
+        f"Rule-based mapping updated {len(replacements)} blocks. "
+        f"{label_matches} blocks were matched using detected PDF labels, and {sequential_matches} blocks were filled in template order."
     )
-    user_prompt = json.dumps(payload, ensure_ascii=False)
-    response = client.chat.completions.create(
-        model=resolved_model,
-        temperature=0.2,
-        response_format={"type": "json_object"},
-        messages=[
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt},
-        ],
-    )
-    raw = response.choices[0].message.content if response.choices else "{}"
-    parsed = json.loads(_strip_json_wrappers(raw or "{}"))
-    replacements = parsed.get("replacements") or []
-    if not isinstance(replacements, list):
-        raise RuntimeError("The AI response did not include a valid replacements list.")
-    normalized_replacements: List[Dict[str, str]] = []
-    for item in replacements:
-        block_id = str((item or {}).get("block_id") or "").strip()
-        text = _normalize_text((item or {}).get("text") or "")
-        if block_id:
-            normalized_replacements.append({"block_id": block_id, "text": text})
     return {
-        "provider": resolved_provider,
-        "model": resolved_model,
-        "summary": _normalize_text(parsed.get("summary") or ""),
-        "replacements": normalized_replacements,
+        "provider": RULE_BASED_PROVIDER,
+        "model": RULE_BASED_MODEL,
+        "summary": summary,
+        "replacements": replacements,
     }
 
 

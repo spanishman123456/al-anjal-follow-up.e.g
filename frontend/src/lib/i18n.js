@@ -72,7 +72,7 @@ export const translations = {
     teachers: "Teachers",
     lesson_plan_generator: "Lesson Plan Generator",
     lesson_plan_generator_description:
-      "Upload your lesson-plan Word template and a source PDF, review both on screen, then generate a new Word document that keeps the original template layout while replacing the content with the PDF information.",
+      "Upload your lesson-plan Word template and a source PDF, review both on screen, then generate a new Word document that keeps the original template layout while replacing the content with the PDF information using built-in structured mapping.",
     calendar: "Academic Calendar",
     notifications: "Notifications",
     overview: "Overview",
@@ -108,7 +108,8 @@ export const translations = {
     no_missed_assessment_alert: "Great! No missing submissions detected for this assessment.",
     no_students_enrolled_yet: "No students are enrolled in your classes yet.",
     add_students_to_begin_tracking: "Add students first to start tracking marks and missing submissions.",
-    lesson_plan_ai_model: "AI Model",
+    lesson_plan_generation_mode: "Generation mode",
+    lesson_plan_rule_based_mode: "Structured template mapping",
     lesson_plan_docx_only: "Word templates: .docx only",
     lesson_plan_text_pdf_only: "Source PDFs must contain selectable text",
     lesson_plan_word_template: "Word Template",
@@ -136,7 +137,7 @@ export const translations = {
     lesson_plan_ready_to_generate:
       "Once both files are uploaded and reviewed, generate the final lesson plan here.",
     lesson_plan_preserve_layout_note:
-      "The generator edits the uploaded Word template instead of rebuilding a new file, so the original Word layout, tables, and formatting stay as close as possible to your template.",
+      "The generator edits the uploaded Word template instead of rebuilding a new file, so the original Word layout, tables, and formatting stay as close as possible to your template while only replacing the text content.",
     lesson_plan_editable_blocks: "Editable blocks",
     lesson_plan_updated_blocks: "Updated blocks",
     lesson_plan_tables: "Tables",
@@ -144,7 +145,7 @@ export const translations = {
     lesson_plan_pages: "Pages",
     lesson_plan_text_length: "Text length",
     lesson_plan_no_preview: "No preview available yet.",
-    lesson_plan_no_summary: "No AI summary was returned for this file.",
+    lesson_plan_no_summary: "No mapping summary was returned for this file.",
     lesson_plan_choose_both: "Please upload both a Word template and a PDF source file first.",
     view_missing_assessment_students: "View students with missing marks",
     assessment_quiz: "Quiz",
@@ -537,7 +538,7 @@ export const translations = {
     teachers: "المعلمين",
     lesson_plan_generator: "مولد خطة الدرس",
     lesson_plan_generator_description:
-      "ارفع قالب خطة الدرس بصيغة Word مع ملف PDF المصدر، وراجع الملفين على الشاشة، ثم أنشئ ملف Word جديداً يحافظ على نفس تنسيق القالب ويستبدل المحتوى بمعلومات الـ PDF.",
+      "ارفع قالب خطة الدرس بصيغة Word مع ملف PDF المصدر، وراجع الملفين على الشاشة، ثم أنشئ ملف Word جديداً يحافظ على نفس تنسيق القالب ويستبدل المحتوى بمعلومات الـ PDF باستخدام مطابقة منظمة مدمجة.",
     calendar: "التقويم الدراسي",
     notifications: "الإشعارات",
     overview: "نظرة عامة",
@@ -573,7 +574,8 @@ export const translations = {
     no_missed_assessment_alert: "ممتاز! لا توجد حالات عدم تسليم لهذا التقييم.",
     no_students_enrolled_yet: "لا يوجد طلاب مسجلون في فصولك حتى الآن.",
     add_students_to_begin_tracking: "أضف الطلاب أولاً لبدء متابعة الدرجات وحالات عدم التسليم.",
-    lesson_plan_ai_model: "نموذج الذكاء الاصطناعي",
+    lesson_plan_generation_mode: "وضع الإنشاء",
+    lesson_plan_rule_based_mode: "مطابقة القالب المنظمة",
     lesson_plan_docx_only: "قوالب Word: ‎.docx فقط",
     lesson_plan_text_pdf_only: "يجب أن يحتوي ملف PDF على نص قابل للاستخراج",
     lesson_plan_word_template: "قالب Word",
@@ -601,7 +603,7 @@ export const translations = {
     lesson_plan_ready_to_generate:
       "بعد رفع الملفين ومراجعتهما، يمكنك إنشاء خطة الدرس النهائية من هنا.",
     lesson_plan_preserve_layout_note:
-      "يعتمد المولد على تعديل قالب Word المرفوع نفسه بدلاً من إعادة بناء ملف جديد، حتى يظل تخطيط Word والجداول والتنسيق أقرب ما يكون إلى قالبك الأصلي.",
+      "يعتمد المولد على تعديل قالب Word المرفوع نفسه بدلاً من إعادة بناء ملف جديد، حتى يظل تخطيط Word والجداول والتنسيق أقرب ما يكون إلى قالبك الأصلي مع استبدال المحتوى النصي فقط.",
     lesson_plan_editable_blocks: "المقاطع القابلة للتعديل",
     lesson_plan_updated_blocks: "المقاطع التي تم تحديثها",
     lesson_plan_tables: "الجداول",
@@ -609,7 +611,7 @@ export const translations = {
     lesson_plan_pages: "الصفحات",
     lesson_plan_text_length: "طول النص",
     lesson_plan_no_preview: "لا توجد معاينة بعد.",
-    lesson_plan_no_summary: "لم يتم إرجاع ملخص من الذكاء الاصطناعي لهذا الملف.",
+    lesson_plan_no_summary: "لم يتم إرجاع ملخص للمطابقة لهذا الملف.",
     lesson_plan_choose_both: "يرجى رفع قالب Word وملف PDF المصدر أولاً.",
     view_missing_assessment_students: "عرض الطلاب الذين لديهم درجات ناقصة",
     assessment_quiz: "الاختبار القصير",
