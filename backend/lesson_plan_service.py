@@ -309,6 +309,333 @@ def _extract_pdf_structured_content(pdf_text: str) -> Dict[str, Any]:
     }
 
 
+def _find_section_index(lines: List[str], *phrases: str) -> int:
+    normalized_lines = [_normalize_key(line) for line in lines]
+    normalized_phrases = [_normalize_key(phrase) for phrase in phrases if _normalize_key(phrase)]
+    if not normalized_phrases:
+        return -1
+    for index in range(len(normalized_lines)):
+        windows = [
+            normalized_lines[index],
+            " ".join(normalized_lines[index:index + 2]).strip(),
+            " ".join(normalized_lines[index:index + 3]).strip(),
+        ]
+        for phrase in normalized_phrases:
+            if any(phrase and window.startswith(phrase) for window in windows):
+                return index
+    return -1
+
+
+def _collect_list_items(lines: List[str]) -> List[str]:
+    items: List[str] = []
+    current = ""
+    for raw_line in lines:
+        line = _normalize_text(raw_line)
+        if not line:
+            continue
+        normalized = _normalize_key(line)
+        starts_new_item = bool(
+            line.startswith(("-", "•"))
+            or re.match(r"^(question \d+|for all students|for advanced students|teachers are asked to|students are asked to)\b", normalized)
+            or re.match(r"^\d+ [a-z]", normalized)
+            or "post activity" in normalized
+        )
+        if starts_new_item:
+            if current:
+                items.append(_normalize_text(current))
+            current = line
+        elif current:
+            current = f"{current} {line.lstrip('-• ').strip()}".strip()
+        else:
+            current = line
+    if current:
+        items.append(_normalize_text(current))
+    return [item for item in items if item]
+
+
+def _fit_items_to_block_count(items: List[str], count: int) -> List[str]:
+    normalized_items = [_normalize_text(item) for item in items if _normalize_text(item)]
+    if count <= 0:
+        return []
+    if not normalized_items:
+        return [""] * count
+    if len(normalized_items) < count:
+        return normalized_items + [""] * (count - len(normalized_items))
+    if len(normalized_items) == count:
+        return normalized_items
+    head = normalized_items[:count - 1]
+    tail = "\n".join(normalized_items[count - 1:])
+    return head + [tail]
+
+
+def _extract_pdf_lesson_sections(lines: List[str]) -> Dict[str, Any]:
+    if not lines:
+        return {}
+
+    def section_slice(start: int, end: int | None) -> List[str]:
+        if start < 0:
+            return []
+        if end is None or end < 0:
+            end = len(lines)
+        return lines[start:end]
+
+    lesson_objectives_idx = _find_section_index(lines, "lesson objectives")
+    checklist_idx = _find_section_index(lines, "check list what you need", "what you need for this lesson")
+    warmup_idx = _find_section_index(lines, "warmup questions", "warm up questions")
+    overview_idx = _find_section_index(lines, "overview steps to follow", "steps to follow")
+    hands_on_idx = _find_section_index(lines, "hands on")
+    exercise_idx = _find_section_index(lines, "exercise project", "exercise project for all students")
+    words_idx = _find_section_index(lines, "words to remember")
+    challenge_idx = _find_section_index(lines, "challenge")
+
+    title = _normalize_text(re.sub(r"\bPages?\s+\d+\b", "", lines[0], flags=re.I))
+
+    objective_lines = section_slice(lesson_objectives_idx + 1, checklist_idx)
+    duration_within_objectives_idx = _find_section_index(objective_lines, "duration")
+    if duration_within_objectives_idx >= 0:
+        objective_lines = objective_lines[:duration_within_objectives_idx]
+    objective_intro = ""
+    objective_bullets: List[str] = []
+    if objective_lines:
+        for index, line in enumerate(objective_lines):
+            normalized = _normalize_key(line)
+            if normalized.startswith("by the end of this lesson"):
+                objective_intro = _normalize_text(line)
+                objective_bullets = _collect_list_items(objective_lines[index + 1:])
+                break
+        if not objective_intro:
+            objective_intro = _normalize_text(objective_lines[0])
+            objective_bullets = _collect_list_items(objective_lines[1:])
+
+    aids_lines = section_slice(checklist_idx, warmup_idx)
+    prerequisite_idx = _find_section_index(aids_lines, "prerequisite")
+    if prerequisite_idx >= 0:
+        aids_lines = aids_lines[:prerequisite_idx]
+    aids_content = [
+        _normalize_text(line)
+        for line in aids_lines
+        if _normalize_text(line)
+        and _normalize_key(line) not in {"check list what you need", "for this lesson"}
+    ]
+    aids = " ".join(aids_content)
+
+    warmup_lines = section_slice(warmup_idx, overview_idx)
+    warmup_questions = [
+        item
+        for item in _collect_list_items(warmup_lines)
+        if not any(
+            marker in _normalize_key(item)
+            for marker in ("warmup", "warm up", "questions")
+        )
+    ]
+
+    procedure_lines = section_slice(overview_idx, hands_on_idx)
+    overview_intro_lines: List[str] = []
+    flashback_lines: List[str] = []
+    project_lines: List[str] = []
+    post_activity_lines: List[str] = []
+    current_section = "overview"
+    for line in procedure_lines:
+        normalized = _normalize_key(line)
+        if not normalized or normalized in {"overview", "steps to", "follow", "overview steps to follow"}:
+            continue
+        if normalized.startswith("1 flashback"):
+            current_section = "flashback"
+            continue
+        if normalized.startswith("2 project"):
+            current_section = "project"
+            continue
+        if "post activity" in normalized:
+            current_section = "post_activity"
+            continue
+        if current_section == "overview":
+            overview_intro_lines.append(line)
+        elif current_section == "flashback":
+            flashback_lines.append(line)
+        elif current_section == "project":
+            project_lines.append(line)
+        else:
+            post_activity_lines.append(line)
+
+    hands_on_lines = section_slice(hands_on_idx, exercise_idx)
+    teacher_lines: List[str] = []
+    student_lines: List[str] = []
+    current_group = ""
+    for line in hands_on_lines:
+        normalized = _normalize_key(line)
+        if not normalized or normalized == "hands on":
+            continue
+        if normalized.startswith("teachers are asked to"):
+            current_group = "teachers"
+            continue
+        if current_group == "teachers" and normalized == "show students":
+            continue
+        if normalized.startswith("students are asked to"):
+            current_group = "students"
+            continue
+        if current_group == "teachers":
+            teacher_lines.append(line)
+        elif current_group == "students":
+            student_lines.append(line)
+
+    exercise_lines = section_slice(exercise_idx, words_idx)
+    exercise_items = [
+        item
+        for item in _collect_list_items(exercise_lines)
+        if "exercise project" not in _normalize_key(item)
+    ]
+
+    words_to_remember = ""
+    if words_idx >= 0:
+        words_line = _normalize_text(lines[words_idx])
+        match = re.match(r"(?i)^Words to remember\s*(.+)$", words_line)
+        if match:
+            words_to_remember = _normalize_text(match.group(1))
+        elif words_idx + 1 < len(lines):
+            words_to_remember = _normalize_text(lines[words_idx + 1])
+
+    challenge = ""
+    if challenge_idx >= 0:
+        challenge_line = _normalize_text(lines[challenge_idx])
+        match = re.match(r"(?i)^Challenge\s*(.+)$", challenge_line)
+        if match:
+            challenge = _normalize_text(match.group(1))
+        elif challenge_idx + 1 < len(lines):
+            challenge = _normalize_text(lines[challenge_idx + 1])
+
+    return {
+        "title": title,
+        "objective_intro": objective_intro,
+        "objective_bullets": objective_bullets,
+        "aids": aids,
+        "warmup_questions": warmup_questions,
+        "overview_intro": _normalize_text(" ".join(overview_intro_lines)),
+        "flashback_items": _collect_list_items(flashback_lines),
+        "project_items": _collect_list_items(project_lines),
+        "post_activity_items": _collect_list_items(post_activity_lines),
+        "teacher_items": _collect_list_items(teacher_lines),
+        "student_items": _collect_list_items(student_lines),
+        "exercise_items": exercise_items,
+        "words_to_remember": words_to_remember,
+        "challenge": challenge,
+    }
+
+
+def _build_targeted_section_replacements(
+    template_blocks: List[Dict[str, Any]],
+    pdf_sections: Dict[str, Any],
+) -> Tuple[List[Dict[str, str]], set[str]]:
+    rows: Dict[Tuple[int, int], Dict[int, List[Dict[str, Any]]]] = {}
+    for block in template_blocks:
+        if block.get("kind") != "table_cell":
+            continue
+        key = (block.get("table_id", -1), block.get("row_index", -1))
+        rows.setdefault(key, {}).setdefault(block.get("cell_index", 0), []).append(block)
+
+    replacements: List[Dict[str, str]] = []
+    handled: set[str] = set()
+
+    def queue_blocks(blocks: List[Dict[str, Any]], values: List[str]) -> None:
+        if not blocks:
+            return
+        fitted_values = _fit_items_to_block_count(values, len(blocks))
+        for block, value in zip(blocks, fitted_values):
+            current = _normalize_text(block.get("text"))
+            next_value = _normalize_text(value)
+            if next_value != current:
+                replacements.append({"block_id": block["block_id"], "text": next_value})
+            handled.add(block["block_id"])
+
+    for (_table_id, _row_index), cells in sorted(rows.items()):
+        left_text = "\n".join(_normalize_text(item.get("text")) for item in cells.get(0, []) if _normalize_text(item.get("text")))
+        right_blocks = [item for item in cells.get(1, []) if _normalize_text(item.get("text"))]
+        label = _normalize_key(left_text)
+        if not label or not right_blocks:
+            continue
+
+        if "lesson title" in label and pdf_sections.get("title"):
+            queue_blocks(right_blocks, [pdf_sections["title"]])
+            continue
+
+        if label == "objectives":
+            objective_lines = pdf_sections.get("objective_bullets") or []
+            if objective_lines:
+                intro = "Students will know & be able to perform the following skills:"
+                queue_blocks(right_blocks, [intro] + objective_lines)
+                continue
+
+        if label == "aids" and pdf_sections.get("aids"):
+            queue_blocks(right_blocks, [pdf_sections["aids"]])
+            continue
+
+        if "lesson procedure" in label and "group projects" in label:
+            warmup_heading = _normalize_text(right_blocks[0].get("text")) if right_blocks else ""
+            warmup_body = "\n".join(pdf_sections.get("warmup_questions") or [])
+            overview_intro = pdf_sections.get("overview_intro") or ""
+
+            numbered_section_starts = [
+                index
+                for index, block in enumerate(right_blocks)
+                if re.match(r"^[^\w]*\d+\s*[-.)]", _normalize_text(block.get("text")))
+            ]
+            if len(numbered_section_starts) >= 3:
+                first_start, second_start, third_start = numbered_section_starts[:3]
+                warmup_blocks = right_blocks[:first_start]
+                flashback_blocks = right_blocks[first_start:second_start]
+                project_blocks = right_blocks[second_start:third_start]
+                post_activity_blocks = right_blocks[third_start:]
+
+                queue_blocks(
+                    warmup_blocks,
+                    [
+                        warmup_heading,
+                        warmup_body,
+                        overview_intro,
+                    ],
+                )
+                queue_blocks(
+                    flashback_blocks,
+                    ["1. Flashback"] + (pdf_sections.get("flashback_items") or []),
+                )
+                queue_blocks(
+                    project_blocks,
+                    ["2. Project"] + (pdf_sections.get("project_items") or []),
+                )
+                post_items = pdf_sections.get("post_activity_items") or pdf_sections.get("teacher_items") or []
+                queue_blocks(
+                    post_activity_blocks,
+                    ["Post-Activity"] + post_items,
+                )
+                continue
+
+        if label == "coding ai":
+            coding_ai_text = ""
+            if pdf_sections.get("words_to_remember"):
+                coding_ai_text = f"Words to remember: {pdf_sections['words_to_remember']}"
+            elif pdf_sections.get("challenge"):
+                coding_ai_text = f"Challenge: {pdf_sections['challenge']}"
+            if coding_ai_text:
+                queue_blocks(right_blocks, [coding_ai_text])
+                continue
+
+        if label == "assessment 5 min":
+            if len(right_blocks) > 1:
+                assessment_prompt = "\n".join((pdf_sections.get("exercise_items") or [])[:2]) or pdf_sections.get("challenge") or ""
+                queue_blocks(
+                    right_blocks,
+                    [
+                        _normalize_text(right_blocks[0].get("text")),
+                        assessment_prompt,
+                    ],
+                )
+            else:
+                observation_text = "\n".join((pdf_sections.get("student_items") or [])[:3]) or "\n".join((pdf_sections.get("exercise_items") or [])[2:4])
+                queue_blocks(right_blocks, [observation_text])
+            continue
+
+    return replacements, handled
+
+
 def _best_pdf_match(label: str, labeled_map: Dict[str, str]) -> str | None:
     key = _normalize_key(label)
     if not key:
@@ -335,6 +662,12 @@ def _best_pdf_match(label: str, labeled_map: Dict[str, str]) -> str | None:
         for candidate_key, candidate_value in labeled_map.items():
             candidate_tokens = set(candidate_key.split())
             overlap = len(label_tokens & candidate_tokens)
+            if not overlap:
+                continue
+            label_coverage = overlap / max(len(label_tokens), 1)
+            candidate_coverage = overlap / max(len(candidate_tokens), 1)
+            if label_coverage < 0.5 or candidate_coverage < 0.5:
+                continue
             if overlap > best_score:
                 best_score = overlap
                 best_value = candidate_value
@@ -372,17 +705,18 @@ def generate_lesson_plan_replacements(
 ) -> Dict[str, Any]:
     _ = provider, model
     structured_pdf = _extract_pdf_structured_content(pdf_text)
+    pdf_sections = _extract_pdf_lesson_sections(structured_pdf["lines"])
     labeled_map = structured_pdf["labeled_map"]
     ordered_units = structured_pdf["ordered_units"]
     queue_index = 0
-    replacements: List[Dict[str, str]] = []
+    replacements, handled_block_ids = _build_targeted_section_replacements(template_blocks, pdf_sections)
     label_matches = 0
     sequential_matches = 0
     used_values: set[str] = set()
 
     for block in template_blocks:
         text = _normalize_text(block.get("text"))
-        if not text or _is_static_heading(block):
+        if not text or block.get("block_id") in handled_block_ids or _is_static_heading(block):
             continue
 
         replacement_text = None
