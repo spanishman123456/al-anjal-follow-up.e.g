@@ -8,6 +8,7 @@ import {
 } from "@/lib/academicScope";
 import { buildAutoInsightsFromReport } from "@/lib/insightAutofill";
 import { useTranslations } from "@/lib/i18n";
+import { getClassGradeValue } from "@/lib/utils";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
@@ -67,8 +68,8 @@ export default function Reports() {
   const availableGrades = Array.from(
     new Set(
       (contextClasses || [])
-        .map((cls) => Number(cls?.grade))
-        .filter((value) => Number.isFinite(value)),
+        .map((cls) => getClassGradeValue(cls))
+        .filter((value) => Number.isFinite(value) && value > 0),
     ),
   ).sort((a, b) => a - b);
 

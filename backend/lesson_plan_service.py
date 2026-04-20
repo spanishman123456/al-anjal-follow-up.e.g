@@ -10,7 +10,7 @@ from docx import Document
 from docx.document import Document as DocxDocument
 from docx.oxml.table import CT_Tbl
 from docx.oxml.text.paragraph import CT_P
-from docx.shared import Pt
+from docx.shared import Inches, Pt
 from docx.table import Table as DocxTable, _Cell
 from docx.text.paragraph import Paragraph
 from pypdf import PdfReader
@@ -842,21 +842,21 @@ def _apply_compact_layout(paragraph: Paragraph, block: Dict[str, Any], text: str
     paragraph_format = paragraph.paragraph_format
     paragraph_format.space_before = Pt(0)
     paragraph_format.space_after = Pt(0)
-    paragraph_format.line_spacing = 1.0
+    paragraph_format.line_spacing = 0.95
 
     row_index = block.get("row_index", -1)
     is_table_block = block.get("kind") == "table_cell"
     compact_rows = {3, 5, 6}
-    size_pt = 9
     if is_table_block and row_index in compact_rows:
-        size_pt = 8
-    if len(_normalize_text(text)) > 180:
-        size_pt = min(size_pt, 8)
-    if len(_normalize_text(text)) > 320:
-        size_pt = min(size_pt, 7)
+        paragraph_format.line_spacing = 0.9
 
-    for run in paragraph.runs:
-        run.font.size = Pt(size_pt)
+
+def _apply_document_compaction(document: DocxDocument) -> None:
+    for section in document.sections:
+        section.top_margin = min(section.top_margin, Inches(0.35))
+        section.bottom_margin = min(section.bottom_margin, Inches(0.35))
+        section.header_distance = min(section.header_distance, Inches(0.2))
+        section.footer_distance = min(section.footer_distance, Inches(0.2))
 
 
 def apply_replacements_to_document(docx_bytes: bytes, replacements: List[Dict[str, str]]) -> Tuple[bytes, int]:
@@ -892,6 +892,8 @@ def apply_replacements_to_document(docx_bytes: bytes, replacements: List[Dict[st
         _replace_paragraph_text(paragraph, replacement_text)
         _apply_compact_layout(paragraph, block_meta_lookup.get(block_id, {}), replacement_text)
         updated += 1
+
+    _apply_document_compaction(document)
 
     buffer = io.BytesIO()
     document.save(buffer)

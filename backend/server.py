@@ -1878,9 +1878,29 @@ def _focus_component_summary_text(student: Dict[str, Any], quarter: int) -> str:
 
 
 def parse_class_name(name: str) -> Dict[str, Optional[Any]]:
-    match = re.search(r"(\d+)\s*([A-Za-z])", name.strip())
+    normalized = (name or "").strip()
+    if not normalized:
+        return {"grade": None, "section": None}
+
+    match = re.match(r"^(\d+)\s*([A-Za-z])$", normalized)
+    if match:
+        return {"grade": int(match.group(1)), "section": match.group(2).upper()}
+
+    match = re.match(r"^Grade\s*(\d+)(?:\s*([A-Za-z]))?$", normalized, flags=re.I)
+    if match:
+        return {
+            "grade": int(match.group(1)),
+            "section": match.group(2).upper() if match.group(2) else None,
+        }
+
+    match = re.match(r"^(\d+)$", normalized)
+    if match:
+        return {"grade": int(match.group(1)), "section": None}
+
+    match = re.search(r"(\d+)", normalized)
     grade = int(match.group(1)) if match else None
-    section = match.group(2).upper() if match else None
+    section_match = re.search(r"([A-Za-z])$", normalized)
+    section = section_match.group(1).upper() if section_match else None
     return {"grade": grade, "section": section}
 
 

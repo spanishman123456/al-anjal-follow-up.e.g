@@ -6,12 +6,51 @@ export function cn(...inputs) {
 }
 
 /** Sort key for class names: grade then section so 6A < 6B, 7A < 7B. */
+export function parseClassNameParts(className) {
+  if (!className || typeof className !== "string") return { grade: null, section: "" };
+  const normalized = String(className).trim();
+
+  let match = normalized.match(/^(\d+)\s*([A-Za-z])$/);
+  if (match) {
+    return { grade: parseInt(match[1], 10), section: match[2].toUpperCase() };
+  }
+
+  match = normalized.match(/^grade\s*(\d+)(?:\s*([A-Za-z]))?$/i);
+  if (match) {
+    return {
+      grade: parseInt(match[1], 10),
+      section: (match[2] || "").toUpperCase(),
+    };
+  }
+
+  match = normalized.match(/^(\d+)$/);
+  if (match) {
+    return { grade: parseInt(match[1], 10), section: "" };
+  }
+
+  match = normalized.match(/(\d+)/);
+  if (match) {
+    const sectionMatch = normalized.match(/([A-Za-z])$/);
+    return {
+      grade: parseInt(match[1], 10),
+      section: sectionMatch ? sectionMatch[1].toUpperCase() : "",
+    };
+  }
+
+  return { grade: null, section: "" };
+}
+
 export function classSortKey(className) {
-  if (!className || typeof className !== "string") return [0, ""];
-  const m = String(className).trim().match(/^(\d+)([A-Za-z])?$/);
-  const grade = m ? parseInt(m[1], 10) : 0;
-  const section = (m && m[2]) ? m[2].toUpperCase() : "";
-  return [grade, section];
+  const parsed = parseClassNameParts(className);
+  return [parsed.grade ?? 999, parsed.section || ""];
+}
+
+export function getClassGradeValue(classItem) {
+  const rawGrade = Number(classItem?.grade);
+  if (Number.isFinite(rawGrade) && rawGrade > 0) return rawGrade;
+  const name = classItem?.class_name ?? classItem?.name ?? "";
+  const parsed = parseClassNameParts(name);
+  return parsed.grade;
 }
 
 /** Sort a list of items by class name (grade then section). Item can be { class_name } or { name }. */
