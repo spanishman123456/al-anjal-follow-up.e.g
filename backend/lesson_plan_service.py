@@ -10,6 +10,7 @@ from docx import Document
 from docx.document import Document as DocxDocument
 from docx.oxml.table import CT_Tbl
 from docx.oxml.text.paragraph import CT_P
+from docx.shared import Pt
 from docx.table import Table as DocxTable, _Cell
 from docx.text.paragraph import Paragraph
 from pypdf import PdfReader
@@ -368,6 +369,15 @@ def _fit_items_to_block_count(items: List[str], count: int) -> List[str]:
     return head + [tail]
 
 
+def _derive_header_topic(title: str) -> str:
+    normalized = _normalize_text(title)
+    if not normalized:
+        return ""
+    normalized = re.sub(r"\bLesson\s+\d+\b.*$", "", normalized, flags=re.I).strip(" -")
+    normalized = re.sub(r"\bPages?\s+\d+\b.*$", "", normalized, flags=re.I).strip(" -")
+    return _normalize_text(normalized)
+
+
 def _extract_pdf_lesson_sections(lines: List[str]) -> Dict[str, Any]:
     if not lines:
         return {}
@@ -389,6 +399,7 @@ def _extract_pdf_lesson_sections(lines: List[str]) -> Dict[str, Any]:
     challenge_idx = _find_section_index(lines, "challenge")
 
     title = _normalize_text(re.sub(r"\bPages?\s+\d+\b", "", lines[0], flags=re.I))
+    header_topic = _derive_header_topic(title)
 
     objective_lines = section_slice(lesson_objectives_idx + 1, checklist_idx)
     duration_within_objectives_idx = _find_section_index(objective_lines, "duration")
@@ -428,6 +439,7 @@ def _extract_pdf_lesson_sections(lines: List[str]) -> Dict[str, Any]:
             for marker in ("warmup", "warm up", "questions")
         )
     ]
+    warmup_question = warmup_questions[0] if warmup_questions else ""
 
     procedure_lines = section_slice(overview_idx, hands_on_idx)
     overview_intro_lines: List[str] = []
@@ -505,10 +517,12 @@ def _extract_pdf_lesson_sections(lines: List[str]) -> Dict[str, Any]:
 
     return {
         "title": title,
+        "header_topic": header_topic,
         "objective_intro": objective_intro,
         "objective_bullets": objective_bullets,
         "aids": aids,
         "warmup_questions": warmup_questions,
+        "warmup_question": warmup_question,
         "overview_intro": _normalize_text(" ".join(overview_intro_lines)),
         "flashback_items": _collect_list_items(flashback_lines),
         "project_items": _collect_list_items(project_lines),
@@ -526,6 +540,7 @@ def _build_targeted_section_replacements(
     pdf_sections: Dict[str, Any],
 ) -> Tuple[List[Dict[str, str]], set[str]]:
     rows: Dict[Tuple[int, int], Dict[int, List[Dict[str, Any]]]] = {}
+    paragraph_blocks = [block for block in template_blocks if block.get("kind") == "paragraph"]
     for block in template_blocks:
         if block.get("kind") != "table_cell":
             continue
@@ -546,6 +561,26 @@ def _build_targeted_section_replacements(
                 replacements.append({"block_id": block["block_id"], "text": next_value})
             handled.add(block["block_id"])
 
+    header_topic = pdf_sections.get("header_topic") or ""
+    if header_topic:
+        for block in paragraph_blocks:
+            text = _normalize_text(block.get("text"))
+            normalized = _normalize_key(text)
+            if "week" in normalized and "strategy" in normalized:
+                handled.add(block["block_id"])
+                continue
+            if "chapter" in normalized and "time pacing" in normalized:
+                updated_text = re.sub(
+                    r"(Stander:\s*[^ ]+\s+)(.*?)(\s+Time Pacing:.*)",
+                    rf"\1{header_topic}\3",
+                    text,
+                    flags=re.I,
+                )
+                if updated_text != text:
+                    replacements.append({"block_id": block["block_id"], "text": _normalize_text(updated_text)})
+                handled.add(block["block_id"])
+                break
+
     for (_table_id, _row_index), cells in sorted(rows.items()):
         left_text = "\n".join(_normalize_text(item.get("text")) for item in cells.get(0, []) if _normalize_text(item.get("text")))
         right_blocks = [item for item in cells.get(1, []) if _normalize_text(item.get("text"))]
@@ -553,8 +588,9 @@ def _build_targeted_section_replacements(
         if not label or not right_blocks:
             continue
 
-        if "lesson title" in label and pdf_sections.get("title"):
-            queue_blocks(right_blocks, [pdf_sections["title"]])
+        if "lesson title" in label:
+            for block in right_blocks:
+                handled.add(block["block_id"])
             continue
 
         if label == "objectives":
@@ -570,7 +606,7 @@ def _build_targeted_section_replacements(
 
         if "lesson procedure" in label and "group projects" in label:
             warmup_heading = _normalize_text(right_blocks[0].get("text")) if right_blocks else ""
-            warmup_body = "\n".join(pdf_sections.get("warmup_questions") or [])
+            warmup_body = pdf_sections.get("warmup_question") or ""
             overview_intro = pdf_sections.get("overview_intro") or ""
 
             numbered_section_starts = [
@@ -609,14 +645,8 @@ def _build_targeted_section_replacements(
                 continue
 
         if label == "coding ai":
-            coding_ai_text = ""
-            if pdf_sections.get("words_to_remember"):
-                coding_ai_text = f"Words to remember: {pdf_sections['words_to_remember']}"
-            elif pdf_sections.get("challenge"):
-                coding_ai_text = f"Challenge: {pdf_sections['challenge']}"
-            if coding_ai_text:
-                queue_blocks(right_blocks, [coding_ai_text])
-                continue
+            queue_blocks(right_blocks, [""] * len(right_blocks))
+            continue
 
         if label == "assessment 5 min":
             if len(right_blocks) > 1:
@@ -783,10 +813,34 @@ def _replace_paragraph_text(paragraph: Paragraph, text: str) -> None:
         run.text = ""
 
 
+def _apply_compact_layout(paragraph: Paragraph, block: Dict[str, Any], text: str) -> None:
+    paragraph_format = paragraph.paragraph_format
+    paragraph_format.space_before = Pt(0)
+    paragraph_format.space_after = Pt(0)
+    paragraph_format.line_spacing = 1.0
+
+    row_index = block.get("row_index", -1)
+    is_table_block = block.get("kind") == "table_cell"
+    compact_rows = {3, 5, 6}
+    size_pt = 9
+    if is_table_block and row_index in compact_rows:
+        size_pt = 8
+    if len(_normalize_text(text)) > 180:
+        size_pt = min(size_pt, 8)
+    if len(_normalize_text(text)) > 320:
+        size_pt = min(size_pt, 7)
+
+    for run in paragraph.runs:
+        run.font.size = Pt(size_pt)
+
+
 def apply_replacements_to_document(docx_bytes: bytes, replacements: List[Dict[str, str]]) -> Tuple[bytes, int]:
     template_data = extract_docx_template(docx_bytes)
     document: DocxDocument = template_data["document"]
     block_lookup: Dict[str, Paragraph] = {}
+    block_meta_lookup: Dict[str, Dict[str, Any]] = {
+        block["block_id"]: block for block in template_data["editable_blocks"]
+    }
 
     paragraph_count = 0
     table_count = 0
@@ -809,7 +863,9 @@ def apply_replacements_to_document(docx_bytes: bytes, replacements: List[Dict[st
         paragraph = block_lookup.get(block_id)
         if paragraph is None:
             continue
-        _replace_paragraph_text(paragraph, replacement.get("text") or "")
+        replacement_text = replacement.get("text") or ""
+        _replace_paragraph_text(paragraph, replacement_text)
+        _apply_compact_layout(paragraph, block_meta_lookup.get(block_id, {}), replacement_text)
         updated += 1
 
     buffer = io.BytesIO()
