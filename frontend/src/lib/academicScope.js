@@ -17,3 +17,13 @@ export function termScopeIdFromOutlet(semester, quarter) {
 export function resolveTermScope(id) {
   return TERM_SCOPES.find((x) => x.id === id) || TERM_SCOPES[0];
 }
+
+export function displayQuarterNumber(semester, quarter) {
+  const semesterNumber = semester === "semester2" ? 2 : Number(semester) === 2 ? 2 : 1;
+  const q = Number(quarter) === 2 ? 2 : 1;
+  return semesterNumber === 2 ? q + 2 : q;
+}
+
+export function displayQuarterLabel(t, semester, quarter) {
+  return `${t("quarter")} ${displayQuarterNumber(semester, quarter)}`;
+}

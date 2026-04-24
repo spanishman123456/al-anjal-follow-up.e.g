@@ -14,6 +14,7 @@ import {
 import { toast } from "sonner";
 import { api, getApiErrorMessage } from "@/lib/api";
 import { useTranslations } from "@/lib/i18n";
+import { displayQuarterNumber } from "@/lib/academicScope";
 import { sortByClassOrder } from "@/lib/utils";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -84,7 +85,7 @@ export default function Dashboard() {
             t("missed_assessment_toast")
               .replace("{count}", String(missedCount))
               .replace("{semester}", String(semesterNumber))
-              .replace("{quarter}", String(quarter)),
+              .replace("{quarter}", String(displayQuarterNumber(semesterNumber, quarter))),
           );
         }
         lastMissedCountRef.current = missedCount;

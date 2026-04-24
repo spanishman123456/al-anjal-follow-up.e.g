@@ -18,6 +18,7 @@ import {
   TERM_SCOPES,
   termScopeIdFromOutlet,
   resolveTermScope,
+  displayQuarterLabel,
 } from "@/lib/academicScope";
 import { buildAutoInsightsFromOverview } from "@/lib/insightAutofill";
 import { useTranslations } from "@/lib/i18n";
@@ -139,6 +140,7 @@ export default function Analytics() {
   const term = resolveTermScope(termScopeId);
   const apiSemester = term.semester;
   const apiQuarter = term.quarter;
+  const sameSemesterQuarterOneLabel = displayQuarterLabel(t, apiSemester, 1);
   const [overview, setOverview] = useState(null);
   const [classSummary, setClassSummary] = useState([]);
   const [activeTab, setActiveTab] = useState("overview");
@@ -920,7 +922,7 @@ export default function Analytics() {
             {t("overview")}
           </TabsTrigger>
           <TabsTrigger value="quarter1" data-testid="analytics-tab-quarter1">
-            {t("quarter_1")}
+            {sameSemesterQuarterOneLabel}
           </TabsTrigger>
           <TabsTrigger value="struggling" data-testid="analytics-tab-struggling">
             {t("struggling_students")}
@@ -986,7 +988,7 @@ export default function Analytics() {
           <Card className="border-primary/20 shadow-sm">
             <CardHeader>
               <CardTitle>
-                {isStudentScoped ? t("analytics_student_component_share") : `${t("quarter_1")} — ${t("performance_distribution")}`}
+                {isStudentScoped ? t("analytics_student_component_share") : `${sameSemesterQuarterOneLabel} — ${t("performance_distribution")}`}
               </CardTitle>
             </CardHeader>
             <CardContent className="grid gap-6 md:grid-cols-2">

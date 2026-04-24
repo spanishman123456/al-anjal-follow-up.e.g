@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useOutletContext, Link } from "react-router-dom";
 import { toast } from "sonner";
 import { api, getApiErrorMessage } from "@/lib/api";
+import { displayQuarterLabel } from "@/lib/academicScope";
 import { useTranslations } from "@/lib/i18n";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -22,6 +23,8 @@ export default function Classes() {
   const semesterNumber = semester === "semester2" ? 2 : 1;
   const isTeacher = profile?.role_name === "Teacher";
   const t = useTranslations(language);
+  const quarterOneLabel = displayQuarterLabel(t, semesterNumber, 1);
+  const quarterTwoLabel = displayQuarterLabel(t, semesterNumber, 2);
   const [classes, setClasses] = useState([]);
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [form, setForm] = useState({ name: "", grade: "", section: "" });
@@ -304,10 +307,10 @@ export default function Classes() {
               </div>
               <div className="grid grid-cols-2 gap-2 text-xs" data-testid={`class-card-quarter-rates-${cls.class_id}`}>
                 <div className="rounded-md bg-emerald-50 px-2 py-1 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">
-                  {t("quarter_1")}: {(cls.quarter1_on_level_rate ?? 0)}% {t("on_level")}
+                  {quarterOneLabel}: {(cls.quarter1_on_level_rate ?? 0)}% {t("on_level")}
                 </div>
                 <div className="rounded-md bg-emerald-50 px-2 py-1 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">
-                  {t("quarter_2")}: {(cls.quarter2_on_level_rate ?? 0)}% {t("on_level")}
+                  {quarterTwoLabel}: {(cls.quarter2_on_level_rate ?? 0)}% {t("on_level")}
                 </div>
               </div>
               <div className="text-xs text-muted-foreground" data-testid={`class-card-selected-term-${cls.class_id}`}>
