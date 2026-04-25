@@ -770,27 +770,25 @@ def compute_quarter_totals(scores_by_week: Dict[int, Dict[str, Optional[float]]]
 QUARTER_TOTAL_ON_LEVEL = 46
 QUARTER_TOTAL_APPROACH = 43
 
-# Dashboard / class / report lists titled "need support": only "below" (<43/50), not "approach" (43–45.99).
-PERFORMANCE_LEVEL_NEED_SUPPORT = "below"
+# Dashboard / class / report lists titled "need support": any scored student below on-level (<46/50).
+PERFORMANCE_LEVELS_NEED_SUPPORT = {"approach", "below"}
 
 
 def include_in_need_support_list(student: Dict[str, Any]) -> bool:
     """
     True if this student should appear on 'Students Needing Support' and related lists.
-    Requires performance band 'below' and a quarter total strictly under the approach threshold (43/50).
+    Includes both Approach and Below bands. The numeric quarter total is the source of truth
+    when available, so a 44.5/50 student is not missed because of a stale label.
     """
-    if student.get("performance_level") != PERFORMANCE_LEVEL_NEED_SUPPORT:
-        return False
     total = student.get("total_score_normalized")
     if total is None:
         total = student.get("semester_total")
     if total is not None:
         try:
-            if float(total) >= float(QUARTER_TOTAL_APPROACH):
-                return False
+            return float(total) < float(QUARTER_TOTAL_ON_LEVEL)
         except (TypeError, ValueError):
             pass
-    return True
+    return student.get("performance_level") in PERFORMANCE_LEVELS_NEED_SUPPORT
 
 
 def quarter_total_to_level(quarter_total: Optional[float]) -> str:
