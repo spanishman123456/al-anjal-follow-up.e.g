@@ -158,7 +158,7 @@ export default function Dashboard() {
   const classData = sortByClassOrder(summary?.students_per_class || []);
   const totalFromClasses = classData.reduce((sum, item) => sum + (Number(item.count) || 0), 0);
   const supportCount = summary
-    ? (summary.counts?.approach || 0) + (summary.counts?.below || 0)
+    ? summary.students_needing_support?.length ?? (summary.counts?.approach || 0) + (summary.counts?.below || 0)
     : 0;
 
   return (
@@ -508,9 +508,9 @@ export default function Dashboard() {
               {t("students_needing_support")}
             </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-3">
+          <CardContent className="max-h-[32rem] space-y-3 overflow-y-auto pr-1">
             {summary?.students_needing_support?.length ? (
-              summary.students_needing_support.slice(0, 5).map((student) => (
+              summary.students_needing_support.map((student) => (
                 <div
                   key={student.id}
                   className="flex items-center justify-between rounded-lg border border-border/60 px-3 py-2"
@@ -525,7 +525,11 @@ export default function Dashboard() {
                     </p>
                   </div>
                   <Badge
-                    className="bg-amber-100 text-amber-700"
+                    className={
+                      student.performance_level === "below"
+                        ? "bg-red-100 text-red-700"
+                        : "bg-amber-100 text-amber-700"
+                    }
                     data-testid={`support-student-level-${student.id}`}
                   >
                     {t(student.performance_level)}
