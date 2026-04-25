@@ -592,15 +592,15 @@ export default function Settings() {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="lg:col-span-2">
           <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle>{t("user_management")}</CardTitle>
             <Button onClick={() => setUserDialogOpen(true)} data-testid="add-user-button">
               {t("add_user")}
             </Button>
           </CardHeader>
-          <CardContent>
-            <Table data-testid="users-table">
+          <CardContent className="overflow-x-auto">
+            <Table className="min-w-[980px]" data-testid="users-table">
               <TableHeader>
                 <TableRow>
                   <TableHead>{t("name")}</TableHead>
