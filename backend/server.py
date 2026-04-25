@@ -5372,6 +5372,9 @@ async def transfer_student(student_id: str, payload: StudentTransferRequest, cur
 
 @api_router.post("/students/promote")
 async def promote_students(payload: PromotionRequest, current_user: Dict[str, Any] = Depends(get_current_user)):
+    promotion_settings = await get_promotion_settings()
+    if not promotion_settings.get("enabled"):
+        raise HTTPException(status_code=403, detail="Promotion is disabled")
     source_class = await db.classes.find_one({"id": payload.from_class_id}, {"_id": 0})
     target_class = await db.classes.find_one({"id": payload.to_class_id}, {"_id": 0})
     if not source_class or not target_class:
