@@ -440,6 +440,27 @@ html:not(.dark) .login-top-sky {
 }
 
 @layer components {
+    /* Interactive list rows (dashboard, analytics lists) */
+    .list-row-interactive {
+        transition: background-color var(--motion-duration-smooth) var(--motion-ease-out),
+            border-color var(--motion-duration-smooth) var(--motion-ease-out),
+            transform var(--motion-duration-smooth) var(--motion-ease-out);
+    }
+    .list-row-interactive:hover {
+        background-color: hsl(var(--muted) / 0.45);
+        transform: translateY(-1px);
+    }
+
+    /* Page header toolbar: stacks on narrow screens */
+    .page-toolbar {
+        @apply flex flex-wrap items-center gap-2 sm:gap-3;
+    }
+
+    /* Wide data tables: horizontal scroll on small viewports */
+    .table-responsive-wrap {
+        @apply -mx-1 w-full overflow-x-auto px-1 sm:mx-0 sm:px-0;
+    }
+
     /*
      * Grade table inputs: override Input `w-full` (utilities win over this layer without !important).
      * Keep native number steppers visible so teachers can increment/decrement with arrows.

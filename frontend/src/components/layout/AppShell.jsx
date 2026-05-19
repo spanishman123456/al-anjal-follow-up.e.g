@@ -521,7 +521,7 @@ export const AppShell = ({
         <div className={cn(heroSky && "main-hero-sky")}>
         <header
           className={cn(
-            "relative z-10 flex flex-col gap-4 px-6 py-4 backdrop-blur-sm",
+            "relative z-10 flex flex-col gap-4 px-4 py-4 backdrop-blur-sm sm:px-6",
             heroSky
               ? "border-0 bg-transparent"
               : "border-b border-border/50 glass-panel dark:border-white/10",
@@ -686,7 +686,7 @@ export const AppShell = ({
         {/* Academic context bar: semester reminder on every page */}
         <div
           className={cn(
-            "relative z-10 flex flex-wrap items-center justify-center gap-4 px-6 py-3",
+            "relative z-10 flex flex-wrap items-center justify-center gap-3 px-4 py-3 sm:gap-4 sm:px-6",
             heroSky ? "border-0 bg-transparent" : "border-b border-border/50 dark:border-white/10",
           )}
           style={heroSky ? undefined : { background: "hsl(var(--section-context))" }}
@@ -755,7 +755,7 @@ export const AppShell = ({
         </div>
         </div>
         <main
-          className="page-content-bg flex-1 px-6 py-8"
+          className="page-content-bg flex-1 px-4 py-6 sm:px-6 sm:py-8"
           data-testid="main-content"
         >
           <div key={`${location.pathname}${location.search}`} className="page-enter">

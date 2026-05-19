@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Trash2 } from "lucide-react";
+import { performanceStatCellClasses } from "@/lib/performanceBadges";
 
 export default function Classes() {
   const { language, profile, semester, quarter, loadClasses: refreshGlobalClasses } = useOutletContext();
@@ -305,32 +306,32 @@ export default function Classes() {
                   {cls.avg_total_score != null ? cls.avg_total_score : "—"}
                 </span>
               </div>
-              <div className="grid grid-cols-2 gap-2 text-xs" data-testid={`class-card-quarter-rates-${cls.class_id}`}>
-                <div className="rounded-md bg-emerald-50 px-2 py-1 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">
+              <div className="grid grid-cols-1 gap-2 text-xs sm:grid-cols-2" data-testid={`class-card-quarter-rates-${cls.class_id}`}>
+                <div className={performanceStatCellClasses.on_level}>
                   {quarterOneLabel}: {(cls.quarter1_on_level_rate ?? 0)}% {t("on_level")}
                 </div>
-                <div className="rounded-md bg-emerald-50 px-2 py-1 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">
+                <div className={performanceStatCellClasses.on_level}>
                   {quarterTwoLabel}: {(cls.quarter2_on_level_rate ?? 0)}% {t("on_level")}
                 </div>
               </div>
               <div className="text-xs text-muted-foreground" data-testid={`class-card-selected-term-${cls.class_id}`}>
                 {t("performance_distribution")} - {selectedTermLabel}
               </div>
-              <div className="grid grid-cols-2 gap-2 text-xs" data-testid={`class-card-distribution-${cls.class_id}`}>
-                <div className="rounded-md bg-emerald-50 px-2 py-1 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">
+              <div className="grid grid-cols-1 gap-2 text-xs sm:grid-cols-2" data-testid={`class-card-distribution-${cls.class_id}`}>
+                <div className={performanceStatCellClasses.on_level}>
                   {t("on_level")}: {cls.distribution?.on_level ?? 0}
                 </div>
-                <div className="rounded-md bg-amber-50 px-2 py-1 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300">
+                <div className={performanceStatCellClasses.approach}>
                   {t("approach")}: {cls.distribution?.approach ?? 0}
                 </div>
-                <div className="rounded-md bg-rose-50 px-2 py-1 text-rose-700 dark:bg-rose-900/30 dark:text-rose-300">
+                <div className={performanceStatCellClasses.below}>
                   {t("below")}: {cls.distribution?.below ?? 0}
                 </div>
-                <div className="rounded-md bg-slate-100 px-2 py-1 text-slate-600 dark:bg-slate-800 dark:text-slate-400">
+                <div className={performanceStatCellClasses.no_data}>
                   {t("need_support")}: {cls.students_needing_support_count ?? 0}
                 </div>
                 {(cls.distribution?.no_data ?? 0) > 0 && (
-                  <div className="col-span-2 rounded-md bg-slate-100 px-2 py-1 text-slate-600 dark:bg-slate-800 dark:text-slate-400">
+                  <div className={`col-span-1 sm:col-span-2 ${performanceStatCellClasses.no_data}`}>
                     {t("no_data")}: {cls.distribution.no_data}
                   </div>
                 )}

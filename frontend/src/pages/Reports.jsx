@@ -39,6 +39,13 @@ import {
   QuarterOnLevelFocus,
   ClassScoreArea,
 } from "@/components/dashboard/VisualBoard";
+import { ExpandableSection } from "@/components/ExpandableSection";
+import { PerformanceLevelBadge } from "@/components/PerformanceLevelBadge";
+import {
+  performanceChipClasses,
+  performanceLegendSwatchClasses,
+  performanceTextClasses,
+} from "@/lib/performanceBadges";
 
 export default function Reports() {
   const { language, semester, quarter, profile, classes: contextClasses = [] } = useOutletContext();
@@ -430,16 +437,16 @@ export default function Reports() {
               subtitle={t(`term_${termScopeId}`)}
             >
               <div className="mb-2 space-y-1 text-sm font-semibold">
-                <div className="flex items-center gap-2 text-emerald-600">
-                  <span className="inline-block h-3 w-3 rounded-sm bg-emerald-500" />
+                <div className={`flex items-center gap-2 ${performanceTextClasses.on_level}`}>
+                  <span className={`inline-block h-3 w-3 rounded-sm ${performanceLegendSwatchClasses.on_level}`} />
                   {t("on_level")}
                 </div>
-                <div className="flex items-center gap-2 text-amber-600">
-                  <span className="inline-block h-3 w-3 rounded-sm bg-amber-500" />
+                <div className={`flex items-center gap-2 ${performanceTextClasses.approach}`}>
+                  <span className={`inline-block h-3 w-3 rounded-sm ${performanceLegendSwatchClasses.approach}`} />
                   {t("visual_board_approaching_full_score")}
                 </div>
-                <div className="flex items-center gap-2 text-red-500">
-                  <span className="inline-block h-3 w-3 rounded-sm bg-red-500" />
+                <div className={`flex items-center gap-2 ${performanceTextClasses.below}`}>
+                  <span className={`inline-block h-3 w-3 rounded-sm ${performanceLegendSwatchClasses.below}`} />
                   {t("visual_board_below_level")}
                 </div>
               </div>
@@ -514,6 +521,7 @@ export default function Reports() {
                 </TabsList>
 
                 <TabsContent value="top" className="mt-4" data-testid="reports-top-content">
+                  <div className="table-responsive-wrap">
                   <Table>
                     <TableHeader>
                       <TableRow>
@@ -539,7 +547,7 @@ export default function Reports() {
                                 {(student.strengths || []).map((str) => (
                                   <span
                                     key={str}
-                                    className="rounded bg-emerald-100 px-2 py-0.5 text-xs dark:bg-emerald-900/40"
+                                    className={performanceChipClasses.on_level}
                                   >
                                     {str}
                                   </span>
@@ -553,9 +561,11 @@ export default function Reports() {
                       ))}
                     </TableBody>
                   </Table>
+                  </div>
                 </TabsContent>
 
                 <TabsContent value="support" className="mt-4" data-testid="reports-support-content">
+                  <div className="table-responsive-wrap">
                   <Table>
                     <TableHeader>
                       <TableRow>
@@ -573,7 +583,12 @@ export default function Reports() {
                           <TableCell>{student.full_name}</TableCell>
                           <TableCell>{student.class_name}</TableCell>
                           <TableCell>{focusQuarterStudentTotal(student)}</TableCell>
-                          <TableCell>{t(student.performance_level)}</TableCell>
+                          <TableCell>
+                            <PerformanceLevelBadge
+                              level={student.performance_level}
+                              label={t(student.performance_level)}
+                            />
+                          </TableCell>
                           <TableCell>{renderMarksBreakdown(student)}</TableCell>
                           <TableCell>
                             {(student.weak_areas || []).length > 0 ? (
@@ -581,7 +596,7 @@ export default function Reports() {
                                 {(student.weak_areas || []).map((area) => (
                                   <span
                                     key={area}
-                                    className="rounded bg-amber-100 px-2 py-0.5 text-xs dark:bg-amber-900/40"
+                                    className={performanceChipClasses.approach}
                                   >
                                     {area}
                                   </span>
@@ -595,9 +610,11 @@ export default function Reports() {
                       ))}
                     </TableBody>
                   </Table>
+                  </div>
                 </TabsContent>
 
                 <TabsContent value="classes" className="mt-4" data-testid="reports-classes-content">
+                  <div className="table-responsive-wrap">
                   <Table>
                     <TableHeader>
                       <TableRow>
@@ -614,6 +631,7 @@ export default function Reports() {
                       ))}
                     </TableBody>
                   </Table>
+                  </div>
                 </TabsContent>
               </Tabs>
             </CardContent>
@@ -636,8 +654,14 @@ export default function Reports() {
             </CardHeader>
           </Card>
 
-          {/* Analysis insights: strengths, weaknesses, performance, standout data, actions, recommendations */}
-          <section className="section-hover grid gap-4 rounded-xl border border-border/50 p-4 md:grid-cols-2" data-testid="reports-insights">
+          <ExpandableSection
+            title={t("visual_board_full_analysis")}
+            description={t("analysis_strengths_desc")}
+            defaultOpen={false}
+            testId="reports-insights"
+            className="section-hover"
+          >
+          <section className="grid gap-4 md:grid-cols-2">
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="text-base text-emerald-700 dark:text-emerald-400">{t("analysis_strengths")}</CardTitle>
@@ -729,6 +753,7 @@ export default function Reports() {
               </CardContent>
             </Card>
           </section>
+          </ExpandableSection>
             </>
           )}
           </BoardShell>

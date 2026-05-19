@@ -49,13 +49,9 @@ import {
   QuarterOnLevelFocus,
   ClassScoreArea,
 } from "@/components/dashboard/VisualBoard";
-
-const PERFORMANCE_COLORS = {
-  on_level: "#10b981",
-  approach: "#f59e0b",
-  below: "#ef4444",
-  no_data: "#94a3b8",
-};
+import { ExpandableSection } from "@/components/ExpandableSection";
+import { PerformanceLevelBadge } from "@/components/PerformanceLevelBadge";
+import { PERFORMANCE_CHART_COLORS } from "@/lib/performanceBadges";
 
 const STUDENT_BREAKDOWN_COLORS = ["#0ea5e9", "#38bdf8", "#22c55e", "#f59e0b", "#8b5cf6", "#ef4444"];
 
@@ -973,7 +969,7 @@ export default function Analytics() {
                     {distributionBarData.map((entry, index) => (
                       <Cell
                         key={`d-${index}`}
-                        fill={isStudentScoped ? entry.fill : PERFORMANCE_COLORS[entry.levelKey]}
+                        fill={isStudentScoped ? entry.fill : PERFORMANCE_CHART_COLORS[entry.levelKey]}
                         fillOpacity={isStudentScoped ? (entry.opacity ?? 1) : 1}
                       />
                     ))}
@@ -999,7 +995,7 @@ export default function Analytics() {
                       {q1Distribution.map((entry) => (
                         <Cell
                           key={entry.level}
-                          fill={isStudentScoped ? entry.fill : PERFORMANCE_COLORS[entry.level]}
+                          fill={isStudentScoped ? entry.fill : PERFORMANCE_CHART_COLORS[entry.level]}
                           fillOpacity={isStudentScoped ? (entry.opacity ?? 1) : 1}
                         />
                       ))}
@@ -1051,17 +1047,19 @@ export default function Analytics() {
                         <p className="font-medium text-foreground">{student.full_name}</p>
                         <p className="text-sm text-muted-foreground">{student.class_name}</p>
                         <div className="mt-2 flex flex-wrap gap-1">
-                          <span
-                            className={`rounded px-2 py-0.5 text-xs ${
-                              (apiQuarter === 1 ? student.performance_level_q1 : student.performance_level_q2) ===
-                              "below"
-                                ? "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300"
-                                : "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300"
-                            }`}
-                          >
-                            {t(`term_${termScopeId}`)}:{" "}
-                            {t(apiQuarter === 1 ? student.performance_level_q1 : student.performance_level_q2)}
-                          </span>
+                          <PerformanceLevelBadge
+                            level={
+                              apiQuarter === 1
+                                ? student.performance_level_q1
+                                : student.performance_level_q2
+                            }
+                            label={`${t(`term_${termScopeId}`)}: ${t(
+                              apiQuarter === 1
+                                ? student.performance_level_q1
+                                : student.performance_level_q2,
+                            )}`}
+                            className="text-xs"
+                          />
                         </div>
                         {student.weak_areas?.length > 0 && (
                           <div className="mt-3">
@@ -1116,13 +1114,19 @@ export default function Analytics() {
                         <p className="font-medium text-foreground">{student.full_name}</p>
                         <p className="text-sm text-muted-foreground">{student.class_name}</p>
                         <div className="mt-2 flex flex-wrap gap-1">
-                          <span className="rounded bg-emerald-100 px-2 py-0.5 text-xs text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300">
-                            {t(`term_${termScopeId}`)}:{" "}
-                            {t(
-                              (apiQuarter === 1 ? student.performance_level_q1 : student.performance_level_q2) ||
-                                "on_level",
-                            )}
-                          </span>
+                          <PerformanceLevelBadge
+                            level={
+                              (apiQuarter === 1
+                                ? student.performance_level_q1
+                                : student.performance_level_q2) || "on_level"
+                            }
+                            label={`${t(`term_${termScopeId}`)}: ${t(
+                              (apiQuarter === 1
+                                ? student.performance_level_q1
+                                : student.performance_level_q2) || "on_level",
+                            )}`}
+                            className="text-xs"
+                          />
                         </div>
                         {student.strengths?.length > 0 && (
                           <div className="mt-3">
@@ -1212,8 +1216,14 @@ export default function Analytics() {
         </CardHeader>
       </Card>
 
-      {/* Analysis insights: strengths, weaknesses, performance, standout data, actions, recommendations */}
-      <section className="section-hover grid gap-4 rounded-xl border border-border/50 p-4 md:grid-cols-2" data-testid="analytics-insights">
+      <ExpandableSection
+        title={t("visual_board_full_analysis")}
+        description={t("analysis_strengths_desc")}
+        defaultOpen={false}
+        testId="analytics-insights"
+        className="section-hover"
+      >
+      <section className="grid gap-4 md:grid-cols-2">
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-base text-emerald-700 dark:text-emerald-400">{t("analysis_strengths")}</CardTitle>
@@ -1305,6 +1315,7 @@ export default function Analytics() {
           </CardContent>
         </Card>
       </section>
+      </ExpandableSection>
       </BoardShell>
     </div>
   );

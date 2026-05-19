@@ -33,13 +33,7 @@ import {
 } from "@/components/ui/select";
 import { AssessmentPageFooter } from "@/components/AssessmentPageFooter";
 import { sortByClassOrder } from "@/lib/utils";
-
-const levelStyles = {
-  on_level: "border-emerald-300 bg-emerald-100 text-emerald-700",
-  approach: "border-amber-300 bg-amber-100 text-amber-700",
-  below: "border-rose-300 bg-rose-100 text-rose-700",
-  no_data: "border-slate-300 bg-slate-100 text-slate-600",
-};
+import { PerformanceLevelBadge } from "@/components/PerformanceLevelBadge";
 
 const formatScore = (value, suffix = "") => {
   if (value === null || value === undefined) return "—";
@@ -737,7 +731,7 @@ export default function FinalExamsAssessment() {
                         </div>
                       </TableCell>
                       <TableCell className="text-center">
-                        <Badge variant="outline" className={levelStyles[perfLevel] ?? levelStyles.no_data}>{t(perfLevel)}</Badge>
+                        <PerformanceLevelBadge variant="outline" level={perfLevel} label={t(perfLevel)} />
                       </TableCell>
                       <TableCell className="text-center">
                         <span className="font-semibold tabular-nums">{formatScore(quarterExamTotal, "/20")}</span>

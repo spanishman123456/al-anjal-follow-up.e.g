@@ -43,13 +43,7 @@ import {
 import { MoreHorizontal, Award, FileText, MessageCircle, PartyPopper, X } from "lucide-react";
 import { AssessmentPageFooter } from "@/components/AssessmentPageFooter";
 import "@/reward-modal.css";
-
-const levelStyles = {
-  on_level: "bg-emerald-100 text-emerald-700",
-  approach: "bg-amber-100 text-amber-700",
-  below: "bg-rose-100 text-rose-700",
-  no_data: "bg-slate-100 text-slate-600",
-};
+import { PerformanceLevelBadge } from "@/components/PerformanceLevelBadge";
 
 const normalizeRewardPerformance = (value) => {
   const compact = String(value || "")
@@ -1375,6 +1369,7 @@ export default function Students() {
 
       <Card data-testid="students-table-card">
         <CardContent className="pt-6">
+          <div className="table-responsive-wrap">
           <Table data-testid="students-table">
             <TableHeader>
               <TableRow>
@@ -1590,12 +1585,11 @@ export default function Students() {
                         {formatScore(computeTotalScore(bulkScores[student.id] || student), "/15")}
                       </TableCell>
                       <TableCell data-testid={`student-performance-${student.id}`} className="text-center">
-                        <Badge
-                          className={levelStyles[computePerformanceLevel(bulkScores[student.id] || student)]}
+                        <PerformanceLevelBadge
+                          level={computePerformanceLevel(bulkScores[student.id] || student)}
+                          label={t(computePerformanceLevel(bulkScores[student.id] || student))}
                           data-testid={`student-performance-badge-${student.id}`}
-                        >
-                          {t(computePerformanceLevel(bulkScores[student.id] || student))}
-                        </Badge>
+                        />
                       </TableCell>
                       <TableCell>
                         <DropdownMenu>
@@ -1705,6 +1699,7 @@ export default function Students() {
               )}
             </TableBody>
           </Table>
+          </div>
         </CardContent>
       </Card>
 

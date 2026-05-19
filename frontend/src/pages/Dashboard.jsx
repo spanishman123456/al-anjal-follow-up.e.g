@@ -17,18 +17,19 @@ import { useTranslations } from "@/lib/i18n";
 import { displayQuarterNumber } from "@/lib/academicScope";
 import { sortByClassOrder } from "@/lib/utils";
 import { PageHeader } from "@/components/layout/PageHeader";
+import { ExpandableSection } from "@/components/ExpandableSection";
+import { PerformanceLevelBadge } from "@/components/PerformanceLevelBadge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import TimetableEditor from "@/components/TimetableEditor";
-
-const PERFORMANCE_COLORS = {
-  on_level: "#10b981",
-  approach: "#f59e0b",
-  below: "#ef4444",
-  no_data: "#94a3b8",
-};
+import {
+  PERFORMANCE_CHART_COLORS,
+  performanceLegendSwatchClasses,
+  performanceMetricTextClasses,
+} from "@/lib/performanceBadges";
+import { cn } from "@/lib/utils";
 
 const formatScore = (value, suffix = "") => {
   if (value === null || value === undefined) {
@@ -168,7 +169,7 @@ export default function Dashboard() {
         subtitle={t("overview")}
         testIdPrefix="dashboard"
         action={
-          <div className="flex flex-wrap items-center gap-4">
+          <div className="page-toolbar">
             <Badge variant="outline" data-testid="academic-year-badge">
               {t("academic_year")}: {academicYear}
             </Badge>
@@ -238,7 +239,10 @@ export default function Dashboard() {
             </CardTitle>
           </CardHeader>
           <CardContent className="mt-auto shrink-0">
-            <div className="text-3xl font-bold text-slate-600" data-testid="metric-no-data-students-value">
+            <div
+              className={cn("text-3xl font-bold", performanceMetricTextClasses.no_data)}
+              data-testid="metric-no-data-students-value"
+            >
               {summary?.students_no_data ?? 0}
             </div>
           </CardContent>
@@ -254,7 +258,7 @@ export default function Dashboard() {
           </CardHeader>
           <CardContent className="mt-auto shrink-0">
             <div
-              className="text-3xl font-bold text-emerald-600"
+              className={cn("text-3xl font-bold", performanceMetricTextClasses.on_level)}
               data-testid="metric-exceeding-value"
             >
               {summary?.counts?.on_level ?? 0}
@@ -272,7 +276,7 @@ export default function Dashboard() {
           </CardHeader>
           <CardContent className="mt-auto shrink-0">
             <div
-              className="text-3xl font-bold text-amber-600"
+              className={cn("text-3xl font-bold", performanceMetricTextClasses.approach)}
               data-testid="metric-support-value"
             >
               {supportCount}
@@ -424,7 +428,7 @@ export default function Dashboard() {
                     {distributionData.map((entry) => (
                       <Cell
                         key={entry.level}
-                        fill={PERFORMANCE_COLORS[entry.level]}
+                        fill={PERFORMANCE_CHART_COLORS[entry.level] || PERFORMANCE_CHART_COLORS.no_data}
                       />
                     ))}
                   </Pie>
@@ -436,11 +440,20 @@ export default function Dashboard() {
               {distributionData.map((item) => (
                 <div
                   key={item.level}
-                  className="flex items-center justify-between rounded-lg border border-border/60 px-3 py-2"
+                  className="list-row-interactive flex items-center justify-between rounded-lg border border-border/60 px-3 py-2"
                   data-testid={`dashboard-distribution-${item.level}`}
                 >
-                  <span className="text-sm font-medium">{item.name}</span>
-                  <span className="text-sm text-muted-foreground">
+                  <span className="flex items-center gap-2 text-sm font-medium">
+                    <span
+                      className={cn(
+                        "inline-block h-2.5 w-2.5 shrink-0 rounded-full",
+                        performanceLegendSwatchClasses[item.level] || performanceLegendSwatchClasses.no_data,
+                      )}
+                      aria-hidden
+                    />
+                    {item.name}
+                  </span>
+                  <span className="text-sm text-muted-foreground tabular-nums">
                     {item.value}
                   </span>
                 </div>
@@ -513,10 +526,10 @@ export default function Dashboard() {
               summary.students_needing_support.map((student) => (
                 <div
                   key={student.id}
-                  className="flex items-center justify-between rounded-lg border border-border/60 px-3 py-2"
+                  className="list-row-interactive flex items-center justify-between gap-2 rounded-lg border border-border/60 px-3 py-2"
                   data-testid={`support-student-${student.id}`}
                 >
-                  <div>
+                  <div className="min-w-0">
                     <p className="text-sm font-semibold" data-testid={`support-student-name-${student.id}`}>
                       {student.full_name}
                     </p>
@@ -524,16 +537,11 @@ export default function Dashboard() {
                       {student.class_name}
                     </p>
                   </div>
-                  <Badge
-                    className={
-                      student.performance_level === "below"
-                        ? "bg-red-100 text-red-700"
-                        : "bg-amber-100 text-amber-700"
-                    }
+                  <PerformanceLevelBadge
+                    level={student.performance_level}
+                    label={t(student.performance_level)}
                     data-testid={`support-student-level-${student.id}`}
-                  >
-                    {t(student.performance_level)}
-                  </Badge>
+                  />
                 </div>
               ))
             ) : (
@@ -557,10 +565,10 @@ export default function Dashboard() {
               summary.top_performers.map((student) => (
                 <div
                   key={student.id}
-                  className="flex items-center justify-between rounded-lg border border-border/60 px-3 py-2"
+                  className="list-row-interactive flex items-center justify-between gap-2 rounded-lg border border-border/60 px-3 py-2"
                   data-testid={`top-performer-${student.id}`}
                 >
-                  <div>
+                  <div className="min-w-0">
                     <p className="text-sm font-semibold" data-testid={`top-performer-name-${student.id}`}>
                       {student.full_name}
                     </p>
@@ -568,12 +576,11 @@ export default function Dashboard() {
                       {student.class_name}
                     </p>
                   </div>
-                  <Badge
-                    className="bg-emerald-100 text-emerald-700"
+                  <PerformanceLevelBadge
+                    level="on_level"
+                    label={formatScore(student.total_score_normalized, "/50")}
                     data-testid={`top-performer-score-${student.id}`}
-                  >
-                    {formatScore(student.total_score_normalized, "/50")}
-                  </Badge>
+                  />
                 </div>
               ))
             ) : (
@@ -609,30 +616,36 @@ export default function Dashboard() {
         </Card>
       </section>
 
-      <section className="grid gap-6" data-testid="dashboard-timetable">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle data-testid="dashboard-timetable-title">{t("timetable")}</CardTitle>
-            <Button
-              variant="success"
-              onClick={handleScheduleSave}
-              disabled={savingSchedule}
-              data-testid="dashboard-timetable-save"
-            >
-              {t("save_changes")}
-            </Button>
-          </CardHeader>
-          <CardContent>
-            <TimetableEditor
-              schedule={schedule}
-              onChange={setSchedule}
-              orientation="days-rows"
-              dayLabels={[t("sunday"), t("monday"), t("tuesday"), t("wednesday"), t("thursday")]}
-              dayHeaderLabel={t("day")}
-            />
-          </CardContent>
-        </Card>
-      </section>
+      <ExpandableSection
+        title={t("timetable")}
+        defaultOpen={isTeacher}
+        testId="dashboard-timetable-section"
+        className="section-hover"
+        headerExtra={
+          <Button
+            variant="success"
+            size="sm"
+            onClick={(e) => {
+              e.stopPropagation();
+              handleScheduleSave();
+            }}
+            disabled={savingSchedule}
+            data-testid="dashboard-timetable-save"
+          >
+            {t("save_changes")}
+          </Button>
+        }
+      >
+        <div data-testid="dashboard-timetable">
+          <TimetableEditor
+            schedule={schedule}
+            onChange={setSchedule}
+            orientation="days-rows"
+            dayLabels={[t("sunday"), t("monday"), t("tuesday"), t("wednesday"), t("thursday")]}
+            dayHeaderLabel={t("day")}
+          />
+        </div>
+      </ExpandableSection>
     </div>
   );
 }

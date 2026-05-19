@@ -500,7 +500,7 @@ export default function Settings() {
               {t("add_role")}
             </Button>
           </CardHeader>
-          <CardContent>
+          <CardContent className="table-responsive-wrap">
             <Table data-testid="roles-table">
               <TableHeader>
                 <TableRow>
@@ -539,6 +539,7 @@ export default function Settings() {
           </CardHeader>
           <CardContent>
             {pendingGmailUsers.length ? (
+              <div className="table-responsive-wrap">
               <Table data-testid="gmail-pending-users-table">
                 <TableHeader>
                   <TableRow>
@@ -584,6 +585,7 @@ export default function Settings() {
                   ))}
                 </TableBody>
               </Table>
+              </div>
             ) : (
               <p className="text-sm text-muted-foreground" data-testid="gmail-pending-empty">
                 {t("gmail_approval_no_requests")}
@@ -599,7 +601,7 @@ export default function Settings() {
               {t("add_user")}
             </Button>
           </CardHeader>
-          <CardContent className="overflow-x-auto">
+          <CardContent className="table-responsive-wrap">
             <Table className="min-w-[980px]" data-testid="users-table">
               <TableHeader>
                 <TableRow>

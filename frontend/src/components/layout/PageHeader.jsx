@@ -21,7 +21,7 @@ export const PageHeader = ({
         </h1>
       </div>
       <div
-        className="relative z-20 flex flex-wrap items-center gap-3"
+        className="page-toolbar relative z-20"
         data-testid={`${testIdPrefix}-actions`}
       >
         {action}
