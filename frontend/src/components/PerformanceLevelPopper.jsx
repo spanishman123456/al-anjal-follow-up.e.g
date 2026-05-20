@@ -6,16 +6,10 @@ import {
 } from "@/components/ui/hover-card";
 import { PartyPopper } from "lucide-react";
 import { cn } from "@/lib/utils";
-
-const levelColors = {
-  on_level: "text-emerald-600",
-  approach: "text-amber-600",
-  below: "text-rose-600",
-  no_data: "text-slate-500",
-};
+import { getPerformanceTextClass } from "@/lib/performanceBadges";
 
 export function PerformanceLevelPopper({ level, label, className, "data-testid": dataTestId }) {
-  const accentClass = levelColors[level];
+  const accentClass = getPerformanceTextClass(level);
 
   return (
     <HoverCard openDelay={200} closeDelay={100}>

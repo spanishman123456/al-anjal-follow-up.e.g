@@ -14,6 +14,7 @@ import {
   Area,
   LabelList,
 } from "recharts";
+import { PERFORMANCE_CHART_COLORS } from "@/lib/performanceBadges";
 
 /** Reference-inspired professional dashboard palette (light blues + clear semantic greens/ambers/reds). */
 export const BOARD = {
@@ -123,9 +124,9 @@ export function PassSplitDonut({
   // Percentage is based on all students in the snapshot (including no_data) for clearer reporting context.
   const pct = total > 0 ? Math.round((onLevel / total) * 1000) / 10 : 0;
   const segments = [
-    { name: onLevelLabel, value: onLevel, fill: "#10b981" },
-    { name: approachingLabel, value: approach, fill: "#f59e0b" },
-    { name: belowLabel, value: below, fill: "#ef4444" },
+    { name: onLevelLabel, value: onLevel, fill: PERFORMANCE_CHART_COLORS.on_level },
+    { name: approachingLabel, value: approach, fill: PERFORMANCE_CHART_COLORS.approach },
+    { name: belowLabel, value: below, fill: PERFORMANCE_CHART_COLORS.below },
   ];
   const data = segments.filter((d) => d.value > 0);
   const legendSpace = showLegend ? 92 : 0;

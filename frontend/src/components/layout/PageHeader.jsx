@@ -6,15 +6,15 @@ export const PageHeader = ({
 }) => {
   return (
     <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-      <div>
+      <div className="min-w-0">
         <p
-          className="text-xs uppercase tracking-[0.2em] text-muted-foreground"
+          className="truncate text-xs uppercase tracking-[0.2em] text-muted-foreground"
           data-testid={`${testIdPrefix}-eyebrow`}
         >
           {subtitle}
         </p>
         <h1
-          className="text-3xl font-bold tracking-tight text-foreground"
+          className="break-words text-2xl font-bold tracking-tight text-foreground sm:text-3xl"
           data-testid={`${testIdPrefix}-title`}
         >
           {title}

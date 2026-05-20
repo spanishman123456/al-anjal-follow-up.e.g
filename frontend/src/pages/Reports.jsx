@@ -13,6 +13,7 @@ import { PageHeader } from "@/components/layout/PageHeader";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import {
@@ -339,7 +340,7 @@ export default function Reports() {
       <p className="text-xs text-muted-foreground" data-testid="reports-term-hint">
         {t("analytics_term_scope_hint")}
       </p>
-      <p className="text-xs text-muted-foreground max-w-3xl" data-testid="reports-type-hint">
+      <p className="max-w-3xl text-xs text-muted-foreground" data-testid="reports-type-hint">
         {isFullReport ? t("report_type_full_help") : t("report_type_summary_help")}
       </p>
 
@@ -368,7 +369,7 @@ export default function Reports() {
                     {t("view_analytics")} →
                   </Link>
                 </BoardHighlightsCard>
-                <Card className="border-primary/20 bg-gradient-to-r from-primary/5 to-primary/10 dark:from-primary/10 dark:to-primary/5">
+                <Card className="card-hover border-primary/20 bg-gradient-to-r from-primary/5 to-primary/10 dark:from-primary/10 dark:to-primary/5">
                   <CardContent className="py-4 text-sm text-muted-foreground">
                     {t("reports_synced_with_analytics")}
                   </CardContent>
@@ -376,7 +377,7 @@ export default function Reports() {
               </>
             }
           >
-          <Card className="border-primary/20 bg-gradient-to-r from-primary/5 to-primary/10 dark:from-primary/10 dark:to-primary/5 lg:hidden">
+          <Card className="card-hover border-primary/20 bg-gradient-to-r from-primary/5 to-primary/10 dark:from-primary/10 dark:to-primary/5 lg:hidden">
             <CardContent className="py-4">
               <p className="text-sm text-muted-foreground">
                 {t("reports_synced_with_analytics")}{" "}
@@ -392,7 +393,7 @@ export default function Reports() {
           </Card>
 
           <section className="section-bg-alt-1 grid gap-4 rounded-xl border border-border/50 p-4 md:grid-cols-2 lg:grid-cols-3" data-testid="reports-summary">
-            <Card>
+            <Card className="card-hover">
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm text-muted-foreground">{t("total_students")}</CardTitle>
               </CardHeader>
@@ -402,7 +403,7 @@ export default function Reports() {
                 </div>
               </CardContent>
             </Card>
-            <Card>
+            <Card className="card-hover">
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm text-muted-foreground">{t("avg_total_score")}</CardTitle>
               </CardHeader>
@@ -412,7 +413,7 @@ export default function Reports() {
                 </div>
               </CardContent>
             </Card>
-            <Card>
+            <Card className="card-hover">
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm text-muted-foreground">{t("on_level")}</CardTitle>
               </CardHeader>
@@ -487,7 +488,7 @@ export default function Reports() {
 
           {!isFullReport && (
             <Card
-              className="border-amber-500/35 bg-amber-500/[0.06] dark:bg-amber-950/20"
+              className="card-hover border-amber-500/35 bg-amber-500/[0.06] dark:bg-amber-950/20"
               data-testid="reports-summary-mode-banner"
             >
               <CardContent className="py-3 text-sm text-muted-foreground">
@@ -498,17 +499,17 @@ export default function Reports() {
 
           {isFullReport && (
             <>
-          <div className="section-bg-alt-3 rounded-xl border border-border/50 p-4">
-          <Card data-testid="reports-tabs-card">
-            <CardHeader>
-              <CardTitle>{t("executive_summary")}</CardTitle>
-              <p className="text-xs text-muted-foreground" data-testid="reports-generated-on">
-                {t("generated_on")}: {new Date().toLocaleDateString()}
-              </p>
-            </CardHeader>
-            <CardContent>
+          <ExpandableSection
+            title={t("executive_summary")}
+            description={`${t("generated_on")}: ${new Date().toLocaleDateString()}`}
+            defaultOpen
+            testId="reports-executive-summary-section"
+            className="section-bg-alt-3"
+          >
+          <Card data-testid="reports-tabs-card" className="card-hover border-none shadow-none">
+            <CardContent className="pt-2">
               <Tabs defaultValue="top" data-testid="reports-tabs">
-                <TabsList>
+                <TabsList className="h-auto flex-wrap">
                   <TabsTrigger value="top" data-testid="reports-tab-top">
                     {t("top_performers")}
                   </TabsTrigger>
@@ -539,7 +540,14 @@ export default function Reports() {
                           <TableCell>{student.full_name}</TableCell>
                           <TableCell>{student.class_name}</TableCell>
                           <TableCell>{focusQuarterStudentTotal(student)}</TableCell>
-                          <TableCell>{student.total_score_normalized != null ? student.total_score_normalized : "-"}</TableCell>
+                          <TableCell>
+                            <Badge
+                              variant="outline"
+                              className={getScoreBandBadgeClass(student.total_score_normalized, 50)}
+                            >
+                              {student.total_score_normalized != null ? student.total_score_normalized : "-"}
+                            </Badge>
+                          </TableCell>
                           <TableCell>{renderMarksBreakdown(student)}</TableCell>
                           <TableCell>
                             {(student.strengths || []).length > 0 ? (
@@ -636,9 +644,9 @@ export default function Reports() {
               </Tabs>
             </CardContent>
           </Card>
-          </div>
+          </ExpandableSection>
 
-          <Card className="rounded-xl border border-slate-200/90 bg-white shadow-sm dark:border-border dark:bg-card">
+          <Card className="card-hover rounded-xl border border-slate-200/90 bg-white shadow-sm dark:border-border dark:bg-card">
             <CardHeader>
               <CardTitle className="text-base">{t("visual_board_full_analysis")}</CardTitle>
               <div className="grid gap-4 pt-2 md:grid-cols-2">

@@ -134,6 +134,25 @@ code {
     }
 }
 
+@layer utilities {
+    .interactive-surface {
+        transition:
+            background-color var(--motion-duration-smooth) var(--motion-ease-out),
+            border-color var(--motion-duration-smooth) var(--motion-ease-out),
+            box-shadow var(--motion-duration-smooth) var(--motion-ease-out),
+            transform var(--motion-duration-smooth) var(--motion-ease-out);
+    }
+
+    .interactive-surface:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 12px 24px -10px rgba(0, 0, 0, 0.14);
+    }
+
+    .interactive-surface:focus-within {
+        box-shadow: 0 0 0 2px hsl(var(--ring) / 0.35);
+    }
+}
+
 @layer base {
     * {
         @apply border-border;

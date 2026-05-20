@@ -1008,7 +1008,7 @@ export default function Analytics() {
                 {q1Distribution.map((item) => (
                   <div
                     key={item.level}
-                    className="flex items-center justify-between rounded-lg border border-border/60 px-3 py-2"
+                    className="interactive-surface flex items-center justify-between rounded-lg border border-border/60 px-3 py-2"
                   >
                     <span className="text-sm font-medium">{item.legendName || item.name}</span>
                     <span className="text-sm text-muted-foreground">{item.value}</span>
@@ -1020,7 +1020,7 @@ export default function Analytics() {
         </TabsContent>
 
         <TabsContent value="struggling" className="mt-6" data-testid="analytics-struggling-content">
-          <Card>
+          <Card className="card-hover">
             <CardHeader>
               <CardTitle className="text-amber-700 dark:text-amber-400">
                 {t("struggling_students")}
@@ -1040,7 +1040,7 @@ export default function Analytics() {
                   {overview.struggling_students.map((student) => (
                     <Card
                       key={student.id}
-                      className="border-amber-200 bg-amber-50/50 dark:border-amber-900/50 dark:bg-amber-950/20"
+                      className="card-hover border-amber-200 bg-amber-50/50 dark:border-amber-900/50 dark:bg-amber-950/20"
                       data-testid={`analytics-struggling-${student.id}`}
                     >
                       <CardContent className="pt-4">
@@ -1088,7 +1088,7 @@ export default function Analytics() {
         </TabsContent>
 
         <TabsContent value="excelling" className="mt-6" data-testid="analytics-excelling-content">
-          <Card>
+          <Card className="card-hover">
             <CardHeader>
               <CardTitle className="text-emerald-700 dark:text-emerald-400">
                 {t("excelling_students")}
@@ -1107,7 +1107,7 @@ export default function Analytics() {
                   {overview.excelling_students.map((student) => (
                     <Card
                       key={student.id}
-                      className="border-emerald-200 bg-emerald-50/50 dark:border-emerald-900/50 dark:bg-emerald-950/20"
+                      className="card-hover border-emerald-200 bg-emerald-50/50 dark:border-emerald-900/50 dark:bg-emerald-950/20"
                       data-testid={`analytics-excelling-${student.id}`}
                     >
                       <CardContent className="pt-4">
@@ -1155,7 +1155,7 @@ export default function Analytics() {
         </TabsContent>
 
         <TabsContent value="classes" className="mt-6" data-testid="analytics-classes-content">
-          <Card className="border-primary/20 shadow-sm">
+          <Card className="card-hover border-primary/20 shadow-sm">
             <CardHeader>
               <CardTitle>{isStudentScoped ? t("analytics_student_total") : t("students_per_class")}</CardTitle>
             </CardHeader>
@@ -1177,21 +1177,39 @@ export default function Analytics() {
         </TabsContent>
 
         <TabsContent value="grades" className="mt-6" data-testid="analytics-grades-content">
-          <Card className="border-primary/20 shadow-sm">
+          <Card className="card-hover border-primary/20 shadow-sm">
             <CardHeader>
               <CardTitle>{isStudentScoped ? t("performance_level") : t("grade")}</CardTitle>
             </CardHeader>
             <CardContent>
               {activeTab === "grades" ? (
-                <div className="h-72" data-testid="analytics-grades-chart">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={gradeSummary} barSize={32}>
-                      <XAxis dataKey="grade" />
-                      <YAxis />
-                      <Tooltip content={<AnalyticsTooltip />} />
-                      <Bar dataKey="avg" fill="#10b981" radius={[8, 8, 0, 0]} />
-                    </BarChart>
-                  </ResponsiveContainer>
+                <div className="grid gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+                  <div className="h-72" data-testid="analytics-grades-chart">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={gradeSummary} barSize={32}>
+                        <XAxis dataKey="grade" />
+                        <YAxis />
+                        <Tooltip content={<AnalyticsTooltip />} />
+                        <Bar dataKey="avg" fill="#10b981" radius={[8, 8, 0, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                  <div className="space-y-2" data-testid="analytics-grades-badges">
+                    {gradeSummary.map((item) => (
+                      <div
+                        key={item.grade}
+                        className="interactive-surface flex items-center justify-between rounded-lg border border-border/60 px-3 py-2"
+                      >
+                        <span className="text-sm font-medium">{item.grade}</span>
+                        <Badge
+                          variant="outline"
+                          className={getScoreBandBadgeClass(item.avg, isStudentScoped ? 50 : 100)}
+                        >
+                          {item.avg}
+                        </Badge>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               ) : null}
             </CardContent>
@@ -1200,7 +1218,7 @@ export default function Analytics() {
       </Tabs>
       </div>
 
-      <Card className="rounded-xl border border-slate-200/90 bg-white shadow-sm dark:border-border dark:bg-card">
+      <Card className="card-hover rounded-xl border border-slate-200/90 bg-white shadow-sm dark:border-border dark:bg-card">
         <CardHeader>
           <CardTitle className="text-base">{t("visual_board_full_analysis")}</CardTitle>
           <div className="grid gap-4 pt-2 md:grid-cols-2">
