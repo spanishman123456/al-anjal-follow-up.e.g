@@ -5,7 +5,7 @@ export function InsightPanel({ title, badge, children, testId, className }) {
   return (
     <section
       className={cn(
-        "insight-panel overflow-hidden rounded-2xl border border-primary/20 bg-gradient-to-br from-primary/[0.04] via-card to-primary/[0.08] shadow-sm",
+        "insight-panel overflow-hidden rounded-3xl border border-primary/20 bg-gradient-to-br from-primary/[0.08] via-card to-cyan-500/[0.07] shadow-lg",
         className,
       )}
       data-testid={testId}
@@ -25,7 +25,7 @@ export function InsightPanel({ title, badge, children, testId, className }) {
 export function InsightRow({ icon: Icon, tone, text, testId }) {
   return (
     <div
-      className="rounded-xl border border-border/50 bg-background/80 px-4 py-3 text-sm shadow-sm backdrop-blur-sm"
+      className="rounded-2xl border border-border/50 bg-background/80 px-4 py-3 text-sm shadow-sm backdrop-blur-sm transition-all duration-smooth hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-md"
       data-testid={testId}
     >
       <p className="flex items-start gap-2.5">

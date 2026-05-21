@@ -2516,6 +2516,38 @@ def _pdf_cover_band() -> Table:
     return band
 
 
+def _pdf_cover_meta_table(meta_rows: List[Tuple[str, str]], lang: str = "en") -> Table:
+    style = ParagraphStyle(
+        name="PdfCoverMetaCell",
+        fontSize=8.5,
+        leading=12,
+        textColor=colors.HexColor("#334155"),
+        alignment=2 if _normalize_lang(lang) == "ar" else 0,
+    )
+    cells: List[Paragraph] = []
+    for key, value in meta_rows[:4]:
+        key_esc = _pdf_paragraph_text(key, bold=True)
+        value_esc = _pdf_paragraph_text(value if value not in (None, "") else "-")
+        cells.append(Paragraph(f"<font color='#64748b'>{key_esc}</font><br/>{value_esc}", style))
+    while len(cells) < 4:
+        cells.append(Paragraph("-", style))
+    tbl = Table([cells[:2], cells[2:4]], colWidths=[265, 265], hAlign="LEFT")
+    tbl.setStyle(
+        TableStyle(
+            [
+                ("BOX", (0, 0), (-1, -1), 0.5, colors.HexColor("#cbd5e1")),
+                ("INNERGRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#e2e8f0")),
+                ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#f8fafc")),
+                ("LEFTPADDING", (0, 0), (-1, -1), 10),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 10),
+                ("TOPPADDING", (0, 0), (-1, -1), 8),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+            ]
+        )
+    )
+    return tbl
+
+
 def _pdf_kpi_cards_table(cards: List[Tuple[str, str]]) -> Table:
     kpi_style = ParagraphStyle(
         name="PdfKpiCell",
@@ -2577,6 +2609,86 @@ def _pdf_append_executive_summary(
     elements.append(Paragraph(_pdf_paragraph_text(_tr("Executive Summary", lang), bold=True), section_style))
     elements.append(Paragraph("<br/>".join(snippets), body_style))
     elements.append(Spacer(1, 12))
+
+
+def _pdf_story_cards_table(stories: List[Tuple[str, str]], lang: str = "en") -> Table:
+    code = _normalize_lang(lang)
+    heading_style = ParagraphStyle(
+        name="PdfStoryHeading",
+        fontSize=9,
+        leading=12,
+        textColor=colors.HexColor(PDF_REPORT_PRIMARY_HEX),
+        alignment=2 if code == "ar" else 0,
+    )
+    body_style = ParagraphStyle(
+        name="PdfStoryBody",
+        fontSize=8.5,
+        leading=12,
+        textColor=colors.HexColor("#334155"),
+        alignment=2 if code == "ar" else 0,
+    )
+    cells: List[Paragraph] = []
+    for title, text in stories[:3]:
+        title_esc = _pdf_paragraph_text(title, bold=True)
+        text_esc = _pdf_paragraph_text(text if text else "-")
+        cells.append(Paragraph(f"{title_esc}<br/><font color='#475569'>{text_esc}</font>", heading_style))
+    while len(cells) < 3:
+        cells.append(Paragraph("-", body_style))
+    tbl = Table([cells], colWidths=[176, 176, 176], hAlign="LEFT")
+    tbl.setStyle(
+        TableStyle(
+            [
+                ("BOX", (0, 0), (-1, -1), 0.5, colors.HexColor("#dbeafe")),
+                ("INNERGRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#e2e8f0")),
+                ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#eff6ff")),
+                ("LEFTPADDING", (0, 0), (-1, -1), 9),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 9),
+                ("TOPPADDING", (0, 0), (-1, -1), 8),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+                ("VALIGN", (0, 0), (-1, -1), "TOP"),
+            ]
+        )
+    )
+    return tbl
+
+
+def _pdf_wrap_card(title: str, content: Any, lang: str = "en") -> Table:
+    code = _normalize_lang(lang)
+    heading = Paragraph(
+        _pdf_paragraph_text(title, bold=True),
+        ParagraphStyle(
+            name=f"PdfCardHead_{title[:8]}",
+            fontSize=10,
+            leading=13,
+            textColor=colors.HexColor(PDF_REPORT_PRIMARY_HEX),
+            alignment=2 if code == "ar" else 0,
+            spaceAfter=6,
+        ),
+    )
+    body = content if isinstance(content, Table) else Paragraph(
+        _pdf_paragraph_text(content),
+        ParagraphStyle(
+            name=f"PdfCardBody_{title[:8]}",
+            fontSize=8.5,
+            leading=12,
+            textColor=colors.HexColor("#334155"),
+            alignment=2 if code == "ar" else 0,
+        ),
+    )
+    card = Table([[heading], [body]], colWidths=[530], hAlign="LEFT")
+    card.setStyle(
+        TableStyle(
+            [
+                ("BOX", (0, 0), (-1, -1), 0.6, colors.HexColor("#cbd5e1")),
+                ("BACKGROUND", (0, 0), (-1, -1), colors.white),
+                ("LEFTPADDING", (0, 0), (-1, -1), 10),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 10),
+                ("TOPPADDING", (0, 0), (-1, -1), 9),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 9),
+            ]
+        )
+    )
+    return card
 
 
 def format_scope_label(scope: Any) -> str:
@@ -2707,6 +2819,18 @@ def generate_report_pdf(
             subtitle_style,
         )
     )
+    elements.append(
+        _pdf_cover_meta_table(
+            [
+                (_tr("Scope", lang), scope_label),
+                (_tr("Term", lang), f"{_tr('Semester', lang)} {report.get('semester', 1)} · {_tr('Quarter', lang)} {rq}"),
+                (_tr("Generated on", lang), datetime.now(REPORT_TIMEZONE).strftime("%Y-%m-%d %H:%M")),
+                (_tr("Professional Performance Summary", lang), _tr("Executive Summary", lang)),
+            ],
+            lang,
+        )
+    )
+    elements.append(Spacer(1, 10))
     _pdf_append_executive_summary(elements, insights, section_style, subtitle_style, lang)
     elements.append(
         _pdf_kpi_cards_table(
@@ -2718,6 +2842,17 @@ def generate_report_pdf(
         )
     )
     elements.append(Spacer(1, 14))
+    elements.append(
+        _pdf_story_cards_table(
+            [
+                (_tr("Executive Summary", lang), (insights or {}).get("analysis_performance") or "-"),
+                (_tr("Top Performers", lang), _tr("Professional Performance Summary", lang)),
+                (_tr("Students Needing Support", lang), _tr("Recommended Actions", lang)),
+            ],
+            lang,
+        )
+    )
+    elements.append(Spacer(1, 12))
 
     q1 = report.get("quarter1") or {}
     q2 = report.get("quarter2") or {}
@@ -2733,7 +2868,7 @@ def generate_report_pdf(
         [_tr("Avg quarter total (focus)", lang), _fmt(focus_q.get("avg_total"))],
         [_tr("Students with data (focus)", lang), _fmt(focus_q.get("total_with_data"))],
     ]
-    elements.append(_styled_table(summary_data, col_widths=[210, 320]))
+    elements.append(_pdf_wrap_card(_tr("Summary metrics", lang), _styled_table(summary_data, col_widths=[210, 320]), lang))
     elements.append(Spacer(1, 10))
 
     elements.append(Paragraph(_pdf_paragraph_text(_tr("Performance distribution (focus quarter)", lang), bold=True), section_style))
@@ -2743,7 +2878,7 @@ def generate_report_pdf(
         dist_rows.append([str(item.get("level", "")).replace("_", " ").title(), _fmt(item.get("count"))])
     if len(dist_rows) == 1:
         dist_rows.append([_tr("No Data", lang), "0"])
-    elements.append(_styled_table(dist_rows, col_widths=[260, 270]))
+    elements.append(_pdf_wrap_card(_tr("Performance distribution (focus quarter)", lang), _styled_table(dist_rows, col_widths=[260, 270]), lang))
     elements.append(Spacer(1, 8))
 
     distribution_chart = create_distribution_chart(distribution)
@@ -2766,7 +2901,7 @@ def generate_report_pdf(
             ]
         )
     )
-    elements.append(chart_table)
+    elements.append(_pdf_wrap_card(_tr("Visual dashboard", lang), chart_table, lang))
     elements.append(Spacer(1, 10))
 
     elements.append(Paragraph(_pdf_paragraph_text(_tr("Class breakdown", lang), bold=True), section_style))
@@ -2775,7 +2910,7 @@ def generate_report_pdf(
         class_table_data.append([_fmt(item.get("class_name")), _fmt(item.get("student_count"))])
     if len(class_table_data) == 1:
         class_table_data.append(["-", "0"])
-    elements.append(_styled_table(class_table_data, col_widths=[350, 180]))
+    elements.append(_pdf_wrap_card(_tr("Class breakdown", lang), _styled_table(class_table_data, col_widths=[350, 180]), lang))
     elements.append(PageBreak())
 
     top_performers = report.get("top_performers", []) or []
@@ -2799,7 +2934,7 @@ def generate_report_pdf(
         )
     if len(top_table_data) == 1:
         top_table_data.append(["-", "-", "-", "-", "-", "-"])
-    elements.append(_styled_table(top_table_data, col_widths=[110, 52, 48, 42, 165, 115]))
+    elements.append(_pdf_wrap_card(_tr("Top Performers", lang), _styled_table(top_table_data, col_widths=[110, 52, 48, 42, 165, 115]), lang))
     elements.append(Spacer(1, 10))
 
     support_students = report.get("students_needing_support", []) or []
@@ -2823,7 +2958,7 @@ def generate_report_pdf(
         )
     if len(support_table_data) == 1:
         support_table_data.append(["-", "-", "-", "-", "-", "-"])
-    elements.append(_styled_table(support_table_data, col_widths=[110, 52, 48, 60, 140, 117]))
+    elements.append(_pdf_wrap_card(_tr("Students Needing Support", lang), _styled_table(support_table_data, col_widths=[110, 52, 48, 60, 140, 117]), lang))
 
     insights = insights or {}
     insight_rows = [
@@ -2837,7 +2972,7 @@ def generate_report_pdf(
     ]
     elements.append(Spacer(1, 10))
     elements.append(Paragraph(_pdf_paragraph_text(_tr("Key Insights", lang), bold=True), section_style))
-    elements.append(_styled_table(insight_rows, col_widths=[130, 380], repeat_header=True))
+    elements.append(_pdf_wrap_card(_tr("Key Insights", lang), _styled_table(insight_rows, col_widths=[130, 380], repeat_header=True), lang))
 
     doc.build(elements, onFirstPage=_pdf_footer_canvas(lang), onLaterPages=_pdf_footer_canvas(lang))
     pdf_value = buffer.getvalue()
@@ -3017,6 +3152,18 @@ def generate_analytics_dashboard_pdf(
             subtitle_style,
         )
     )
+    elements.append(
+        _pdf_cover_meta_table(
+            [
+                (_tr("Scope", lang), scope_label),
+                (_tr("Term", lang), f"{_tr('Semester', lang)} {sem_o} · {_tr('Quarter', lang)} {qn_o}"),
+                (_tr("Generated on", lang), datetime.now(REPORT_TIMEZONE).strftime("%Y-%m-%d %H:%M")),
+                (_tr("Professional Performance Summary", lang), _tr("Visual dashboard", lang)),
+            ],
+            lang,
+        )
+    )
+    elements.append(Spacer(1, 10))
     _pdf_append_executive_summary(elements, insights, section_style, subtitle_style, lang)
     elements.append(
         _pdf_kpi_cards_table(
@@ -3028,6 +3175,17 @@ def generate_analytics_dashboard_pdf(
         )
     )
     elements.append(Spacer(1, 14))
+    elements.append(
+        _pdf_story_cards_table(
+            [
+                (_tr("Key Insights", lang), _tr("On Level % (focus quarter)", lang)),
+                (_tr("Summary metrics", lang), _tr("Average Total Score", lang)),
+                (_tr("Recommended Actions", lang), (insights or {}).get("analysis_actions") or "-"),
+            ],
+            lang,
+        )
+    )
+    elements.append(Spacer(1, 12))
 
     elements.append(Paragraph(_pdf_paragraph_text(_tr("Visual dashboard", lang), bold=True), section_style))
     level_labels_text = (
@@ -3088,7 +3246,7 @@ def generate_analytics_dashboard_pdf(
             ]
         )
     )
-    elements.append(dashboard_grid)
+    elements.append(_pdf_wrap_card(_tr("Visual dashboard", lang), dashboard_grid, lang))
     elements.append(Spacer(1, 14))
 
     q1 = report.get("quarter1") or {}
@@ -3106,7 +3264,7 @@ def generate_analytics_dashboard_pdf(
         [_tr("Students with data (focus)", lang), _fmt(focus_q.get("total_with_data"))],
     ]
     elements.append(Paragraph(_pdf_paragraph_text(_tr("Summary metrics", lang), bold=True), section_style))
-    elements.append(_styled_table(summary_data, col_widths=[210, 320]))
+    elements.append(_pdf_wrap_card(_tr("Summary metrics", lang), _styled_table(summary_data, col_widths=[210, 320]), lang))
     elements.append(Spacer(1, 10))
 
     elements.append(Paragraph(_pdf_paragraph_text(_tr("Performance distribution (focus quarter)", lang), bold=True), section_style))
@@ -3116,7 +3274,7 @@ def generate_analytics_dashboard_pdf(
         dist_rows.append([str(item.get("level", "")).replace("_", " ").title(), _fmt(item.get("count"))])
     if len(dist_rows) == 1:
         dist_rows.append([_tr("No Data", lang), "0"])
-    elements.append(_styled_table(dist_rows, col_widths=[260, 270]))
+    elements.append(_pdf_wrap_card(_tr("Performance distribution (focus quarter)", lang), _styled_table(dist_rows, col_widths=[260, 270]), lang))
     elements.append(Spacer(1, 10))
 
     class_breakdown = report.get("class_breakdown", []) or []
@@ -3126,7 +3284,7 @@ def generate_analytics_dashboard_pdf(
         class_table_data.append([_fmt(item.get("class_name")), _fmt(item.get("student_count"))])
     if len(class_table_data) == 1:
         class_table_data.append(["-", "0"])
-    elements.append(_styled_table(class_table_data, col_widths=[350, 180]))
+    elements.append(_pdf_wrap_card(_tr("Class breakdown", lang), _styled_table(class_table_data, col_widths=[350, 180]), lang))
     elements.append(PageBreak())
 
     top_performers = report.get("top_performers", []) or []
@@ -3150,7 +3308,7 @@ def generate_analytics_dashboard_pdf(
         )
     if len(top_table_data) == 1:
         top_table_data.append(["-", "-", "-", "-", "-", "-"])
-    elements.append(_styled_table(top_table_data, col_widths=[110, 52, 48, 42, 165, 115]))
+    elements.append(_pdf_wrap_card(_tr("Top Performers", lang), _styled_table(top_table_data, col_widths=[110, 52, 48, 42, 165, 115]), lang))
     elements.append(Spacer(1, 10))
 
     support_students = report.get("students_needing_support", []) or []
@@ -3174,7 +3332,7 @@ def generate_analytics_dashboard_pdf(
         )
     if len(support_table_data) == 1:
         support_table_data.append(["-", "-", "-", "-", "-", "-"])
-    elements.append(_styled_table(support_table_data, col_widths=[110, 52, 48, 60, 140, 117]))
+    elements.append(_pdf_wrap_card(_tr("Students Needing Support", lang), _styled_table(support_table_data, col_widths=[110, 52, 48, 60, 140, 117]), lang))
 
     insights = insights or {}
     insight_rows = [
@@ -3188,7 +3346,7 @@ def generate_analytics_dashboard_pdf(
     ]
     elements.append(Spacer(1, 10))
     elements.append(Paragraph(_pdf_paragraph_text(_tr("Key Insights", lang), bold=True), section_style))
-    elements.append(_styled_table(insight_rows, col_widths=[130, 380], repeat_header=True))
+    elements.append(_pdf_wrap_card(_tr("Key Insights", lang), _styled_table(insight_rows, col_widths=[130, 380], repeat_header=True), lang))
 
     doc.build(elements, onFirstPage=_pdf_footer_canvas(lang), onLaterPages=_pdf_footer_canvas(lang))
     pdf_value = buffer.getvalue()
@@ -3357,6 +3515,7 @@ def generate_reports_dashboard_pdf(
     )
     elements.append(Paragraph(_pdf_paragraph_text(PDF_REPORT_ORG_NAME), subtitle_style))
     elements.append(Paragraph(f"<b>{_pdf_paragraph_text(scope_label)}</b>", subtitle_style))
+    elements.append(Paragraph(_pdf_paragraph_text(term_sub), subtitle_style))
     elements.append(
         Paragraph(
             _pdf_paragraph_text(
@@ -3366,6 +3525,18 @@ def generate_reports_dashboard_pdf(
             subtitle_style,
         )
     )
+    elements.append(
+        _pdf_cover_meta_table(
+            [
+                (_tr("Scope", lang), scope_label),
+                (_tr("Term", lang), term_sub),
+                (_tr("Generated on", lang), datetime.now(REPORT_TIMEZONE).strftime("%Y-%m-%d %H:%M")),
+                (_tr("Report", lang), reports_title_text),
+            ],
+            lang,
+        )
+    )
+    elements.append(Spacer(1, 10))
     _pdf_append_executive_summary(elements, insights, section_style, subtitle_style, lang)
     elements.append(
         _pdf_kpi_cards_table(
@@ -3377,6 +3548,17 @@ def generate_reports_dashboard_pdf(
         )
     )
     elements.append(Spacer(1, 14))
+    elements.append(
+        _pdf_story_cards_table(
+            [
+                (_tr("Executive Summary", lang), (insights or {}).get("analysis_strengths") or "-"),
+                (_tr("Key Insights", lang), _tr("Visual dashboard", lang)),
+                (_tr("Recommendations", lang), (insights or {}).get("analysis_recommendations") or "-"),
+            ],
+            lang,
+        )
+    )
+    elements.append(Spacer(1, 10))
 
     elements.append(Paragraph(_pdf_paragraph_text(_tr("Visual dashboard", lang), bold=True), section_style))
     rq = qn
@@ -3432,7 +3614,7 @@ def generate_reports_dashboard_pdf(
             ]
         )
     )
-    elements.append(dashboard_grid)
+    elements.append(_pdf_wrap_card(_tr("Visual dashboard", lang), dashboard_grid, lang))
     elements.append(Spacer(1, 14))
 
     if is_student_scope:
@@ -3460,7 +3642,7 @@ def generate_reports_dashboard_pdf(
         [_tr("Students with data (focus)", lang), _fmt(focus_q.get("total_with_data"))],
     ]
     elements.append(Paragraph(_pdf_paragraph_text(_tr("Summary metrics", lang), bold=True), section_style))
-    elements.append(_styled_table(summary_data, col_widths=[210, 320]))
+    elements.append(_pdf_wrap_card(_tr("Summary metrics", lang), _styled_table(summary_data, col_widths=[210, 320]), lang))
     elements.append(Spacer(1, 10))
 
     elements.append(Paragraph(_pdf_paragraph_text(_tr("Performance distribution (focus quarter)", lang), bold=True), section_style))
@@ -3469,7 +3651,7 @@ def generate_reports_dashboard_pdf(
         dist_rows.append([str(item.get("level", "")).replace("_", " ").title(), _fmt(item.get("count"))])
     if len(dist_rows) == 1:
         dist_rows.append([_tr("No Data", lang), "0"])
-    elements.append(_styled_table(dist_rows, col_widths=[260, 270]))
+    elements.append(_pdf_wrap_card(_tr("Performance distribution (focus quarter)", lang), _styled_table(dist_rows, col_widths=[260, 270]), lang))
     elements.append(Spacer(1, 10))
 
     elements.append(Paragraph(_pdf_paragraph_text(_tr("Class breakdown", lang), bold=True), section_style))
@@ -3478,7 +3660,7 @@ def generate_reports_dashboard_pdf(
         class_table_data.append([_fmt(item.get("class_name")), _fmt(item.get("student_count"))])
     if len(class_table_data) == 1:
         class_table_data.append(["-", "0"])
-    elements.append(_styled_table(class_table_data, col_widths=[350, 180]))
+    elements.append(_pdf_wrap_card(_tr("Class breakdown", lang), _styled_table(class_table_data, col_widths=[350, 180]), lang))
 
     if not is_summary:
         elements.append(PageBreak())

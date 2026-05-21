@@ -459,6 +459,10 @@ html:not(.dark) .login-top-sky {
 }
 
 @layer components {
+    .dashboard-premium-shell {
+        @apply rounded-[28px] border border-border/40 bg-gradient-to-b from-background via-background to-muted/20 p-3 sm:p-5 lg:p-6;
+    }
+
     /* Interactive list rows (dashboard, analytics lists) */
     .list-row-interactive {
         transition: background-color var(--motion-duration-smooth) var(--motion-ease-out),
@@ -490,8 +494,28 @@ html:not(.dark) .login-top-sky {
         @apply grid gap-4 md:grid-cols-2;
     }
 
+    .analytics-chart-grid-premium {
+        @apply grid gap-4 md:grid-cols-2 lg:grid-cols-3;
+    }
+
+    .story-card {
+        @apply rounded-3xl border border-border/60 bg-card p-5 shadow-sm transition-all duration-smooth hover:-translate-y-0.5 hover:shadow-lg sm:p-6;
+    }
+
+    .story-card-kicker {
+        @apply text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground;
+    }
+
+    .story-card-title {
+        @apply mt-2 text-lg font-semibold tracking-tight text-foreground;
+    }
+
+    .story-card-body {
+        @apply mt-2 text-sm leading-relaxed text-muted-foreground;
+    }
+
     .report-table-premium thead tr {
-        @apply border-b border-border/80 bg-muted/50;
+        @apply border-b border-border/80 bg-gradient-to-r from-slate-100 via-slate-50 to-slate-100 dark:from-slate-900/80 dark:via-slate-800/70 dark:to-slate-900/80;
     }
 
     .report-table-premium th {
@@ -499,7 +523,7 @@ html:not(.dark) .login-top-sky {
     }
 
     .report-table-premium td {
-        @apply px-4 py-3 text-sm align-top;
+        @apply px-4 py-3 text-sm align-top leading-relaxed;
     }
 
     .report-table-premium tbody tr {
@@ -508,6 +532,14 @@ html:not(.dark) .login-top-sky {
 
     .report-table-premium tbody tr:last-child {
         @apply border-b-0;
+    }
+
+    .report-table-premium tbody tr:nth-child(even) {
+        @apply bg-muted/[0.22];
+    }
+
+    .report-table-premium tbody tr:nth-child(odd) {
+        @apply bg-card;
     }
 
     /*
@@ -599,7 +631,20 @@ table td:has(input.score-table-input-10-fill) {
     .report-section,
     .chart-card,
     .metric-card,
-    .insight-panel {
+    .insight-panel,
+    .story-card {
+        break-inside: avoid;
+        page-break-inside: avoid;
+    }
+
+    .table-responsive-wrap {
+        overflow: visible !important;
+    }
+
+    .report-table-premium,
+    .report-table-premium tr,
+    .report-table-premium td,
+    .report-table-premium th {
         break-inside: avoid;
         page-break-inside: avoid;
     }

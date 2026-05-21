@@ -23,7 +23,6 @@ import {
 import { buildAutoInsightsFromOverview } from "@/lib/insightAutofill";
 import { useTranslations } from "@/lib/i18n";
 import { sortByClassOrder } from "@/lib/utils";
-import { PageHeader } from "@/components/layout/PageHeader";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
@@ -60,6 +59,7 @@ import {
   DashboardEmpty,
   AnalyticsToolbar,
   FilterField,
+  DashboardPageHeader,
 } from "@/components/analytics";
 
 const STUDENT_BREAKDOWN_COLORS = ["#0ea5e9", "#38bdf8", "#22c55e", "#f59e0b", "#8b5cf6", "#ef4444"];
@@ -574,8 +574,14 @@ export default function Analytics() {
 
   if (loading && !overview) {
     return (
-      <div className="analytics-page page-enter space-y-8" data-testid="analytics-page">
-        <PageHeader title={t("analytics")} subtitle={t("analytics_page_description")} testIdPrefix="analytics" />
+      <div className="analytics-page dashboard-premium-shell page-enter space-y-8" data-testid="analytics-page">
+        <DashboardPageHeader
+          title={t("analytics")}
+          subtitle={t("analytics_term_scope")}
+          description={t("analytics_page_description")}
+          metaItems={[t(`term_${termScopeId}`)]}
+          testId="analytics-hero-loading"
+        />
         <DashboardLoading message={t("analytics_loading")} testId="analytics-loading" />
       </div>
     );
@@ -586,8 +592,24 @@ export default function Analytics() {
   const focusAvg = apiQuarter === 1 ? q1.avg_total : q2.avg_total;
 
   return (
-    <div className="analytics-page page-enter space-y-6 sm:space-y-8" data-testid="analytics-page">
-      <PageHeader title={t("analytics")} subtitle={t("analytics_page_description")} testIdPrefix="analytics" />
+    <div className="analytics-page dashboard-premium-shell page-enter space-y-6 sm:space-y-8" data-testid="analytics-page">
+      <DashboardPageHeader
+        title={t("analytics")}
+        subtitle={t("analytics_term_scope")}
+        description={t("analytics_page_description")}
+        metaItems={[t(`term_${termScopeId}`), selectedClassId === "all" ? t("all_classes") : t("class_name")]}
+        actions={
+          <>
+            <Button variant="secondary" onClick={() => handleDownload("pdf")} data-testid="analytics-hero-download-pdf">
+              {t("download_pdf")}
+            </Button>
+            <Button variant="outline" onClick={() => setRefreshKey((k) => k + 1)} data-testid="analytics-hero-refresh">
+              {t("refresh_data")}
+            </Button>
+          </>
+        }
+        testId="analytics-hero"
+      />
 
       <AnalyticsToolbar
         testId="analytics-toolbar"
@@ -769,15 +791,51 @@ export default function Analytics() {
         <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
           {t("analytics_kpi_section")}
         </h2>
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          <MetricCard label={t("total_students")} value={totalStudents} testId="analytics-total-students" />
-          <MetricCard label={t("classes")} value={classesCount} testId="analytics-classes-count" />
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           <MetricCard
+            icon={TrendingUp}
+            label={t("total_students")}
+            value={totalStudents}
+            delta={`${focusOnLevelRate}% ${t("on_level")}`}
+            deltaTone={focusOnLevelRate >= 75 ? "positive" : focusOnLevelRate < 50 ? "negative" : "neutral"}
+            hint={t("dashboard_metrics_scope_note")}
+            status={t("overview")}
+            testId="analytics-total-students"
+          />
+          <MetricCard
+            icon={Sparkles}
+            label={t("classes")}
+            value={classesCount}
+            delta={selectedClassId === "all" ? t("all_classes") : t("class_name")}
+            hint={t(`term_${termScopeId}`)}
+            status={t("analytics")}
+            testId="analytics-classes-count"
+          />
+          <MetricCard
+            icon={AlertTriangle}
             label={isStudentScoped ? t("analytics_student_total") : `${t(`term_${termScopeId}`)} — ${t("on_level_rate")}`}
             value={
               isStudentScoped
                 ? `${selectedStudentTermTotal != null ? selectedStudentTermTotal : "—"}/50`
                 : `${focusOnLevelRate}%`
+            }
+            delta={
+              isStudentScoped
+                ? `${selectedStudentPerformanceLevel ? t(selectedStudentPerformanceLevel) : t("no_data")}`
+                : `${t("avg_quarter_total")}: ${focusAvg != null ? focusAvg : "—"}`
+            }
+            deltaTone={
+              isStudentScoped
+                ? selectedStudentPerformanceLevel === "on_level"
+                  ? "positive"
+                  : selectedStudentPerformanceLevel === "below"
+                    ? "negative"
+                    : "neutral"
+                : focusOnLevelRate >= 75
+                  ? "positive"
+                  : focusOnLevelRate < 50
+                    ? "negative"
+                    : "neutral"
             }
             hint={
               !isStudentScoped && focusAvg != null
@@ -787,7 +845,19 @@ export default function Analytics() {
                   : undefined
             }
             accent="primary"
+            status={t("key_insights")}
             testId="analytics-focus-quarter"
+          />
+          <MetricCard
+            icon={Sparkles}
+            label={t("students_needing_support")}
+            value={overview?.struggling_students?.length ?? 0}
+            delta={`${overview?.excelling_students?.length ?? 0} ${t("top_performers").toLowerCase()}`}
+            deltaTone={(overview?.struggling_students?.length ?? 0) > 0 ? "negative" : "positive"}
+            hint={t("dashboard_thresholds_note")}
+            accent="warning"
+            status={t(`term_${termScopeId}`)}
+            testId="analytics-support-count"
           />
         </div>
       </section>
@@ -797,13 +867,16 @@ export default function Analytics() {
           <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
             {t("analytics_visual_insights")}
           </h2>
-          <div className="analytics-chart-grid">
+          <div className="analytics-chart-grid-premium">
           <ChartCard
             title={isStudentScoped ? t("analytics_student_marks_breakdown") : t("visual_board_chart_class_avg")}
             subtitle={isStudentScoped ? t("analytics_student_marks_breakdown_sub") : t("visual_board_chart_class_avg_sub")}
             summary={!isStudentScoped && focusAvg != null ? String(focusAvg) : undefined}
             summaryLabel={!isStudentScoped ? t("avg_quarter_total") : undefined}
+            badge={<Badge variant="outline">{t("key_insights")}</Badge>}
             testId="analytics-board-class-avg"
+            span="hero"
+            insight={isStudentScoped ? t("analytics_student_component_profile_sub") : t("visual_board_chart_class_avg_sub")}
           >
             <ClassAverageBarChart data={classChartData} height={260} />
           </ChartCard>
@@ -813,6 +886,7 @@ export default function Analytics() {
             summary={!isStudentScoped ? `${focusOnLevelRate}%` : undefined}
             summaryLabel={!isStudentScoped ? t("on_level") : undefined}
             testId="analytics-board-donut"
+            insight={isStudentScoped ? t("analytics_student_component_share_sub") : t("visual_board_chart_pass_split_sub")}
           >
             {isStudentScoped ? (
               <ScoreBreakdownDonut
@@ -843,6 +917,7 @@ export default function Analytics() {
             title={isStudentScoped ? t("analytics_student_achievement") : t("visual_board_chart_q_focus")}
             subtitle={isStudentScoped ? t("analytics_student_achievement_sub") : t("visual_board_chart_q_focus_sub")}
             testId="analytics-board-q-focus"
+            insight={isStudentScoped ? t("analytics_student_achievement_caption") : t("visual_board_chart_q_focus_sub")}
           >
             <QuarterOnLevelFocus
               rate={isStudentScoped ? selectedStudentTermTotal : focusOnLevelRate}
@@ -857,6 +932,7 @@ export default function Analytics() {
             title={isStudentScoped ? t("analytics_student_component_profile") : t("visual_board_chart_class_curve")}
             subtitle={isStudentScoped ? t("analytics_student_component_profile_sub") : t("visual_board_chart_class_curve_sub")}
             testId="analytics-board-class-area"
+            insight={isStudentScoped ? t("analytics_student_component_profile_sub") : t("visual_board_chart_class_curve_sub")}
           >
             <ClassScoreArea data={classChartData} height={240} />
           </ChartCard>
@@ -883,6 +959,36 @@ export default function Analytics() {
           />
         ))}
       </InsightPanel>
+
+      <section className="grid gap-4 lg:grid-cols-3" data-testid="analytics-story-cards">
+        <article className="story-card">
+          <p className="story-card-kicker">Key Insight</p>
+          <h3 className="story-card-title">{isStudentScoped ? selectedStudent?.full_name || t("students") : t("on_level")}</h3>
+          <p className="story-card-body">
+            {isStudentScoped
+              ? `${t("analytics_student_total")}: ${selectedStudentTermTotal != null ? selectedStudentTermTotal : "—"}/50.`
+              : `${focusOnLevelRate}% ${t("on_level")} ${t("analytics_focus_quarter").toLowerCase()}.`}
+          </p>
+        </article>
+        <article className="story-card">
+          <p className="story-card-kicker">Performance Trend</p>
+          <h3 className="story-card-title">{t(`term_${termScopeId}`)}</h3>
+          <p className="story-card-body">
+            {focusAvg != null
+              ? `${t("avg_quarter_total")}: ${focusAvg}.`
+              : t("dashboard_thresholds_note")}
+          </p>
+        </article>
+        <article className="story-card">
+          <p className="story-card-kicker">Recommended Action</p>
+          <h3 className="story-card-title">{t("analysis_actions")}</h3>
+          <p className="story-card-body">
+            {analysisActions?.trim()
+              ? analysisActions.trim().slice(0, 160)
+              : t("analysis_actions_desc")}
+          </p>
+        </article>
+      </section>
 
       <div className="section-bg-alt-2 rounded-xl border border-border/50 p-4">
       <Tabs

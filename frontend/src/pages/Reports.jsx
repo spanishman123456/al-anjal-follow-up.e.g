@@ -9,13 +9,13 @@ import {
 import { buildAutoInsightsFromReport } from "@/lib/insightAutofill";
 import { useTranslations } from "@/lib/i18n";
 import { getClassGradeValue } from "@/lib/utils";
-import { PageHeader } from "@/components/layout/PageHeader";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
+import { Sparkles, TrendingUp, AlertTriangle } from "lucide-react";
 import {
   Select,
   SelectContent,
@@ -54,6 +54,7 @@ import {
   ReportSection,
   AnalyticsToolbar,
   FilterField,
+  DashboardPageHeader,
 } from "@/components/analytics";
 
 export default function Reports() {
@@ -268,8 +269,24 @@ export default function Reports() {
     .slice(0, 320);
 
   return (
-    <div className="space-y-6 sm:space-y-8" data-testid="reports-page">
-      <PageHeader title={t("reports")} subtitle={t("analytics_page_description")} testIdPrefix="reports" />
+    <div className="dashboard-premium-shell space-y-6 sm:space-y-8" data-testid="reports-page">
+      <DashboardPageHeader
+        title={t("reports")}
+        subtitle={t("report_type")}
+        description={t("analytics_page_description")}
+        metaItems={[t(`term_${termScopeId}`), `Grade ${grade || "-"}`]}
+        actions={
+          <>
+            <Button onClick={handleGenerate} data-testid="reports-hero-generate" disabled={isTeacher && !availableGrades.length}>
+              {t("generate_report")}
+            </Button>
+            <Button variant="secondary" onClick={() => handleDownload("pdf")} data-testid="reports-hero-download-pdf" disabled={!report}>
+              {t("download_pdf")}
+            </Button>
+          </>
+        }
+        testId="reports-hero"
+      />
 
       <AnalyticsToolbar
         testId="reports-toolbar"
@@ -415,30 +432,62 @@ export default function Reports() {
             </CardContent>
           </Card>
 
-          <ReportSection title={t("key_metrics")} testId="reports-summary">
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3" data-testid="reports-summary-metrics">
+          <ReportSection
+            title={t("key_metrics")}
+            description={t("report_executive_intro")}
+            lead={executiveSummaryText || t("reports_synced_with_analytics")}
+            testId="reports-summary"
+            variant="accent"
+          >
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4" data-testid="reports-summary-metrics">
               <MetricCard
+                icon={TrendingUp}
                 label={t("total_students")}
                 value={report.total_students}
+                delta={`${report.class_breakdown?.length || 0} ${t("classes").toLowerCase()}`}
+                status={t("overview")}
                 testId="reports-total-students"
               />
               <MetricCard
+                icon={Sparkles}
                 label={t("avg_total_score")}
                 value={report.avg_total_score != null ? report.avg_total_score : "—"}
+                delta={`${t(`term_${termScopeId}`)}`}
+                status={t("analytics")}
                 testId="reports-avg-total"
               />
               <MetricCard
+                icon={AlertTriangle}
                 label={t("on_level")}
                 value={`${report.exceeding_rate}%`}
+                delta={`${t("focus_quarter_total")}`}
+                deltaTone={report.exceeding_rate >= 75 ? "positive" : report.exceeding_rate < 50 ? "negative" : "neutral"}
                 hint={t(`term_${termScopeId}`)}
                 accent="primary"
+                status={t("key_insights")}
                 testId="reports-exceeding-rate"
+              />
+              <MetricCard
+                icon={Sparkles}
+                label={t("students_needing_support")}
+                value={(report.students_needing_support || []).length}
+                delta={`${(report.top_performers || []).length} ${t("top_performers").toLowerCase()}`}
+                deltaTone={(report.students_needing_support || []).length > 0 ? "negative" : "positive"}
+                hint={t("reports_synced_with_analytics")}
+                accent="warning"
+                status={t("report_type")}
+                testId="reports-support-students"
               />
             </div>
           </ReportSection>
 
-          <ReportSection title={t("visual_insights")} description={t(`term_${termScopeId}`)} testId="reports-visual-board-grid">
-            <div className="analytics-chart-grid">
+          <ReportSection
+            title={t("visual_insights")}
+            description={t(`term_${termScopeId}`)}
+            lead={t("report_type_full_help")}
+            testId="reports-visual-board-grid"
+          >
+            <div className="analytics-chart-grid-premium">
             <ChartCard title={t("avg_total_score")} subtitle={t("visual_board_chart_class_curve_sub")}>
               <ClassAverageBarChart data={reportClassAverageBars} height={260} />
             </ChartCard>
@@ -485,6 +534,28 @@ export default function Reports() {
             ) : null}
             </div>
           </ReportSection>
+
+          <section className="grid gap-4 lg:grid-cols-3" data-testid="reports-story-cards">
+            <article className="story-card">
+              <p className="story-card-kicker">Executive Summary</p>
+              <h3 className="story-card-title">{t("executive_summary")}</h3>
+              <p className="story-card-body">{executiveSummaryText || t("report_executive_intro")}</p>
+            </article>
+            <article className="story-card">
+              <p className="story-card-kicker">Risk Indicator</p>
+              <h3 className="story-card-title">{t("students_needing_support")}</h3>
+              <p className="story-card-body">
+                {(report.students_needing_support || []).length} {t("students")} · {t("performance_level")}
+              </p>
+            </article>
+            <article className="story-card">
+              <p className="story-card-kicker">Top Performing Area</p>
+              <h3 className="story-card-title">{t("top_performers")}</h3>
+              <p className="story-card-body">
+                {(report.top_performers || []).length} {t("students")} · {t("on_level")}
+              </p>
+            </article>
+          </section>
 
           {!isFullReport && (
             <Card

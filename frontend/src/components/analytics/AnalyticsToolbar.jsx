@@ -5,7 +5,7 @@ export function AnalyticsToolbar({ filters, actions, className, testId }) {
   return (
     <div
       className={cn(
-        "analytics-toolbar flex w-full flex-col gap-4 rounded-2xl border border-border/50 bg-muted/30 p-4 lg:flex-row lg:items-end lg:justify-between",
+        "analytics-toolbar flex w-full flex-col gap-4 rounded-3xl border border-border/60 bg-card/90 p-4 shadow-sm backdrop-blur-sm lg:flex-row lg:items-end lg:justify-between lg:p-5",
         className,
       )}
       data-testid={testId}
@@ -24,9 +24,9 @@ export function AnalyticsToolbar({ filters, actions, className, testId }) {
 
 export function FilterField({ label, children, className }) {
   return (
-    <div className={cn("flex min-w-[200px] flex-col gap-1.5", className)}>
+    <div className={cn("flex min-w-[190px] flex-col gap-1.5", className)}>
       {label ? (
-        <span className="text-xs font-medium text-muted-foreground">{label}</span>
+        <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">{label}</span>
       ) : null}
       {children}
     </div>
