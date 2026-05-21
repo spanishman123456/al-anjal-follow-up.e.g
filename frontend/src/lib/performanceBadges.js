@@ -104,3 +104,13 @@ export function getPerformanceTextClass(level) {
 export function getPerformanceChartColor(level) {
   return PERFORMANCE_CHART_COLORS[normalizePerformanceLevel(level)];
 }
+
+/** Score band outline badge (normalized to 50-point scale). */
+export function getScoreBandBadgeClass(score, max = 50) {
+  const value = Number(score);
+  if (!Number.isFinite(value)) return performanceBadgeOutlineClasses.no_data;
+  const normalized = max === 50 ? value : (value / max) * 50;
+  if (normalized >= 46) return performanceBadgeOutlineClasses.on_level;
+  if (normalized >= 43) return performanceBadgeOutlineClasses.approach;
+  return performanceBadgeOutlineClasses.below;
+}

@@ -30,6 +30,18 @@ export const translations = {
     quarter2_theoretical_exam: "2nd Quarter Theoretical Exam",
     classes: "Classes",
     analytics: "Analytics",
+    analytics_page_description:
+      "Interactive performance dashboard for the selected term, class, and student filters.",
+    analytics_kpi_section: "Key metrics",
+    analytics_visual_insights: "Visual insights",
+    analytics_loading: "Loading analytics…",
+    analytics_no_data: "No analytics data for the current filters.",
+    analytics_retry: "Retry",
+    report_prepared_for: "Prepared for",
+    report_executive_intro:
+      "Headline metrics and cohort performance for the selected grade and term.",
+    key_metrics: "Key metrics",
+    visual_insights: "Visual insights",
     analytics_term_scope: "Analysis term",
     analytics_term_scope_hint:
       "Choose one of the four quarters (two semesters × two quarters). All charts and tables reflect that term only—there is no Quarter 1 vs Quarter 2 comparison.",
@@ -515,6 +527,18 @@ export const translations = {
     quarter2_theoretical_exam: "امتحان الربع الثاني النظري",
     classes: "الفصول",
     analytics: "التحليلات",
+    analytics_page_description:
+      "لوحة أداء تفاعلية للفترة والصف والطالب المحددين.",
+    analytics_kpi_section: "المؤشرات الرئيسية",
+    analytics_visual_insights: "رؤى بصرية",
+    analytics_loading: "جاري تحميل التحليلات…",
+    analytics_no_data: "لا توجد بيانات تحليلات للفلاتر الحالية.",
+    analytics_retry: "إعادة المحاولة",
+    report_prepared_for: "أُعدّ لـ",
+    report_executive_intro:
+      "مؤشرات رئيسية وأداء المجموعة للصف والفترة المحددين.",
+    key_metrics: "المؤشرات الرئيسية",
+    visual_insights: "رؤى بصرية",
     analytics_term_scope: "فترة التحليل",
     analytics_term_scope_hint:
       "اختر أحد الأرباع الأربعة (فصلان دراسيان × ربعان). جميع الرسوم والجداول تعكس ذلك الربع فقط—دون مقارنة بين الربعين.",

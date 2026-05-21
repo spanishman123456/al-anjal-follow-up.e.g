@@ -41,7 +41,6 @@ import { toast } from "sonner";
 import {
   BOARD,
   BoardShell,
-  BoardPanel,
   BoardHighlightsCard,
   ClassAverageBarChart,
   PassSplitDonut,
@@ -51,7 +50,17 @@ import {
 } from "@/components/dashboard/VisualBoard";
 import { ExpandableSection } from "@/components/ExpandableSection";
 import { PerformanceLevelBadge } from "@/components/PerformanceLevelBadge";
-import { PERFORMANCE_CHART_COLORS } from "@/lib/performanceBadges";
+import { PERFORMANCE_CHART_COLORS, getScoreBandBadgeClass } from "@/lib/performanceBadges";
+import {
+  MetricCard,
+  ChartCard,
+  InsightPanel,
+  InsightRow,
+  DashboardLoading,
+  DashboardEmpty,
+  AnalyticsToolbar,
+  FilterField,
+} from "@/components/analytics";
 
 const STUDENT_BREAKDOWN_COLORS = ["#0ea5e9", "#38bdf8", "#22c55e", "#f59e0b", "#8b5cf6", "#ef4444"];
 
@@ -565,30 +574,28 @@ export default function Analytics() {
 
   if (loading && !overview) {
     return (
-      <div className="space-y-8" data-testid="analytics-page">
-        <PageHeader title={t("analytics")} subtitle={t("overview")} testIdPrefix="analytics" />
-        <div className="flex items-center justify-center py-16 text-muted-foreground">
-          {t("refresh_data")}…
-        </div>
+      <div className="analytics-page page-enter space-y-8" data-testid="analytics-page">
+        <PageHeader title={t("analytics")} subtitle={t("analytics_page_description")} testIdPrefix="analytics" />
+        <DashboardLoading message={t("analytics_loading")} testId="analytics-loading" />
       </div>
     );
   }
 
   const totalStudents = overview?.total_students ?? 0;
   const classesCount = overview?.classes_count ?? 0;
+  const focusAvg = apiQuarter === 1 ? q1.avg_total : q2.avg_total;
 
   return (
-    <div className="space-y-8" data-testid="analytics-page">
-      <PageHeader
-        title={t("analytics")}
-        subtitle={t("overview")}
-        testIdPrefix="analytics"
-        action={
-          <div className="flex flex-wrap items-end gap-2">
-            <div className="flex min-w-[220px] flex-col gap-1">
-              <span className="text-xs text-muted-foreground">{t("analytics_term_scope")}</span>
+    <div className="analytics-page page-enter space-y-6 sm:space-y-8" data-testid="analytics-page">
+      <PageHeader title={t("analytics")} subtitle={t("analytics_page_description")} testIdPrefix="analytics" />
+
+      <AnalyticsToolbar
+        testId="analytics-toolbar"
+        filters={
+          <>
+            <FilterField label={t("analytics_term_scope")}>
               <Select value={termScopeId} onValueChange={setTermScopeId}>
-                <SelectTrigger className="w-48" data-testid="analytics-term-scope">
+                <SelectTrigger className="w-full min-w-[12rem] sm:w-48" data-testid="analytics-term-scope">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -599,11 +606,8 @@ export default function Analytics() {
                   ))}
                 </SelectContent>
               </Select>
-            </div>
-            <div className="flex min-w-[220px] flex-col gap-1">
-              <span className="select-none text-xs text-muted-foreground opacity-0" aria-hidden="true">
-                {t("analytics_term_scope")}
-              </span>
+            </FilterField>
+            <FilterField label={t("classes")}>
               <Select
                 value={selectedClassId}
                 onValueChange={(value) => {
@@ -611,7 +615,7 @@ export default function Analytics() {
                   setSelectedStudentId("all");
                 }}
               >
-                <SelectTrigger className="w-48" data-testid="analytics-class-filter">
+                <SelectTrigger className="w-full min-w-[12rem] sm:w-48" data-testid="analytics-class-filter">
                   <SelectValue placeholder={t("classes")} />
                 </SelectTrigger>
                 <SelectContent>
@@ -625,14 +629,11 @@ export default function Analytics() {
                   ))}
                 </SelectContent>
               </Select>
-            </div>
+            </FilterField>
             {selectedClassId !== "all" && (
-              <div className="flex min-w-[220px] flex-col gap-1">
-                <span className="select-none text-xs text-muted-foreground opacity-0" aria-hidden="true">
-                  {t("analytics_term_scope")}
-                </span>
+              <FilterField label={t("students")}>
                 <Select value={selectedStudentId} onValueChange={setSelectedStudentId}>
-                  <SelectTrigger className="w-56" data-testid="analytics-student-filter">
+                  <SelectTrigger className="w-full min-w-[12rem] sm:w-56" data-testid="analytics-student-filter">
                     <SelectValue placeholder={t("select_student")} />
                   </SelectTrigger>
                   <SelectContent>
@@ -650,30 +651,22 @@ export default function Analytics() {
                     ))}
                   </SelectContent>
                 </Select>
-              </div>
+              </FilterField>
             )}
-            <Button
-              variant="secondary"
-              onClick={() => handleDownload("pdf")}
-              data-testid="analytics-download-pdf"
-            >
+          </>
+        }
+        actions={
+          <>
+            <Button variant="secondary" onClick={() => handleDownload("pdf")} data-testid="analytics-download-pdf">
               {t("download_pdf")}
             </Button>
-            <Button
-              variant="secondary"
-              onClick={() => handleDownload("excel")}
-              data-testid="analytics-download-excel"
-            >
+            <Button variant="secondary" onClick={() => handleDownload("excel")} data-testid="analytics-download-excel">
               {t("download_excel")}
             </Button>
-            <Button
-              variant="outline"
-              onClick={autoFillInsights}
-              data-testid="analytics-autofill-insights"
-            >
+            <Button variant="outline" onClick={autoFillInsights} data-testid="analytics-autofill-insights">
               Auto-fill AI comments
             </Button>
-          </div>
+          </>
         }
       />
 
@@ -681,9 +674,20 @@ export default function Analytics() {
         {t("analytics_term_scope_hint")}
       </p>
 
+      {!overview ? (
+        <DashboardEmpty
+          title={t("analytics_no_data")}
+          description={t("analytics_failed")}
+          actionLabel={t("analytics_retry")}
+          onAction={() => setRefreshKey((k) => k + 1)}
+          testId="analytics-empty"
+        />
+      ) : null}
+
+      {overview ? (
       <BoardShell
         sidebar={
-          overview && totalStudents > 0 ? (
+          totalStudents > 0 ? (
             <>
               <BoardHighlightsCard title={t("visual_board_key_highlights")}>
                 <div>
@@ -761,70 +765,53 @@ export default function Analytics() {
           )
         }
       >
-      {/* Metric cards */}
-      <section className="section-bg-alt-1 grid gap-4 rounded-xl border border-border/50 p-4 md:grid-cols-2 lg:grid-cols-3" data-testid="analytics-metrics">
-        <Card data-testid="analytics-total-students">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              {t("total_students")}
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-semibold" data-testid="analytics-total-students-value">
-              {totalStudents}
-            </div>
-          </CardContent>
-        </Card>
-        <Card data-testid="analytics-classes-count">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              {t("classes")}
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-semibold" data-testid="analytics-classes-count-value">
-              {classesCount}
-            </div>
-          </CardContent>
-        </Card>
-        <Card data-testid="analytics-focus-quarter" className="ring-2 ring-primary ring-offset-2 ring-offset-background">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              {isStudentScoped ? t("analytics_student_total") : `${t(`term_${termScopeId}`)} — ${t("on_level_rate")}`}
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-semibold text-emerald-600 dark:text-emerald-400">
-              {isStudentScoped
+      <section className="space-y-3" data-testid="analytics-metrics">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+          {t("analytics_kpi_section")}
+        </h2>
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          <MetricCard label={t("total_students")} value={totalStudents} testId="analytics-total-students" />
+          <MetricCard label={t("classes")} value={classesCount} testId="analytics-classes-count" />
+          <MetricCard
+            label={isStudentScoped ? t("analytics_student_total") : `${t(`term_${termScopeId}`)} — ${t("on_level_rate")}`}
+            value={
+              isStudentScoped
                 ? `${selectedStudentTermTotal != null ? selectedStudentTermTotal : "—"}/50`
-                : `${focusOnLevelRate}%`}
-            </div>
-            {!isStudentScoped && (apiQuarter === 1 ? q1.avg_total : q2.avg_total) != null && (
-              <p className="mt-1 text-xs text-muted-foreground">
-                {t("avg_quarter_total")}: {apiQuarter === 1 ? q1.avg_total : q2.avg_total}
-              </p>
-            )}
-            {isStudentScoped && (
-              <p className="mt-1 text-xs text-muted-foreground">
-                {selectedStudentAchievementRate}%
-              </p>
-            )}
-          </CardContent>
-        </Card>
+                : `${focusOnLevelRate}%`
+            }
+            hint={
+              !isStudentScoped && focusAvg != null
+                ? `${t("avg_quarter_total")}: ${focusAvg}`
+                : isStudentScoped
+                  ? `${selectedStudentAchievementRate}%`
+                  : undefined
+            }
+            accent="primary"
+            testId="analytics-focus-quarter"
+          />
+        </div>
       </section>
 
-      {overview && totalStudents > 0 && (
-        <div className="grid gap-4 md:grid-cols-2" data-testid="analytics-visual-board-grid">
-          <BoardPanel
+      {totalStudents > 0 && (
+        <section className="space-y-3" data-testid="analytics-visual-board-grid">
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+            {t("analytics_visual_insights")}
+          </h2>
+          <div className="analytics-chart-grid">
+          <ChartCard
             title={isStudentScoped ? t("analytics_student_marks_breakdown") : t("visual_board_chart_class_avg")}
             subtitle={isStudentScoped ? t("analytics_student_marks_breakdown_sub") : t("visual_board_chart_class_avg_sub")}
+            summary={!isStudentScoped && focusAvg != null ? String(focusAvg) : undefined}
+            summaryLabel={!isStudentScoped ? t("avg_quarter_total") : undefined}
             testId="analytics-board-class-avg"
           >
             <ClassAverageBarChart data={classChartData} height={260} />
-          </BoardPanel>
-          <BoardPanel
+          </ChartCard>
+          <ChartCard
             title={isStudentScoped ? t("analytics_student_component_share") : t("visual_board_chart_pass_split")}
             subtitle={isStudentScoped ? t("analytics_student_component_share_sub") : t("visual_board_chart_pass_split_sub")}
+            summary={!isStudentScoped ? `${focusOnLevelRate}%` : undefined}
+            summaryLabel={!isStudentScoped ? t("on_level") : undefined}
             testId="analytics-board-donut"
           >
             {isStudentScoped ? (
@@ -851,8 +838,8 @@ export default function Analytics() {
                 height={260}
               />
             )}
-          </BoardPanel>
-          <BoardPanel
+          </ChartCard>
+          <ChartCard
             title={isStudentScoped ? t("analytics_student_achievement") : t("visual_board_chart_q_focus")}
             subtitle={isStudentScoped ? t("analytics_student_achievement_sub") : t("visual_board_chart_q_focus_sub")}
             testId="analytics-board-q-focus"
@@ -865,47 +852,37 @@ export default function Analytics() {
               labelFormatter={isStudentScoped ? ((value) => `${value}/50`) : undefined}
               height={240}
             />
-          </BoardPanel>
-          <BoardPanel
+          </ChartCard>
+          <ChartCard
             title={isStudentScoped ? t("analytics_student_component_profile") : t("visual_board_chart_class_curve")}
             subtitle={isStudentScoped ? t("analytics_student_component_profile_sub") : t("visual_board_chart_class_curve_sub")}
             testId="analytics-board-class-area"
           >
             <ClassScoreArea data={classChartData} height={240} />
-          </BoardPanel>
-        </div>
+          </ChartCard>
+          </div>
+        </section>
       )}
 
-      <Card className="border-primary/20 bg-gradient-to-r from-primary/5 via-primary/10 to-primary/5" data-testid="analytics-ai-panel">
-        <CardHeader className="pb-2">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <CardTitle className="flex items-center gap-2 text-base">
-              <Sparkles className="h-4 w-4 text-primary" />
-              AI Analytics Studio
-            </CardTitle>
-            <Badge variant="secondary" className="font-normal">
-              Auto-updated by selected filters
-            </Badge>
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          {aiInsightRows.map((item, idx) => {
-            const Icon = item.icon;
-            return (
-              <div
-                key={idx}
-                className="rounded-lg border border-border/60 bg-background/70 px-3 py-2 text-sm"
-                data-testid={`analytics-ai-insight-${idx}`}
-              >
-                <p className="flex items-start gap-2">
-                  <Icon className={`mt-0.5 h-4 w-4 shrink-0 ${item.tone}`} />
-                  <span>{item.text}</span>
-                </p>
-              </div>
-            );
-          })}
-        </CardContent>
-      </Card>
+      <InsightPanel
+        title="AI Analytics Studio"
+        badge={
+          <Badge variant="secondary" className="font-normal">
+            Auto-updated by selected filters
+          </Badge>
+        }
+        testId="analytics-ai-panel"
+      >
+        {aiInsightRows.map((item, idx) => (
+          <InsightRow
+            key={idx}
+            icon={item.icon}
+            tone={item.tone}
+            text={item.text}
+            testId={`analytics-ai-insight-${idx}`}
+          />
+        ))}
+      </InsightPanel>
 
       <div className="section-bg-alt-2 rounded-xl border border-border/50 p-4">
       <Tabs
@@ -935,7 +912,7 @@ export default function Analytics() {
         </TabsList>
 
         <TabsContent value="overview" className="mt-6" data-testid="analytics-overview-content">
-          <BoardPanel
+          <ChartCard
             title={
               isStudentScoped
                 ? `${t("analytics_student_marks_breakdown")} — ${t(`term_${termScopeId}`)}`
@@ -949,6 +926,7 @@ export default function Analytics() {
                 </Badge>
               </span>
             }
+            span="full"
           >
             <div className="h-80" data-testid="analytics-overview-bar">
               <ResponsiveContainer width="100%" height="100%">
@@ -977,7 +955,7 @@ export default function Analytics() {
                 </BarChart>
               </ResponsiveContainer>
             </div>
-          </BoardPanel>
+          </ChartCard>
         </TabsContent>
 
         <TabsContent value="quarter1" className="mt-6" data-testid="analytics-quarter1-content">
@@ -1335,6 +1313,7 @@ export default function Analytics() {
       </section>
       </ExpandableSection>
       </BoardShell>
+      ) : null}
     </div>
   );
 }

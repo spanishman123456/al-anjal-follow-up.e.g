@@ -480,6 +480,36 @@ html:not(.dark) .login-top-sky {
         @apply -mx-1 w-full overflow-x-auto px-1 sm:mx-0 sm:px-0;
     }
 
+    /* Premium analytics / report surfaces */
+    .analytics-page,
+    .report-document {
+        @apply space-y-6 sm:space-y-8;
+    }
+
+    .analytics-chart-grid {
+        @apply grid gap-4 md:grid-cols-2;
+    }
+
+    .report-table-premium thead tr {
+        @apply border-b border-border/80 bg-muted/50;
+    }
+
+    .report-table-premium th {
+        @apply px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground;
+    }
+
+    .report-table-premium td {
+        @apply px-4 py-3 text-sm align-top;
+    }
+
+    .report-table-premium tbody tr {
+        @apply border-b border-border/40 transition-colors hover:bg-muted/30;
+    }
+
+    .report-table-premium tbody tr:last-child {
+        @apply border-b-0;
+    }
+
     /*
      * Grade table inputs: override Input `w-full` (utilities win over this layer without !important).
      * Keep native number steppers visible so teachers can increment/decrement with arrows.
@@ -540,6 +570,52 @@ table td:has(input.score-table-input-10),
 table td:has(input.score-table-input-10-fill) {
     text-align: center !important;
     vertical-align: middle !important;
+}
+
+/* Screen + print: professional report layout */
+@media print {
+    @page {
+        size: A4;
+        margin: 14mm 12mm 18mm;
+    }
+
+    body {
+        background: #fff !important;
+        print-color-adjust: exact;
+        -webkit-print-color-adjust: exact;
+    }
+
+    .no-print,
+    .page-toolbar,
+    [data-testid="reports-page"] .page-toolbar,
+    [data-testid="analytics-page"] .page-toolbar,
+    nav,
+    aside:not(.report-document aside) {
+        display: none !important;
+    }
+
+    .report-document,
+    .report-cover,
+    .report-section,
+    .chart-card,
+    .metric-card,
+    .insight-panel {
+        break-inside: avoid;
+        page-break-inside: avoid;
+    }
+
+    .report-cover {
+        break-after: page;
+        page-break-after: always;
+    }
+
+    .report-document .card-hover:hover,
+    .section-bg-alt-1:hover,
+    .section-bg-alt-2:hover,
+    .section-bg-alt-3:hover {
+        transform: none !important;
+        box-shadow: none !important;
+    }
 }
 
 body {

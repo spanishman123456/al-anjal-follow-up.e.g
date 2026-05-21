@@ -482,6 +482,7 @@ PDF_LABELS: Dict[str, Dict[str, str]] = {
         "Professional Performance Summary": "Professional Performance Summary",
         "Generated on": "Generated on",
         "Summary metrics": "Summary metrics",
+        "Executive Summary": "Executive Summary",
         "Performance distribution (focus quarter)": "Performance distribution (focus quarter)",
         "Class breakdown": "Class breakdown",
         "Top Performers": "Top Performers",
@@ -526,6 +527,7 @@ PDF_LABELS: Dict[str, Dict[str, str]] = {
         "Professional Performance Summary": "ملخص الأداء المهني",
         "Generated on": "تاريخ الإصدار",
         "Summary metrics": "المؤشرات الرئيسية",
+        "Executive Summary": "ملخص تنفيذي",
         "Performance distribution (focus quarter)": "توزيع الأداء (الربع الحالي)",
         "Class breakdown": "توزيع الصفوف",
         "Top Performers": "الطلاب المتفوقون",
@@ -2476,6 +2478,107 @@ def create_reports_enrollment_area_chart(class_breakdown: List[Dict[str, Any]]) 
     return buf
 
 
+PDF_REPORT_PRIMARY_HEX = "#6d28d9"
+PDF_REPORT_ORG_NAME = "Al Anjal School Follow-up Record"
+
+
+def _pdf_footer_canvas(lang: str = "en"):
+    """Page footer: page number, org name, generation timestamp."""
+
+    def _draw(canvas, doc) -> None:
+        canvas.saveState()
+        canvas.setFont("Helvetica", 8)
+        canvas.setFillColor(colors.HexColor("#94a3b8"))
+        page_num = canvas.getPageNumber()
+        ts = datetime.now(REPORT_TIMEZONE).strftime("%Y-%m-%d %H:%M")
+        width, _ = A4
+        canvas.drawString(28, 18, f"Page {page_num}")
+        canvas.drawCentredString(width / 2, 18, PDF_REPORT_ORG_NAME)
+        canvas.drawRightString(width - 28, 18, ts)
+        canvas.restoreState()
+
+    return _draw
+
+
+def _pdf_cover_band() -> Table:
+    band = Table([[""]], colWidths=[530], rowHeights=[10])
+    band.setStyle(
+        TableStyle(
+            [
+                ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor(PDF_REPORT_PRIMARY_HEX)),
+                ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+                ("TOPPADDING", (0, 0), (-1, -1), 0),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
+            ]
+        )
+    )
+    return band
+
+
+def _pdf_kpi_cards_table(cards: List[Tuple[str, str]]) -> Table:
+    kpi_style = ParagraphStyle(
+        name="PdfKpiCell",
+        fontSize=10,
+        leading=16,
+        textColor=colors.HexColor("#0f172a"),
+    )
+    padded = list(cards) + [("", "—")] * 3
+    cells = []
+    for label, value in padded[:3]:
+        label_esc = escape(str(label or ""))
+        value_esc = escape(str(value if value not in (None, "") else "—"))
+        cells.append(
+            Paragraph(
+                f"<font size='8' color='#64748b'>{label_esc}</font><br/>"
+                f"<b><font size='13' color='{PDF_REPORT_PRIMARY_HEX}'>{value_esc}</font></b>",
+                kpi_style,
+            )
+        )
+    tbl = Table([cells], colWidths=[176, 176, 176], hAlign="LEFT")
+    tbl.setStyle(
+        TableStyle(
+            [
+                ("BOX", (0, 0), (-1, -1), 0.6, colors.HexColor("#e2e8f0")),
+                ("INNERGRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#e2e8f0")),
+                ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#f8fafc")),
+                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                ("LEFTPADDING", (0, 0), (-1, -1), 10),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 10),
+                ("TOPPADDING", (0, 0), (-1, -1), 10),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 10),
+            ]
+        )
+    )
+    return tbl
+
+
+def _pdf_append_executive_summary(
+    elements: List[Any],
+    insights: Optional[Dict[str, str]],
+    section_style: ParagraphStyle,
+    body_style: ParagraphStyle,
+    lang: str,
+) -> None:
+    insights = insights or {}
+    snippets: List[str] = []
+    for key, label_key in [
+        ("analysis_strengths", "Strengths"),
+        ("analysis_performance", "Student Performance"),
+        ("analysis_standout_data", "Standout Data"),
+    ]:
+        text = (insights.get(key) or "").strip()
+        if text:
+            snippets.append(
+                f"<b>{_tr(label_key, lang)}:</b> {_pdf_paragraph_text(text)}"
+            )
+    if not snippets:
+        return
+    elements.append(Paragraph(_pdf_paragraph_text(_tr("Executive Summary", lang), bold=True), section_style))
+    elements.append(Paragraph("<br/>".join(snippets), body_style))
+    elements.append(Spacer(1, 12))
+
+
 def format_scope_label(scope: Any) -> str:
     if isinstance(scope, int):
         return f"Grade {scope}"
@@ -2518,7 +2621,7 @@ def generate_report_pdf(
         tbl.setStyle(
             TableStyle(
                 [
-                    ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#0f766e")),
+                    ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor(PDF_REPORT_PRIMARY_HEX)),
                     ("TEXTCOLOR", (0, 0), (-1, 0), colors.whitesmoke),
                     ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
                     ("FONTSIZE", (0, 0), (-1, 0), 9),
@@ -2556,7 +2659,7 @@ def generate_report_pdf(
         name="SectionHeading",
         parent=styles["Heading2"],
         fontSize=12,
-        textColor=colors.HexColor("#0f766e"),
+        textColor=colors.HexColor(PDF_REPORT_PRIMARY_HEX),
         spaceBefore=6,
         spaceAfter=6,
     )
@@ -2586,11 +2689,14 @@ def generate_report_pdf(
         table_header_style.wordWrap = "RTL"
         table_body_style.wordWrap = "RTL"
 
-    doc = SimpleDocTemplate(buffer, pagesize=A4, leftMargin=28, rightMargin=28, topMargin=28, bottomMargin=28)
+    doc = SimpleDocTemplate(buffer, pagesize=A4, leftMargin=28, rightMargin=28, topMargin=36, bottomMargin=36)
     elements: List[Any] = []
     scope_label = format_scope_label(scope)
 
+    elements.append(_pdf_cover_band())
+    elements.append(Spacer(1, 10))
     elements.append(Paragraph(f"{_pdf_paragraph_text(scope_label)} {_pdf_paragraph_text(_tr('Report', lang))}", title_style))
+    elements.append(Paragraph(_pdf_paragraph_text(PDF_REPORT_ORG_NAME), subtitle_style))
     elements.append(
         Paragraph(
             _pdf_paragraph_text(
@@ -2601,6 +2707,17 @@ def generate_report_pdf(
             subtitle_style,
         )
     )
+    _pdf_append_executive_summary(elements, insights, section_style, subtitle_style, lang)
+    elements.append(
+        _pdf_kpi_cards_table(
+            [
+                (_tr("Total Students", lang), _fmt(report.get("total_students"))),
+                (_tr("Average Total Score", lang), _fmt(report.get("avg_total_score"))),
+                (_tr("On Level % (focus quarter)", lang), _fmt(report.get("exceeding_rate"), "%")),
+            ]
+        )
+    )
+    elements.append(Spacer(1, 14))
 
     q1 = report.get("quarter1") or {}
     q2 = report.get("quarter2") or {}
@@ -2722,7 +2839,7 @@ def generate_report_pdf(
     elements.append(Paragraph(_pdf_paragraph_text(_tr("Key Insights", lang), bold=True), section_style))
     elements.append(_styled_table(insight_rows, col_widths=[130, 380], repeat_header=True))
 
-    doc.build(elements)
+    doc.build(elements, onFirstPage=_pdf_footer_canvas(lang), onLaterPages=_pdf_footer_canvas(lang))
     pdf_value = buffer.getvalue()
     buffer.close()
     return pdf_value
@@ -2771,7 +2888,7 @@ def generate_analytics_dashboard_pdf(
         tbl.setStyle(
             TableStyle(
                 [
-                    ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#0f766e")),
+                    ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor(PDF_REPORT_PRIMARY_HEX)),
                     ("TEXTCOLOR", (0, 0), (-1, 0), colors.whitesmoke),
                     ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
                     ("FONTSIZE", (0, 0), (-1, 0), 9),
@@ -2809,7 +2926,7 @@ def generate_analytics_dashboard_pdf(
         name="AnalyticsSection",
         parent=styles["Heading2"],
         fontSize=12,
-        textColor=colors.HexColor("#0f766e"),
+        textColor=colors.HexColor(PDF_REPORT_PRIMARY_HEX),
         spaceBefore=6,
         spaceAfter=6,
     )
@@ -2877,7 +2994,7 @@ def generate_analytics_dashboard_pdf(
         line_buf = create_analytics_quarter_focus_bar_chart(focus_rate, f"S{sem_o}·Q{qn_o}")
         area_buf = create_analytics_class_area_chart(class_summaries)
 
-    doc = SimpleDocTemplate(buffer, pagesize=A4, leftMargin=28, rightMargin=28, topMargin=28, bottomMargin=28)
+    doc = SimpleDocTemplate(buffer, pagesize=A4, leftMargin=28, rightMargin=28, topMargin=36, bottomMargin=36)
     elements: List[Any] = []
 
     grade_labels = [str(label).strip() for label in (selected_grade_labels or []) if str(label).strip()]
@@ -2885,7 +3002,10 @@ def generate_analytics_dashboard_pdf(
     term_subtitle = f"{_tr('Semester', lang)} {sem_o} · {_tr('Quarter', lang)} {qn_o}"
 
     # Product requirement: keep this title exact in exports.
+    elements.append(_pdf_cover_band())
+    elements.append(Spacer(1, 10))
     elements.append(Paragraph(_pdf_paragraph_text("Analytics Report", bold=True), title_style))
+    elements.append(Paragraph(_pdf_paragraph_text(PDF_REPORT_ORG_NAME), subtitle_style))
     elements.append(Paragraph(f"<b>{_pdf_paragraph_text(grade_subtitle)}</b>", subtitle_style))
     elements.append(Paragraph(_pdf_paragraph_text(term_subtitle), subtitle_style))
     elements.append(
@@ -2897,6 +3017,17 @@ def generate_analytics_dashboard_pdf(
             subtitle_style,
         )
     )
+    _pdf_append_executive_summary(elements, insights, section_style, subtitle_style, lang)
+    elements.append(
+        _pdf_kpi_cards_table(
+            [
+                (_tr("Total Students", lang), _fmt(report.get("total_students"))),
+                (_tr("Average Total Score", lang), _fmt(report.get("avg_total_score"))),
+                (_tr("On Level % (focus quarter)", lang), _fmt(report.get("exceeding_rate"), "%")),
+            ]
+        )
+    )
+    elements.append(Spacer(1, 14))
 
     elements.append(Paragraph(_pdf_paragraph_text(_tr("Visual dashboard", lang), bold=True), section_style))
     level_labels_text = (
@@ -3059,7 +3190,7 @@ def generate_analytics_dashboard_pdf(
     elements.append(Paragraph(_pdf_paragraph_text(_tr("Key Insights", lang), bold=True), section_style))
     elements.append(_styled_table(insight_rows, col_widths=[130, 380], repeat_header=True))
 
-    doc.build(elements)
+    doc.build(elements, onFirstPage=_pdf_footer_canvas(lang), onLaterPages=_pdf_footer_canvas(lang))
     pdf_value = buffer.getvalue()
     buffer.close()
     return pdf_value
@@ -3110,7 +3241,7 @@ def generate_reports_dashboard_pdf(
         tbl.setStyle(
             TableStyle(
                 [
-                    ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#0f766e")),
+                    ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor(PDF_REPORT_PRIMARY_HEX)),
                     ("TEXTCOLOR", (0, 0), (-1, 0), colors.whitesmoke),
                     ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
                     ("FONTSIZE", (0, 0), (-1, 0), 9),
@@ -3148,7 +3279,7 @@ def generate_reports_dashboard_pdf(
         name="ReportsDashSection",
         parent=styles["Heading2"],
         fontSize=12,
-        textColor=colors.HexColor("#0f766e"),
+        textColor=colors.HexColor(PDF_REPORT_PRIMARY_HEX),
         spaceBefore=6,
         spaceAfter=6,
     )
@@ -3212,16 +3343,19 @@ def generate_reports_dashboard_pdf(
 
     term_sub = f"{_tr('Semester', lang)} {sem} · {_tr('Quarter', lang)} {qn}"
 
-    doc = SimpleDocTemplate(buffer, pagesize=A4, leftMargin=28, rightMargin=28, topMargin=28, bottomMargin=28)
+    doc = SimpleDocTemplate(buffer, pagesize=A4, leftMargin=28, rightMargin=28, topMargin=36, bottomMargin=36)
     elements: List[Any] = []
 
     reports_title_key = "Report"  # "Reports" is rare in our label dict; reuse "Report".
     reports_title_text = _tr(reports_title_key, lang)
     if is_summary:
         reports_title_text = f"{reports_title_text} ({_tr('Summary metrics', lang)})"
+    elements.append(_pdf_cover_band())
+    elements.append(Spacer(1, 10))
     elements.append(
         Paragraph(_pdf_paragraph_text(reports_title_text, bold=True), title_style)
     )
+    elements.append(Paragraph(_pdf_paragraph_text(PDF_REPORT_ORG_NAME), subtitle_style))
     elements.append(Paragraph(f"<b>{_pdf_paragraph_text(scope_label)}</b>", subtitle_style))
     elements.append(
         Paragraph(
@@ -3232,6 +3366,17 @@ def generate_reports_dashboard_pdf(
             subtitle_style,
         )
     )
+    _pdf_append_executive_summary(elements, insights, section_style, subtitle_style, lang)
+    elements.append(
+        _pdf_kpi_cards_table(
+            [
+                (_tr("Total Students", lang), _fmt(report.get("total_students"))),
+                (_tr("Average Total Score", lang), _fmt(report.get("avg_total_score"))),
+                (_tr("On Level % (focus quarter)", lang), _fmt(report.get("exceeding_rate"), "%")),
+            ]
+        )
+    )
+    elements.append(Spacer(1, 14))
 
     elements.append(Paragraph(_pdf_paragraph_text(_tr("Visual dashboard", lang), bold=True), section_style))
     rq = qn
@@ -3399,7 +3544,7 @@ def generate_reports_dashboard_pdf(
         elements.append(Paragraph(_pdf_paragraph_text(_tr("Key Insights", lang), bold=True), section_style))
         elements.append(_styled_table(insight_rows, col_widths=[130, 380], repeat_header=True))
 
-    doc.build(elements)
+    doc.build(elements, onFirstPage=_pdf_footer_canvas(lang), onLaterPages=_pdf_footer_canvas(lang))
     pdf_value = buffer.getvalue()
     buffer.close()
     return pdf_value

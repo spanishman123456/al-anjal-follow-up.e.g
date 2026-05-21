@@ -33,7 +33,6 @@ import {
 } from "@/components/ui/table";
 import {
   BoardShell,
-  BoardPanel,
   BoardHighlightsCard,
   ClassAverageBarChart,
   PassSplitDonut,
@@ -46,7 +45,16 @@ import {
   performanceChipClasses,
   performanceLegendSwatchClasses,
   performanceTextClasses,
+  getScoreBandBadgeClass,
 } from "@/lib/performanceBadges";
+import {
+  MetricCard,
+  ChartCard,
+  ReportCoverMeta,
+  ReportSection,
+  AnalyticsToolbar,
+  FilterField,
+} from "@/components/analytics";
 
 export default function Reports() {
   const { language, semester, quarter, profile, classes: contextClasses = [] } = useOutletContext();
@@ -249,18 +257,28 @@ export default function Reports() {
   const focusQuarterStudentTotal = (student) =>
     apiQuarter === 2 ? student.quarter2_total ?? "—" : student.quarter1_total ?? "—";
 
+  const executiveSummaryText = [
+    analysisStrengths,
+    analysisPerformance,
+    analysisStandoutData,
+  ]
+    .map((s) => (s || "").trim())
+    .filter(Boolean)
+    .join(" ")
+    .slice(0, 320);
+
   return (
-    <div className="space-y-8" data-testid="reports-page">
-      <PageHeader
-        title={t("reports")}
-        subtitle={t("overview")}
-        testIdPrefix="reports"
-        action={
-          <div className="flex flex-wrap items-center gap-3">
-            <div className="flex min-w-[220px] flex-col gap-1">
-              <span className="text-xs text-muted-foreground">{t("analytics_term_scope")}</span>
+    <div className="space-y-6 sm:space-y-8" data-testid="reports-page">
+      <PageHeader title={t("reports")} subtitle={t("analytics_page_description")} testIdPrefix="reports" />
+
+      <AnalyticsToolbar
+        testId="reports-toolbar"
+        className="no-print"
+        filters={
+          <>
+            <FilterField label={t("analytics_term_scope")}>
               <Select value={termScopeId} onValueChange={setTermScopeId}>
-                <SelectTrigger className="w-[min(100%,240px)]" data-testid="reports-term-scope">
+                <SelectTrigger className="w-full min-w-[12rem] sm:w-48" data-testid="reports-term-scope">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -271,69 +289,59 @@ export default function Reports() {
                   ))}
                 </SelectContent>
               </Select>
-            </div>
-            <Select value={grade} onValueChange={setGrade} disabled={!availableGrades.length}>
-              <SelectTrigger data-testid="reports-grade-select">
-                <SelectValue placeholder={t("grade")} />
-              </SelectTrigger>
-              <SelectContent>
-                {availableGrades.map((value) => (
-                  <SelectItem key={value} value={String(value)} data-testid={`reports-grade-${value}`}>
-                    Grade {value}
+            </FilterField>
+            <FilterField label={t("grade")}>
+              <Select value={grade} onValueChange={setGrade} disabled={!availableGrades.length}>
+                <SelectTrigger className="w-full min-w-[10rem]" data-testid="reports-grade-select">
+                  <SelectValue placeholder={t("grade")} />
+                </SelectTrigger>
+                <SelectContent>
+                  {availableGrades.map((value) => (
+                    <SelectItem key={value} value={String(value)} data-testid={`reports-grade-${value}`}>
+                      Grade {value}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </FilterField>
+            <FilterField label={t("report_type")}>
+              <Select value={reportType} onValueChange={setReportType}>
+                <SelectTrigger className="w-full min-w-[10rem]" data-testid="reports-type-select">
+                  <SelectValue placeholder={t("report_type")} />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="summary" data-testid="reports-type-summary">
+                    {t("summary_report")}
                   </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Select value={reportType} onValueChange={setReportType}>
-              <SelectTrigger data-testid="reports-type-select">
-                <SelectValue placeholder={t("report_type")} />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="summary" data-testid="reports-type-summary">
-                  {t("summary_report")}
-                </SelectItem>
-                <SelectItem value="full" data-testid="reports-type-full">
-                  {t("full_report")}
-                </SelectItem>
-              </SelectContent>
-            </Select>
+                  <SelectItem value="full" data-testid="reports-type-full">
+                    {t("full_report")}
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </FilterField>
+          </>
+        }
+        actions={
+          <>
             <Button onClick={handleGenerate} data-testid="reports-generate-button" disabled={isTeacher && !availableGrades.length}>
               {t("generate_report")}
             </Button>
-            <Button
-              variant="outline"
-              onClick={() => autoFillInsights()}
-              data-testid="reports-autofill-insights-button"
-              disabled={!report}
-            >
+            <Button variant="outline" onClick={() => autoFillInsights()} data-testid="reports-autofill-insights-button" disabled={!report}>
               Auto-fill AI comments
             </Button>
-            <Button variant="outline" onClick={handlePrint} data-testid="reports-print-button" disabled={!report}>
+            <Button variant="outline" onClick={handlePrint} className="no-print" data-testid="reports-print-button" disabled={!report}>
               {t("print")}
             </Button>
-            <Button
-              variant="secondary"
-              onClick={() => handleDownload("pdf")}
-              data-testid="reports-download-pdf-button"
-              disabled={!report}
-            >
+            <Button variant="secondary" onClick={() => handleDownload("pdf")} data-testid="reports-download-pdf-button" disabled={!report}>
               {t("download_pdf")}
             </Button>
-            <Button
-              variant="secondary"
-              onClick={() => handleDownload("excel")}
-              data-testid="reports-download-excel-button"
-              disabled={!report}
-            >
+            <Button variant="secondary" onClick={() => handleDownload("excel")} data-testid="reports-download-excel-button" disabled={!report}>
               {t("download_excel")}
             </Button>
-            <Button
-              onClick={handleSchedule}
-              data-testid="reports-schedule-button"
-            >
+            <Button onClick={handleSchedule} className="no-print" data-testid="reports-schedule-button">
               {t("schedule_weekly")}
             </Button>
-          </div>
+          </>
         }
       />
 
@@ -345,7 +353,22 @@ export default function Reports() {
       </p>
 
       {report ? (
-        <div className="space-y-6" data-testid="reports-content">
+        <div className="report-document space-y-6" data-testid="reports-content">
+          <ReportCoverMeta
+            title={t("reports")}
+            subtitle={t("report_prepared_for")}
+            organization={t("app_name")}
+            reportTypeLabel={isFullReport ? t("full_report") : t("summary_report")}
+            gradeLabel={t("grade")}
+            gradeValue={`Grade ${grade}`}
+            termLabel={t("analytics_term_scope")}
+            termValue={t(`term_${termScopeId}`)}
+            generatedLabel={t("generated_on")}
+            generatedValue={new Date().toLocaleDateString()}
+            summary={executiveSummaryText || t("report_executive_intro")}
+            testId="reports-cover"
+          />
+
           <BoardShell
             sidebar={
               <>
@@ -392,51 +415,34 @@ export default function Reports() {
             </CardContent>
           </Card>
 
-          <section className="section-bg-alt-1 grid gap-4 rounded-xl border border-border/50 p-4 md:grid-cols-2 lg:grid-cols-3" data-testid="reports-summary">
-            <Card className="card-hover">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm text-muted-foreground">{t("total_students")}</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-semibold" data-testid="reports-total-students">
-                  {report.total_students}
-                </div>
-              </CardContent>
-            </Card>
-            <Card className="card-hover">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm text-muted-foreground">{t("avg_total_score")}</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-semibold" data-testid="reports-avg-total">
-                  {report.avg_total_score != null ? report.avg_total_score : "—"}
-                </div>
-              </CardContent>
-            </Card>
-            <Card className="card-hover">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm text-muted-foreground">{t("on_level")}</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-semibold" data-testid="reports-exceeding-rate">
-                  {report.exceeding_rate}%
-                </div>
-                <p className="text-xs text-muted-foreground">{t(`term_${termScopeId}`)}</p>
-              </CardContent>
-            </Card>
-          </section>
+          <ReportSection title={t("key_metrics")} testId="reports-summary">
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3" data-testid="reports-summary-metrics">
+              <MetricCard
+                label={t("total_students")}
+                value={report.total_students}
+                testId="reports-total-students"
+              />
+              <MetricCard
+                label={t("avg_total_score")}
+                value={report.avg_total_score != null ? report.avg_total_score : "—"}
+                testId="reports-avg-total"
+              />
+              <MetricCard
+                label={t("on_level")}
+                value={`${report.exceeding_rate}%`}
+                hint={t(`term_${termScopeId}`)}
+                accent="primary"
+                testId="reports-exceeding-rate"
+              />
+            </div>
+          </ReportSection>
 
-          <div className="grid gap-4 md:grid-cols-2" data-testid="reports-visual-board-grid">
-            <BoardPanel
-              title={t("avg_total_score")}
-              subtitle={t("visual_board_chart_class_curve_sub")}
-            >
+          <ReportSection title={t("visual_insights")} description={t(`term_${termScopeId}`)} testId="reports-visual-board-grid">
+            <div className="analytics-chart-grid">
+            <ChartCard title={t("avg_total_score")} subtitle={t("visual_board_chart_class_curve_sub")}>
               <ClassAverageBarChart data={reportClassAverageBars} height={260} />
-            </BoardPanel>
-            <BoardPanel
-              title={t("visual_board_chart_pass_split")}
-              subtitle={t(`term_${termScopeId}`)}
-            >
+            </ChartCard>
+            <ChartCard title={t("visual_board_chart_pass_split")} subtitle={t(`term_${termScopeId}`)} summary={`${report.exceeding_rate}%`} summaryLabel={t("on_level")}>
               <div className="mb-2 space-y-1 text-sm font-semibold">
                 <div className={`flex items-center gap-2 ${performanceTextClasses.on_level}`}>
                   <span className={`inline-block h-3 w-3 rounded-sm ${performanceLegendSwatchClasses.on_level}`} />
@@ -461,30 +467,24 @@ export default function Reports() {
                 height={260}
                 showLegend={false}
               />
-            </BoardPanel>
-          </div>
-
-          {isFullReport && (
-            <div className="grid gap-4 md:grid-cols-2" data-testid="reports-visual-board-grid-full">
-              <BoardPanel
-                title={t("visual_board_chart_q_focus")}
-                subtitle={t("visual_board_chart_q_focus_sub")}
-              >
+            </ChartCard>
+            {isFullReport ? (
+              <>
+              <ChartCard title={t("visual_board_chart_q_focus")} subtitle={t("visual_board_chart_q_focus_sub")}>
                 <QuarterOnLevelFocus
                   rate={report.exceeding_rate}
                   termLabel={t(`term_${termScopeId}`)}
                   lineName={t("visual_board_line_cohort")}
                   height={240}
                 />
-              </BoardPanel>
-              <BoardPanel
-                title={t("visual_board_chart_class_curve")}
-                subtitle={t("visual_board_chart_class_curve_sub")}
-              >
+              </ChartCard>
+              <ChartCard title={t("visual_board_chart_class_curve")} subtitle={t("visual_board_chart_class_curve_sub")}>
                 <ClassScoreArea data={reportClassAverageBars} height={240} />
-              </BoardPanel>
+              </ChartCard>
+              </>
+            ) : null}
             </div>
-          )}
+          </ReportSection>
 
           {!isFullReport && (
             <Card
@@ -504,9 +504,9 @@ export default function Reports() {
             description={`${t("generated_on")}: ${new Date().toLocaleDateString()}`}
             defaultOpen
             testId="reports-executive-summary-section"
-            className="section-bg-alt-3"
+            className="section-bg-alt-3 print:break-inside-avoid"
           >
-          <Card data-testid="reports-tabs-card" className="card-hover border-none shadow-none">
+          <Card data-testid="reports-tabs-card" className="border-none bg-transparent shadow-none">
             <CardContent className="pt-2">
               <Tabs defaultValue="top" data-testid="reports-tabs">
                 <TabsList className="h-auto flex-wrap">
@@ -522,8 +522,8 @@ export default function Reports() {
                 </TabsList>
 
                 <TabsContent value="top" className="mt-4" data-testid="reports-top-content">
-                  <div className="table-responsive-wrap">
-                  <Table>
+                  <div className="table-responsive-wrap rounded-xl border border-border/60 overflow-hidden">
+                  <Table className="report-table-premium">
                     <TableHeader>
                       <TableRow>
                         <TableHead>{t("student_name")}</TableHead>
@@ -573,8 +573,8 @@ export default function Reports() {
                 </TabsContent>
 
                 <TabsContent value="support" className="mt-4" data-testid="reports-support-content">
-                  <div className="table-responsive-wrap">
-                  <Table>
+                  <div className="table-responsive-wrap rounded-xl border border-border/60 overflow-hidden">
+                  <Table className="report-table-premium">
                     <TableHeader>
                       <TableRow>
                         <TableHead>{t("student_name")}</TableHead>
@@ -622,8 +622,8 @@ export default function Reports() {
                 </TabsContent>
 
                 <TabsContent value="classes" className="mt-4" data-testid="reports-classes-content">
-                  <div className="table-responsive-wrap">
-                  <Table>
+                  <div className="table-responsive-wrap rounded-xl border border-border/60 overflow-hidden">
+                  <Table className="report-table-premium">
                     <TableHeader>
                       <TableRow>
                         <TableHead>{t("class_name")}</TableHead>
