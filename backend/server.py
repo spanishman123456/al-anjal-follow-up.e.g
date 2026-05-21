@@ -2549,6 +2549,14 @@ def _pdf_cover_meta_table(meta_rows: List[Tuple[str, str]], lang: str = "en") ->
     return tbl
 
 
+def _pdf_clamp_text(value: Any, max_chars: int = 220) -> str:
+    text = str(value or "").strip()
+    if len(text) <= max_chars:
+        return text
+    cut = text[:max_chars].rsplit(" ", 1)[0].strip()
+    return f"{cut or text[:max_chars].strip()}..."
+
+
 def _pdf_kpi_cards_table(cards: List[Tuple[str, str]]) -> Table:
     kpi_style = ParagraphStyle(
         name="PdfKpiCell",
@@ -2600,7 +2608,7 @@ def _pdf_append_executive_summary(
         ("analysis_performance", "Student Performance"),
         ("analysis_standout_data", "Standout Data"),
     ]:
-        text = (insights.get(key) or "").strip()
+        text = _pdf_clamp_text((insights.get(key) or "").strip(), max_chars=340)
         if text:
             snippets.append(
                 f"<b>{_tr(label_key, lang)}:</b> {_pdf_paragraph_text(text)}"
@@ -2631,7 +2639,7 @@ def _pdf_story_cards_table(stories: List[Tuple[str, str]], lang: str = "en") -> 
     cells: List[Paragraph] = []
     for title, text in stories[:3]:
         title_esc = _pdf_paragraph_text(title, bold=True)
-        text_esc = _pdf_paragraph_text(text if text else "-")
+        text_esc = _pdf_paragraph_text(_pdf_clamp_text(text if text else "-", max_chars=180))
         cells.append(Paragraph(f"{title_esc}<br/><font color='#475569'>{text_esc}</font>", heading_style))
     while len(cells) < 3:
         cells.append(Paragraph("-", body_style))
@@ -2757,7 +2765,7 @@ def _pdf_chart_panel(
 def _pdf_side_by_side_panels(left_panel: Table, right_panel: Table) -> Table:
     row = Table(
         [[left_panel, right_panel]],
-        colWidths=[262, 262],
+        colWidths=[261, 261],
         hAlign="LEFT",
     )
     row.setStyle(
@@ -2766,6 +2774,8 @@ def _pdf_side_by_side_panels(left_panel: Table, right_panel: Table) -> Table:
                 ("VALIGN", (0, 0), (-1, -1), "TOP"),
                 ("LEFTPADDING", (0, 0), (-1, -1), 0),
                 ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+                ("RIGHTPADDING", (0, 0), (0, -1), 4),
+                ("LEFTPADDING", (1, 0), (1, -1), 4),
                 ("TOPPADDING", (0, 0), (-1, -1), 0),
                 ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
             ]
@@ -3263,7 +3273,7 @@ def generate_analytics_dashboard_pdf(
             [
                 (_tr("Key Insights", lang), _tr("On Level % (focus quarter)", lang)),
                 (_tr("Summary metrics", lang), _tr("Average Total Score", lang)),
-                (_tr("Recommended Actions", lang), (insights or {}).get("analysis_actions") or "-"),
+                (_tr("Recommended Actions", lang), _pdf_clamp_text((insights or {}).get("analysis_actions") or "-", max_chars=180)),
             ],
             lang,
         )
@@ -3310,7 +3320,9 @@ def generate_analytics_dashboard_pdf(
             lang=lang,
         ),
     )
-    elements.append(KeepTogether([dashboard_row_1, Spacer(1, 10), dashboard_row_2]))
+    elements.append(dashboard_row_1)
+    elements.append(Spacer(1, 10))
+    elements.append(dashboard_row_2)
     elements.append(Spacer(1, 14))
 
     q1 = report.get("quarter1") or {}
@@ -3407,12 +3419,12 @@ def generate_analytics_dashboard_pdf(
     insights = insights or {}
     insight_rows = [
         [_tr("Insight", lang), _tr("Details", lang)],
-        [_tr("Strengths", lang), (insights.get("analysis_strengths") or "").strip() or "-"],
-        [_tr("Weaknesses", lang), (insights.get("analysis_weaknesses") or "").strip() or "-"],
-        [_tr("Student Performance", lang), (insights.get("analysis_performance") or "").strip() or "-"],
-        [_tr("Standout Data", lang), (insights.get("analysis_standout_data") or "").strip() or "-"],
-        [_tr("Recommended Actions", lang), (insights.get("analysis_actions") or "").strip() or "-"],
-        [_tr("Recommendations", lang), (insights.get("analysis_recommendations") or "").strip() or "-"],
+        [_tr("Strengths", lang), _pdf_clamp_text((insights.get("analysis_strengths") or "").strip() or "-", max_chars=320)],
+        [_tr("Weaknesses", lang), _pdf_clamp_text((insights.get("analysis_weaknesses") or "").strip() or "-", max_chars=320)],
+        [_tr("Student Performance", lang), _pdf_clamp_text((insights.get("analysis_performance") or "").strip() or "-", max_chars=320)],
+        [_tr("Standout Data", lang), _pdf_clamp_text((insights.get("analysis_standout_data") or "").strip() or "-", max_chars=320)],
+        [_tr("Recommended Actions", lang), _pdf_clamp_text((insights.get("analysis_actions") or "").strip() or "-", max_chars=320)],
+        [_tr("Recommendations", lang), _pdf_clamp_text((insights.get("analysis_recommendations") or "").strip() or "-", max_chars=320)],
     ]
     elements.append(Spacer(1, 10))
     elements.append(Paragraph(_pdf_paragraph_text(_tr("Key Insights", lang), bold=True), section_style))
@@ -3612,9 +3624,9 @@ def generate_reports_dashboard_pdf(
     elements.append(
         _pdf_story_cards_table(
             [
-                (_tr("Executive Summary", lang), (insights or {}).get("analysis_strengths") or "-"),
+                (_tr("Executive Summary", lang), _pdf_clamp_text((insights or {}).get("analysis_strengths") or "-", max_chars=180)),
                 (_tr("Key Insights", lang), _tr("Visual dashboard", lang)),
-                (_tr("Recommendations", lang), (insights or {}).get("analysis_recommendations") or "-"),
+                (_tr("Recommendations", lang), _pdf_clamp_text((insights or {}).get("analysis_recommendations") or "-", max_chars=180)),
             ],
             lang,
         )
@@ -3665,7 +3677,8 @@ def generate_reports_dashboard_pdf(
                 lang=lang,
             ),
         )
-        elements.append(KeepTogether([Spacer(1, 10), dashboard_bottom]))
+        elements.append(Spacer(1, 10))
+        elements.append(dashboard_bottom)
     elements.append(Spacer(1, 14))
 
     if is_student_scope:
@@ -3772,12 +3785,12 @@ def generate_reports_dashboard_pdf(
         insights = insights or {}
         insight_rows = [
             [_tr("Insight", lang), _tr("Details", lang)],
-            [_tr("Strengths", lang), (insights.get("analysis_strengths") or "").strip() or "-"],
-            [_tr("Weaknesses", lang), (insights.get("analysis_weaknesses") or "").strip() or "-"],
-            [_tr("Student Performance", lang), (insights.get("analysis_performance") or "").strip() or "-"],
-            [_tr("Standout Data", lang), (insights.get("analysis_standout_data") or "").strip() or "-"],
-            [_tr("Recommended Actions", lang), (insights.get("analysis_actions") or "").strip() or "-"],
-            [_tr("Recommendations", lang), (insights.get("analysis_recommendations") or "").strip() or "-"],
+            [_tr("Strengths", lang), _pdf_clamp_text((insights.get("analysis_strengths") or "").strip() or "-", max_chars=320)],
+            [_tr("Weaknesses", lang), _pdf_clamp_text((insights.get("analysis_weaknesses") or "").strip() or "-", max_chars=320)],
+            [_tr("Student Performance", lang), _pdf_clamp_text((insights.get("analysis_performance") or "").strip() or "-", max_chars=320)],
+            [_tr("Standout Data", lang), _pdf_clamp_text((insights.get("analysis_standout_data") or "").strip() or "-", max_chars=320)],
+            [_tr("Recommended Actions", lang), _pdf_clamp_text((insights.get("analysis_actions") or "").strip() or "-", max_chars=320)],
+            [_tr("Recommendations", lang), _pdf_clamp_text((insights.get("analysis_recommendations") or "").strip() or "-", max_chars=320)],
         ]
         elements.append(Spacer(1, 10))
         elements.append(Paragraph(_pdf_paragraph_text(_tr("Key Insights", lang), bold=True), section_style))
