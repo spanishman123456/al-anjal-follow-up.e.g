@@ -45,6 +45,7 @@ from reportlab.lib.utils import ImageReader
 from reportlab.pdfgen import canvas
 import random
 import math
+from reportlab.platypus.flowables import KeepTogether
 from sendgrid import SendGridAPIClient
 from sendgrid.helpers.mail import (
     Mail,
@@ -2567,7 +2568,7 @@ def _pdf_kpi_cards_table(cards: List[Tuple[str, str]]) -> Table:
                 kpi_style,
             )
         )
-    tbl = Table([cells], colWidths=[176, 176, 176], hAlign="LEFT")
+    tbl = Table([cells], colWidths=[176, 176, 176], rowHeights=[74], hAlign="LEFT")
     tbl.setStyle(
         TableStyle(
             [
@@ -2577,8 +2578,8 @@ def _pdf_kpi_cards_table(cards: List[Tuple[str, str]]) -> Table:
                 ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
                 ("LEFTPADDING", (0, 0), (-1, -1), 10),
                 ("RIGHTPADDING", (0, 0), (-1, -1), 10),
-                ("TOPPADDING", (0, 0), (-1, -1), 10),
-                ("BOTTOMPADDING", (0, 0), (-1, -1), 10),
+                ("TOPPADDING", (0, 0), (-1, -1), 8),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
             ]
         )
     )
@@ -2634,7 +2635,7 @@ def _pdf_story_cards_table(stories: List[Tuple[str, str]], lang: str = "en") -> 
         cells.append(Paragraph(f"{title_esc}<br/><font color='#475569'>{text_esc}</font>", heading_style))
     while len(cells) < 3:
         cells.append(Paragraph("-", body_style))
-    tbl = Table([cells], colWidths=[176, 176, 176], hAlign="LEFT")
+    tbl = Table([cells], colWidths=[176, 176, 176], rowHeights=[68], hAlign="LEFT")
     tbl.setStyle(
         TableStyle(
             [
@@ -2643,8 +2644,8 @@ def _pdf_story_cards_table(stories: List[Tuple[str, str]], lang: str = "en") -> 
                 ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#eff6ff")),
                 ("LEFTPADDING", (0, 0), (-1, -1), 9),
                 ("RIGHTPADDING", (0, 0), (-1, -1), 9),
-                ("TOPPADDING", (0, 0), (-1, -1), 8),
-                ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+                ("TOPPADDING", (0, 0), (-1, -1), 7),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 7),
                 ("VALIGN", (0, 0), (-1, -1), "TOP"),
             ]
         )
@@ -2658,19 +2659,19 @@ def _pdf_wrap_card(title: str, content: Any, lang: str = "en", col_width: float 
         _pdf_paragraph_text(title, bold=True),
         ParagraphStyle(
             name=f"PdfCardHead_{title[:8]}",
-            fontSize=10,
-            leading=13,
+            fontSize=9.5,
+            leading=12,
             textColor=colors.HexColor(PDF_REPORT_PRIMARY_HEX),
             alignment=2 if code == "ar" else 0,
-            spaceAfter=6,
+            spaceAfter=5,
         ),
     )
     body = content if isinstance(content, Table) else Paragraph(
         _pdf_paragraph_text(content),
         ParagraphStyle(
             name=f"PdfCardBody_{title[:8]}",
-            fontSize=8.5,
-            leading=12,
+            fontSize=8.3,
+            leading=11.5,
             textColor=colors.HexColor("#334155"),
             alignment=2 if code == "ar" else 0,
         ),
@@ -2681,14 +2682,96 @@ def _pdf_wrap_card(title: str, content: Any, lang: str = "en", col_width: float 
             [
                 ("BOX", (0, 0), (-1, -1), 0.6, colors.HexColor("#cbd5e1")),
                 ("BACKGROUND", (0, 0), (-1, -1), colors.white),
-                ("LEFTPADDING", (0, 0), (-1, -1), 10),
-                ("RIGHTPADDING", (0, 0), (-1, -1), 10),
-                ("TOPPADDING", (0, 0), (-1, -1), 9),
-                ("BOTTOMPADDING", (0, 0), (-1, -1), 9),
+                ("LEFTPADDING", (0, 0), (-1, -1), 9),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 9),
+                ("TOPPADDING", (0, 0), (-1, -1), 8),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
             ]
         )
     )
     return card
+
+
+def _pdf_chart_panel(
+    title: str,
+    subtitle: str,
+    chart_image: Optional[io.BytesIO],
+    *,
+    notes: Optional[List[str]] = None,
+    lang: str = "en",
+    panel_width: float = 255,
+    chart_width: float = 228,
+    chart_height: float = 160,
+) -> Table:
+    code = _normalize_lang(lang)
+    title_style = ParagraphStyle(
+        name=f"PdfChartTitle_{title[:8]}",
+        fontSize=9.5,
+        leading=12,
+        textColor=colors.HexColor("#0f172a"),
+        alignment=2 if code == "ar" else 0,
+    )
+    sub_style = ParagraphStyle(
+        name=f"PdfChartSub_{title[:8]}",
+        fontSize=8,
+        leading=11,
+        textColor=colors.HexColor("#64748b"),
+        alignment=2 if code == "ar" else 0,
+    )
+    note_style = ParagraphStyle(
+        name=f"PdfChartNote_{title[:8]}",
+        fontSize=7.8,
+        leading=10.5,
+        textColor=colors.HexColor("#334155"),
+        alignment=2 if code == "ar" else 0,
+    )
+    rows: List[List[Any]] = [
+        [Paragraph(_pdf_paragraph_text(title, bold=True), title_style)],
+        [Paragraph(_pdf_paragraph_text(subtitle), sub_style)],
+    ]
+    if notes:
+        note_text = "\n".join(f"- {line}" for line in notes if str(line).strip())
+        if note_text.strip():
+            rows.append([Paragraph(_pdf_paragraph_text(note_text), note_style)])
+    if chart_image is not None:
+        rows.append([RLImage(chart_image, width=chart_width, height=chart_height)])
+    else:
+        rows.append([Paragraph(_pdf_paragraph_text(_tr("No Data", lang)), sub_style)])
+    panel = Table(rows, colWidths=[panel_width], hAlign="LEFT")
+    panel.setStyle(
+        TableStyle(
+            [
+                ("BOX", (0, 0), (-1, -1), 0.5, colors.HexColor("#d1d5db")),
+                ("BACKGROUND", (0, 0), (-1, -1), colors.white),
+                ("LEFTPADDING", (0, 0), (-1, -1), 8),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 8),
+                ("TOPPADDING", (0, 0), (-1, -1), 6),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+                ("VALIGN", (0, 0), (-1, -1), "TOP"),
+            ]
+        )
+    )
+    return panel
+
+
+def _pdf_side_by_side_panels(left_panel: Table, right_panel: Table) -> Table:
+    row = Table(
+        [[left_panel, right_panel]],
+        colWidths=[262, 262],
+        hAlign="LEFT",
+    )
+    row.setStyle(
+        TableStyle(
+            [
+                ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+                ("TOPPADDING", (0, 0), (-1, -1), 0),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
+            ]
+        )
+    )
+    return row
 
 
 def format_scope_label(scope: Any) -> str:
@@ -3139,114 +3222,97 @@ def generate_analytics_dashboard_pdf(
     # Product requirement: keep this title exact in exports.
     elements.append(_pdf_cover_band())
     elements.append(Spacer(1, 10))
-    elements.append(Paragraph(_pdf_paragraph_text("Analytics Report", bold=True), title_style))
-    elements.append(Paragraph(_pdf_paragraph_text(PDF_REPORT_ORG_NAME), subtitle_style))
-    elements.append(Paragraph(f"<b>{_pdf_paragraph_text(grade_subtitle)}</b>", subtitle_style))
-    elements.append(Paragraph(_pdf_paragraph_text(term_subtitle), subtitle_style))
+    generated_on_text = datetime.now(REPORT_TIMEZONE).strftime("%Y-%m-%d %H:%M")
     elements.append(
-        Paragraph(
-            _pdf_paragraph_text(
-                f"{_tr('Generated on', lang)} "
-                f"{datetime.now(REPORT_TIMEZONE).strftime('%Y-%m-%d %H:%M')}"
-            ),
-            subtitle_style,
-        )
-    )
-    elements.append(
-        _pdf_cover_meta_table(
+        KeepTogether(
             [
-                (_tr("Scope", lang), scope_label),
-                (_tr("Term", lang), f"{_tr('Semester', lang)} {sem_o} · {_tr('Quarter', lang)} {qn_o}"),
-                (_tr("Generated on", lang), datetime.now(REPORT_TIMEZONE).strftime("%Y-%m-%d %H:%M")),
-                (_tr("Professional Performance Summary", lang), _tr("Visual dashboard", lang)),
-            ],
-            lang,
+                Paragraph(_pdf_paragraph_text("Analytics Report", bold=True), title_style),
+                Paragraph(_pdf_paragraph_text(PDF_REPORT_ORG_NAME), subtitle_style),
+                Paragraph(f"<b>{_pdf_paragraph_text(grade_subtitle)}</b>", subtitle_style),
+                Paragraph(_pdf_paragraph_text(term_subtitle), subtitle_style),
+                Paragraph(
+                    _pdf_paragraph_text(f"{_tr('Generated on', lang)} {generated_on_text}"),
+                    subtitle_style,
+                ),
+                _pdf_cover_meta_table(
+                    [
+                        (_tr("Scope", lang), scope_label),
+                        (_tr("Term", lang), f"{_tr('Semester', lang)} {sem_o} · {_tr('Quarter', lang)} {qn_o}"),
+                        (_tr("Generated on", lang), generated_on_text),
+                        (_tr("Professional Performance Summary", lang), _tr("Visual dashboard", lang)),
+                    ],
+                    lang,
+                ),
+            ]
         )
     )
     elements.append(Spacer(1, 10))
     _pdf_append_executive_summary(elements, insights, section_style, subtitle_style, lang)
     elements.append(
-        _pdf_kpi_cards_table(
+        KeepTogether(
             [
-                (_tr("Total Students", lang), _fmt(report.get("total_students"))),
-                (_tr("Average Total Score", lang), _fmt(report.get("avg_total_score"))),
-                (_tr("On Level % (focus quarter)", lang), _fmt(report.get("exceeding_rate"), "%")),
+                _pdf_kpi_cards_table(
+                    [
+                        (_tr("Total Students", lang), _fmt(report.get("total_students"))),
+                        (_tr("Average Total Score", lang), _fmt(report.get("avg_total_score"))),
+                        (_tr("On Level % (focus quarter)", lang), _fmt(report.get("exceeding_rate"), "%")),
+                    ]
+                ),
+                Spacer(1, 12),
+                _pdf_story_cards_table(
+                    [
+                        (_tr("Key Insights", lang), _tr("On Level % (focus quarter)", lang)),
+                        (_tr("Summary metrics", lang), _tr("Average Total Score", lang)),
+                        (_tr("Recommended Actions", lang), (insights or {}).get("analysis_actions") or "-"),
+                    ],
+                    lang,
+                ),
             ]
-        )
-    )
-    elements.append(Spacer(1, 14))
-    elements.append(
-        _pdf_story_cards_table(
-            [
-                (_tr("Key Insights", lang), _tr("On Level % (focus quarter)", lang)),
-                (_tr("Summary metrics", lang), _tr("Average Total Score", lang)),
-                (_tr("Recommended Actions", lang), (insights or {}).get("analysis_actions") or "-"),
-            ],
-            lang,
         )
     )
     elements.append(Spacer(1, 12))
 
     elements.append(Paragraph(_pdf_paragraph_text(_tr("Visual dashboard", lang), bold=True), section_style))
-    level_labels_text = (
-        "Levels:<br/>"
-        "- On Level<br/>"
-        "- Approaching full score<br/>"
-        "- Below Level<br/>"
-        "- No Data"
+    on_level_count = next((int(item.get("count") or 0) for item in selected_dist if str(item.get("level")) == "on_level"), 0)
+    approach_count = next((int(item.get("count") or 0) for item in selected_dist if str(item.get("level")) == "approach"), 0)
+    below_count = next((int(item.get("count") or 0) for item in selected_dist if str(item.get("level")) == "below"), 0)
+    no_data_count = next((int(item.get("count") or 0) for item in selected_dist if str(item.get("level")) == "no_data"), 0)
+    levels_notes = [
+        f"{_tr('On Level', lang)}: {on_level_count}",
+        f"{_tr('Approaching full score', lang)}: {approach_count}",
+        f"{_tr('Below Level', lang)}: {below_count}",
+        f"{_tr('No Data', lang)}: {no_data_count}",
+    ]
+    dashboard_row_1 = _pdf_side_by_side_panels(
+        _pdf_chart_panel(
+            _tr("Average score by class", lang) if not is_student_scope else _tr("Marks breakdown", lang),
+            _tr("Class mean total for the selected term", lang) if not is_student_scope else _tr("Student component profile", lang),
+            bar_buf,
+            lang=lang,
+        ),
+        _pdf_chart_panel(
+            _tr("Performance levels", lang),
+            _tr("Distribution for selected term", lang),
+            donut_buf,
+            notes=levels_notes,
+            lang=lang,
+        ),
     )
-    dashboard_grid = Table(
-        [
-            [
-                Paragraph(
-                    "<b>Student marks breakdown</b>" if is_student_scope else "<b>Average score by class</b>",
-                    cap_style,
-                ),
-                Paragraph(
-                    "<b>Assessment included; lower quiz is shown but not counted in total</b>" if is_student_scope else "<b>Performance levels</b>",
-                    cap_style,
-                ),
-            ],
-            [
-                RLImage(bar_buf, width=248, height=176),
-                Paragraph(_pdf_paragraph_text(level_labels_text), cap_style),
-            ],
-            [
-                Paragraph("", cap_style),
-                RLImage(donut_buf, width=248, height=176),
-            ],
-            [
-                Paragraph(
-                    "<b>Quarter total achievement</b>" if is_student_scope else "<b>On-level rate (selected quarter)</b>",
-                    cap_style,
-                ),
-                Paragraph(
-                    "<b>Student marks profile</b>" if is_student_scope else "<b>Class averages profile</b>",
-                    cap_style,
-                ),
-            ],
-            [
-                RLImage(line_buf, width=248, height=176),
-                RLImage(area_buf, width=248, height=176),
-            ],
-        ],
-        colWidths=[260, 260],
-        hAlign="LEFT",
+    dashboard_row_2 = _pdf_side_by_side_panels(
+        _pdf_chart_panel(
+            _tr("On-level rate (selected quarter)", lang) if not is_student_scope else _tr("Quarter total achievement", lang),
+            _tr("Cohort on-level percent for selected term", lang) if not is_student_scope else _tr("Quarter total out of 50", lang),
+            line_buf,
+            lang=lang,
+        ),
+        _pdf_chart_panel(
+            _tr("Class averages profile", lang) if not is_student_scope else _tr("Student marks profile", lang),
+            _tr("How averages spread across groups", lang),
+            area_buf,
+            lang=lang,
+        ),
     )
-    dashboard_grid.setStyle(
-        TableStyle(
-            [
-                ("VALIGN", (0, 0), (-1, -1), "TOP"),
-                ("BOX", (0, 0), (-1, -1), 0.5, colors.HexColor("#cbd5e1")),
-                ("LEFTPADDING", (0, 0), (-1, -1), 8),
-                ("RIGHTPADDING", (0, 0), (-1, -1), 8),
-                ("TOPPADDING", (0, 0), (-1, -1), 8),
-                ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
-                ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#ffffff")),
-            ]
-        )
-    )
-    elements.append(_pdf_wrap_card(_tr("Visual dashboard", lang), dashboard_grid, lang))
+    elements.append(KeepTogether([dashboard_row_1, Spacer(1, 10), dashboard_row_2]))
     elements.append(Spacer(1, 14))
 
     q1 = report.get("quarter1") or {}
@@ -3263,8 +3329,14 @@ def generate_analytics_dashboard_pdf(
         [_tr("Avg quarter total (focus)", lang), _fmt(focus_q.get("avg_total"))],
         [_tr("Students with data (focus)", lang), _fmt(focus_q.get("total_with_data"))],
     ]
-    elements.append(Paragraph(_pdf_paragraph_text(_tr("Summary metrics", lang), bold=True), section_style))
-    elements.append(_pdf_wrap_card(_tr("Summary metrics", lang), _styled_table(summary_data, col_widths=[210, 320]), lang))
+    elements.append(
+        KeepTogether(
+            [
+                Paragraph(_pdf_paragraph_text(_tr("Summary metrics", lang), bold=True), section_style),
+                _pdf_wrap_card(_tr("Summary metrics", lang), _styled_table(summary_data, col_widths=[210, 320]), lang),
+            ]
+        )
+    )
     elements.append(Spacer(1, 10))
 
     elements.append(Paragraph(_pdf_paragraph_text(_tr("Performance distribution (focus quarter)", lang), bold=True), section_style))
@@ -3284,7 +3356,7 @@ def generate_analytics_dashboard_pdf(
         class_table_data.append([_fmt(item.get("class_name")), _fmt(item.get("student_count"))])
     if len(class_table_data) == 1:
         class_table_data.append(["-", "0"])
-    elements.append(_pdf_wrap_card(_tr("Class breakdown", lang), _styled_table(class_table_data, col_widths=[350, 180]), lang))
+    elements.append(_styled_table(class_table_data, col_widths=[350, 180]))
     elements.append(PageBreak())
 
     top_performers = report.get("top_performers", []) or []
@@ -3308,7 +3380,7 @@ def generate_analytics_dashboard_pdf(
         )
     if len(top_table_data) == 1:
         top_table_data.append(["-", "-", "-", "-", "-", "-"])
-    elements.append(_styled_table(top_table_data, col_widths=[110, 52, 48, 42, 165, 115]))
+    elements.append(_pdf_wrap_card(_tr("Top Performers", lang), _styled_table(top_table_data, col_widths=[110, 52, 48, 42, 165, 115]), lang))
     elements.append(Spacer(1, 10))
 
     support_students = report.get("students_needing_support", []) or []
@@ -3332,7 +3404,7 @@ def generate_analytics_dashboard_pdf(
         )
     if len(support_table_data) == 1:
         support_table_data.append(["-", "-", "-", "-", "-", "-"])
-    elements.append(_styled_table(support_table_data, col_widths=[110, 52, 48, 60, 140, 117]))
+    elements.append(_pdf_wrap_card(_tr("Students Needing Support", lang), _styled_table(support_table_data, col_widths=[110, 52, 48, 60, 140, 117]), lang))
 
     insights = insights or {}
     insight_rows = [
@@ -3346,7 +3418,7 @@ def generate_analytics_dashboard_pdf(
     ]
     elements.append(Spacer(1, 10))
     elements.append(Paragraph(_pdf_paragraph_text(_tr("Key Insights", lang), bold=True), section_style))
-    elements.append(_styled_table(insight_rows, col_widths=[130, 380], repeat_header=True))
+    elements.append(_pdf_wrap_card(_tr("Key Insights", lang), _styled_table(insight_rows, col_widths=[130, 380], repeat_header=True), lang))
 
     doc.build(elements, onFirstPage=_pdf_footer_canvas(lang), onLaterPages=_pdf_footer_canvas(lang))
     pdf_value = buffer.getvalue()
@@ -3492,13 +3564,6 @@ def generate_reports_dashboard_pdf(
         line_buf = create_analytics_quarter_focus_bar_chart(report.get("exceeding_rate"), _pdf_term_short_label(report))
         area_buf = create_reports_enrollment_area_chart(class_breakdown)
 
-    def _cap(title: str, subtitle: str) -> Paragraph:
-        sub_esc = escape(subtitle)
-        return Paragraph(
-            f"<b>{escape(title)}</b><br/><font size='8' color='#64748b'>{sub_esc}</font>",
-            cap_style,
-        )
-
     term_sub = f"{_tr('Semester', lang)} {sem} · {_tr('Quarter', lang)} {qn}"
 
     doc = SimpleDocTemplate(buffer, pagesize=A4, leftMargin=28, rightMargin=28, topMargin=36, bottomMargin=36)
@@ -3510,52 +3575,52 @@ def generate_reports_dashboard_pdf(
         reports_title_text = f"{reports_title_text} ({_tr('Summary metrics', lang)})"
     elements.append(_pdf_cover_band())
     elements.append(Spacer(1, 10))
+    generated_on_text = datetime.now(REPORT_TIMEZONE).strftime("%Y-%m-%d %H:%M")
     elements.append(
-        Paragraph(_pdf_paragraph_text(reports_title_text, bold=True), title_style)
-    )
-    elements.append(Paragraph(_pdf_paragraph_text(PDF_REPORT_ORG_NAME), subtitle_style))
-    elements.append(Paragraph(f"<b>{_pdf_paragraph_text(scope_label)}</b>", subtitle_style))
-    elements.append(Paragraph(_pdf_paragraph_text(term_sub), subtitle_style))
-    elements.append(
-        Paragraph(
-            _pdf_paragraph_text(
-                f"{_tr('Generated on', lang)} "
-                f"{datetime.now(REPORT_TIMEZONE).strftime('%Y-%m-%d %H:%M')}"
-            ),
-            subtitle_style,
-        )
-    )
-    elements.append(
-        _pdf_cover_meta_table(
+        KeepTogether(
             [
-                (_tr("Scope", lang), scope_label),
-                (_tr("Term", lang), term_sub),
-                (_tr("Generated on", lang), datetime.now(REPORT_TIMEZONE).strftime("%Y-%m-%d %H:%M")),
-                (_tr("Report", lang), reports_title_text),
-            ],
-            lang,
+                Paragraph(_pdf_paragraph_text(reports_title_text, bold=True), title_style),
+                Paragraph(_pdf_paragraph_text(PDF_REPORT_ORG_NAME), subtitle_style),
+                Paragraph(f"<b>{_pdf_paragraph_text(scope_label)}</b>", subtitle_style),
+                Paragraph(_pdf_paragraph_text(term_sub), subtitle_style),
+                Paragraph(
+                    _pdf_paragraph_text(f"{_tr('Generated on', lang)} {generated_on_text}"),
+                    subtitle_style,
+                ),
+                _pdf_cover_meta_table(
+                    [
+                        (_tr("Scope", lang), scope_label),
+                        (_tr("Term", lang), term_sub),
+                        (_tr("Generated on", lang), generated_on_text),
+                        (_tr("Report", lang), reports_title_text),
+                    ],
+                    lang,
+                ),
+            ]
         )
     )
     elements.append(Spacer(1, 10))
     _pdf_append_executive_summary(elements, insights, section_style, subtitle_style, lang)
     elements.append(
-        _pdf_kpi_cards_table(
+        KeepTogether(
             [
-                (_tr("Total Students", lang), _fmt(report.get("total_students"))),
-                (_tr("Average Total Score", lang), _fmt(report.get("avg_total_score"))),
-                (_tr("On Level % (focus quarter)", lang), _fmt(report.get("exceeding_rate"), "%")),
+                _pdf_kpi_cards_table(
+                    [
+                        (_tr("Total Students", lang), _fmt(report.get("total_students"))),
+                        (_tr("Average Total Score", lang), _fmt(report.get("avg_total_score"))),
+                        (_tr("On Level % (focus quarter)", lang), _fmt(report.get("exceeding_rate"), "%")),
+                    ]
+                ),
+                Spacer(1, 12),
+                _pdf_story_cards_table(
+                    [
+                        (_tr("Executive Summary", lang), (insights or {}).get("analysis_strengths") or "-"),
+                        (_tr("Key Insights", lang), _tr("Visual dashboard", lang)),
+                        (_tr("Recommendations", lang), (insights or {}).get("analysis_recommendations") or "-"),
+                    ],
+                    lang,
+                ),
             ]
-        )
-    )
-    elements.append(Spacer(1, 14))
-    elements.append(
-        _pdf_story_cards_table(
-            [
-                (_tr("Executive Summary", lang), (insights or {}).get("analysis_strengths") or "-"),
-                (_tr("Key Insights", lang), _tr("Visual dashboard", lang)),
-                (_tr("Recommendations", lang), (insights or {}).get("analysis_recommendations") or "-"),
-            ],
-            lang,
         )
     )
     elements.append(Spacer(1, 10))
@@ -3563,58 +3628,48 @@ def generate_reports_dashboard_pdf(
     elements.append(Paragraph(_pdf_paragraph_text(_tr("Visual dashboard", lang), bold=True), section_style))
     rq = qn
     focus_q = q1 if rq == 1 else q2
-    if is_summary:
-        dashboard_grid = Table(
-            [
-                [
-                    _cap("Students per class", "Enrollment by class section"),
-                    _cap("On-level, approaching full score, and below level", term_sub),
-                ],
-                [
-                    RLImage(bar_buf, width=248, height=176),
-                    RLImage(donut_buf, width=248, height=176),
-                ],
-            ],
-            colWidths=[260, 260],
-            hAlign="LEFT",
-        )
-    else:
-        dashboard_grid = Table(
-            [
-                [
-                    _cap("Students per class", "Enrollment by class section"),
-                    _cap("On-level, approaching full score, and below level", term_sub),
-                ],
-                [
-                    RLImage(bar_buf, width=248, height=176),
-                    RLImage(donut_buf, width=248, height=176),
-                ],
-                [
-                    _cap("On-level rate (selected quarter)", "Cohort on-level % for the selected term only"),
-                    _cap("Class averages profile", "Enrollment by class section"),
-                ],
-                [
-                    RLImage(line_buf, width=248, height=176),
-                    RLImage(area_buf, width=248, height=176),
-                ],
-            ],
-            colWidths=[260, 260],
-            hAlign="LEFT",
-        )
-    dashboard_grid.setStyle(
-        TableStyle(
-            [
-                ("VALIGN", (0, 0), (-1, -1), "TOP"),
-                ("BOX", (0, 0), (-1, -1), 0.5, colors.HexColor("#cbd5e1")),
-                ("LEFTPADDING", (0, 0), (-1, -1), 8),
-                ("RIGHTPADDING", (0, 0), (-1, -1), 8),
-                ("TOPPADDING", (0, 0), (-1, -1), 8),
-                ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
-                ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#ffffff")),
-            ]
-        )
+    dist_on_level = next((int(item.get("count") or 0) for item in distribution if str(item.get("level")) == "on_level"), 0)
+    dist_approach = next((int(item.get("count") or 0) for item in distribution if str(item.get("level")) == "approach"), 0)
+    dist_below = next((int(item.get("count") or 0) for item in distribution if str(item.get("level")) == "below"), 0)
+    dist_no_data = next((int(item.get("count") or 0) for item in distribution if str(item.get("level")) == "no_data"), 0)
+    notes = [
+        f"{_tr('On Level', lang)}: {dist_on_level}",
+        f"{_tr('Approaching full score', lang)}: {dist_approach}",
+        f"{_tr('Below Level', lang)}: {dist_below}",
+        f"{_tr('No Data', lang)}: {dist_no_data}",
+    ]
+    dashboard_top = _pdf_side_by_side_panels(
+        _pdf_chart_panel(
+            _tr("Students per class", lang),
+            _tr("Enrollment by class section", lang),
+            bar_buf,
+            lang=lang,
+        ),
+        _pdf_chart_panel(
+            _tr("Performance levels", lang),
+            term_sub,
+            donut_buf,
+            notes=notes,
+            lang=lang,
+        ),
     )
-    elements.append(_pdf_wrap_card(_tr("Visual dashboard", lang), dashboard_grid, lang))
+    elements.append(dashboard_top)
+    if not is_summary:
+        dashboard_bottom = _pdf_side_by_side_panels(
+            _pdf_chart_panel(
+                _tr("On-level rate (selected quarter)", lang),
+                _tr("Cohort on-level percent for selected term", lang),
+                line_buf,
+                lang=lang,
+            ),
+            _pdf_chart_panel(
+                _tr("Class averages profile", lang),
+                _tr("How averages spread across classes", lang),
+                area_buf,
+                lang=lang,
+            ),
+        )
+        elements.append(KeepTogether([Spacer(1, 10), dashboard_bottom]))
     elements.append(Spacer(1, 14))
 
     if is_student_scope:
@@ -3641,8 +3696,14 @@ def generate_reports_dashboard_pdf(
         [_tr("Avg quarter total (focus)", lang), _fmt(focus_q.get("avg_total"))],
         [_tr("Students with data (focus)", lang), _fmt(focus_q.get("total_with_data"))],
     ]
-    elements.append(Paragraph(_pdf_paragraph_text(_tr("Summary metrics", lang), bold=True), section_style))
-    elements.append(_pdf_wrap_card(_tr("Summary metrics", lang), _styled_table(summary_data, col_widths=[210, 320]), lang))
+    elements.append(
+        KeepTogether(
+            [
+                Paragraph(_pdf_paragraph_text(_tr("Summary metrics", lang), bold=True), section_style),
+                _pdf_wrap_card(_tr("Summary metrics", lang), _styled_table(summary_data, col_widths=[210, 320]), lang),
+            ]
+        )
+    )
     elements.append(Spacer(1, 10))
 
     elements.append(Paragraph(_pdf_paragraph_text(_tr("Performance distribution (focus quarter)", lang), bold=True), section_style))
@@ -3686,7 +3747,7 @@ def generate_reports_dashboard_pdf(
             )
         if len(top_table_data) == 1:
             top_table_data.append(["-", "-", "-", "-", "-", "-"])
-        elements.append(_styled_table(top_table_data, col_widths=[110, 52, 48, 42, 165, 115]))
+        elements.append(_pdf_wrap_card(_tr("Top Performers", lang), _styled_table(top_table_data, col_widths=[110, 52, 48, 42, 165, 115]), lang))
         elements.append(Spacer(1, 10))
 
         support_students = report.get("students_needing_support", []) or []
@@ -3710,7 +3771,7 @@ def generate_reports_dashboard_pdf(
             )
         if len(support_table_data) == 1:
             support_table_data.append(["-", "-", "-", "-", "-", "-"])
-        elements.append(_styled_table(support_table_data, col_widths=[110, 52, 48, 60, 140, 117]))
+        elements.append(_pdf_wrap_card(_tr("Students Needing Support", lang), _styled_table(support_table_data, col_widths=[110, 52, 48, 60, 140, 117]), lang))
 
         insights = insights or {}
         insight_rows = [
@@ -3724,7 +3785,7 @@ def generate_reports_dashboard_pdf(
         ]
         elements.append(Spacer(1, 10))
         elements.append(Paragraph(_pdf_paragraph_text(_tr("Key Insights", lang), bold=True), section_style))
-        elements.append(_styled_table(insight_rows, col_widths=[130, 380], repeat_header=True))
+        elements.append(_pdf_wrap_card(_tr("Key Insights", lang), _styled_table(insight_rows, col_widths=[130, 380], repeat_header=True), lang))
 
     doc.build(elements, onFirstPage=_pdf_footer_canvas(lang), onLaterPages=_pdf_footer_canvas(lang))
     pdf_value = buffer.getvalue()
