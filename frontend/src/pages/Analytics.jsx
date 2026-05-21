@@ -161,6 +161,8 @@ export default function Analytics() {
   const [analysisStandoutData, setAnalysisStandoutData] = useState("");
   const [analysisActions, setAnalysisActions] = useState("");
   const [analysisRecommendations, setAnalysisRecommendations] = useState("");
+  const [isExportingPdf, setIsExportingPdf] = useState(false);
+  const [isExportingExcel, setIsExportingExcel] = useState(false);
   const latestRequestIdRef = useRef(0);
 
   const applyGeneratedInsights = (generated) => {
@@ -533,6 +535,12 @@ export default function Analytics() {
   ]);
 
   const handleDownload = async (format) => {
+    if (format === "pdf" && isExportingPdf) return;
+    if (format === "excel" && isExportingExcel) return;
+    if (format === "pdf") setIsExportingPdf(true);
+    if (format === "excel") setIsExportingExcel(true);
+    const timerLabel = format === "pdf" ? "analytics-pdf-export" : "analytics-excel-export";
+    console.time(timerLabel);
     try {
       const response = await api.get("/analytics/summary/export", {
         params: {
@@ -567,8 +575,26 @@ export default function Analytics() {
       document.body.appendChild(link);
       link.click();
       link.remove();
+      toast.success(format === "pdf" ? "PDF downloaded successfully" : "Excel downloaded successfully");
     } catch (error) {
-      toast.error(t("download_fail"));
+      console.error("Analytics export failed:", {
+        format,
+        semester: apiSemester,
+        quarter: apiQuarter,
+        selectedClassId,
+        selectedStudentId,
+        error,
+      });
+      const detail = getApiErrorMessage(error);
+      toast.error(
+        format === "pdf"
+          ? `PDF export failed because the report could not be rendered. ${detail || "Please try again."}`
+          : `Excel export failed. ${detail || "Please try again."}`,
+      );
+    } finally {
+      console.timeEnd(timerLabel);
+      if (format === "pdf") setIsExportingPdf(false);
+      if (format === "excel") setIsExportingExcel(false);
     }
   };
 
@@ -600,8 +626,13 @@ export default function Analytics() {
         metaItems={[t(`term_${termScopeId}`), selectedClassId === "all" ? t("all_classes") : t("class_name")]}
         actions={
           <>
-            <Button variant="secondary" onClick={() => handleDownload("pdf")} data-testid="analytics-hero-download-pdf">
-              {t("download_pdf")}
+            <Button
+              variant="secondary"
+              onClick={() => handleDownload("pdf")}
+              data-testid="analytics-hero-download-pdf"
+              disabled={isExportingPdf}
+            >
+              {isExportingPdf ? "Preparing PDF..." : t("download_pdf")}
             </Button>
             <Button variant="outline" onClick={() => setRefreshKey((k) => k + 1)} data-testid="analytics-hero-refresh">
               {t("refresh_data")}
@@ -679,11 +710,21 @@ export default function Analytics() {
         }
         actions={
           <>
-            <Button variant="secondary" onClick={() => handleDownload("pdf")} data-testid="analytics-download-pdf">
-              {t("download_pdf")}
+            <Button
+              variant="secondary"
+              onClick={() => handleDownload("pdf")}
+              data-testid="analytics-download-pdf"
+              disabled={isExportingPdf}
+            >
+              {isExportingPdf ? "Preparing PDF..." : t("download_pdf")}
             </Button>
-            <Button variant="secondary" onClick={() => handleDownload("excel")} data-testid="analytics-download-excel">
-              {t("download_excel")}
+            <Button
+              variant="secondary"
+              onClick={() => handleDownload("excel")}
+              data-testid="analytics-download-excel"
+              disabled={isExportingExcel}
+            >
+              {isExportingExcel ? "Preparing Excel..." : t("download_excel")}
             </Button>
             <Button variant="outline" onClick={autoFillInsights} data-testid="analytics-autofill-insights">
               Auto-fill AI comments

@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useOutletContext, Link } from "react-router-dom";
 import { api } from "@/lib/api";
+import { getApiErrorMessage } from "@/lib/api";
 import {
   TERM_SCOPES,
   termScopeIdFromOutlet,
@@ -80,6 +81,8 @@ export default function Reports() {
   const [analysisStandoutData, setAnalysisStandoutData] = useState("");
   const [analysisActions, setAnalysisActions] = useState("");
   const [analysisRecommendations, setAnalysisRecommendations] = useState("");
+  const [isExportingPdf, setIsExportingPdf] = useState(false);
+  const [isExportingExcel, setIsExportingExcel] = useState(false);
   const fetchReportRef = useRef(() => {});
   const hasReportRef = useRef(false);
   const availableGrades = Array.from(
@@ -174,6 +177,12 @@ export default function Reports() {
   };
 
   const handleDownload = async (format) => {
+    if (format === "pdf" && isExportingPdf) return;
+    if (format === "excel" && isExportingExcel) return;
+    if (format === "pdf") setIsExportingPdf(true);
+    if (format === "excel") setIsExportingExcel(true);
+    const timerLabel = format === "pdf" ? "reports-pdf-export" : "reports-excel-export";
+    console.time(timerLabel);
     try {
       const response = await api.get("/reports/grade/export", {
         params: {
@@ -202,8 +211,26 @@ export default function Reports() {
       document.body.appendChild(link);
       link.click();
       link.remove();
+      toast.success(format === "pdf" ? "PDF downloaded successfully" : "Excel downloaded successfully");
     } catch (error) {
-      toast.error(t("download_fail"));
+      console.error("Reports export failed:", {
+        format,
+        grade,
+        semester: apiSemester,
+        quarter: apiQuarter,
+        reportType,
+        error,
+      });
+      const detail = getApiErrorMessage(error);
+      toast.error(
+        format === "pdf"
+          ? `PDF export failed because the report could not be rendered. ${detail || "Please try again."}`
+          : `Excel export failed. ${detail || "Please try again."}`,
+      );
+    } finally {
+      console.timeEnd(timerLabel);
+      if (format === "pdf") setIsExportingPdf(false);
+      if (format === "excel") setIsExportingExcel(false);
     }
   };
 
@@ -280,8 +307,13 @@ export default function Reports() {
             <Button onClick={handleGenerate} data-testid="reports-hero-generate" disabled={isTeacher && !availableGrades.length}>
               {t("generate_report")}
             </Button>
-            <Button variant="secondary" onClick={() => handleDownload("pdf")} data-testid="reports-hero-download-pdf" disabled={!report}>
-              {t("download_pdf")}
+            <Button
+              variant="secondary"
+              onClick={() => handleDownload("pdf")}
+              data-testid="reports-hero-download-pdf"
+              disabled={!report || isExportingPdf}
+            >
+              {isExportingPdf ? "Preparing PDF..." : t("download_pdf")}
             </Button>
           </>
         }
@@ -349,11 +381,21 @@ export default function Reports() {
             <Button variant="outline" onClick={handlePrint} className="no-print" data-testid="reports-print-button" disabled={!report}>
               {t("print")}
             </Button>
-            <Button variant="secondary" onClick={() => handleDownload("pdf")} data-testid="reports-download-pdf-button" disabled={!report}>
-              {t("download_pdf")}
+            <Button
+              variant="secondary"
+              onClick={() => handleDownload("pdf")}
+              data-testid="reports-download-pdf-button"
+              disabled={!report || isExportingPdf}
+            >
+              {isExportingPdf ? "Preparing PDF..." : t("download_pdf")}
             </Button>
-            <Button variant="secondary" onClick={() => handleDownload("excel")} data-testid="reports-download-excel-button" disabled={!report}>
-              {t("download_excel")}
+            <Button
+              variant="secondary"
+              onClick={() => handleDownload("excel")}
+              data-testid="reports-download-excel-button"
+              disabled={!report || isExportingExcel}
+            >
+              {isExportingExcel ? "Preparing Excel..." : t("download_excel")}
             </Button>
             <Button onClick={handleSchedule} className="no-print" data-testid="reports-schedule-button">
               {t("schedule_weekly")}

@@ -289,7 +289,7 @@ _READ_CACHE: Dict[Any, tuple] = {}
 _PDF_BYTES_CACHE: Dict[Any, tuple] = {}
 _DATA_CACHE_VERSION = 0
 CACHE_TTL_JSON = 30.0
-CACHE_TTL_PDF = 90.0
+CACHE_TTL_PDF = 180.0
 MAX_READ_CACHE_ENTRIES = 384
 MAX_PDF_CACHE_ENTRIES = 40
 
@@ -2076,7 +2076,7 @@ BOARD_ANALYTICS = {
 }
 
 # Lower DPI keeps PDF generation fast while preserving readability.
-PDF_EXPORT_CHART_DPI = 110
+PDF_EXPORT_CHART_DPI = 96
 
 
 def _analytics_empty_chart(message: str) -> io.BytesIO:
@@ -2652,7 +2652,7 @@ def _pdf_story_cards_table(stories: List[Tuple[str, str]], lang: str = "en") -> 
     return tbl
 
 
-def _pdf_wrap_card(title: str, content: Any, lang: str = "en") -> Table:
+def _pdf_wrap_card(title: str, content: Any, lang: str = "en", col_width: float = 530) -> Table:
     code = _normalize_lang(lang)
     heading = Paragraph(
         _pdf_paragraph_text(title, bold=True),
@@ -2675,7 +2675,7 @@ def _pdf_wrap_card(title: str, content: Any, lang: str = "en") -> Table:
             alignment=2 if code == "ar" else 0,
         ),
     )
-    card = Table([[heading], [body]], colWidths=[530], hAlign="LEFT")
+    card = Table([[heading], [body]], colWidths=[col_width], hAlign="LEFT")
     card.setStyle(
         TableStyle(
             [
@@ -2910,7 +2910,7 @@ def generate_report_pdf(
         class_table_data.append([_fmt(item.get("class_name")), _fmt(item.get("student_count"))])
     if len(class_table_data) == 1:
         class_table_data.append(["-", "0"])
-    elements.append(_pdf_wrap_card(_tr("Class breakdown", lang), _styled_table(class_table_data, col_widths=[350, 180]), lang))
+    elements.append(_styled_table(class_table_data, col_widths=[350, 180]))
     elements.append(PageBreak())
 
     top_performers = report.get("top_performers", []) or []
@@ -2934,7 +2934,7 @@ def generate_report_pdf(
         )
     if len(top_table_data) == 1:
         top_table_data.append(["-", "-", "-", "-", "-", "-"])
-    elements.append(_pdf_wrap_card(_tr("Top Performers", lang), _styled_table(top_table_data, col_widths=[110, 52, 48, 42, 165, 115]), lang))
+    elements.append(_styled_table(top_table_data, col_widths=[110, 52, 48, 42, 165, 115]))
     elements.append(Spacer(1, 10))
 
     support_students = report.get("students_needing_support", []) or []
@@ -2958,7 +2958,7 @@ def generate_report_pdf(
         )
     if len(support_table_data) == 1:
         support_table_data.append(["-", "-", "-", "-", "-", "-"])
-    elements.append(_pdf_wrap_card(_tr("Students Needing Support", lang), _styled_table(support_table_data, col_widths=[110, 52, 48, 60, 140, 117]), lang))
+    elements.append(_styled_table(support_table_data, col_widths=[110, 52, 48, 60, 140, 117]))
 
     insights = insights or {}
     insight_rows = [
@@ -2972,7 +2972,7 @@ def generate_report_pdf(
     ]
     elements.append(Spacer(1, 10))
     elements.append(Paragraph(_pdf_paragraph_text(_tr("Key Insights", lang), bold=True), section_style))
-    elements.append(_pdf_wrap_card(_tr("Key Insights", lang), _styled_table(insight_rows, col_widths=[130, 380], repeat_header=True), lang))
+    elements.append(_styled_table(insight_rows, col_widths=[130, 380], repeat_header=True))
 
     doc.build(elements, onFirstPage=_pdf_footer_canvas(lang), onLaterPages=_pdf_footer_canvas(lang))
     pdf_value = buffer.getvalue()
@@ -3308,7 +3308,7 @@ def generate_analytics_dashboard_pdf(
         )
     if len(top_table_data) == 1:
         top_table_data.append(["-", "-", "-", "-", "-", "-"])
-    elements.append(_pdf_wrap_card(_tr("Top Performers", lang), _styled_table(top_table_data, col_widths=[110, 52, 48, 42, 165, 115]), lang))
+    elements.append(_styled_table(top_table_data, col_widths=[110, 52, 48, 42, 165, 115]))
     elements.append(Spacer(1, 10))
 
     support_students = report.get("students_needing_support", []) or []
@@ -3332,7 +3332,7 @@ def generate_analytics_dashboard_pdf(
         )
     if len(support_table_data) == 1:
         support_table_data.append(["-", "-", "-", "-", "-", "-"])
-    elements.append(_pdf_wrap_card(_tr("Students Needing Support", lang), _styled_table(support_table_data, col_widths=[110, 52, 48, 60, 140, 117]), lang))
+    elements.append(_styled_table(support_table_data, col_widths=[110, 52, 48, 60, 140, 117]))
 
     insights = insights or {}
     insight_rows = [
@@ -3346,7 +3346,7 @@ def generate_analytics_dashboard_pdf(
     ]
     elements.append(Spacer(1, 10))
     elements.append(Paragraph(_pdf_paragraph_text(_tr("Key Insights", lang), bold=True), section_style))
-    elements.append(_pdf_wrap_card(_tr("Key Insights", lang), _styled_table(insight_rows, col_widths=[130, 380], repeat_header=True), lang))
+    elements.append(_styled_table(insight_rows, col_widths=[130, 380], repeat_header=True))
 
     doc.build(elements, onFirstPage=_pdf_footer_canvas(lang), onLaterPages=_pdf_footer_canvas(lang))
     pdf_value = buffer.getvalue()
@@ -7613,7 +7613,24 @@ async def export_grade_report(
         }
         return generate_reports_dashboard_pdf(summary, grade, insights=insights, report_type=rt, lang=lang_code)
 
-    content = await cache_get_bytes(cache_key, CACHE_TTL_PDF, _produce)
+    try:
+        content = await cache_get_bytes(cache_key, CACHE_TTL_PDF, _produce)
+    except Exception as exc:
+        logger.exception(
+            "Report export failed",
+            extra={
+                "format": fmt,
+                "grade": grade,
+                "semester": sem,
+                "quarter": q,
+                "report_type": rt,
+                "user_id": current_user.get("id"),
+            },
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Report export failed: {type(exc).__name__}. Please retry.",
+        )
     if fmt == "excel":
         filename = f"grade_{grade}_report.xlsx"
         media_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
@@ -7697,24 +7714,28 @@ async def export_analytics_summary(
                 }
             ]
         else:
-            class_query = {"id": class_id} if class_id else {}
-            classes_for_charts = await db.classes.find(class_query, {"_id": 0}).to_list(200)
-            grade_numbers: set[int] = set()
-            for cls in classes_for_charts:
-                grade_val = cls.get("grade")
-                if grade_val is None:
-                    grade_val = parse_class_name(cls.get("name") or "").get("grade")
-                try:
-                    if grade_val is not None:
-                        grade_numbers.add(int(grade_val))
-                except (TypeError, ValueError):
-                    continue
-            selected_grade_labels = [
-                f"{_tr('Grade', lang_code)} {gv}"
-                for gv in sorted(grade_numbers)
-            ]
-            class_summaries = await _build_class_summary_list(classes_for_charts, sem, q)
-            class_summaries = sorted(class_summaries, key=lambda x: _class_sort_key(x.get("class_name") or ""))
+            # Excel export does not need PDF chart scaffolding data; skip extra DB work.
+            if fmt == "excel":
+                class_summaries = []
+            else:
+                class_query = {"id": class_id} if class_id else {}
+                classes_for_charts = await db.classes.find(class_query, {"_id": 0}).to_list(200)
+                grade_numbers: set[int] = set()
+                for cls in classes_for_charts:
+                    grade_val = cls.get("grade")
+                    if grade_val is None:
+                        grade_val = parse_class_name(cls.get("name") or "").get("grade")
+                    try:
+                        if grade_val is not None:
+                            grade_numbers.add(int(grade_val))
+                    except (TypeError, ValueError):
+                        continue
+                selected_grade_labels = [
+                    f"{_tr('Grade', lang_code)} {gv}"
+                    for gv in sorted(grade_numbers)
+                ]
+                class_summaries = await _build_class_summary_list(classes_for_charts, sem, q)
+                class_summaries = sorted(class_summaries, key=lambda x: _class_sort_key(x.get("class_name") or ""))
         scope_label = f"Analytics · Semester {sem} · Q{q}"
         if class_id:
             cls = await db.classes.find_one({"id": class_id}, {"_id": 0, "name": 1})
@@ -7744,7 +7765,24 @@ async def export_analytics_summary(
             lang=lang_code,
         )
 
-    content = await cache_get_bytes(cache_key, CACHE_TTL_PDF, _produce)
+    try:
+        content = await cache_get_bytes(cache_key, CACHE_TTL_PDF, _produce)
+    except Exception as exc:
+        logger.exception(
+            "Analytics export failed",
+            extra={
+                "format": fmt,
+                "semester": sem,
+                "quarter": q,
+                "class_id": class_id,
+                "student_id": student_id,
+                "user_id": current_user.get("id"),
+            },
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Analytics export failed: {type(exc).__name__}. Please retry.",
+        )
     fn_base = f"analytics_s{sem}_q{q}"
     if class_id:
         cid = "".join(c for c in class_id if c.isalnum())[:24] or "class"
