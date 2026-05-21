@@ -585,7 +585,16 @@ export default function Analytics() {
         selectedStudentId,
         error,
       });
-      const detail = getApiErrorMessage(error);
+      let detail = getApiErrorMessage(error);
+      if (error?.response?.data instanceof Blob) {
+        try {
+          const errText = await error.response.data.text();
+          const parsed = JSON.parse(errText);
+          detail = parsed?.detail || parsed?.message || detail;
+        } catch {
+          // keep fallback detail
+        }
+      }
       toast.error(
         format === "pdf"
           ? `PDF export failed because the report could not be rendered. ${detail || "Please try again."}`

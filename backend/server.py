@@ -2568,7 +2568,7 @@ def _pdf_kpi_cards_table(cards: List[Tuple[str, str]]) -> Table:
                 kpi_style,
             )
         )
-    tbl = Table([cells], colWidths=[176, 176, 176], rowHeights=[74], hAlign="LEFT")
+    tbl = Table([cells], colWidths=[176, 176, 176], hAlign="LEFT")
     tbl.setStyle(
         TableStyle(
             [
@@ -2635,7 +2635,7 @@ def _pdf_story_cards_table(stories: List[Tuple[str, str]], lang: str = "en") -> 
         cells.append(Paragraph(f"{title_esc}<br/><font color='#475569'>{text_esc}</font>", heading_style))
     while len(cells) < 3:
         cells.append(Paragraph("-", body_style))
-    tbl = Table([cells], colWidths=[176, 176, 176], rowHeights=[68], hAlign="LEFT")
+    tbl = Table([cells], colWidths=[176, 176, 176], hAlign="LEFT")
     tbl.setStyle(
         TableStyle(
             [
@@ -3249,25 +3249,23 @@ def generate_analytics_dashboard_pdf(
     elements.append(Spacer(1, 10))
     _pdf_append_executive_summary(elements, insights, section_style, subtitle_style, lang)
     elements.append(
-        KeepTogether(
+        _pdf_kpi_cards_table(
             [
-                _pdf_kpi_cards_table(
-                    [
-                        (_tr("Total Students", lang), _fmt(report.get("total_students"))),
-                        (_tr("Average Total Score", lang), _fmt(report.get("avg_total_score"))),
-                        (_tr("On Level % (focus quarter)", lang), _fmt(report.get("exceeding_rate"), "%")),
-                    ]
-                ),
-                Spacer(1, 12),
-                _pdf_story_cards_table(
-                    [
-                        (_tr("Key Insights", lang), _tr("On Level % (focus quarter)", lang)),
-                        (_tr("Summary metrics", lang), _tr("Average Total Score", lang)),
-                        (_tr("Recommended Actions", lang), (insights or {}).get("analysis_actions") or "-"),
-                    ],
-                    lang,
-                ),
+                (_tr("Total Students", lang), _fmt(report.get("total_students"))),
+                (_tr("Average Total Score", lang), _fmt(report.get("avg_total_score"))),
+                (_tr("On Level % (focus quarter)", lang), _fmt(report.get("exceeding_rate"), "%")),
             ]
+        )
+    )
+    elements.append(Spacer(1, 12))
+    elements.append(
+        _pdf_story_cards_table(
+            [
+                (_tr("Key Insights", lang), _tr("On Level % (focus quarter)", lang)),
+                (_tr("Summary metrics", lang), _tr("Average Total Score", lang)),
+                (_tr("Recommended Actions", lang), (insights or {}).get("analysis_actions") or "-"),
+            ],
+            lang,
         )
     )
     elements.append(Spacer(1, 12))
@@ -3380,7 +3378,7 @@ def generate_analytics_dashboard_pdf(
         )
     if len(top_table_data) == 1:
         top_table_data.append(["-", "-", "-", "-", "-", "-"])
-    elements.append(_pdf_wrap_card(_tr("Top Performers", lang), _styled_table(top_table_data, col_widths=[110, 52, 48, 42, 165, 115]), lang))
+    elements.append(_styled_table(top_table_data, col_widths=[110, 52, 48, 42, 165, 115]))
     elements.append(Spacer(1, 10))
 
     support_students = report.get("students_needing_support", []) or []
@@ -3404,7 +3402,7 @@ def generate_analytics_dashboard_pdf(
         )
     if len(support_table_data) == 1:
         support_table_data.append(["-", "-", "-", "-", "-", "-"])
-    elements.append(_pdf_wrap_card(_tr("Students Needing Support", lang), _styled_table(support_table_data, col_widths=[110, 52, 48, 60, 140, 117]), lang))
+    elements.append(_styled_table(support_table_data, col_widths=[110, 52, 48, 60, 140, 117]))
 
     insights = insights or {}
     insight_rows = [
@@ -3418,7 +3416,7 @@ def generate_analytics_dashboard_pdf(
     ]
     elements.append(Spacer(1, 10))
     elements.append(Paragraph(_pdf_paragraph_text(_tr("Key Insights", lang), bold=True), section_style))
-    elements.append(_pdf_wrap_card(_tr("Key Insights", lang), _styled_table(insight_rows, col_widths=[130, 380], repeat_header=True), lang))
+    elements.append(_styled_table(insight_rows, col_widths=[130, 380], repeat_header=True))
 
     doc.build(elements, onFirstPage=_pdf_footer_canvas(lang), onLaterPages=_pdf_footer_canvas(lang))
     pdf_value = buffer.getvalue()
@@ -3602,25 +3600,23 @@ def generate_reports_dashboard_pdf(
     elements.append(Spacer(1, 10))
     _pdf_append_executive_summary(elements, insights, section_style, subtitle_style, lang)
     elements.append(
-        KeepTogether(
+        _pdf_kpi_cards_table(
             [
-                _pdf_kpi_cards_table(
-                    [
-                        (_tr("Total Students", lang), _fmt(report.get("total_students"))),
-                        (_tr("Average Total Score", lang), _fmt(report.get("avg_total_score"))),
-                        (_tr("On Level % (focus quarter)", lang), _fmt(report.get("exceeding_rate"), "%")),
-                    ]
-                ),
-                Spacer(1, 12),
-                _pdf_story_cards_table(
-                    [
-                        (_tr("Executive Summary", lang), (insights or {}).get("analysis_strengths") or "-"),
-                        (_tr("Key Insights", lang), _tr("Visual dashboard", lang)),
-                        (_tr("Recommendations", lang), (insights or {}).get("analysis_recommendations") or "-"),
-                    ],
-                    lang,
-                ),
+                (_tr("Total Students", lang), _fmt(report.get("total_students"))),
+                (_tr("Average Total Score", lang), _fmt(report.get("avg_total_score"))),
+                (_tr("On Level % (focus quarter)", lang), _fmt(report.get("exceeding_rate"), "%")),
             ]
+        )
+    )
+    elements.append(Spacer(1, 12))
+    elements.append(
+        _pdf_story_cards_table(
+            [
+                (_tr("Executive Summary", lang), (insights or {}).get("analysis_strengths") or "-"),
+                (_tr("Key Insights", lang), _tr("Visual dashboard", lang)),
+                (_tr("Recommendations", lang), (insights or {}).get("analysis_recommendations") or "-"),
+            ],
+            lang,
         )
     )
     elements.append(Spacer(1, 10))
@@ -3721,7 +3717,7 @@ def generate_reports_dashboard_pdf(
         class_table_data.append([_fmt(item.get("class_name")), _fmt(item.get("student_count"))])
     if len(class_table_data) == 1:
         class_table_data.append(["-", "0"])
-    elements.append(_pdf_wrap_card(_tr("Class breakdown", lang), _styled_table(class_table_data, col_widths=[350, 180]), lang))
+    elements.append(_styled_table(class_table_data, col_widths=[350, 180]))
 
     if not is_summary:
         elements.append(PageBreak())
@@ -3747,7 +3743,7 @@ def generate_reports_dashboard_pdf(
             )
         if len(top_table_data) == 1:
             top_table_data.append(["-", "-", "-", "-", "-", "-"])
-        elements.append(_pdf_wrap_card(_tr("Top Performers", lang), _styled_table(top_table_data, col_widths=[110, 52, 48, 42, 165, 115]), lang))
+        elements.append(_styled_table(top_table_data, col_widths=[110, 52, 48, 42, 165, 115]))
         elements.append(Spacer(1, 10))
 
         support_students = report.get("students_needing_support", []) or []
@@ -3771,7 +3767,7 @@ def generate_reports_dashboard_pdf(
             )
         if len(support_table_data) == 1:
             support_table_data.append(["-", "-", "-", "-", "-", "-"])
-        elements.append(_pdf_wrap_card(_tr("Students Needing Support", lang), _styled_table(support_table_data, col_widths=[110, 52, 48, 60, 140, 117]), lang))
+        elements.append(_styled_table(support_table_data, col_widths=[110, 52, 48, 60, 140, 117]))
 
         insights = insights or {}
         insight_rows = [
@@ -3785,7 +3781,7 @@ def generate_reports_dashboard_pdf(
         ]
         elements.append(Spacer(1, 10))
         elements.append(Paragraph(_pdf_paragraph_text(_tr("Key Insights", lang), bold=True), section_style))
-        elements.append(_pdf_wrap_card(_tr("Key Insights", lang), _styled_table(insight_rows, col_widths=[130, 380], repeat_header=True), lang))
+        elements.append(_styled_table(insight_rows, col_widths=[130, 380], repeat_header=True))
 
     doc.build(elements, onFirstPage=_pdf_footer_canvas(lang), onLaterPages=_pdf_footer_canvas(lang))
     pdf_value = buffer.getvalue()
