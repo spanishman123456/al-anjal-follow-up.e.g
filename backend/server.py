@@ -2733,6 +2733,7 @@ def generate_analytics_dashboard_pdf(
     scope: Any,
     overview: Dict[str, Any],
     class_summaries: List[Dict[str, Any]],
+    selected_grade_labels: Optional[List[str]] = None,
     insights: Optional[Dict[str, str]] = None,
     lang: str = "en",
 ) -> bytes:
@@ -2879,8 +2880,14 @@ def generate_analytics_dashboard_pdf(
     doc = SimpleDocTemplate(buffer, pagesize=A4, leftMargin=28, rightMargin=28, topMargin=28, bottomMargin=28)
     elements: List[Any] = []
 
-    elements.append(Paragraph(_pdf_paragraph_text(_tr("Analytics Dashboard", lang), bold=True), title_style))
-    elements.append(Paragraph(f"<b>{_pdf_paragraph_text(scope_label)}</b>", subtitle_style))
+    grade_labels = [str(label).strip() for label in (selected_grade_labels or []) if str(label).strip()]
+    grade_subtitle = ", ".join(grade_labels) if grade_labels else scope_label
+    term_subtitle = f"{_tr('Semester', lang)} {sem_o} · {_tr('Quarter', lang)} {qn_o}"
+
+    # Product requirement: keep this title exact in exports.
+    elements.append(Paragraph(_pdf_paragraph_text("Analytics Report", bold=True), title_style))
+    elements.append(Paragraph(f"<b>{_pdf_paragraph_text(grade_subtitle)}</b>", subtitle_style))
+    elements.append(Paragraph(_pdf_paragraph_text(term_subtitle), subtitle_style))
     elements.append(
         Paragraph(
             _pdf_paragraph_text(
@@ -2892,6 +2899,13 @@ def generate_analytics_dashboard_pdf(
     )
 
     elements.append(Paragraph(_pdf_paragraph_text(_tr("Visual dashboard", lang), bold=True), section_style))
+    level_labels_text = (
+        "Levels:<br/>"
+        "- On Level<br/>"
+        "- Approaching full score<br/>"
+        "- Below Level<br/>"
+        "- No Data"
+    )
     dashboard_grid = Table(
         [
             [
@@ -2900,12 +2914,16 @@ def generate_analytics_dashboard_pdf(
                     cap_style,
                 ),
                 Paragraph(
-                    "<b>Assessment included; lower quiz is shown but not counted in total</b>" if is_student_scope else "<b>On-level, approaching full score, and below level</b>",
+                    "<b>Assessment included; lower quiz is shown but not counted in total</b>" if is_student_scope else "<b>Performance levels</b>",
                     cap_style,
                 ),
             ],
             [
                 RLImage(bar_buf, width=248, height=176),
+                Paragraph(_pdf_paragraph_text(level_labels_text), cap_style),
+            ],
+            [
+                Paragraph("", cap_style),
                 RLImage(donut_buf, width=248, height=176),
             ],
             [
@@ -7320,10 +7338,30 @@ async def export_analytics_summary(
     )
 
     async def _produce():
+        def _grade_label_for_value(grade_value: Any) -> Optional[str]:
+            try:
+                gv = int(grade_value)
+            except (TypeError, ValueError):
+                return None
+            return f"{_tr('Grade', lang_code)} {gv}"
+
         overview = await _compute_analytics_overview(class_id, student_id, semester, quarter, current_user)
         summary = overview_to_pdf_report(overview)
         selected_student = overview.get("selected_student") or {}
+        selected_grade_labels: List[str] = []
         if selected_student:
+            selected_class_grade: Optional[int] = None
+            selected_class_id = selected_student.get("class_id")
+            if selected_class_id:
+                selected_class = await db.classes.find_one({"id": selected_class_id}, {"_id": 0, "grade": 1, "name": 1})
+                if selected_class:
+                    selected_class_grade = selected_class.get("grade")
+                    if selected_class_grade is None:
+                        parsed = parse_class_name(selected_class.get("name") or "")
+                        selected_class_grade = parsed.get("grade")
+            grade_label = _grade_label_for_value(selected_class_grade)
+            if grade_label:
+                selected_grade_labels = [grade_label]
             focus_total = selected_student.get("quarter2_total") if q == 2 else selected_student.get("quarter1_total")
             class_summaries = [
                 {
@@ -7334,6 +7372,20 @@ async def export_analytics_summary(
         else:
             class_query = {"id": class_id} if class_id else {}
             classes_for_charts = await db.classes.find(class_query, {"_id": 0}).to_list(200)
+            grade_numbers: set[int] = set()
+            for cls in classes_for_charts:
+                grade_val = cls.get("grade")
+                if grade_val is None:
+                    grade_val = parse_class_name(cls.get("name") or "").get("grade")
+                try:
+                    if grade_val is not None:
+                        grade_numbers.add(int(grade_val))
+                except (TypeError, ValueError):
+                    continue
+            selected_grade_labels = [
+                f"{_tr('Grade', lang_code)} {gv}"
+                for gv in sorted(grade_numbers)
+            ]
             class_summaries = await _build_class_summary_list(classes_for_charts, sem, q)
             class_summaries = sorted(class_summaries, key=lambda x: _class_sort_key(x.get("class_name") or ""))
         scope_label = f"Analytics · Semester {sem} · Q{q}"
@@ -7355,7 +7407,15 @@ async def export_analytics_summary(
             "analysis_actions": analysis_actions or "",
             "analysis_recommendations": analysis_recommendations or "",
         }
-        return generate_analytics_dashboard_pdf(summary, scope_label, overview, class_summaries, insights=insights, lang=lang_code)
+        return generate_analytics_dashboard_pdf(
+            summary,
+            scope_label,
+            overview,
+            class_summaries,
+            selected_grade_labels=selected_grade_labels,
+            insights=insights,
+            lang=lang_code,
+        )
 
     content = await cache_get_bytes(cache_key, CACHE_TTL_PDF, _produce)
     fn_base = f"analytics_s{sem}_q{q}"
