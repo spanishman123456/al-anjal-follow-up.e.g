@@ -85,35 +85,81 @@ from lesson_plan_service import (
     save_generated_docx,
 )
 
-mongo_url = os.environ.get('MONGO_URL')
-if not mongo_url:
-    raise ValueError("MONGO_URL environment variable is not set. Please check your .env file.")
-
-# URL encode special characters in password if needed
+# MongoDB: lazy init so `import server` / offline PDF tests do not resolve mongodb+srv at import time.
 from urllib.parse import quote_plus
-if '@' in mongo_url and '://' in mongo_url:
-    # Extract and encode password if it contains special characters
+
+_mongo_client: Optional[AsyncIOMotorClient] = None
+_mongo_db = None
+
+
+def _normalize_mongo_url(mongo_url: str) -> str:
+    """URL-encode password special characters when present."""
+    if "@" not in mongo_url or "://" not in mongo_url:
+        return mongo_url
     try:
-        protocol_end = mongo_url.find('://') + 3
-        at_pos = mongo_url.find('@', protocol_end)
+        protocol_end = mongo_url.find("://") + 3
+        at_pos = mongo_url.find("@", protocol_end)
         if at_pos > protocol_end:
             user_pass = mongo_url[protocol_end:at_pos]
-            if ':' in user_pass:
-                username, password = user_pass.split(':', 1)
-                # Only encode if password contains special chars
-                if any(c in password for c in ['@', '#', '$', '%', '&', '+', '=']):
+            if ":" in user_pass:
+                username, password = user_pass.split(":", 1)
+                if any(c in password for c in ["@", "#", "$", "%", "&", "+", "="]):
                     encoded_password = quote_plus(password)
-                    mongo_url = mongo_url[:protocol_end] + f"{username}:{encoded_password}" + mongo_url[at_pos:]
+                    return mongo_url[:protocol_end] + f"{username}:{encoded_password}" + mongo_url[at_pos:]
     except Exception:
-        pass  # If encoding fails, use original URL
+        pass
+    return mongo_url
 
-try:
-    client = AsyncIOMotorClient(mongo_url, serverSelectionTimeoutMS=5000)
-except Exception as e:
-    logger.error(f"Failed to create MongoDB client: {e}")
-    raise
 
-db = client[os.environ.get('DB_NAME', 'school_db')]
+def get_mongo_client() -> AsyncIOMotorClient:
+    """Create Motor client on first use (DNS/SRV runs here, not at import)."""
+    global _mongo_client, _mongo_db
+    if _mongo_client is not None:
+        return _mongo_client
+    mongo_url = os.environ.get("MONGO_URL")
+    if not mongo_url:
+        raise ValueError(
+            "MONGO_URL environment variable is not set. Please check your .env file."
+        )
+    mongo_url = _normalize_mongo_url(mongo_url)
+    try:
+        _mongo_client = AsyncIOMotorClient(mongo_url, serverSelectionTimeoutMS=5000)
+        _mongo_db = _mongo_client[os.environ.get("DB_NAME", "school_db")]
+    except Exception as e:
+        logger.error("Failed to create MongoDB client: %s", e)
+        raise
+    return _mongo_client
+
+
+def get_database():
+    get_mongo_client()
+    return _mongo_db
+
+
+class _LazyMongoDB:
+    """Defer MongoDB until first collection access (offline PDF export tests)."""
+
+    def __getattr__(self, name):
+        return getattr(get_database(), name)
+
+    def __getitem__(self, name):
+        return get_database()[name]
+
+
+class _LazyMongoClient:
+    def __getattr__(self, name):
+        return getattr(get_mongo_client(), name)
+
+    def close(self) -> None:
+        global _mongo_client, _mongo_db
+        if _mongo_client is not None:
+            _mongo_client.close()
+            _mongo_client = None
+            _mongo_db = None
+
+
+db = _LazyMongoDB()
+client = _LazyMongoClient()
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 security = HTTPBearer(auto_error=False)
@@ -2002,6 +2048,7 @@ def normalize_schedule(schedule: Optional[Dict[str, List[str]]]) -> Dict[str, Li
 
 def create_distribution_chart(distribution: List[Dict[str, Any]]) -> io.BytesIO:
     """Pie chart for three performance bands only (on level, approach, below)."""
+    _chart_prepare_mpl()
     distribution = distribution or []
     graded_only = [item for item in distribution if item.get("level") != "no_data"]
     labels = [item["level"].replace("_", " ").title() for item in graded_only]
@@ -2046,17 +2093,28 @@ def create_distribution_chart(distribution: List[Dict[str, Any]]) -> io.BytesIO:
 
 
 def create_class_breakdown_chart(class_breakdown: List[Dict[str, Any]]) -> io.BytesIO:
-    names = [item["class_name"] for item in class_breakdown]
+    _chart_prepare_mpl()
+    names = [_chart_label(item["class_name"]) for item in class_breakdown]
     counts = [item["student_count"] for item in class_breakdown]
-    fig, ax = plt.subplots(figsize=(5.4, 3.2))
-    ax.bar(names, counts, color="#1e3a8a")
-    ax.set_ylabel("Students")
-    ax.set_xlabel("Class")
-    ax.tick_params(axis="x", labelsize=8, rotation=20)
-    ax.tick_params(axis="y", labelsize=8)
-    plt.tight_layout()
+    fig, ax = plt.subplots(figsize=(5.8, 3.6))
+    ax.set_facecolor("white")
+    x = range(len(names))
+    bar_colors = [plt.cm.Blues(0.35 + 0.55 * (i / max(len(names) - 1, 1))) for i in range(len(names))]
+    bars = ax.bar(x, counts, color=bar_colors, edgecolor="white", linewidth=1.0, width=0.62)
+    ymax = max(counts) if counts else 1
+    for i, bar in enumerate(bars):
+        h = bar.get_height()
+        ax.text(bar.get_x() + bar.get_width() / 2, h + ymax * 0.03, str(counts[i]), ha="center", va="bottom", fontsize=9, color="#475569")
+    ax.set_xticks(list(x))
+    rot = 28 if len(names) > 4 or any(_has_arabic(n) for n in names) else 0
+    ax.set_xticklabels(names, fontsize=9, color="#475569", rotation=rot, ha="right" if rot else "center")
+    ax.yaxis.grid(True, linestyle="--", color=BOARD_ANALYTICS["grid"], linewidth=0.8)
+    ax.set_axisbelow(True)
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+    fig.subplots_adjust(left=0.1, right=0.98, top=0.9, bottom=0.28 if rot else 0.16)
     buffer = io.BytesIO()
-    plt.savefig(buffer, format="png", dpi=150)
+    plt.savefig(buffer, format="png", dpi=PDF_EXPORT_CHART_DPI, facecolor="white", bbox_inches="tight", pad_inches=0.08)
     plt.close(fig)
     buffer.seek(0)
     return buffer
@@ -2076,8 +2134,25 @@ BOARD_ANALYTICS = {
     "donut_no_data": "#94a3b8",
 }
 
-# Lower DPI keeps PDF generation fast while preserving readability.
-PDF_EXPORT_CHART_DPI = 96
+# Sharp charts for print-ready PDFs (balance speed vs clarity).
+PDF_EXPORT_CHART_DPI = 140
+
+
+def _chart_prepare_mpl() -> None:
+    try:
+        from pdf_report_engine import ensure_matplotlib_arabic_font
+        ensure_matplotlib_arabic_font()
+    except Exception:
+        pass
+
+
+def _chart_label(text: Any, max_len: int = 32) -> str:
+    try:
+        from pdf_report_engine import chart_axis_label
+        return chart_axis_label(text, max_len=max_len)
+    except Exception:
+        raw = str(text or "?")
+        return raw[:max_len] if len(raw) > max_len else raw
 
 
 def _analytics_empty_chart(message: str) -> io.BytesIO:
@@ -2095,12 +2170,14 @@ def _analytics_empty_chart(message: str) -> io.BytesIO:
 def create_analytics_class_avg_bar_chart(class_rows: List[Dict[str, Any]]) -> io.BytesIO:
     if not class_rows:
         return _analytics_empty_chart("No class averages")
-    names = [str(r.get("class_name") or "?") for r in class_rows]
+    _chart_prepare_mpl()
+    names = [_chart_label(r.get("class_name") or "?") for r in class_rows]
     scores = [float(r.get("avg_total_score") or 0) for r in class_rows]
-    fig, ax = plt.subplots(figsize=(5.4, 3.5))
+    fig, ax = plt.subplots(figsize=(5.8, 3.8))
     ax.set_facecolor("white")
     x = range(len(names))
-    bars = ax.bar(x, scores, color=BOARD_ANALYTICS["bar"], edgecolor="white", linewidth=0.8, width=0.65)
+    bar_colors = [plt.cm.Purples(0.35 + 0.55 * (i / max(len(names) - 1, 1))) for i in range(len(names))]
+    bars = ax.bar(x, scores, color=bar_colors, edgecolor="white", linewidth=1.0, width=0.62)
     ymax = max(scores) if scores else 1
     ax.set_ylim(0, max(ymax * 1.15, 5))
     for i, bar in enumerate(bars):
@@ -2115,14 +2192,15 @@ def create_analytics_class_avg_bar_chart(class_rows: List[Dict[str, Any]]) -> io
             color="#475569",
         )
     ax.set_xticks(list(x))
-    ax.set_xticklabels(names, fontsize=9, color="#64748b", rotation=22 if len(names) > 5 else 0)
-    ax.yaxis.grid(True, linestyle="--", color=BOARD_ANALYTICS["grid"], linewidth=0.8)
+    rot = 28 if len(names) > 4 or any(_has_arabic(n) for n in names) else 0
+    ax.set_xticklabels(names, fontsize=9, color="#475569", rotation=rot, ha="right" if rot else "center")
+    ax.yaxis.grid(True, linestyle="--", color=BOARD_ANALYTICS["grid"], linewidth=0.8, alpha=0.9)
     ax.set_axisbelow(True)
     ax.spines["top"].set_visible(False)
     ax.spines["right"].set_visible(False)
     buf = io.BytesIO()
-    fig.subplots_adjust(left=0.08, right=0.98, top=0.92, bottom=0.16)
-    plt.savefig(buf, format="png", dpi=PDF_EXPORT_CHART_DPI, facecolor="white")
+    fig.subplots_adjust(left=0.1, right=0.98, top=0.9, bottom=0.28 if rot else 0.16)
+    plt.savefig(buf, format="png", dpi=PDF_EXPORT_CHART_DPI, facecolor="white", bbox_inches="tight", pad_inches=0.08)
     plt.close(fig)
     buf.seek(0)
     return buf
@@ -2158,26 +2236,27 @@ def create_analytics_pass_donut(distribution: List[Dict[str, Any]]) -> io.BytesI
             labels.append(lab)
     if not sizes:
         return _analytics_empty_chart("No graded students (all no data)")
-    fig, ax = plt.subplots(figsize=(4.8, 3.6))
+    _chart_prepare_mpl()
+    fig, ax = plt.subplots(figsize=(5.2, 4.0))
     ax.set_facecolor("white")
     wedges, _ = ax.pie(
         sizes,
         colors=cols,
         startangle=90,
-        wedgeprops=dict(width=0.38, edgecolor="white", linewidth=2),
+        wedgeprops=dict(width=0.42, edgecolor="white", linewidth=2.5),
     )
     ax.axis("equal")
     legend_handles = [
         Patch(facecolor=BOARD_ANALYTICS["donut_on"], edgecolor="white", label=f"On Level: {on_level}"),
-        Patch(facecolor=BOARD_ANALYTICS["donut_approach"], edgecolor="white", label=f"Approaching full score: {approach}"),
-        Patch(facecolor=BOARD_ANALYTICS["donut_below"], edgecolor="white", label=f"Below Level: {below}"),
+        Patch(facecolor=BOARD_ANALYTICS["donut_approach"], edgecolor="white", label=f"Approaching: {approach}"),
+        Patch(facecolor=BOARD_ANALYTICS["donut_below"], edgecolor="white", label=f"Below: {below}"),
     ]
-    ax.legend(handles=legend_handles, loc="upper left", fontsize=8, frameon=False, bbox_to_anchor=(0.0, 1.02))
-    ax.text(0, 0.02, f"{pct}%", ha="center", va="center", fontsize=20, fontweight="bold", color="#0f172a")
-    ax.text(0, -0.12, "ON LEVEL", ha="center", va="center", fontsize=8, color="#64748b")
+    ax.legend(handles=legend_handles, loc="center left", fontsize=8, frameon=True, fancybox=True, framealpha=0.92, bbox_to_anchor=(-0.02, 0.5))
+    ax.text(0, 0.03, f"{pct}%", ha="center", va="center", fontsize=22, fontweight="bold", color="#0f172a")
+    ax.text(0, -0.14, "ON LEVEL", ha="center", va="center", fontsize=8, color="#64748b")
     buf = io.BytesIO()
-    fig.subplots_adjust(left=0.08, right=0.98, top=0.92, bottom=0.16)
-    plt.savefig(buf, format="png", dpi=PDF_EXPORT_CHART_DPI, facecolor="white")
+    fig.subplots_adjust(left=0.22, right=0.98, top=0.92, bottom=0.12)
+    plt.savefig(buf, format="png", dpi=PDF_EXPORT_CHART_DPI, facecolor="white", bbox_inches="tight", pad_inches=0.06)
     plt.close(fig)
     buf.seek(0)
     return buf
@@ -2187,7 +2266,8 @@ def create_component_breakdown_bar_chart(student: Dict[str, Any], quarter: int) 
     rows = _focus_component_chart_rows(student, quarter)
     if not rows:
         return _analytics_empty_chart("No score breakdown data")
-    names = [row["label"] for row in rows]
+    _chart_prepare_mpl()
+    names = [_chart_label(row["label"]) for row in rows]
     values = [float(row["value"]) for row in rows]
     colors_list = [row["color"] for row in rows]
     fig, ax = plt.subplots(figsize=(5.4, 3.5))
@@ -2208,14 +2288,15 @@ def create_component_breakdown_bar_chart(student: Dict[str, Any], quarter: int) 
             color="#475569",
         )
     ax.set_xticks(list(x))
-    ax.set_xticklabels(names, fontsize=9, color="#64748b", rotation=16 if len(names) > 4 else 0)
+    rot = 22 if len(names) > 4 else 0
+    ax.set_xticklabels(names, fontsize=9, color="#475569", rotation=rot, ha="right" if rot else "center")
     ax.yaxis.grid(True, linestyle="--", color=BOARD_ANALYTICS["grid"], linewidth=0.8)
     ax.set_axisbelow(True)
     ax.spines["top"].set_visible(False)
     ax.spines["right"].set_visible(False)
     buf = io.BytesIO()
-    fig.subplots_adjust(left=0.08, right=0.98, top=0.92, bottom=0.24)
-    plt.savefig(buf, format="png", dpi=PDF_EXPORT_CHART_DPI, facecolor="white")
+    fig.subplots_adjust(left=0.1, right=0.98, top=0.9, bottom=0.3 if rot else 0.22)
+    plt.savefig(buf, format="png", dpi=PDF_EXPORT_CHART_DPI, facecolor="white", bbox_inches="tight", pad_inches=0.08)
     plt.close(fig)
     buf.seek(0)
     return buf
@@ -2259,8 +2340,9 @@ def create_component_breakdown_area_chart(student: Dict[str, Any], quarter: int)
     rows = _focus_component_chart_rows(student, quarter)
     if not rows:
         return _analytics_empty_chart("No score breakdown data")
+    _chart_prepare_mpl()
     xs = list(range(len(rows)))
-    names = [row["label"] for row in rows]
+    names = [_chart_label(row["label"]) for row in rows]
     ys = [float(row["value"]) for row in rows]
     ymax = max(ys) if ys else 1
     fig, ax = plt.subplots(figsize=(5.4, 3.5))
@@ -2326,9 +2408,10 @@ def create_analytics_quarter_focus_bar_chart(
     legend_label: str = "Cohort on-level %",
 ) -> io.BytesIO:
     """Single bar for either cohort percentage or student total, depending on the provided scale."""
+    _chart_prepare_mpl()
     r = float(rate or 0)
-    label = (xlabel or "Focus")[:22]
-    fig, ax = plt.subplots(figsize=(5.2, 3.4))
+    label = _chart_label((xlabel or "Focus")[:32])
+    fig, ax = plt.subplots(figsize=(5.4, 3.6))
     ax.set_facecolor("white")
     ax.bar(
         [0],
@@ -2348,7 +2431,7 @@ def create_analytics_quarter_focus_bar_chart(
         color="#475569",
     )
     ax.set_xticks([0])
-    ax.set_xticklabels([label], fontsize=9, color="#64748b")
+    ax.set_xticklabels([label], fontsize=9, color="#475569")
     if max_value == 100:
         ax.set_ylim(0, 105)
         ax.set_yticks([0, 25, 50, 75, 100])
@@ -2364,8 +2447,8 @@ def create_analytics_quarter_focus_bar_chart(
     ax.spines["right"].set_visible(False)
     ax.legend([legend_label], loc="lower center", fontsize=8, frameon=False)
     buf = io.BytesIO()
-    fig.subplots_adjust(left=0.08, right=0.98, top=0.92, bottom=0.16)
-    plt.savefig(buf, format="png", dpi=PDF_EXPORT_CHART_DPI, facecolor="white")
+    fig.subplots_adjust(left=0.1, right=0.98, top=0.9, bottom=0.22)
+    plt.savefig(buf, format="png", dpi=PDF_EXPORT_CHART_DPI, facecolor="white", bbox_inches="tight", pad_inches=0.08)
     plt.close(fig)
     buf.seek(0)
     return buf
@@ -2403,23 +2486,25 @@ def create_analytics_class_area_chart(class_rows: List[Dict[str, Any]]) -> io.By
         return _analytics_empty_chart("No class averages")
     n = len(class_rows)
     xs = list(range(n))
-    names = [str(r.get("class_name") or "?") for r in class_rows]
+    _chart_prepare_mpl()
+    names = [_chart_label(r.get("class_name") or "?") for r in class_rows]
     ys = [float(r.get("avg_total_score") or 0) for r in class_rows]
-    fig, ax = plt.subplots(figsize=(5.4, 3.5))
+    fig, ax = plt.subplots(figsize=(5.8, 3.8))
     ax.set_facecolor("white")
     ymax = max(ys) if ys else 1
     ax.fill_between(xs, ys, color=BOARD_ANALYTICS["area_fill"], alpha=0.55, linewidth=0)
     ax.plot(xs, ys, color=BOARD_ANALYTICS["area_line"], linewidth=2.2, marker="o", markersize=7)
     ax.set_xticks(xs)
-    ax.set_xticklabels(names, fontsize=9, color="#64748b", rotation=22 if n > 5 else 0)
+    rot = 28 if n > 4 else 0
+    ax.set_xticklabels(names, fontsize=9, color="#475569", rotation=rot, ha="right" if rot else "center")
     ax.set_ylim(0, max(ymax * 1.12, 5))
     ax.yaxis.grid(True, linestyle="--", color=BOARD_ANALYTICS["grid"], linewidth=0.8)
     ax.set_axisbelow(True)
     ax.spines["top"].set_visible(False)
     ax.spines["right"].set_visible(False)
     buf = io.BytesIO()
-    fig.subplots_adjust(left=0.08, right=0.98, top=0.92, bottom=0.16)
-    plt.savefig(buf, format="png", dpi=PDF_EXPORT_CHART_DPI, facecolor="white")
+    fig.subplots_adjust(left=0.1, right=0.98, top=0.9, bottom=0.28 if rot else 0.16)
+    plt.savefig(buf, format="png", dpi=PDF_EXPORT_CHART_DPI, facecolor="white", bbox_inches="tight", pad_inches=0.08)
     plt.close(fig)
     buf.seek(0)
     return buf
@@ -2429,9 +2514,10 @@ def create_reports_enrollment_bar_chart(class_breakdown: List[Dict[str, Any]]) -
     """Enrollment per class (student_count) — same data as Reports `reportEnrollmentBars`."""
     if not class_breakdown:
         return _analytics_empty_chart("No class enrollment data")
-    names = [str(r.get("class_name") or "?") for r in class_breakdown]
+    _chart_prepare_mpl()
+    names = [_chart_label(r.get("class_name") or "?") for r in class_breakdown]
     counts = [int(r.get("student_count") or 0) for r in class_breakdown]
-    fig, ax = plt.subplots(figsize=(5.4, 3.5))
+    fig, ax = plt.subplots(figsize=(5.8, 3.8))
     ax.set_facecolor("white")
     x = range(len(names))
     ymax = max(counts) if counts else 1
@@ -2450,14 +2536,15 @@ def create_reports_enrollment_bar_chart(class_breakdown: List[Dict[str, Any]]) -
             color="#475569",
         )
     ax.set_xticks(list(x))
-    ax.set_xticklabels(names, fontsize=9, color="#64748b", rotation=22 if len(names) > 5 else 0)
+    rot = 28 if len(names) > 4 else 0
+    ax.set_xticklabels(names, fontsize=9, color="#475569", rotation=rot, ha="right" if rot else "center")
     ax.yaxis.grid(True, linestyle="--", color=BOARD_ANALYTICS["grid"], linewidth=0.8)
     ax.set_axisbelow(True)
     ax.spines["top"].set_visible(False)
     ax.spines["right"].set_visible(False)
     buf = io.BytesIO()
-    fig.subplots_adjust(left=0.08, right=0.98, top=0.92, bottom=0.16)
-    plt.savefig(buf, format="png", dpi=PDF_EXPORT_CHART_DPI, facecolor="white")
+    fig.subplots_adjust(left=0.1, right=0.98, top=0.9, bottom=0.28 if rot else 0.16)
+    plt.savefig(buf, format="png", dpi=PDF_EXPORT_CHART_DPI, facecolor="white", bbox_inches="tight", pad_inches=0.08)
     plt.close(fig)
     buf.seek(0)
     return buf
@@ -2469,30 +2556,32 @@ def create_reports_enrollment_area_chart(class_breakdown: List[Dict[str, Any]]) 
         return _analytics_empty_chart("No class enrollment data")
     n = len(class_breakdown)
     xs = list(range(n))
-    names = [str(r.get("class_name") or "?") for r in class_breakdown]
+    _chart_prepare_mpl()
+    names = [_chart_label(r.get("class_name") or "?") for r in class_breakdown]
     ys = [float(int(r.get("student_count") or 0)) for r in class_breakdown]
-    fig, ax = plt.subplots(figsize=(5.4, 3.5))
+    fig, ax = plt.subplots(figsize=(5.8, 3.8))
     ax.set_facecolor("white")
     ymax = max(ys) if ys else 1
     y_top = max(6, int(math.ceil((ymax * 1.15) / 6) * 6))
     ax.fill_between(xs, ys, color=BOARD_ANALYTICS["area_fill"], alpha=0.55, linewidth=0)
     ax.plot(xs, ys, color=BOARD_ANALYTICS["area_line"], linewidth=2.2, marker="o", markersize=7)
     ax.set_xticks(xs)
-    ax.set_xticklabels(names, fontsize=9, color="#64748b", rotation=22 if n > 5 else 0)
+    rot = 28 if n > 4 else 0
+    ax.set_xticklabels(names, fontsize=9, color="#475569", rotation=rot, ha="right" if rot else "center")
     ax.set_ylim(0, y_top)
     ax.yaxis.grid(True, linestyle="--", color=BOARD_ANALYTICS["grid"], linewidth=0.8)
     ax.set_axisbelow(True)
     ax.spines["top"].set_visible(False)
     ax.spines["right"].set_visible(False)
     buf = io.BytesIO()
-    fig.subplots_adjust(left=0.08, right=0.98, top=0.92, bottom=0.16)
-    plt.savefig(buf, format="png", dpi=PDF_EXPORT_CHART_DPI, facecolor="white")
+    fig.subplots_adjust(left=0.1, right=0.98, top=0.9, bottom=0.28 if rot else 0.16)
+    plt.savefig(buf, format="png", dpi=PDF_EXPORT_CHART_DPI, facecolor="white", bbox_inches="tight", pad_inches=0.08)
     plt.close(fig)
     buf.seek(0)
     return buf
 
 
-PDF_REPORT_PRIMARY_HEX = "#6d28d9"
+PDF_REPORT_PRIMARY_HEX = "#8B2BEC"
 PDF_REPORT_ORG_NAME = "Al Anjal School Follow-up Record"
 
 
@@ -2570,7 +2659,12 @@ def _pdf_clamp_text(value: Any, max_chars: int = 220) -> str:
     return f"{cut or text[:max_chars].strip()}..."
 
 
-def _pdf_kpi_cards_table(cards: List[Tuple[str, str]]) -> Table:
+def _pdf_kpi_cards_table(cards: List[Tuple[str, str]], lang: str = "en") -> Table:
+    try:
+        from pdf_report_engine import pdf_kpi_cards
+        return pdf_kpi_cards(cards, lang)
+    except Exception:
+        pass
     kpi_style = ParagraphStyle(
         name="PdfKpiCell",
         fontSize=10,
@@ -2580,8 +2674,8 @@ def _pdf_kpi_cards_table(cards: List[Tuple[str, str]]) -> Table:
     padded = list(cards) + [("", "—")] * 3
     cells = []
     for label, value in padded[:3]:
-        label_esc = escape(str(label or ""))
-        value_esc = escape(str(value if value not in (None, "") else "—"))
+        label_esc = _pdf_paragraph_text(label)
+        value_esc = _pdf_paragraph_text(value if value not in (None, "") else "—", bold=True)
         cells.append(
             Paragraph(
                 f"<font size='8' color='#64748b'>{label_esc}</font><br/>"
@@ -2605,6 +2699,69 @@ def _pdf_kpi_cards_table(cards: List[Tuple[str, str]]) -> Table:
         )
     )
     return tbl
+
+
+def _build_pdf_premium_intro(
+    elements: List[Any],
+    *,
+    report_title: str,
+    scope_line: str,
+    term_line: str,
+    meta_rows: List[Tuple[str, str]],
+    kpi_cards: List[Tuple[str, str]],
+    insight_triplet: List[Tuple[str, str]],
+    insights: Optional[Dict[str, str]],
+    lang: str,
+) -> None:
+    """Premium cover, executive summary, KPI rows, insight cards, and recommendations."""
+    from pdf_report_engine import (
+        pdf_cover_header,
+        pdf_executive_summary,
+        pdf_insight_cards,
+        pdf_kpi_section,
+        pdf_recommendations_block,
+        resolve_logo_path,
+    )
+
+    generated_on = datetime.now(REPORT_TIMEZONE).strftime("%Y-%m-%d %H:%M")
+    elements.extend(
+        pdf_cover_header(
+            report_title=report_title,
+            org_name=PDF_REPORT_ORG_NAME,
+            scope_line=scope_line,
+            term_line=term_line,
+            generated_on=generated_on,
+            meta_rows=meta_rows,
+            lang=lang,
+            logo_path=resolve_logo_path(),
+        )
+    )
+    pdf_executive_summary(elements, insights, lang)
+    elements.extend(pdf_kpi_section(kpi_cards, lang))
+    elements.append(Spacer(1, 10))
+    elements.append(pdf_insight_cards(insight_triplet, lang))
+    elements.append(Spacer(1, 10))
+    pdf_recommendations_block(elements, insights, lang)
+
+
+def _pdf_engine_styled_table(
+    data: List[List[Any]],
+    lang: str,
+    col_widths: Optional[List[int]] = None,
+    repeat_header: bool = True,
+) -> Table:
+    from pdf_report_engine import pdf_styled_table
+    return pdf_styled_table(data, lang, col_widths, repeat_header)
+
+
+def _pdf_engine_footer(lang: str, report_label: str = "Analytics Report"):
+    from pdf_report_engine import pdf_footer_draw
+    return pdf_footer_draw(lang, report_label)
+
+
+def _pdf_engine_section_style(lang: str) -> ParagraphStyle:
+    from pdf_report_engine import pdf_paragraph_styles
+    return pdf_paragraph_styles(lang)["section"]
 
 
 def _pdf_append_executive_summary(
@@ -2839,12 +2996,13 @@ def _pdf_chart_panel(
     panel.setStyle(
         TableStyle(
             [
-                ("BOX", (0, 0), (-1, -1), 0.5, colors.HexColor("#d1d5db")),
+                ("BOX", (0, 0), (-1, -1), 0.6, colors.HexColor("#E2E8F0")),
+                ("LINEABOVE", (0, 0), (-1, 0), 2.5, colors.HexColor(PDF_REPORT_PRIMARY_HEX)),
                 ("BACKGROUND", (0, 0), (-1, -1), colors.white),
-                ("LEFTPADDING", (0, 0), (-1, -1), 8),
-                ("RIGHTPADDING", (0, 0), (-1, -1), 8),
-                ("TOPPADDING", (0, 0), (-1, -1), 6),
-                ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+                ("LEFTPADDING", (0, 0), (-1, -1), 10),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 10),
+                ("TOPPADDING", (0, 0), (-1, -1), 8),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
                 ("VALIGN", (0, 0), (-1, -1), "TOP"),
             ]
         )
@@ -2893,153 +3051,53 @@ def generate_report_pdf(
         return f"{value}{suffix}"
 
     def _styled_table(data: List[List[Any]], col_widths: Optional[List[int]] = None, repeat_header: bool = True) -> Table:
-        wrapped_rows: List[List[Any]] = []
-        for row_idx, row in enumerate(data):
-            wrapped_row: List[Any] = []
-            for cell in row:
-                if isinstance(cell, Paragraph):
-                    wrapped_row.append(cell)
-                    continue
-                is_header = row_idx == 0
-                text = _pdf_paragraph_text(cell, bold=is_header)
-                if is_header:
-                    wrapped_row.append(Paragraph(text, table_header_style))
-                else:
-                    wrapped_row.append(Paragraph(text, table_body_style))
-            wrapped_rows.append(wrapped_row)
-        tbl = Table(
-            wrapped_rows,
-            colWidths=col_widths,
-            repeatRows=1 if repeat_header else 0,
-            hAlign="RIGHT" if lang == "ar" else "LEFT",
-        )
-        tbl.setStyle(
-            TableStyle(
-                [
-                    ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor(PDF_REPORT_PRIMARY_HEX)),
-                    ("TEXTCOLOR", (0, 0), (-1, 0), colors.whitesmoke),
-                    ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
-                    ("FONTSIZE", (0, 0), (-1, 0), 9),
-                    ("FONTSIZE", (0, 1), (-1, -1), 8),
-                    ("ALIGN", (0, 0), (-1, -1), "RIGHT" if lang == "ar" else "LEFT"),
-                    ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-                    ("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#9ca3af")),
-                    ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#f8fafc")]),
-                    ("LEFTPADDING", (0, 0), (-1, -1), 6),
-                    ("RIGHTPADDING", (0, 0), (-1, -1), 6),
-                    ("TOPPADDING", (0, 0), (-1, -1), 4),
-                    ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
-                ]
-            )
-        )
-        return tbl
+        return _pdf_engine_styled_table(data, lang, col_widths, repeat_header)
 
     buffer = io.BytesIO()
-    styles = getSampleStyleSheet()
-    title_style = ParagraphStyle(
-        name="ReportTitle",
-        parent=styles["Title"],
-        fontSize=18,
-        textColor=colors.HexColor("#0f172a"),
-        spaceAfter=6,
-    )
-    subtitle_style = ParagraphStyle(
-        name="ReportSubtitle",
-        parent=styles["Normal"],
-        fontSize=10,
-        textColor=colors.HexColor("#475569"),
-        spaceAfter=10,
-    )
-    section_style = ParagraphStyle(
-        name="SectionHeading",
-        parent=styles["Heading2"],
-        fontSize=12,
-        textColor=colors.HexColor(PDF_REPORT_PRIMARY_HEX),
-        spaceBefore=6,
-        spaceAfter=6,
-    )
-    table_header_style = ParagraphStyle(
-        name="TableHeaderCell",
-        parent=styles["Normal"],
-        fontName="Helvetica-Bold",
-        fontSize=8.5,
-        textColor=colors.whitesmoke,
-        leading=10,
-        wordWrap="CJK",
-    )
-    table_body_style = ParagraphStyle(
-        name="TableBodyCell",
-        parent=styles["Normal"],
-        fontSize=8,
-        textColor=colors.HexColor("#111827"),
-        leading=10,
-        wordWrap="CJK",
-    )
-    if lang == "ar":
-        title_style.alignment = TA_RIGHT
-        subtitle_style.alignment = TA_RIGHT
-        section_style.alignment = TA_RIGHT
-        table_header_style.alignment = TA_RIGHT
-        table_body_style.alignment = TA_RIGHT
-        table_header_style.wordWrap = "RTL"
-        table_body_style.wordWrap = "RTL"
+    section_style = _pdf_engine_section_style(lang)
 
     doc = SimpleDocTemplate(buffer, pagesize=A4, leftMargin=28, rightMargin=28, topMargin=36, bottomMargin=36)
     elements: List[Any] = []
     scope_label = format_scope_label(scope)
-
-    elements.append(_pdf_cover_band())
-    elements.append(Spacer(1, 10))
-    elements.append(Paragraph(f"{_pdf_paragraph_text(scope_label)} {_pdf_paragraph_text(_tr('Report', lang))}", title_style))
-    elements.append(Paragraph(_pdf_paragraph_text(PDF_REPORT_ORG_NAME), subtitle_style))
-    elements.append(
-        Paragraph(
-            _pdf_paragraph_text(
-                f"{_tr('Generated on', lang)} "
-                f"{datetime.now(REPORT_TIMEZONE).strftime('%Y-%m-%d %H:%M')} | "
-                f"{_tr('Professional Performance Summary', lang)}"
-            ),
-            subtitle_style,
-        )
-    )
-    elements.append(
-        _pdf_cover_meta_table(
-            [
-                (_tr("Scope", lang), scope_label),
-                (_tr("Term", lang), _pdf_term_display_label(int(report.get("semester", 1)), rq, lang)),
-                (_tr("Generated on", lang), datetime.now(REPORT_TIMEZONE).strftime("%Y-%m-%d %H:%M")),
-                (_tr("Professional Performance Summary", lang), _tr("Executive Summary", lang)),
-            ],
-            lang,
-        )
-    )
-    elements.append(Spacer(1, 10))
-    _pdf_append_executive_summary(elements, insights, section_style, subtitle_style, lang)
-    elements.append(
-        _pdf_kpi_cards_table(
-            [
-                (_tr("Total Students", lang), _fmt(report.get("total_students"))),
-                (_tr("Average Total Score", lang), _fmt(report.get("avg_total_score"))),
-                (_tr("On Level % (focus quarter)", lang), _fmt(report.get("exceeding_rate"), "%")),
-            ]
-        )
-    )
-    elements.append(Spacer(1, 14))
-    elements.append(
-        _pdf_story_cards_table(
-            [
-                (_tr("Executive Summary", lang), (insights or {}).get("analysis_performance") or "-"),
-                (_tr("Top Performers", lang), _tr("Professional Performance Summary", lang)),
-                (_tr("Students Needing Support", lang), _tr("Recommended Actions", lang)),
-            ],
-            lang,
-        )
-    )
-    elements.append(Spacer(1, 12))
-
     q1 = report.get("quarter1") or {}
     q2 = report.get("quarter2") or {}
     rq = int(report.get("quarter") or 1)
+    distribution = report.get("distribution") or []
+    dist_approach = next((int(item.get("count") or 0) for item in distribution if str(item.get("level")) == "approach"), 0)
+    dist_below = next((int(item.get("count") or 0) for item in distribution if str(item.get("level")) == "below"), 0)
+    support_count = len(report.get("students_needing_support") or [])
+    term_sub = _pdf_term_display_label(int(report.get("semester", 1)), rq, lang)
+    generated_on_text = datetime.now(REPORT_TIMEZONE).strftime("%Y-%m-%d %H:%M")
+    insights = insights or {}
+    report_title = f"{scope_label} {_tr('Report', lang)}"
+
+    _build_pdf_premium_intro(
+        elements,
+        report_title=report_title,
+        scope_line=scope_label,
+        term_line=term_sub,
+        meta_rows=[
+            (_tr("Scope", lang), scope_label),
+            (_tr("Term", lang), term_sub),
+            (_tr("Generated on", lang), generated_on_text),
+            (_tr("Professional Performance Summary", lang), _tr("Executive Summary", lang)),
+        ],
+        kpi_cards=[
+            (_tr("Total Students", lang), _fmt(report.get("total_students"))),
+            (_tr("Average Total Score", lang), _fmt(report.get("avg_total_score"))),
+            (_tr("On Level % (focus quarter)", lang), _fmt(report.get("exceeding_rate"), "%")),
+            (_tr("Approaching full score", lang), str(dist_approach)),
+            (_tr("Below Level", lang), str(dist_below)),
+            (_tr("Students Needing Support", lang), str(support_count)),
+        ],
+        insight_triplet=[
+            (_tr("Executive Summary", lang), _pdf_clamp_text(insights.get("analysis_performance") or "-", max_chars=200)),
+            (_tr("Top Performers", lang), _tr("Professional Performance Summary", lang)),
+            (_tr("Students Needing Support", lang), _pdf_clamp_text(insights.get("analysis_actions") or "-", max_chars=200)),
+        ],
+        insights=insights,
+        lang=lang,
+    )
     focus_q = q1 if rq == 1 else q2
     summary_data = [
         [_tr("Metric", lang), _tr("Value", lang)],
@@ -3143,21 +3201,20 @@ def generate_report_pdf(
         support_table_data.append(["-", "-", "-", "-", "-", "-"])
     elements.append(_styled_table(support_table_data, col_widths=[110, 52, 48, 60, 140, 117]))
 
-    insights = insights or {}
     insight_rows = [
         [_tr("Insight", lang), _tr("Details", lang)],
-        [_tr("Strengths", lang), (insights.get("analysis_strengths") or "").strip() or "-"],
-        [_tr("Weaknesses", lang), (insights.get("analysis_weaknesses") or "").strip() or "-"],
-        [_tr("Student Performance", lang), (insights.get("analysis_performance") or "").strip() or "-"],
-        [_tr("Standout Data", lang), (insights.get("analysis_standout_data") or "").strip() or "-"],
-        [_tr("Recommended Actions", lang), (insights.get("analysis_actions") or "").strip() or "-"],
-        [_tr("Recommendations", lang), (insights.get("analysis_recommendations") or "").strip() or "-"],
+        [_tr("Strengths", lang), _pdf_clamp_text((insights.get("analysis_strengths") or "").strip() or "-", max_chars=320)],
+        [_tr("Weaknesses", lang), _pdf_clamp_text((insights.get("analysis_weaknesses") or "").strip() or "-", max_chars=320)],
+        [_tr("Student Performance", lang), _pdf_clamp_text((insights.get("analysis_performance") or "").strip() or "-", max_chars=320)],
+        [_tr("Standout Data", lang), _pdf_clamp_text((insights.get("analysis_standout_data") or "").strip() or "-", max_chars=320)],
+        [_tr("Recommended Actions", lang), _pdf_clamp_text((insights.get("analysis_actions") or "").strip() or "-", max_chars=320)],
+        [_tr("Recommendations", lang), _pdf_clamp_text((insights.get("analysis_recommendations") or "").strip() or "-", max_chars=320)],
     ]
     elements.append(Spacer(1, 10))
     elements.append(Paragraph(_pdf_paragraph_text(_tr("Key Insights", lang), bold=True), section_style))
     elements.append(_styled_table(insight_rows, col_widths=[130, 380], repeat_header=True))
 
-    doc.build(elements, onFirstPage=_pdf_footer_canvas(lang), onLaterPages=_pdf_footer_canvas(lang))
+    doc.build(elements, onFirstPage=_pdf_engine_footer(lang, report_title), onLaterPages=_pdf_engine_footer(lang, report_title))
     pdf_value = buffer.getvalue()
     buffer.close()
     return pdf_value
@@ -3183,104 +3240,10 @@ def generate_analytics_dashboard_pdf(
         return f"{value}{suffix}"
 
     def _styled_table(data: List[List[Any]], col_widths: Optional[List[int]] = None, repeat_header: bool = True) -> Table:
-        wrapped_rows: List[List[Any]] = []
-        for row_idx, row in enumerate(data):
-            wrapped_row: List[Any] = []
-            for cell in row:
-                if isinstance(cell, Paragraph):
-                    wrapped_row.append(cell)
-                    continue
-                is_header = row_idx == 0
-                text = _pdf_paragraph_text(cell, bold=is_header)
-                if is_header:
-                    wrapped_row.append(Paragraph(text, table_header_style))
-                else:
-                    wrapped_row.append(Paragraph(text, table_body_style))
-            wrapped_rows.append(wrapped_row)
-        tbl = Table(
-            wrapped_rows,
-            colWidths=col_widths,
-            repeatRows=1 if repeat_header else 0,
-            hAlign="RIGHT" if lang == "ar" else "LEFT",
-        )
-        tbl.setStyle(
-            TableStyle(
-                [
-                    ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor(PDF_REPORT_PRIMARY_HEX)),
-                    ("TEXTCOLOR", (0, 0), (-1, 0), colors.whitesmoke),
-                    ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
-                    ("FONTSIZE", (0, 0), (-1, 0), 9),
-                    ("FONTSIZE", (0, 1), (-1, -1), 8),
-                    ("ALIGN", (0, 0), (-1, -1), "RIGHT" if lang == "ar" else "LEFT"),
-                    ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-                    ("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#9ca3af")),
-                    ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#f8fafc")]),
-                    ("LEFTPADDING", (0, 0), (-1, -1), 6),
-                    ("RIGHTPADDING", (0, 0), (-1, -1), 6),
-                    ("TOPPADDING", (0, 0), (-1, -1), 4),
-                    ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
-                ]
-            )
-        )
-        return tbl
+        return _pdf_engine_styled_table(data, lang, col_widths, repeat_header)
 
     buffer = io.BytesIO()
-    styles = getSampleStyleSheet()
-    title_style = ParagraphStyle(
-        name="AnalyticsTitle",
-        parent=styles["Title"],
-        fontSize=18,
-        textColor=colors.HexColor("#0f172a"),
-        spaceAfter=6,
-    )
-    subtitle_style = ParagraphStyle(
-        name="AnalyticsSubtitle",
-        parent=styles["Normal"],
-        fontSize=10,
-        textColor=colors.HexColor("#475569"),
-        spaceAfter=10,
-    )
-    section_style = ParagraphStyle(
-        name="AnalyticsSection",
-        parent=styles["Heading2"],
-        fontSize=12,
-        textColor=colors.HexColor(PDF_REPORT_PRIMARY_HEX),
-        spaceBefore=6,
-        spaceAfter=6,
-    )
-    cap_style = ParagraphStyle(
-        name="ChartCaption",
-        parent=styles["Normal"],
-        fontSize=9,
-        textColor=colors.HexColor("#334155"),
-        spaceAfter=4,
-    )
-    table_header_style = ParagraphStyle(
-        name="TableHeaderCellA",
-        parent=styles["Normal"],
-        fontName="Helvetica-Bold",
-        fontSize=8.5,
-        textColor=colors.whitesmoke,
-        leading=10,
-        wordWrap="CJK",
-    )
-    table_body_style = ParagraphStyle(
-        name="TableBodyCellA",
-        parent=styles["Normal"],
-        fontSize=8,
-        textColor=colors.HexColor("#111827"),
-        leading=10,
-        wordWrap="CJK",
-    )
-    if lang == "ar":
-        title_style.alignment = TA_RIGHT
-        subtitle_style.alignment = TA_RIGHT
-        section_style.alignment = TA_RIGHT
-        cap_style.alignment = TA_RIGHT
-        table_header_style.alignment = TA_RIGHT
-        table_body_style.alignment = TA_RIGHT
-        table_header_style.wordWrap = "RTL"
-        table_body_style.wordWrap = "RTL"
+    section_style = _pdf_engine_section_style(lang)
 
     scope_label = format_scope_label(scope)
     qn = overview.get("quarter") or 1
@@ -3322,61 +3285,43 @@ def generate_analytics_dashboard_pdf(
     grade_subtitle = ", ".join(grade_labels) if grade_labels else scope_label
     term_subtitle = _pdf_term_display_label(sem_o, qn_o, lang)
 
-    # Product requirement: keep this title exact in exports.
-    elements.append(_pdf_cover_band())
-    elements.append(Spacer(1, 10))
-    generated_on_text = datetime.now(REPORT_TIMEZONE).strftime("%Y-%m-%d %H:%M")
-    elements.append(
-        KeepTogether(
-            [
-                Paragraph(_pdf_paragraph_text("Analytics Report", bold=True), title_style),
-                Paragraph(_pdf_paragraph_text(PDF_REPORT_ORG_NAME), subtitle_style),
-                Paragraph(f"<b>{_pdf_paragraph_text(grade_subtitle)}</b>", subtitle_style),
-                Paragraph(_pdf_paragraph_text(term_subtitle), subtitle_style),
-                Paragraph(
-                    _pdf_paragraph_text(f"{_tr('Generated on', lang)} {generated_on_text}"),
-                    subtitle_style,
-                ),
-                _pdf_cover_meta_table(
-                    [
-                        (_tr("Scope", lang), scope_label),
-                        (_tr("Term", lang), term_subtitle),
-                        (_tr("Generated on", lang), generated_on_text),
-                        (_tr("Professional Performance Summary", lang), _tr("Visual dashboard", lang)),
-                    ],
-                    lang,
-                ),
-            ]
-        )
-    )
-    elements.append(Spacer(1, 10))
-    _pdf_append_executive_summary(elements, insights, section_style, subtitle_style, lang)
-    elements.append(
-        _pdf_kpi_cards_table(
-            [
-                (_tr("Total Students", lang), _fmt(report.get("total_students"))),
-                (_tr("Average Total Score", lang), _fmt(report.get("avg_total_score"))),
-                (_tr("On Level % (focus quarter)", lang), _fmt(report.get("exceeding_rate"), "%")),
-            ]
-        )
-    )
-    elements.append(Spacer(1, 12))
-    elements.append(
-        _pdf_story_cards_table(
-            [
-                (_tr("Key Insights", lang), _tr("On Level % (focus quarter)", lang)),
-                (_tr("Summary metrics", lang), _tr("Average Total Score", lang)),
-                (_tr("Recommended Actions", lang), _pdf_clamp_text((insights or {}).get("analysis_actions") or "-", max_chars=180)),
-            ],
-            lang,
-        )
-    )
-    elements.append(Spacer(1, 12))
-
-    elements.append(Paragraph(_pdf_paragraph_text(_tr("Visual dashboard", lang), bold=True), section_style))
     on_level_count = next((int(item.get("count") or 0) for item in selected_dist if str(item.get("level")) == "on_level"), 0)
     approach_count = next((int(item.get("count") or 0) for item in selected_dist if str(item.get("level")) == "approach"), 0)
     below_count = next((int(item.get("count") or 0) for item in selected_dist if str(item.get("level")) == "below"), 0)
+    support_count = len(report.get("students_needing_support") or [])
+    generated_on_text = datetime.now(REPORT_TIMEZONE).strftime("%Y-%m-%d %H:%M")
+    insights = insights or {}
+
+    # Product requirement: keep this title exact in exports.
+    _build_pdf_premium_intro(
+        elements,
+        report_title="Analytics Report",
+        scope_line=grade_subtitle,
+        term_line=term_subtitle,
+        meta_rows=[
+            (_tr("Scope", lang), scope_label),
+            (_tr("Term", lang), term_subtitle),
+            (_tr("Generated on", lang), generated_on_text),
+            (_tr("Professional Performance Summary", lang), _tr("Visual dashboard", lang)),
+        ],
+        kpi_cards=[
+            (_tr("Total Students", lang), _fmt(report.get("total_students"))),
+            (_tr("Average Total Score", lang), _fmt(report.get("avg_total_score"))),
+            (_tr("On Level % (focus quarter)", lang), _fmt(report.get("exceeding_rate"), "%")),
+            (_tr("Approaching full score", lang), str(approach_count)),
+            (_tr("Below Level", lang), str(below_count)),
+            (_tr("Students Needing Support", lang), str(support_count)),
+        ],
+        insight_triplet=[
+            (_tr("Strengths", lang), _pdf_clamp_text(insights.get("analysis_strengths") or "-", max_chars=200)),
+            (_tr("Key Insights", lang), _pdf_clamp_text(insights.get("analysis_standout_data") or "-", max_chars=200)),
+            (_tr("Student Performance", lang), _pdf_clamp_text(insights.get("analysis_performance") or "-", max_chars=200)),
+        ],
+        insights=insights,
+        lang=lang,
+    )
+
+    elements.append(Paragraph(_pdf_paragraph_text(_tr("Visual dashboard", lang), bold=True), section_style))
     no_data_count = next((int(item.get("count") or 0) for item in selected_dist if str(item.get("level")) == "no_data"), 0)
     levels_notes = [
         f"{_tr('On Level', lang)}: {on_level_count}",
@@ -3526,7 +3471,6 @@ def generate_analytics_dashboard_pdf(
         support_table_data.append(["-", "-", "-", "-", "-", "-"])
     elements.append(_styled_table(support_table_data, col_widths=[110, 52, 48, 60, 140, 117]))
 
-    insights = insights or {}
     insight_rows = [
         [_tr("Insight", lang), _tr("Details", lang)],
         [_tr("Strengths", lang), _pdf_clamp_text((insights.get("analysis_strengths") or "").strip() or "-", max_chars=320)],
@@ -3540,7 +3484,7 @@ def generate_analytics_dashboard_pdf(
     elements.append(Paragraph(_pdf_paragraph_text(_tr("Key Insights", lang), bold=True), section_style))
     elements.append(_styled_table(insight_rows, col_widths=[130, 380], repeat_header=True))
 
-    doc.build(elements, onFirstPage=_pdf_footer_canvas(lang), onLaterPages=_pdf_footer_canvas(lang))
+    doc.build(elements, onFirstPage=_pdf_engine_footer(lang, "Analytics Report"), onLaterPages=_pdf_engine_footer(lang, "Analytics Report"))
     pdf_value = buffer.getvalue()
     buffer.close()
     return pdf_value
@@ -3568,105 +3512,10 @@ def generate_reports_dashboard_pdf(
         return f"{value}{suffix}"
 
     def _styled_table(data: List[List[Any]], col_widths: Optional[List[int]] = None, repeat_header: bool = True) -> Table:
-        wrapped_rows: List[List[Any]] = []
-        for row_idx, row in enumerate(data):
-            wrapped_row: List[Any] = []
-            for cell in row:
-                if isinstance(cell, Paragraph):
-                    wrapped_row.append(cell)
-                    continue
-                is_header = row_idx == 0
-                text = _pdf_paragraph_text(cell, bold=is_header)
-                if is_header:
-                    wrapped_row.append(Paragraph(text, table_header_style))
-                else:
-                    wrapped_row.append(Paragraph(text, table_body_style))
-            wrapped_rows.append(wrapped_row)
-        tbl = Table(
-            wrapped_rows,
-            colWidths=col_widths,
-            repeatRows=1 if repeat_header else 0,
-            hAlign="RIGHT" if lang == "ar" else "LEFT",
-        )
-        tbl.setStyle(
-            TableStyle(
-                [
-                    ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor(PDF_REPORT_PRIMARY_HEX)),
-                    ("TEXTCOLOR", (0, 0), (-1, 0), colors.whitesmoke),
-                    ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
-                    ("FONTSIZE", (0, 0), (-1, 0), 9),
-                    ("FONTSIZE", (0, 1), (-1, -1), 8),
-                    ("ALIGN", (0, 0), (-1, -1), "RIGHT" if lang == "ar" else "LEFT"),
-                    ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-                    ("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#9ca3af")),
-                    ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#f8fafc")]),
-                    ("LEFTPADDING", (0, 0), (-1, -1), 6),
-                    ("RIGHTPADDING", (0, 0), (-1, -1), 6),
-                    ("TOPPADDING", (0, 0), (-1, -1), 4),
-                    ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
-                ]
-            )
-        )
-        return tbl
+        return _pdf_engine_styled_table(data, lang, col_widths, repeat_header)
 
     buffer = io.BytesIO()
-    styles = getSampleStyleSheet()
-    title_style = ParagraphStyle(
-        name="ReportsDashTitle",
-        parent=styles["Title"],
-        fontSize=18,
-        textColor=colors.HexColor("#0f172a"),
-        spaceAfter=6,
-    )
-    subtitle_style = ParagraphStyle(
-        name="ReportsDashSubtitle",
-        parent=styles["Normal"],
-        fontSize=10,
-        textColor=colors.HexColor("#475569"),
-        spaceAfter=10,
-    )
-    section_style = ParagraphStyle(
-        name="ReportsDashSection",
-        parent=styles["Heading2"],
-        fontSize=12,
-        textColor=colors.HexColor(PDF_REPORT_PRIMARY_HEX),
-        spaceBefore=6,
-        spaceAfter=6,
-    )
-    cap_style = ParagraphStyle(
-        name="ReportsChartCaption",
-        parent=styles["Normal"],
-        fontSize=9,
-        textColor=colors.HexColor("#334155"),
-        spaceAfter=4,
-        leading=12,
-    )
-    table_header_style = ParagraphStyle(
-        name="ReportsTableHeaderCell",
-        parent=styles["Normal"],
-        fontName="Helvetica-Bold",
-        fontSize=8.5,
-        textColor=colors.whitesmoke,
-        leading=10,
-        wordWrap="CJK",
-    )
-    table_body_style = ParagraphStyle(
-        name="ReportsTableBodyCell",
-        parent=styles["Normal"],
-        fontSize=8,
-        textColor=colors.HexColor("#111827"),
-        leading=10,
-        wordWrap="CJK",
-    )
-    if lang == "ar":
-        title_style.alignment = TA_RIGHT
-        subtitle_style.alignment = TA_RIGHT
-        section_style.alignment = TA_RIGHT
-        cap_style.alignment = TA_RIGHT
-        table_header_style.alignment = TA_RIGHT
-        table_body_style.alignment = TA_RIGHT
-        table_header_style.wordWrap = "RTL"
-        table_body_style.wordWrap = "RTL"
+    section_style = _pdf_engine_section_style(lang)
 
     scope_label = format_scope_label(scope)
     sem = int(report.get("semester") or 1)
@@ -3693,62 +3542,44 @@ def generate_reports_dashboard_pdf(
     reports_title_text = _tr(reports_title_key, lang)
     if is_summary:
         reports_title_text = f"{reports_title_text} ({_tr('Summary metrics', lang)})"
-    elements.append(_pdf_cover_band())
-    elements.append(Spacer(1, 10))
-    generated_on_text = datetime.now(REPORT_TIMEZONE).strftime("%Y-%m-%d %H:%M")
-    elements.append(
-        KeepTogether(
-            [
-                Paragraph(_pdf_paragraph_text(reports_title_text, bold=True), title_style),
-                Paragraph(_pdf_paragraph_text(PDF_REPORT_ORG_NAME), subtitle_style),
-                Paragraph(f"<b>{_pdf_paragraph_text(scope_label)}</b>", subtitle_style),
-                Paragraph(_pdf_paragraph_text(term_sub), subtitle_style),
-                Paragraph(
-                    _pdf_paragraph_text(f"{_tr('Generated on', lang)} {generated_on_text}"),
-                    subtitle_style,
-                ),
-                _pdf_cover_meta_table(
-                    [
-                        (_tr("Scope", lang), scope_label),
-                        (_tr("Term", lang), term_sub),
-                        (_tr("Generated on", lang), generated_on_text),
-                        (_tr("Report", lang), reports_title_text),
-                    ],
-                    lang,
-                ),
-            ]
-        )
-    )
-    elements.append(Spacer(1, 10))
-    _pdf_append_executive_summary(elements, insights, section_style, subtitle_style, lang)
-    elements.append(
-        _pdf_kpi_cards_table(
-            [
-                (_tr("Total Students", lang), _fmt(report.get("total_students"))),
-                (_tr("Average Total Score", lang), _fmt(report.get("avg_total_score"))),
-                (_tr("On Level % (focus quarter)", lang), _fmt(report.get("exceeding_rate"), "%")),
-            ]
-        )
-    )
-    elements.append(Spacer(1, 12))
-    elements.append(
-        _pdf_story_cards_table(
-            [
-                (_tr("Executive Summary", lang), _pdf_clamp_text((insights or {}).get("analysis_strengths") or "-", max_chars=180)),
-                (_tr("Key Insights", lang), _tr("Visual dashboard", lang)),
-                (_tr("Recommendations", lang), _pdf_clamp_text((insights or {}).get("analysis_recommendations") or "-", max_chars=180)),
-            ],
-            lang,
-        )
-    )
-    elements.append(Spacer(1, 10))
-
-    elements.append(Paragraph(_pdf_paragraph_text(_tr("Visual dashboard", lang), bold=True), section_style))
     rq = qn
     focus_q = q1 if rq == 1 else q2
     dist_on_level = next((int(item.get("count") or 0) for item in distribution if str(item.get("level")) == "on_level"), 0)
     dist_approach = next((int(item.get("count") or 0) for item in distribution if str(item.get("level")) == "approach"), 0)
     dist_below = next((int(item.get("count") or 0) for item in distribution if str(item.get("level")) == "below"), 0)
+    support_count = len(report.get("students_needing_support") or [])
+    generated_on_text = datetime.now(REPORT_TIMEZONE).strftime("%Y-%m-%d %H:%M")
+    insights = insights or {}
+
+    _build_pdf_premium_intro(
+        elements,
+        report_title=reports_title_text,
+        scope_line=scope_label,
+        term_line=term_sub,
+        meta_rows=[
+            (_tr("Scope", lang), scope_label),
+            (_tr("Term", lang), term_sub),
+            (_tr("Generated on", lang), generated_on_text),
+            (_tr("Report", lang), reports_title_text),
+        ],
+        kpi_cards=[
+            (_tr("Total Students", lang), _fmt(report.get("total_students"))),
+            (_tr("Average Total Score", lang), _fmt(report.get("avg_total_score"))),
+            (_tr("On Level % (focus quarter)", lang), _fmt(report.get("exceeding_rate"), "%")),
+            (_tr("Approaching full score", lang), str(dist_approach)),
+            (_tr("Below Level", lang), str(dist_below)),
+            (_tr("Students Needing Support", lang), str(support_count)),
+        ],
+        insight_triplet=[
+            (_tr("Executive Summary", lang), _pdf_clamp_text(insights.get("analysis_strengths") or "-", max_chars=200)),
+            (_tr("Key Insights", lang), _pdf_clamp_text(insights.get("analysis_standout_data") or "-", max_chars=200)),
+            (_tr("Recommendations", lang), _pdf_clamp_text(insights.get("analysis_recommendations") or "-", max_chars=200)),
+        ],
+        insights=insights,
+        lang=lang,
+    )
+
+    elements.append(Paragraph(_pdf_paragraph_text(_tr("Visual dashboard", lang), bold=True), section_style))
     dist_no_data = next((int(item.get("count") or 0) for item in distribution if str(item.get("level")) == "no_data"), 0)
     notes = [
         f"{_tr('On Level', lang)}: {dist_on_level}",
@@ -3914,7 +3745,6 @@ def generate_reports_dashboard_pdf(
             support_table_data.append(["-", "-", "-", "-", "-", "-"])
         elements.append(_styled_table(support_table_data, col_widths=[110, 52, 48, 60, 140, 117]))
 
-        insights = insights or {}
         insight_rows = [
             [_tr("Insight", lang), _tr("Details", lang)],
             [_tr("Strengths", lang), _pdf_clamp_text((insights.get("analysis_strengths") or "").strip() or "-", max_chars=320)],
@@ -3928,7 +3758,7 @@ def generate_reports_dashboard_pdf(
         elements.append(Paragraph(_pdf_paragraph_text(_tr("Key Insights", lang), bold=True), section_style))
         elements.append(_styled_table(insight_rows, col_widths=[130, 380], repeat_header=True))
 
-    doc.build(elements, onFirstPage=_pdf_footer_canvas(lang), onLaterPages=_pdf_footer_canvas(lang))
+    doc.build(elements, onFirstPage=_pdf_engine_footer(lang, reports_title_text), onLaterPages=_pdf_engine_footer(lang, reports_title_text))
     pdf_value = buffer.getvalue()
     buffer.close()
     return pdf_value
