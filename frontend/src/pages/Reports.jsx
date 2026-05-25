@@ -306,16 +306,22 @@ export default function Reports() {
     <div className="dashboard-premium-shell space-y-6 sm:space-y-8" data-testid="reports-page">
       <DashboardPageHeader
         title={t("reports")}
-        subtitle={t("report_type")}
-        description={t("analytics_page_description")}
+        subtitle={t("hero_eyebrow_report_center")}
+        description={t("hero_desc_reports")}
         metaItems={[t(`term_${termScopeId}`), `Grade ${grade || "-"}`]}
         actions={
           <>
-            <Button onClick={handleGenerate} data-testid="reports-hero-generate" disabled={isTeacher && !availableGrades.length}>
+            <Button
+              className="page-hero-btn-secondary"
+              onClick={handleGenerate}
+              data-testid="reports-hero-generate"
+              disabled={isTeacher && !availableGrades.length}
+            >
               {t("generate_report")}
             </Button>
             <Button
               variant="secondary"
+              className="page-hero-btn-primary"
               onClick={() => handleDownload("pdf")}
               data-testid="reports-hero-download-pdf"
               disabled={!report || isExportingPdf}

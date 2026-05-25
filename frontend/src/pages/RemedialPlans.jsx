@@ -125,8 +125,7 @@ export default function RemedialPlans() {
   return (
     <div className="space-y-8" data-testid="remedial-page">
       <PageHeader
-        title={t("remedial_plans")}
-        subtitle={t("overview")}
+        pageKey="remedial_plans"
         testIdPrefix="remedial"
         action={
           <Button onClick={() => setIsDialogOpen(true)} data-testid="remedial-create-button">

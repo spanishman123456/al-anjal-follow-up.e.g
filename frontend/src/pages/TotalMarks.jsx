@@ -550,8 +550,7 @@ export default function TotalMarks() {
   return (
     <div className="space-y-8" data-testid="total-marks-page">
       <PageHeader
-        title={t("nav_total_marks")}
-        subtitle={t("overview")}
+        pageKey="total_marks"
         testIdPrefix="total-marks"
         action={
           <div className="flex flex-wrap gap-2">

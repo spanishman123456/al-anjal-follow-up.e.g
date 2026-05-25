@@ -60,8 +60,7 @@ export default function Calendar() {
   return (
     <div className="space-y-6" data-testid="calendar-page">
       <PageHeader
-        title={t("calendar")}
-        subtitle={t("overview")}
+        pageKey="calendar"
         testIdPrefix="calendar"
         action={
           <div className="flex items-center gap-3">

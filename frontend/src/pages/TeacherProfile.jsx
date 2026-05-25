@@ -121,7 +121,7 @@ export default function TeacherProfile() {
   if (loading && !teacherData) {
     return (
       <div className="space-y-6" data-testid="teacher-profile-page">
-        <PageHeader title={t("teacher_profile")} subtitle="" testIdPrefix="teacher-profile" />
+        <PageHeader pageKey="teacher_profile" testIdPrefix="teacher-profile" />
         <Card>
           <CardContent className="pt-6">
             <p className="text-muted-foreground">{t("loading") || "Loading…"}</p>
@@ -134,7 +134,7 @@ export default function TeacherProfile() {
   if (loadError && !teacherData) {
     return (
       <div className="space-y-6" data-testid="teacher-profile-page">
-        <PageHeader title={t("teacher_profile")} subtitle="" testIdPrefix="teacher-profile" />
+        <PageHeader pageKey="teacher_profile" testIdPrefix="teacher-profile" />
         <Card>
           <CardContent className="pt-6 space-y-4">
             <p className="text-muted-foreground">{t("teacher_profile_failed")}</p>
@@ -154,8 +154,8 @@ export default function TeacherProfile() {
   return (
     <div className="space-y-6" data-testid="teacher-profile-page">
       <PageHeader
-        title={t("teacher_profile")}
-        subtitle={teacher.name}
+        pageKey="teacher_profile"
+        badges={teacher.name ? [teacher.name] : []}
         testIdPrefix="teacher-profile"
         action={
           <Button variant="success" onClick={handleSave} data-testid="teacher-save-button">

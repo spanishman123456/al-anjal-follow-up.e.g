@@ -107,11 +107,7 @@ export default function Notifications() {
   if (loading && !logs.length) {
     return (
       <div className="space-y-6" data-testid="notifications-page">
-        <PageHeader
-          title={t("notifications")}
-          subtitle={t("overview")}
-          testIdPrefix="notifications"
-        />
+        <PageHeader pageKey="notifications" testIdPrefix="notifications" />
         <Card>
           <CardContent className="pt-6">
             <p className="text-sm text-muted-foreground">{t("refresh_data")}...</p>
@@ -124,8 +120,7 @@ export default function Notifications() {
   return (
     <div className="space-y-6" data-testid="notifications-page">
       <PageHeader
-        title={t("notifications")}
-        subtitle={t("overview")}
+        pageKey="notifications"
         testIdPrefix="notifications"
         action={
           <div className="flex flex-wrap items-center gap-2">

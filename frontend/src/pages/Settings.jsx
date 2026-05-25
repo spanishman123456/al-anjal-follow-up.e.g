@@ -365,11 +365,7 @@ export default function Settings() {
 
   return (
     <div className="space-y-8" data-testid="settings-page">
-      <PageHeader
-        title={t("settings")}
-        subtitle={t("overview")}
-        testIdPrefix="settings"
-      />
+      <PageHeader pageKey="settings" testIdPrefix="settings" />
 
       <section className="grid gap-6" data-testid="settings-sections">
         <Card data-testid="profile-card" ref={profileRef}>

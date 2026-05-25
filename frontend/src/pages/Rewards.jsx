@@ -127,11 +127,7 @@ export default function Rewards() {
   if (loading && !students.length) {
     return (
       <div className="space-y-8" data-testid="rewards-page">
-        <PageHeader
-          title={t("rewards")}
-          subtitle={t("overview")}
-          testIdPrefix="rewards"
-        />
+        <PageHeader pageKey="rewards" testIdPrefix="rewards" />
         <Card>
           <CardContent className="pt-6">
             <p className="text-sm text-muted-foreground">{t("refresh_data")}...</p>
@@ -189,11 +185,7 @@ export default function Rewards() {
 
   return (
     <div className="space-y-8" data-testid="rewards-page">
-      <PageHeader
-        title={t("rewards")}
-        subtitle={t("overview")}
-        testIdPrefix="rewards"
-      />
+      <PageHeader pageKey="rewards" testIdPrefix="rewards" />
 
       <section className="grid gap-4 md:grid-cols-3" data-testid="rewards-metrics">
         <Card>

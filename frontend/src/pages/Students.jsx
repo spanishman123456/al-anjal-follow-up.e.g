@@ -1062,8 +1062,7 @@ export default function Students() {
   return (
     <div className="space-y-8" data-testid="students-page">
       <PageHeader
-        title={t("assessment")}
-        subtitle={t("overview")}
+        pageKey="students"
         testIdPrefix="students"
         action={
           isTeacher ? (

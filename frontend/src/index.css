@@ -520,6 +520,14 @@ html:not(.dark) .login-top-sky {
         @apply rounded-[28px] border border-border/40 bg-gradient-to-b from-background via-background to-muted/20 p-3 sm:p-5 lg:p-6;
     }
 
+    /* Premium wide page hero (Analytics-style banner on all pages) */
+    .page-hero__actions .page-hero-btn-primary {
+        @apply border-0 bg-cyan-500 text-white shadow-md hover:bg-cyan-400 focus-visible:ring-cyan-300;
+    }
+    .page-hero__actions .page-hero-btn-secondary {
+        @apply border border-white/35 bg-white/5 text-white hover:bg-white/15 hover:text-white;
+    }
+
     /* Interactive list rows (dashboard, analytics lists) */
     .list-row-interactive {
         transition: background-color var(--motion-duration-smooth) var(--motion-ease-out),

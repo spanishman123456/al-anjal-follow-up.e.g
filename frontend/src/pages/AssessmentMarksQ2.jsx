@@ -522,8 +522,7 @@ export default function AssessmentMarksQ2() {
   return (
     <div className="space-y-8" data-testid="assessment-q2-marks-q2-page">
       <PageHeader
-        title={t("nav_quizzes_chapter_test")}
-        subtitle={t("overview")}
+        pageKey="assessment_marks_q2"
         testIdPrefix="assessment-marks-q2"
         action={
           <div className="flex flex-wrap gap-2">

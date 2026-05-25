@@ -36,7 +36,7 @@ export default function Teachers() {
 
   return (
     <div className="space-y-6" data-testid="teachers-page">
-      <PageHeader title={t("teachers")} subtitle={t("overview")} testIdPrefix="teachers" />
+      <PageHeader pageKey="teachers" testIdPrefix="teachers" />
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3" data-testid="teachers-grid">
         {teachers.length ? (
           teachers.map((teacher) => (

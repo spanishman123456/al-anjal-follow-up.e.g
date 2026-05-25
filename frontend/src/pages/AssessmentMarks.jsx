@@ -526,8 +526,7 @@ export default function AssessmentMarks() {
   return (
     <div className="space-y-8" data-testid="assessment-marks-page">
       <PageHeader
-        title={t("nav_quizzes_chapter_test")}
-        subtitle={t("overview")}
+        pageKey="assessment_marks"
         testIdPrefix="assessment-marks"
         action={
           <div className="flex flex-wrap gap-2">

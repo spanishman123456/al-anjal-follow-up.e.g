@@ -165,14 +165,15 @@ export default function Dashboard() {
   return (
     <div className="space-y-8" data-testid="dashboard-page">
       <PageHeader
-        title={t("dashboard")}
-        subtitle={t("overview")}
+        pageKey="dashboard"
+        badges={[
+          `${t("academic_year")}: ${academicYear}`,
+          semester === "semester2" ? t("semester_two") : t("semester_one"),
+          `${t("quarter")} ${quarter}`,
+        ]}
         testIdPrefix="dashboard"
         action={
           <div className="page-toolbar">
-            <Badge variant="outline" data-testid="academic-year-badge">
-              {t("academic_year")}: {academicYear}
-            </Badge>
             <Select value={semester} onValueChange={setSemester}>
               <SelectTrigger className="w-[180px]" data-testid="semester-list">
                 <SelectValue placeholder={t("semesters")} />
@@ -188,6 +189,7 @@ export default function Dashboard() {
             </Select>
             <Button
               variant="outline"
+              className="page-hero-btn-secondary"
               onClick={fetchSummary}
               disabled={loading}
               data-testid="dashboard-refresh-button"

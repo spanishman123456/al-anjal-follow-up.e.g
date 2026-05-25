@@ -542,8 +542,7 @@ export default function FinalExamsAssessmentQ2() {
   return (
     <div className="space-y-8" data-testid="final-exams-q2-assessment-page">
       <PageHeader
-        title={t("nav_final_exams")}
-        subtitle={t("overview")}
+        pageKey="final_exams_q2"
         testIdPrefix="final-exams-q2"
         action={
           <div className="flex flex-wrap gap-2">

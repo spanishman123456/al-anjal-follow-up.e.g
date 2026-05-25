@@ -135,8 +135,7 @@ export default function LessonPlanGenerator() {
   return (
     <div className="space-y-8" data-testid="lesson-plan-generator-page">
       <PageHeader
-        title={t("lesson_plan_generator")}
-        subtitle={t("overview")}
+        pageKey="lesson_plan"
         testIdPrefix="lesson-plan"
         action={
           <div className="flex flex-wrap items-center gap-3">

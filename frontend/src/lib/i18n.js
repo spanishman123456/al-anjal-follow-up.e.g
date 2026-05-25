@@ -38,6 +38,50 @@ export const translations = {
     analytics: "Analytics",
     analytics_page_description:
       "Interactive performance dashboard for the selected term, class, and student filters.",
+    hero_eyebrow_overview: "OVERVIEW",
+    hero_eyebrow_analysis_term: "ANALYSIS TERM",
+    hero_eyebrow_report_center: "REPORT CENTER",
+    hero_eyebrow_student_records: "STUDENT RECORDS",
+    hero_eyebrow_classes: "CLASS MANAGEMENT",
+    hero_eyebrow_quiz_performance: "QUIZ PERFORMANCE",
+    hero_eyebrow_practical_performance: "PRACTICAL PERFORMANCE",
+    hero_eyebrow_performance_levels: "PERFORMANCE LEVELS",
+    hero_eyebrow_remedial: "REMEDIAL PROGRAMS",
+    hero_eyebrow_rewards: "REWARDS",
+    hero_eyebrow_lesson_plan: "LESSON PLANNING",
+    hero_eyebrow_admin_management: "ADMIN MANAGEMENT",
+    hero_eyebrow_teacher_profile: "TEACHER PROFILE",
+    hero_eyebrow_system_settings: "SYSTEM SETTINGS",
+    hero_eyebrow_calendar: "ACADEMIC CALENDAR",
+    hero_eyebrow_notifications: "NOTIFICATIONS",
+    hero_desc_dashboard:
+      "A central overview of student progress, assessment completion, support needs, and key academic indicators.",
+    hero_desc_reports:
+      "Generate, download, and review academic reports that summarize student performance and progress.",
+    hero_desc_students:
+      "Manage and review student information, enrollment status, class placement, and academic follow-up data.",
+    hero_desc_classes:
+      "Organize class sections, enrollment counts, and the structure used across assessments and reports.",
+    hero_desc_quiz_results:
+      "Review quiz and chapter test scores, identify missing submissions, and track understanding for the selected period.",
+    hero_desc_final_practical:
+      "Track final practical and theory exam results and evaluate students' applied skills and readiness.",
+    hero_desc_total_marks:
+      "View combined quarter marks and classify students by on-level, approaching full score, or below level.",
+    hero_desc_remedial_plans:
+      "Create and manage remedial support plans for students who need additional academic follow-up.",
+    hero_desc_rewards:
+      "Recognize student achievement and manage reward records tied to performance and effort.",
+    hero_desc_teachers:
+      "Manage system users, teacher profiles, roles, and administrative access for the follow-up record system.",
+    hero_desc_teacher_profile:
+      "View and update a teacher's profile, assignments, and account details.",
+    hero_desc_settings:
+      "Configure academic year, semester, quarter, system preferences, and report settings.",
+    hero_desc_calendar:
+      "Plan and sync the academic calendar, schedules, and key school dates.",
+    hero_desc_notifications:
+      "Review system alerts, submission notices, and messages for teachers and administrators.",
     analytics_kpi_section: "Key metrics",
     analytics_visual_insights: "Visual insights",
     analytics_loading: "Loading analytics…",
@@ -541,6 +585,50 @@ export const translations = {
     analytics: "التحليلات",
     analytics_page_description:
       "لوحة أداء تفاعلية للفترة والصف والطالب المحددين.",
+    hero_eyebrow_overview: "نظرة عامة",
+    hero_eyebrow_analysis_term: "فترة التحليل",
+    hero_eyebrow_report_center: "مركز التقارير",
+    hero_eyebrow_student_records: "سجلات الطلاب",
+    hero_eyebrow_classes: "إدارة الفصول",
+    hero_eyebrow_quiz_performance: "أداء الاختبارات القصيرة",
+    hero_eyebrow_practical_performance: "الأداء العملي",
+    hero_eyebrow_performance_levels: "مستويات الأداء",
+    hero_eyebrow_remedial: "خطط التقوية",
+    hero_eyebrow_rewards: "المكافآت",
+    hero_eyebrow_lesson_plan: "تخطيط الدروس",
+    hero_eyebrow_admin_management: "إدارة النظام",
+    hero_eyebrow_teacher_profile: "ملف المعلم",
+    hero_eyebrow_system_settings: "إعدادات النظام",
+    hero_eyebrow_calendar: "التقويم الدراسي",
+    hero_eyebrow_notifications: "الإشعارات",
+    hero_desc_dashboard:
+      "نظرة مركزية على تقدم الطلاب، اكتمال التقييمات، احتياجات الدعم، والمؤشرات الأكاديمية الرئيسية.",
+    hero_desc_reports:
+      "إنشاء وتنزيل ومراجعة التقارير الأكاديمية التي تلخص أداء الطلاب وتقدمهم.",
+    hero_desc_students:
+      "إدارة ومراجعة بيانات الطلاب، حالة التسجيل، توزيع الفصول، ومتابعة الأداء الأكاديمي.",
+    hero_desc_classes:
+      "تنظيم الشعب والفصول وأعداد التسجيل والهيكل المستخدم في التقييمات والتقارير.",
+    hero_desc_quiz_results:
+      "مراجعة درجات الاختبارات القصيرة واختبارات الفصل وتحديد الغياب ومتابعة الفهم للفترة المحددة.",
+    hero_desc_final_practical:
+      "متابعة نتائج الامتحانات العملية والنظرية وتقييم مهارات الطلاب التطبيقية واستعدادهم.",
+    hero_desc_total_marks:
+      "عرض مجموع درجات الربع وتصنيف الطلاب حسب على المستوى أو يقتربون من الدرجة الكاملة أو دون المستوى.",
+    hero_desc_remedial_plans:
+      "إنشاء وإدارة خطط التقوية للطلاب الذين يحتاجون متابعة أكاديمية إضافية.",
+    hero_desc_rewards:
+      "تكريم إنجازات الطلاب وإدارة سجلات المكافآت المرتبطة بالأداء والجهد.",
+    hero_desc_teachers:
+      "إدارة مستخدمي النظام وملفات المعلمين والأدوار وصلاحيات الإدارة لنظام المتابعة.",
+    hero_desc_teacher_profile:
+      "عرض وتحديث ملف المعلم وتكليفاته وتفاصيل حسابه.",
+    hero_desc_settings:
+      "ضبط السنة الدراسية والفصل والربع وتفضيلات النظام وإعدادات التقارير.",
+    hero_desc_calendar:
+      "تخطيط ومزامنة التقويم الدراسي والجداول والمواعيد المهمة.",
+    hero_desc_notifications:
+      "مراجعة تنبيهات النظام وإشعارات التسليم والرسائل للمعلمين والإدارة.",
     analytics_kpi_section: "المؤشرات الرئيسية",
     analytics_visual_insights: "رؤى بصرية",
     analytics_loading: "جاري تحميل التحليلات…",

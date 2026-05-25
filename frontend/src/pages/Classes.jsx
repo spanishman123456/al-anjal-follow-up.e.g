@@ -218,8 +218,7 @@ export default function Classes() {
   return (
     <div className="space-y-8" data-testid="classes-page">
       <PageHeader
-        title={t("classes")}
-        subtitle={t("overview")}
+        pageKey="classes"
         testIdPrefix="classes"
         action={
           <div className="flex flex-wrap items-center gap-2">

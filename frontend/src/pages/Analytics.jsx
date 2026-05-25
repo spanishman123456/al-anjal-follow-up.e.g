@@ -613,7 +613,7 @@ export default function Analytics() {
       <div className="analytics-page dashboard-premium-shell page-enter space-y-8" data-testid="analytics-page">
         <DashboardPageHeader
           title={t("analytics")}
-          subtitle={t("analytics_term_scope")}
+          subtitle={t("hero_eyebrow_analysis_term")}
           description={t("analytics_page_description")}
           metaItems={[t(`term_${termScopeId}`)]}
           testId="analytics-hero-loading"
@@ -631,20 +631,26 @@ export default function Analytics() {
     <div className="analytics-page dashboard-premium-shell page-enter space-y-6 sm:space-y-8" data-testid="analytics-page">
       <DashboardPageHeader
         title={t("analytics")}
-        subtitle={t("analytics_term_scope")}
+        subtitle={t("hero_eyebrow_analysis_term")}
         description={t("analytics_page_description")}
         metaItems={[t(`term_${termScopeId}`), selectedClassId === "all" ? t("all_classes") : t("class_name")]}
         actions={
           <>
             <Button
               variant="secondary"
+              className="page-hero-btn-primary"
               onClick={() => handleDownload("pdf")}
               data-testid="analytics-hero-download-pdf"
               disabled={isExportingPdf}
             >
               {isExportingPdf ? "Preparing PDF..." : t("download_pdf")}
             </Button>
-            <Button variant="outline" onClick={() => setRefreshKey((k) => k + 1)} data-testid="analytics-hero-refresh">
+            <Button
+              variant="outline"
+              className="page-hero-btn-secondary"
+              onClick={() => setRefreshKey((k) => k + 1)}
+              data-testid="analytics-hero-refresh"
+            >
               {t("refresh_data")}
             </Button>
           </>
