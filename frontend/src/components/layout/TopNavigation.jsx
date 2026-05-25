@@ -159,16 +159,18 @@ export function TopNavigation({ groups, isRTL, t, prefetchRoute }) {
       data-testid="top-navigation"
       aria-label="Main navigation"
     >
-      <div className="mx-auto flex max-w-[1600px] items-center gap-3">
-        <MobileNavSheet
-          groups={groups}
-          pathname={pathname}
-          isRTL={isRTL}
-          t={t}
-          prefetchRoute={prefetchRoute}
-        />
+      <div className="relative mx-auto flex w-full max-w-[1600px] items-center justify-center">
+        <div className="absolute start-0 top-1/2 z-10 -translate-y-1/2 lg:hidden">
+          <MobileNavSheet
+            groups={groups}
+            pathname={pathname}
+            isRTL={isRTL}
+            t={t}
+            prefetchRoute={prefetchRoute}
+          />
+        </div>
         <div
-          className="hidden min-w-0 flex-1 flex-wrap items-center gap-2 lg:flex"
+          className="hidden flex-wrap items-center justify-center gap-2 lg:flex"
           data-testid="top-nav-desktop"
         >
           {groups.map((group) => {

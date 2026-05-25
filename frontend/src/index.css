@@ -382,6 +382,11 @@ html:not(.dark) .main-hero-sky::before {
     background: transparent;
 }
 
+.top-nav-bar [data-testid="top-nav-desktop"] {
+    width: 100%;
+    justify-content: center;
+}
+
 .top-nav-tab--idle {
     color: #e8ecf4;
     background: rgba(255, 255, 255, 0.06);
