@@ -2,11 +2,8 @@ import { useState, useEffect, useRef } from "react";
 import { useOutletContext, Link } from "react-router-dom";
 import { api } from "@/lib/api";
 import { getApiErrorMessage } from "@/lib/api";
-import {
-  TERM_SCOPES,
-  termScopeIdFromOutlet,
-  resolveTermScope,
-} from "@/lib/academicScope";
+import { termScopeIdFromOutlet, resolveTermScope } from "@/lib/academicScope";
+import { AcademicTermSelect } from "@/components/layout/AcademicTermSelect";
 import { buildAutoInsightsFromReport } from "@/lib/insightAutofill";
 import { useTranslations } from "@/lib/i18n";
 import { getClassGradeValue } from "@/lib/utils";
@@ -60,12 +57,7 @@ export default function Reports() {
   const { language, semester, quarter, profile, classes: contextClasses = [] } = useOutletContext();
   const t = useTranslations(language);
   const isTeacher = profile?.role_name === "Teacher";
-  const [termScopeId, setTermScopeId] = useState(() =>
-    termScopeIdFromOutlet(semester, quarter),
-  );
-  useEffect(() => {
-    setTermScopeId(termScopeIdFromOutlet(semester, quarter));
-  }, [semester, quarter]);
+  const termScopeId = termScopeIdFromOutlet(semester, quarter);
   const term = resolveTermScope(termScopeId);
   const apiSemester = term.semester;
   const apiQuarter = term.quarter;
@@ -163,7 +155,7 @@ export default function Reports() {
   useEffect(() => {
     if (!grade || !hasReportRef.current) return;
     fetchReportRef.current();
-  }, [grade, termScopeId]);
+  }, [grade, semester, quarter]);
 
   useEffect(() => {
     if (!report) return;
@@ -339,18 +331,7 @@ export default function Reports() {
         filters={
           <>
             <FilterField label={t("analytics_term_scope")}>
-              <Select value={termScopeId} onValueChange={setTermScopeId}>
-                <SelectTrigger className="w-full min-w-[12rem] sm:w-48" data-testid="reports-term-scope">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {TERM_SCOPES.map((s) => (
-                    <SelectItem key={s.id} value={s.id} data-testid={`reports-term-${s.id}`}>
-                      {t(`term_${s.id}`)}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <AcademicTermSelect testIdPrefix="reports-term" />
             </FilterField>
             <FilterField label={t("grade")}>
               <Select value={grade} onValueChange={setGrade} disabled={!availableGrades.length}>

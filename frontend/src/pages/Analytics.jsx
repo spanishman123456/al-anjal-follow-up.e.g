@@ -15,12 +15,12 @@ import {
 } from "recharts";
 import { api, getApiErrorMessage } from "@/lib/api";
 import {
-  TERM_SCOPES,
   termScopeIdFromOutlet,
   resolveTermScope,
   displayQuarterLabel,
   displayQuarterNumber,
 } from "@/lib/academicScope";
+import { AcademicTermSelect } from "@/components/layout/AcademicTermSelect";
 import { buildAutoInsightsFromOverview } from "@/lib/insightAutofill";
 import { useTranslations } from "@/lib/i18n";
 import { sortByClassOrder } from "@/lib/utils";
@@ -137,12 +137,7 @@ const AnalyticsTooltip = ({ active, payload, label }) => {
 export default function Analytics() {
   const { language, semester, quarter } = useOutletContext();
   const t = useTranslations(language);
-  const [termScopeId, setTermScopeId] = useState(() =>
-    termScopeIdFromOutlet(semester, quarter),
-  );
-  useEffect(() => {
-    setTermScopeId(termScopeIdFromOutlet(semester, quarter));
-  }, [semester, quarter]);
+  const termScopeId = termScopeIdFromOutlet(semester, quarter);
   const term = resolveTermScope(termScopeId);
   const apiSemester = term.semester;
   const apiQuarter = term.quarter;
@@ -663,18 +658,7 @@ export default function Analytics() {
         filters={
           <>
             <FilterField label={t("analytics_term_scope")}>
-              <Select value={termScopeId} onValueChange={setTermScopeId}>
-                <SelectTrigger className="w-full min-w-[12rem] sm:w-48" data-testid="analytics-term-scope">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {TERM_SCOPES.map((s) => (
-                    <SelectItem key={s.id} value={s.id} data-testid={`analytics-term-${s.id}`}>
-                      {t(`term_${s.id}`)}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <AcademicTermSelect testIdPrefix="analytics-term" />
             </FilterField>
             <FilterField label={t("classes")}>
               <Select

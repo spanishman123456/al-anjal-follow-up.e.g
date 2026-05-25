@@ -14,7 +14,8 @@ import {
 import { toast } from "sonner";
 import { api, getApiErrorMessage } from "@/lib/api";
 import { useTranslations } from "@/lib/i18n";
-import { displayQuarterNumber } from "@/lib/academicScope";
+import { displayQuarterNumber, termScopeIdFromOutlet } from "@/lib/academicScope";
+import { AcademicTermSelect } from "@/components/layout/AcademicTermSelect";
 import { sortByClassOrder } from "@/lib/utils";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { ExpandableSection } from "@/components/ExpandableSection";
@@ -39,9 +40,10 @@ const formatScore = (value, suffix = "") => {
 };
 
 export default function Dashboard() {
-  const { language, semester, setSemester, quarter, academicYear, profile } = useOutletContext();
+  const { language, semester, quarter, academicYear, profile } = useOutletContext();
   const t = useTranslations(language);
   const semesterNumber = semester === "semester2" ? 2 : 1;
+  const termScopeId = termScopeIdFromOutlet(semester, quarter);
   const isTeacher = profile?.role_name === "Teacher";
   const [summary, setSummary] = useState(null);
   const [missedAssessments, setMissedAssessments] = useState(null);
@@ -168,25 +170,15 @@ export default function Dashboard() {
         pageKey="dashboard"
         badges={[
           `${t("academic_year")}: ${academicYear}`,
-          semester === "semester2" ? t("semester_two") : t("semester_one"),
-          `${t("quarter")} ${quarter}`,
+          t(`term_${termScopeId}`),
         ]}
         testIdPrefix="dashboard"
         action={
           <div className="page-toolbar">
-            <Select value={semester} onValueChange={setSemester}>
-              <SelectTrigger className="w-[180px]" data-testid="semester-list">
-                <SelectValue placeholder={t("semesters")} />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="semester1" data-testid="semester-one-button">
-                  {t("semester_one")}
-                </SelectItem>
-                <SelectItem value="semester2" data-testid="semester-two-button">
-                  {t("semester_two")}
-                </SelectItem>
-              </SelectContent>
-            </Select>
+            <AcademicTermSelect
+              testIdPrefix="dashboard-term"
+              triggerClassName="w-[min(100%,240px)] sm:w-[240px] border-border bg-background text-foreground"
+            />
             <Button
               variant="outline"
               className="page-hero-btn-secondary"

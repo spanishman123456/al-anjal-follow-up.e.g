@@ -36,6 +36,10 @@ import {
 import { SocialLinks } from "@/components/SocialLinks";
 import { cn } from "@/lib/utils";
 import {
+  applySemesterQuarterSelectValue,
+  semesterQuarterSelectValue,
+} from "@/lib/academicScope";
+import {
   loadAnalyticsPage,
   loadAssessmentMarksPage,
   loadAssessmentMarksQ2Page,
@@ -361,12 +365,10 @@ export const AppShell = ({
             <span className="text-[#7ED7F7]">{t("academic_year")}:</span> {academicYear}
           </div>
           <Select
-            value={`${semester}-${quarter}`}
-            onValueChange={(value) => {
-              const [s, q] = value.split("-");
-              if (s) setSemester(s === "semester2" ? "semester2" : "semester1");
-              if (q) setQuarter(parseInt(q, 10) === 2 ? 2 : 1);
-            }}
+            value={semesterQuarterSelectValue(semester, quarter)}
+            onValueChange={(value) =>
+              applySemesterQuarterSelectValue(value, setSemester, setQuarter)
+            }
             data-testid="semester-quarter-select"
           >
             <SelectTrigger
