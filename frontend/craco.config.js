@@ -2,6 +2,11 @@
 const path = require("path");
 require("dotenv").config();
 
+// CRA looks for "ESLintWebpackPlugin" but the package exports "ESLintPlugin" — disable by default
+if (process.env.DISABLE_ESLINT_PLUGIN == null) {
+  process.env.DISABLE_ESLINT_PLUGIN = "true";
+}
+
 // Check if we're in development/preview mode (not production build)
 // Craco sets NODE_ENV=development for start, NODE_ENV=production for build
 const isDevServer = process.env.NODE_ENV !== "production";
@@ -9,7 +14,8 @@ const isDevServer = process.env.NODE_ENV !== "production";
 // Environment variable overrides
 const config = {
   enableHealthCheck: process.env.ENABLE_HEALTH_CHECK === "true",
-  enableVisualEdits: isDevServer, // Only enable during dev server
+  // Visual-edits Babel plugin is opt-in (set ENABLE_VISUAL_EDITS=true for Cursor live edits)
+  enableVisualEdits: isDevServer && process.env.ENABLE_VISUAL_EDITS === "true",
 };
 
 // Conditionally load visual edits modules only in dev mode

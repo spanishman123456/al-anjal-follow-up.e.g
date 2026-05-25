@@ -16,10 +16,12 @@ export function ChartCard({
   return (
     <article
       className={cn(
-        "chart-card flex flex-col overflow-hidden rounded-3xl border border-border/60 bg-gradient-to-br shadow-sm transition-all duration-smooth hover:-translate-y-0.5 hover:shadow-xl",
+        "chart-card flex flex-col rounded-3xl border border-border/60 bg-gradient-to-br shadow-sm transition-all duration-smooth hover:-translate-y-0.5 hover:shadow-xl",
+        span === "donut" ? "chart-card--donut overflow-visible" : "overflow-hidden",
         cardTone,
         span === "full" && "lg:col-span-2",
         span === "hero" && "lg:col-span-3",
+        span === "donut" && "col-span-full lg:col-span-3",
         className,
       )}
       data-testid={testId}
@@ -49,7 +51,14 @@ export function ChartCard({
           ) : null}
         </div>
       </header>
-      <div className="flex flex-1 flex-col px-4 py-4 sm:px-6 sm:py-5">{children}</div>
+      <div
+        className={cn(
+          "flex flex-1 flex-col px-4 py-4 sm:px-6 sm:py-5",
+          span === "donut" && "overflow-visible",
+        )}
+      >
+        {children}
+      </div>
       {insight ? (
         <footer className="border-t border-border/50 bg-muted/20 px-5 py-3 text-xs leading-relaxed text-muted-foreground">
           {insight}

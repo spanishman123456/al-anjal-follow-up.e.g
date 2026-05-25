@@ -19,6 +19,7 @@ import {
   termScopeIdFromOutlet,
   resolveTermScope,
   displayQuarterLabel,
+  displayQuarterNumber,
 } from "@/lib/academicScope";
 import { buildAutoInsightsFromOverview } from "@/lib/insightAutofill";
 import { useTranslations } from "@/lib/i18n";
@@ -562,7 +563,7 @@ export default function Analytics() {
       const url = window.URL.createObjectURL(new Blob([response.data]));
       const link = document.createElement("a");
       link.href = url;
-      const fnBase = `analytics_s${apiSemester}_q${apiQuarter}${
+      const fnBase = `analytics_s${apiSemester}_q${displayQuarterNumber(apiSemester, apiQuarter)}${
         selectedClassId !== "all"
           ? `_${selectedClassId.replace(/[^a-zA-Z0-9]/g, "").slice(0, 24)}`
           : ""
@@ -936,6 +937,7 @@ export default function Analytics() {
             summary={!isStudentScoped ? `${focusOnLevelRate}%` : undefined}
             summaryLabel={!isStudentScoped ? t("on_level") : undefined}
             testId="analytics-board-donut"
+            span="donut"
             insight={isStudentScoped ? t("analytics_student_component_share_sub") : t("visual_board_chart_pass_split_sub")}
           >
             {isStudentScoped ? (
@@ -944,12 +946,13 @@ export default function Analytics() {
                   name: item.name,
                   legendName: item.legendName,
                   value: item.score,
+                  share: item.share,
                   fill: item.fill,
                   opacity: item.opacity,
                 }))}
                 centerValue={selectedStudentTermTotal}
                 centerCaption={t("total_score")}
-                height={260}
+                height={300}
               />
             ) : (
               <PassSplitDonut
@@ -959,7 +962,7 @@ export default function Analytics() {
                 belowLabel={t("visual_board_below_level")}
                 noDataLabel={t("no_data")}
                 centerCaption={t("on_level")}
-                height={260}
+                height={280}
               />
             )}
           </ChartCard>

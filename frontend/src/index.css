@@ -355,14 +355,66 @@ html.dark .App {
  * Light mode only: navy “night sky” band (header area) — not full page.
  * Matches reference hero background treatment.
  */
-html:not(.dark) .main-hero-sky {
+html:not(.dark) .main-hero-sky,
+.app-chrome {
     position: relative;
+    background-color: #0d1222;
+    background-image:
+        radial-gradient(ellipse 80% 120% at 10% -20%, rgba(139, 43, 236, 0.22) 0%, transparent 55%),
+        radial-gradient(ellipse 70% 90% at 95% 0%, rgba(230, 30, 143, 0.14) 0%, transparent 50%),
+        linear-gradient(180deg, #0d1222 0%, #161c31 55%, #1a2038 100%);
+}
+
+html.dark .app-chrome {
     background-color: #0a0e1a;
-    background-image: linear-gradient(180deg, #0a0e1a 0%, #131c30 100%);
+    background-image:
+        radial-gradient(ellipse 80% 120% at 10% -20%, rgba(139, 43, 236, 0.18) 0%, transparent 55%),
+        radial-gradient(ellipse 70% 90% at 95% 0%, rgba(230, 30, 143, 0.12) 0%, transparent 50%),
+        linear-gradient(180deg, #0a0e1a 0%, #121a2e 100%);
 }
 
 html:not(.dark) .main-hero-sky::before {
     content: none;
+}
+
+/* Top navigation (Al Mubarmij Workshop–style pills) */
+.top-nav-bar {
+    background: transparent;
+}
+
+.top-nav-tab--idle {
+    color: #e8ecf4;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.top-nav-tab--idle:hover {
+    color: #ffffff;
+    background: rgba(255, 255, 255, 0.12);
+    border-color: rgba(126, 215, 247, 0.35);
+    box-shadow: 0 0 0 1px rgba(139, 43, 236, 0.2);
+}
+
+.top-nav-tab--active {
+    color: #ffffff;
+    background: linear-gradient(135deg, #8b2bec 0%, #c626a0 48%, #e91e8f 100%);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    box-shadow:
+        0 4px 18px rgba(139, 43, 236, 0.35),
+        0 0 0 1px rgba(126, 215, 247, 0.15);
+}
+
+.top-nav-menu-btn {
+    color: #ffffff;
+}
+
+.app-site-footer {
+    border-top: 1px solid hsl(var(--border) / 0.6);
+    background: hsl(var(--section-alt-2));
+}
+
+.app-site-footer a {
+    transition: color 0.2s ease;
 }
 
 /* Login (light): top sky strip only */
@@ -496,6 +548,88 @@ html:not(.dark) .login-top-sky {
 
     .analytics-chart-grid-premium {
         @apply grid gap-4 md:grid-cols-2 lg:grid-cols-3;
+    }
+
+    /* Donut/pie: dedicated text column + fixed chart column (no shared cramped flex) */
+    .donut-layout {
+        display: grid;
+        width: 100%;
+        grid-template-columns: minmax(0, 1fr);
+        gap: 2rem;
+        align-items: center;
+    }
+
+    @media (min-width: 1024px) {
+        .donut-layout {
+            grid-template-columns: minmax(200px, 1fr) 300px;
+            column-gap: 3rem;
+            row-gap: 1.5rem;
+        }
+    }
+
+    .donut-text-panel {
+        min-width: 0;
+        overflow-wrap: anywhere;
+        word-break: break-word;
+        padding-right: 0.25rem;
+    }
+
+    .donut-legend-list--dense {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr);
+        gap: 0.625rem 1.5rem;
+    }
+
+    @media (min-width: 640px) {
+        .donut-legend-list--dense {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+    }
+
+    .donut-chart-panel-wrap {
+        position: relative;
+        display: flex;
+        flex-shrink: 0;
+        align-items: center;
+        justify-content: center;
+        width: 100%;
+        max-width: 300px;
+        margin-inline: auto;
+    }
+
+    @media (min-width: 1024px) {
+        .donut-chart-panel-wrap {
+            width: 300px;
+            min-width: 300px;
+            max-width: 300px;
+            margin-inline: 0;
+            justify-content: flex-end;
+        }
+    }
+
+    .donut-chart-panel {
+        position: relative;
+        flex-shrink: 0;
+        width: 260px;
+        height: 260px;
+        min-width: 260px;
+        min-height: 260px;
+    }
+
+    @media (max-width: 1023px) {
+        .donut-chart-panel {
+            width: min(260px, 100%);
+            min-width: 0;
+        }
+    }
+
+    .chart-card--donut {
+        overflow: visible;
+    }
+
+    .chart-card--donut > div:last-child,
+    .chart-card--donut > footer {
+        overflow: visible;
     }
 
     .story-card {

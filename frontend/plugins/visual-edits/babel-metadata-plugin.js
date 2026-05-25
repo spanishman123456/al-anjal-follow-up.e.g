@@ -853,6 +853,7 @@ const babelMetadataPlugin = ({ types: t }) => {
 
       let result = null;
 
+      try {
       traverse(ast, {
         ImportDeclaration(importPath) {
           if (result) return;
@@ -872,8 +873,11 @@ const babelMetadataPlugin = ({ types: t }) => {
           }
           if (!localName) return;
 
-          // Search for usages of this component
-          importPath.parentPath.parentPath.traverse({
+          // Search for usages of this component (Program root — parentPath chain is not reliable)
+          const programPath = importPath.findParent((p) => p.isProgram());
+          if (!programPath) return;
+
+          programPath.traverse({
             JSXOpeningElement(jsxPath) {
               if (result) return;
 
@@ -910,6 +914,9 @@ const babelMetadataPlugin = ({ types: t }) => {
           });
         }
       });
+      } catch (_crossFileErr) {
+        // Skip files where lazy cross-file prop analysis cannot traverse safely
+      }
 
       if (result) return result;
     }

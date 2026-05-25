@@ -2379,10 +2379,23 @@ def _pdf_focus_quarter_total(student: Dict[str, Any], report_quarter: int) -> An
     return student.get("quarter1_total")
 
 
+def _display_quarter_number(semester: int, quarter: int) -> int:
+    """Match frontend displayQuarterNumber (S2 internal Q1 -> displayed Q3)."""
+    sem = int(semester or 1)
+    q = 2 if int(quarter or 1) == 2 else 1
+    return (q + 2) if sem == 2 else q
+
+
+def _pdf_term_display_label(semester: int, quarter: int, lang: str = "en") -> str:
+    sem = int(semester or 1)
+    q_disp = _display_quarter_number(sem, quarter)
+    return f"{_tr('Semester', lang)} {sem} · {_tr('Quarter', lang)} {q_disp}"
+
+
 def _pdf_term_short_label(report: Dict[str, Any]) -> str:
     sem = int(report.get("semester") or 1)
     qn = int(report.get("quarter") or 1)
-    return f"S{sem}·Q{qn}"
+    return f"S{sem}·Q{_display_quarter_number(sem, qn)}"
 
 
 def create_analytics_class_area_chart(class_rows: List[Dict[str, Any]]) -> io.BytesIO:
@@ -2700,6 +2713,83 @@ def _pdf_wrap_card(title: str, content: Any, lang: str = "en", col_width: float 
     return card
 
 
+def _pdf_donut_split_panel(
+    title: str,
+    subtitle: str,
+    chart_image: Optional[io.BytesIO],
+    notes: List[str],
+    lang: str = "en",
+    panel_width: float = 255,
+    chart_width: float = 118,
+    chart_height: float = 118,
+) -> Table:
+    """Donut/pie card: legend text left, chart right — no stacked overlap."""
+    code = _normalize_lang(lang)
+    title_style = ParagraphStyle(
+        name=f"PdfDonutTitle_{title[:8]}",
+        fontSize=9.5,
+        leading=12,
+        textColor=colors.HexColor("#0f172a"),
+        alignment=2 if code == "ar" else 0,
+    )
+    sub_style = ParagraphStyle(
+        name=f"PdfDonutSub_{title[:8]}",
+        fontSize=8,
+        leading=11,
+        textColor=colors.HexColor("#64748b"),
+        alignment=2 if code == "ar" else 0,
+    )
+    note_style = ParagraphStyle(
+        name=f"PdfDonutNote_{title[:8]}",
+        fontSize=8,
+        leading=12,
+        textColor=colors.HexColor("#334155"),
+        alignment=2 if code == "ar" else 0,
+        wordWrap="CJK",
+    )
+    gap = 36 if panel_width >= 400 else 18
+    text_col_w = max(panel_width - chart_width - gap - 24, 120)
+    note_text = "\n".join(f"• {line}" for line in notes if str(line).strip())
+    text_cell = Paragraph(_pdf_paragraph_text(note_text or "-"), note_style)
+    if chart_image is not None:
+        chart_cell = RLImage(chart_image, width=chart_width, height=chart_height)
+    else:
+        chart_cell = Paragraph(_pdf_paragraph_text(_tr("No Data", lang)), sub_style)
+    body = Table([[text_cell, chart_cell]], colWidths=[text_col_w, chart_width], hAlign="LEFT")
+    body.setStyle(
+        TableStyle(
+            [
+                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                ("RIGHTPADDING", (0, 0), (0, 0), gap),
+                ("RIGHTPADDING", (1, 0), (1, 0), 0),
+                ("TOPPADDING", (0, 0), (-1, -1), 4),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+            ]
+        )
+    )
+    rows: List[List[Any]] = [
+        [Paragraph(_pdf_paragraph_text(title, bold=True), title_style)],
+        [Paragraph(_pdf_paragraph_text(subtitle), sub_style)],
+        [body],
+    ]
+    panel = Table(rows, colWidths=[panel_width], hAlign="LEFT")
+    panel.setStyle(
+        TableStyle(
+            [
+                ("BOX", (0, 0), (-1, -1), 0.5, colors.HexColor("#d1d5db")),
+                ("BACKGROUND", (0, 0), (-1, -1), colors.white),
+                ("LEFTPADDING", (0, 0), (-1, -1), 10),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 10),
+                ("TOPPADDING", (0, 0), (-1, -1), 8),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+                ("VALIGN", (0, 0), (-1, -1), "TOP"),
+            ]
+        )
+    )
+    return panel
+
+
 def _pdf_chart_panel(
     title: str,
     subtitle: str,
@@ -2711,6 +2801,17 @@ def _pdf_chart_panel(
     chart_width: float = 228,
     chart_height: float = 160,
 ) -> Table:
+    if notes:
+        return _pdf_donut_split_panel(
+            title,
+            subtitle,
+            chart_image,
+            notes,
+            lang=lang,
+            panel_width=panel_width,
+            chart_width=min(chart_width, panel_width * 0.48),
+            chart_height=min(chart_height, panel_width * 0.48),
+        )
     code = _normalize_lang(lang)
     title_style = ParagraphStyle(
         name=f"PdfChartTitle_{title[:8]}",
@@ -2726,21 +2827,10 @@ def _pdf_chart_panel(
         textColor=colors.HexColor("#64748b"),
         alignment=2 if code == "ar" else 0,
     )
-    note_style = ParagraphStyle(
-        name=f"PdfChartNote_{title[:8]}",
-        fontSize=7.8,
-        leading=10.5,
-        textColor=colors.HexColor("#334155"),
-        alignment=2 if code == "ar" else 0,
-    )
     rows: List[List[Any]] = [
         [Paragraph(_pdf_paragraph_text(title, bold=True), title_style)],
         [Paragraph(_pdf_paragraph_text(subtitle), sub_style)],
     ]
-    if notes:
-        note_text = "\n".join(f"- {line}" for line in notes if str(line).strip())
-        if note_text.strip():
-            rows.append([Paragraph(_pdf_paragraph_text(note_text), note_style)])
     if chart_image is not None:
         rows.append([RLImage(chart_image, width=chart_width, height=chart_height)])
     else:
@@ -2916,7 +3006,7 @@ def generate_report_pdf(
         _pdf_cover_meta_table(
             [
                 (_tr("Scope", lang), scope_label),
-                (_tr("Term", lang), f"{_tr('Semester', lang)} {report.get('semester', 1)} · {_tr('Quarter', lang)} {rq}"),
+                (_tr("Term", lang), _pdf_term_display_label(int(report.get("semester", 1)), rq, lang)),
                 (_tr("Generated on", lang), datetime.now(REPORT_TIMEZONE).strftime("%Y-%m-%d %H:%M")),
                 (_tr("Professional Performance Summary", lang), _tr("Executive Summary", lang)),
             ],
@@ -2954,7 +3044,7 @@ def generate_report_pdf(
     summary_data = [
         [_tr("Metric", lang), _tr("Value", lang)],
         [_tr("Scope", lang), scope_label],
-        [_tr("Term", lang), f"{_tr('Semester', lang)} {report.get('semester', 1)} · {_tr('Quarter', lang)} {rq}"],
+        [_tr("Term", lang), _pdf_term_display_label(int(report.get("semester", 1)), rq, lang)],
         [_tr("Total Students", lang), _fmt(report.get("total_students"))],
         [_tr("Average Total Score", lang), _fmt(report.get("avg_total_score"))],
         [_tr("On Level % (focus quarter)", lang), _fmt(report.get("exceeding_rate"), "%")],
@@ -3219,7 +3309,10 @@ def generate_analytics_dashboard_pdf(
         area_buf = create_component_breakdown_area_chart(selected_student, qn)
     else:
         focus_rate = (q1o if qn_o == 1 else q2o).get("on_level_rate")
-        line_buf = create_analytics_quarter_focus_bar_chart(focus_rate, f"S{sem_o}·Q{qn_o}")
+        line_buf = create_analytics_quarter_focus_bar_chart(
+            focus_rate,
+            _pdf_term_short_label({"semester": sem_o, "quarter": qn_o}),
+        )
         area_buf = create_analytics_class_area_chart(class_summaries)
 
     doc = SimpleDocTemplate(buffer, pagesize=A4, leftMargin=28, rightMargin=28, topMargin=36, bottomMargin=36)
@@ -3227,7 +3320,7 @@ def generate_analytics_dashboard_pdf(
 
     grade_labels = [str(label).strip() for label in (selected_grade_labels or []) if str(label).strip()]
     grade_subtitle = ", ".join(grade_labels) if grade_labels else scope_label
-    term_subtitle = f"{_tr('Semester', lang)} {sem_o} · {_tr('Quarter', lang)} {qn_o}"
+    term_subtitle = _pdf_term_display_label(sem_o, qn_o, lang)
 
     # Product requirement: keep this title exact in exports.
     elements.append(_pdf_cover_band())
@@ -3247,7 +3340,7 @@ def generate_analytics_dashboard_pdf(
                 _pdf_cover_meta_table(
                     [
                         (_tr("Scope", lang), scope_label),
-                        (_tr("Term", lang), f"{_tr('Semester', lang)} {sem_o} · {_tr('Quarter', lang)} {qn_o}"),
+                        (_tr("Term", lang), term_subtitle),
                         (_tr("Generated on", lang), generated_on_text),
                         (_tr("Professional Performance Summary", lang), _tr("Visual dashboard", lang)),
                     ],
@@ -3291,6 +3384,17 @@ def generate_analytics_dashboard_pdf(
         f"{_tr('Below Level', lang)}: {below_count}",
         f"{_tr('No Data', lang)}: {no_data_count}",
     ]
+    if is_student_scope:
+        donut_notes = [
+            f"{label}: {_fmt(selected_student.get(key))}"
+            for label, key in _focus_component_column_defs(qn_o)
+        ]
+        donut_title = _tr("Marks breakdown", lang)
+        donut_subtitle = _tr("Student component profile", lang)
+    else:
+        donut_notes = levels_notes
+        donut_title = _tr("Performance levels", lang)
+        donut_subtitle = _tr("Distribution for selected term", lang)
     dashboard_row_1 = _pdf_side_by_side_panels(
         _pdf_chart_panel(
             _tr("Average score by class", lang) if not is_student_scope else _tr("Marks breakdown", lang),
@@ -3299,30 +3403,36 @@ def generate_analytics_dashboard_pdf(
             lang=lang,
         ),
         _pdf_chart_panel(
-            _tr("Performance levels", lang),
-            _tr("Distribution for selected term", lang),
-            donut_buf,
-            notes=levels_notes,
-            lang=lang,
-        ),
-    )
-    dashboard_row_2 = _pdf_side_by_side_panels(
-        _pdf_chart_panel(
             _tr("On-level rate (selected quarter)", lang) if not is_student_scope else _tr("Quarter total achievement", lang),
             _tr("Cohort on-level percent for selected term", lang) if not is_student_scope else _tr("Quarter total out of 50", lang),
             line_buf,
             lang=lang,
         ),
-        _pdf_chart_panel(
-            _tr("Class averages profile", lang) if not is_student_scope else _tr("Student marks profile", lang),
-            _tr("How averages spread across groups", lang),
-            area_buf,
-            lang=lang,
-        ),
+    )
+    donut_panel = _pdf_donut_split_panel(
+        donut_title,
+        donut_subtitle,
+        donut_buf,
+        donut_notes,
+        lang=lang,
+        panel_width=530,
+        chart_width=220,
+        chart_height=200,
+    )
+    area_panel = _pdf_chart_panel(
+        _tr("Class averages profile", lang) if not is_student_scope else _tr("Student marks profile", lang),
+        _tr("How averages spread across groups", lang),
+        area_buf,
+        lang=lang,
+        panel_width=530,
+        chart_width=500,
+        chart_height=150,
     )
     elements.append(dashboard_row_1)
     elements.append(Spacer(1, 10))
-    elements.append(dashboard_row_2)
+    elements.append(donut_panel)
+    elements.append(Spacer(1, 10))
+    elements.append(area_panel)
     elements.append(Spacer(1, 14))
 
     q1 = report.get("quarter1") or {}
@@ -3332,7 +3442,7 @@ def generate_analytics_dashboard_pdf(
     summary_data = [
         [_tr("Metric", lang), _tr("Value", lang)],
         [_tr("Scope", lang), scope_label],
-        [_tr("Term", lang), f"{_tr('Semester', lang)} {report.get('semester', 1)} · {_tr('Quarter', lang)} {rq}"],
+        [_tr("Term", lang), _pdf_term_display_label(int(report.get("semester", 1)), rq, lang)],
         [_tr("Total Students", lang), _fmt(report.get("total_students"))],
         [_tr("Average Total Score", lang), _fmt(report.get("avg_total_score"))],
         [_tr("On Level % (focus quarter)", lang), _fmt(report.get("exceeding_rate"), "%")],
@@ -3574,7 +3684,7 @@ def generate_reports_dashboard_pdf(
         line_buf = create_analytics_quarter_focus_bar_chart(report.get("exceeding_rate"), _pdf_term_short_label(report))
         area_buf = create_reports_enrollment_area_chart(class_breakdown)
 
-    term_sub = f"{_tr('Semester', lang)} {sem} · {_tr('Quarter', lang)} {qn}"
+    term_sub = _pdf_term_display_label(sem, qn, lang)
 
     doc = SimpleDocTemplate(buffer, pagesize=A4, leftMargin=28, rightMargin=28, topMargin=36, bottomMargin=36)
     elements: List[Any] = []
@@ -3646,39 +3756,61 @@ def generate_reports_dashboard_pdf(
         f"{_tr('Below Level', lang)}: {dist_below}",
         f"{_tr('No Data', lang)}: {dist_no_data}",
     ]
-    dashboard_top = _pdf_side_by_side_panels(
-        _pdf_chart_panel(
-            _tr("Students per class", lang),
-            _tr("Enrollment by class section", lang),
-            bar_buf,
-            lang=lang,
-        ),
-        _pdf_chart_panel(
+    if is_summary:
+        elements.append(
+            _pdf_chart_panel(
+                _tr("Students per class", lang),
+                _tr("Enrollment by class section", lang),
+                bar_buf,
+                lang=lang,
+                panel_width=530,
+                chart_width=500,
+                chart_height=150,
+            )
+        )
+    else:
+        elements.append(
+            _pdf_side_by_side_panels(
+                _pdf_chart_panel(
+                    _tr("Students per class", lang),
+                    _tr("Enrollment by class section", lang),
+                    bar_buf,
+                    lang=lang,
+                ),
+                _pdf_chart_panel(
+                    _tr("On-level rate (selected quarter)", lang),
+                    _tr("Cohort on-level percent for selected term", lang),
+                    line_buf,
+                    lang=lang,
+                ),
+            )
+        )
+    elements.append(Spacer(1, 10))
+    elements.append(
+        _pdf_donut_split_panel(
             _tr("Performance levels", lang),
             term_sub,
             donut_buf,
-            notes=notes,
+            notes,
             lang=lang,
-        ),
+            panel_width=530,
+            chart_width=220,
+            chart_height=200,
+        )
     )
-    elements.append(dashboard_top)
     if not is_summary:
-        dashboard_bottom = _pdf_side_by_side_panels(
-            _pdf_chart_panel(
-                _tr("On-level rate (selected quarter)", lang),
-                _tr("Cohort on-level percent for selected term", lang),
-                line_buf,
-                lang=lang,
-            ),
+        elements.append(Spacer(1, 10))
+        elements.append(
             _pdf_chart_panel(
                 _tr("Class averages profile", lang),
                 _tr("How averages spread across classes", lang),
                 area_buf,
                 lang=lang,
-            ),
+                panel_width=530,
+                chart_width=500,
+                chart_height=150,
+            )
         )
-        elements.append(Spacer(1, 10))
-        elements.append(dashboard_bottom)
     elements.append(Spacer(1, 14))
 
     if is_student_scope:
@@ -3698,7 +3830,7 @@ def generate_reports_dashboard_pdf(
     summary_data = [
         [_tr("Metric", lang), _tr("Value", lang)],
         [_tr("Scope", lang), scope_label],
-        [_tr("Term", lang), f"{_tr('Semester', lang)} {sem} · {_tr('Quarter', lang)} {rq}"],
+        [_tr("Term", lang), _pdf_term_display_label(sem, rq, lang)],
         [_tr("Total Students", lang), _fmt(report.get("total_students"))],
         [_tr("Average Total Score", lang), _fmt(report.get("avg_total_score"))],
         [_tr("On Level % (focus quarter)", lang), _fmt(report.get("exceeding_rate"), "%")],
@@ -3816,7 +3948,7 @@ def generate_report_excel(report: Dict[str, Any], scope: Any, report_type: str =
     summary_df = pd.DataFrame([
         {
             "Scope": scope_label,
-            "Term": f"Semester {report.get('semester', 1)} · Quarter {rq}",
+            "Term": _pdf_term_display_label(int(report.get("semester", 1)), rq, "en"),
             "Total Students": report.get("total_students", 0),
             "Avg Total Score": report.get("avg_total_score"),
             "On-level %": report.get("exceeding_rate"),
@@ -7806,7 +7938,7 @@ async def export_analytics_summary(
                 ]
                 class_summaries = await _build_class_summary_list(classes_for_charts, sem, q)
                 class_summaries = sorted(class_summaries, key=lambda x: _class_sort_key(x.get("class_name") or ""))
-        scope_label = f"Analytics · Semester {sem} · Q{q}"
+        scope_label = f"Analytics · {_pdf_term_display_label(sem, q, lang_code)}"
         if class_id:
             cls = await db.classes.find_one({"id": class_id}, {"_id": 0, "name": 1})
             cname = (cls or {}).get("name") or class_id
@@ -7853,7 +7985,7 @@ async def export_analytics_summary(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Analytics export failed: {type(exc).__name__}. Please retry.",
         )
-    fn_base = f"analytics_s{sem}_q{q}"
+    fn_base = f"analytics_s{sem}_q{_display_quarter_number(sem, q)}"
     if class_id:
         cid = "".join(c for c in class_id if c.isalnum())[:24] or "class"
         fn_base = f"{fn_base}_{cid}"

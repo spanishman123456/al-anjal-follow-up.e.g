@@ -44,8 +44,6 @@ import { ExpandableSection } from "@/components/ExpandableSection";
 import { PerformanceLevelBadge } from "@/components/PerformanceLevelBadge";
 import {
   performanceChipClasses,
-  performanceLegendSwatchClasses,
-  performanceTextClasses,
   getScoreBandBadgeClass,
 } from "@/lib/performanceBadges";
 import {
@@ -542,21 +540,13 @@ export default function Reports() {
             <ChartCard title={t("avg_total_score")} subtitle={t("visual_board_chart_class_curve_sub")}>
               <ClassAverageBarChart data={reportClassAverageBars} height={260} />
             </ChartCard>
-            <ChartCard title={t("visual_board_chart_pass_split")} subtitle={t(`term_${termScopeId}`)} summary={`${report.exceeding_rate}%`} summaryLabel={t("on_level")}>
-              <div className="mb-2 space-y-1 text-sm font-semibold">
-                <div className={`flex items-center gap-2 ${performanceTextClasses.on_level}`}>
-                  <span className={`inline-block h-3 w-3 rounded-sm ${performanceLegendSwatchClasses.on_level}`} />
-                  {t("on_level")}
-                </div>
-                <div className={`flex items-center gap-2 ${performanceTextClasses.approach}`}>
-                  <span className={`inline-block h-3 w-3 rounded-sm ${performanceLegendSwatchClasses.approach}`} />
-                  {t("visual_board_approaching_full_score")}
-                </div>
-                <div className={`flex items-center gap-2 ${performanceTextClasses.below}`}>
-                  <span className={`inline-block h-3 w-3 rounded-sm ${performanceLegendSwatchClasses.below}`} />
-                  {t("visual_board_below_level")}
-                </div>
-              </div>
+            <ChartCard
+              title={t("visual_board_chart_pass_split")}
+              subtitle={t(`term_${termScopeId}`)}
+              summary={`${report.exceeding_rate}%`}
+              summaryLabel={t("on_level")}
+              span="donut"
+            >
               <PassSplitDonut
                 distribution={reportQuarterDistribution || []}
                 onLevelLabel={t("on_level")}
@@ -564,8 +554,7 @@ export default function Reports() {
                 belowLabel={t("visual_board_below_level")}
                 noDataLabel={t("no_data")}
                 centerCaption={t("on_level")}
-                height={260}
-                showLegend={false}
+                height={300}
               />
             </ChartCard>
             {isFullReport ? (

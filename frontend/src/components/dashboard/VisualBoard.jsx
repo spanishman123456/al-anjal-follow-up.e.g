@@ -41,6 +41,79 @@ const boardTooltip = ({ active, payload, label }) => {
   );
 };
 
+function DonutLegendList({ items, className = "", dense = false }) {
+  const listClass = dense
+    ? "donut-legend-list donut-legend-list--dense text-sm font-semibold"
+    : "donut-legend-list space-y-2.5 text-sm font-semibold";
+  return (
+    <ul className={`${listClass} ${className}`.trim()}>
+      {items.map((item) => (
+        <li key={item.key || item.name} className="flex items-start gap-2.5 leading-snug">
+          <span
+            className="mt-1 inline-block h-3 w-3 shrink-0 rounded-sm"
+            style={{ backgroundColor: item.fill, opacity: item.opacity ?? 1 }}
+          />
+          <span className="min-w-0 break-words text-foreground" style={{ color: item.fill }}>
+            <span className="text-foreground">{item.legendName || item.name}</span>
+            {item.value != null ? (
+              <span className="font-medium text-muted-foreground">
+                {": "}
+                {item.value}
+                {item.share != null ? ` (${item.share}%)` : ""}
+              </span>
+            ) : null}
+          </span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function DonutChartPane({ data, centerValue, centerCaption, centerSubtext }) {
+  return (
+    <div className="donut-chart-panel">
+      <ResponsiveContainer width="100%" height="100%">
+        <PieChart>
+          <Pie
+            data={data}
+            dataKey="value"
+            nameKey="name"
+            cx="50%"
+            cy="50%"
+            innerRadius="52%"
+            outerRadius="78%"
+            paddingAngle={2}
+          >
+            {data.map((entry, i) => (
+              <Cell
+                key={entry.name || i}
+                fill={entry.fill}
+                fillOpacity={entry.opacity ?? 1}
+                stroke="white"
+                strokeWidth={1}
+              />
+            ))}
+          </Pie>
+          <Tooltip content={boardTooltip} />
+        </PieChart>
+      </ResponsiveContainer>
+      <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
+        <span className="text-2xl font-semibold tabular-nums text-slate-800 dark:text-foreground">
+          {centerValue}
+        </span>
+        {centerCaption ? (
+          <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+            {centerCaption}
+          </span>
+        ) : null}
+        {centerSubtext ? (
+          <span className="text-[10px] text-muted-foreground">{centerSubtext}</span>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
 export function BoardShell({ sidebar, children, className = "" }) {
   return (
     <div
@@ -103,7 +176,7 @@ export function ClassAverageBarChart({ data, valueKey = "score", labelKey = "nam
   );
 }
 
-/** Donut: three performance bands (green / amber / red). No-data students are excluded from the ring and center %. */
+/** Donut: performance bands — legend left, chart right (no overlap). */
 export function PassSplitDonut({
   distribution,
   onLevelLabel,
@@ -111,7 +184,7 @@ export function PassSplitDonut({
   belowLabel,
   noDataLabel,
   centerCaption,
-  height = 240,
+  height = 280,
   showLegend = true,
 }) {
   const list = Array.isArray(distribution) ? distribution : [];
@@ -121,20 +194,17 @@ export function PassSplitDonut({
   const noData = list.find((d) => d.level === "no_data")?.count ?? 0;
   const total = onLevel + approach + below + noData;
   const graded = onLevel + approach + below;
-  // Percentage is based on all students in the snapshot (including no_data) for clearer reporting context.
   const pct = total > 0 ? Math.round((onLevel / total) * 1000) / 10 : 0;
   const segments = [
-    { name: onLevelLabel, value: onLevel, fill: PERFORMANCE_CHART_COLORS.on_level },
-    { name: approachingLabel, value: approach, fill: PERFORMANCE_CHART_COLORS.approach },
-    { name: belowLabel, value: below, fill: PERFORMANCE_CHART_COLORS.below },
+    { key: "on_level", name: onLevelLabel, value: onLevel, fill: PERFORMANCE_CHART_COLORS.on_level },
+    { key: "approach", name: approachingLabel, value: approach, fill: PERFORMANCE_CHART_COLORS.approach },
+    { key: "below", name: belowLabel, value: below, fill: PERFORMANCE_CHART_COLORS.below },
   ];
   const data = segments.filter((d) => d.value > 0);
-  const legendSpace = showLegend ? 92 : 0;
-  const chartHeight = Math.max(height - legendSpace, 150);
 
   if (total === 0) {
     return (
-      <div className="flex h-[240px] items-center justify-center text-sm text-muted-foreground">
+      <div className="flex min-h-[240px] items-center justify-center text-sm text-muted-foreground">
         —
       </div>
     );
@@ -142,7 +212,7 @@ export function PassSplitDonut({
 
   if (graded === 0) {
     return (
-      <div className="flex h-[240px] flex-col items-center justify-center gap-1 text-sm text-muted-foreground">
+      <div className="flex min-h-[240px] flex-col items-center justify-center gap-1 text-sm text-muted-foreground">
         <span>—</span>
         {noData > 0 ? (
           <span className="text-xs">
@@ -153,51 +223,36 @@ export function PassSplitDonut({
     );
   }
 
+  if (!showLegend) {
+    return (
+      <div className="flex min-h-[240px] items-center justify-center">
+        <DonutChartPane
+          data={data}
+          centerValue={onLevel}
+          centerCaption={centerCaption}
+          centerSubtext={`${pct}%`}
+        />
+      </div>
+    );
+  }
+
   return (
-    <div className="mx-auto w-full max-w-sm overflow-hidden" style={{ height }}>
-      {showLegend ? (
-        <div className="mb-2 space-y-1 text-sm font-semibold">
-          {segments.map((s) => (
-            <div key={s.name} className="flex items-center gap-2" style={{ color: s.fill }}>
-              <span className="inline-block h-3 w-3 rounded-sm" style={{ backgroundColor: s.fill }} />
-              <span>
-                {s.name}: {s.value}
-              </span>
-            </div>
-          ))}
-        </div>
-      ) : null}
-      <div className="relative" style={{ height: chartHeight }}>
-        <ResponsiveContainer width="100%" height="100%">
-          <PieChart>
-            <Pie
-              data={data}
-              dataKey="value"
-              nameKey="name"
-              cx="50%"
-              cy="45%"
-              innerRadius={52}
-              outerRadius={74}
-              paddingAngle={2}
-            >
-              {data.map((entry, i) => (
-                <Cell key={i} fill={entry.fill} stroke="white" strokeWidth={1} />
-              ))}
-            </Pie>
-            <Tooltip content={boardTooltip} />
-          </PieChart>
-        </ResponsiveContainer>
-        <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center -translate-y-3">
-          <span className="text-2xl font-semibold tabular-nums text-slate-800 dark:text-foreground">
-            {onLevel}
-          </span>
-          {centerCaption ? (
-            <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-              {centerCaption}
-            </span>
-          ) : null}
-          <span className="text-[10px] text-muted-foreground">{pct}%</span>
-        </div>
+    <div className="donut-layout w-full" style={{ minHeight: Math.max(height, 280) }}>
+      <div className="donut-text-panel" aria-label="Chart legend">
+        <DonutLegendList items={segments} />
+        {noData > 0 ? (
+          <p className="mt-4 text-xs text-muted-foreground">
+            {noDataLabel}: {noData}
+          </p>
+        ) : null}
+      </div>
+      <div className="donut-chart-panel-wrap" aria-hidden={false}>
+        <DonutChartPane
+          data={data}
+          centerValue={onLevel}
+          centerCaption={centerCaption}
+          centerSubtext={`${pct}%`}
+        />
       </div>
     </div>
   );
@@ -207,71 +262,47 @@ export function ScoreBreakdownDonut({
   data,
   centerCaption,
   centerValue,
-  height = 240,
+  height = 280,
   showLegend = true,
 }) {
   const list = Array.isArray(data) ? data.filter((item) => Number(item?.value || 0) > 0) : [];
   const total = list.reduce((sum, item) => sum + Number(item?.value || 0), 0);
-  const chartHeight = Math.max(height, 220);
 
   if (total <= 0) {
     return (
-      <div className="flex h-[240px] items-center justify-center text-sm text-muted-foreground">
+      <div className="flex min-h-[240px] items-center justify-center text-sm text-muted-foreground">
         —
       </div>
     );
   }
 
+  if (!showLegend) {
+    return (
+      <div className="flex min-h-[240px] items-center justify-center">
+        <DonutChartPane
+          data={list}
+          centerValue={Math.round(Number(centerValue ?? total) * 10) / 10}
+          centerCaption={centerCaption}
+          centerSubtext="100%"
+        />
+      </div>
+    );
+  }
+
+  const denseLegend = list.length >= 4;
+
   return (
-    <div
-      className={`mx-auto w-full ${showLegend ? "max-w-2xl" : "max-w-md"} overflow-visible`}
-      style={{ height: chartHeight }}
-    >
-      <div className={`grid h-full items-center gap-4 ${showLegend ? "grid-cols-[minmax(0,1fr)_minmax(220px,1.35fr)]" : "grid-cols-1"}`}>
-        {showLegend ? (
-          <div className="space-y-1 text-sm font-semibold">
-            {list.map((item) => (
-              <div key={item.name} className="flex items-center gap-2" style={{ color: item.fill }}>
-                <span className="inline-block h-3 w-3 rounded-sm shrink-0" style={{ backgroundColor: item.fill }} />
-                <span className="leading-5">
-                  {(item.legendName || item.name)}: {item.value}
-                </span>
-              </div>
-            ))}
-          </div>
-        ) : null}
-        <div className="relative h-full min-w-0">
-          <ResponsiveContainer width="100%" height="100%">
-            <PieChart>
-              <Pie
-                data={list}
-                dataKey="value"
-                nameKey="name"
-                cx="52%"
-                cy="50%"
-                innerRadius={52}
-                outerRadius={78}
-                paddingAngle={2}
-              >
-                {list.map((item) => (
-                  <Cell key={item.name} fill={item.fill} fillOpacity={item.opacity ?? 1} stroke="white" strokeWidth={1} />
-                ))}
-              </Pie>
-              <Tooltip content={boardTooltip} />
-            </PieChart>
-          </ResponsiveContainer>
-          <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
-            <span className="text-2xl font-semibold tabular-nums text-slate-800 dark:text-foreground">
-              {Math.round(Number(centerValue ?? total) * 10) / 10}
-            </span>
-            {centerCaption ? (
-              <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-                {centerCaption}
-              </span>
-            ) : null}
-            <span className="text-[10px] text-muted-foreground">100%</span>
-          </div>
-        </div>
+    <div className="donut-layout w-full" style={{ minHeight: Math.max(height, 300) }}>
+      <div className="donut-text-panel" aria-label="Component marks legend">
+        <DonutLegendList items={list} dense={denseLegend} />
+      </div>
+      <div className="donut-chart-panel-wrap">
+        <DonutChartPane
+          data={list}
+          centerValue={Math.round(Number(centerValue ?? total) * 10) / 10}
+          centerCaption={centerCaption}
+          centerSubtext="100%"
+        />
       </div>
     </div>
   );
