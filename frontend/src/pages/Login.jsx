@@ -1,6 +1,6 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, memo } from "react";
 import { useNavigate } from "react-router-dom";
-import { api, checkBackendLive, isProductionBackendUrl, setStoredAuthToken, warmBackendInBackground } from "@/lib/api";
+import { api, checkBackendHealth, checkBackendLive, isProductionBackendUrl, setStoredAuthToken, warmBackendInBackground } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Globe, MessageCircle, Mail } from "lucide-react";
 import { Input } from "@/components/ui/input";
@@ -12,12 +12,53 @@ import { SocialLinks } from "@/components/SocialLinks";
 
 const GOOGLE_CLIENT_ID = process.env.REACT_APP_GOOGLE_CLIENT_ID || "";
 
-export default function Login({
+/** One-shot server probe — never polls, so the status line cannot flicker. */
+const LoginServerStatus = memo(function LoginServerStatus() {
+  const [backendOk, setBackendOk] = useState(null);
+  const settledRef = useRef(false);
+
+  useEffect(() => {
+    if (settledRef.current) return;
+    let cancelled = false;
+    const settle = (ok) => {
+      if (cancelled || settledRef.current) return;
+      settledRef.current = true;
+      setBackendOk(ok);
+    };
+    if (isProductionBackendUrl) warmBackendInBackground();
+    checkBackendHealth().then((ok) => settle(ok));
+    const safetyMs = isProductionBackendUrl ? 95000 : 12000;
+    const safety = setTimeout(() => settle(false), safetyMs);
+    return () => {
+      cancelled = true;
+      clearTimeout(safety);
+    };
+  }, []);
+
+  return (
+    <div className="mt-2 min-h-[3.5rem] text-center">
+      {backendOk === null && (
+        <p className="text-xs text-slate-500 dark:text-slate-400">Checking server status...</p>
+      )}
+      {backendOk === true && (
+        <p className="text-xs text-green-600 dark:text-emerald-400">Server and database connected</p>
+      )}
+      {backendOk === false && (
+        <p className="text-xs text-amber-600 dark:text-amber-400">
+          {isProductionBackendUrl
+            ? "Server may be waking (Render free tier: up to ~2 min after idle). You can press Login — the app will retry automatically."
+            : "Backend or database not reachable. Run Start_App.bat (keep it open). If this persists, open MongoDB Atlas → Network Access and allow your current IP (or 0.0.0.0/0 for testing), and ensure the cluster is not paused."}
+        </p>
+      )}
+    </div>
+  );
+});
+
+function LoginPage({
   language = "en",
   theme = "light",
   onLogin,
   onLanguageChange,
-  serverStatus: serverStatusProp,
   logoutReason = null,
 }) {
   const t = useTranslations(language);
@@ -28,20 +69,6 @@ export default function Login({
   const [gsiReady, setGsiReady] = useState(false);
   const googleButtonRef = useRef(null);
   const handleGoogleSignInRef = useRef(null);
-  // App passes serverStatus from a single debounced health poll — no duplicate polling here.
-  const backendOk = serverStatusProp ?? null;
-
-  // Nudge Render free tier to start waking as soon as the login page opens (cold start can take 1–2 min).
-  useEffect(() => {
-    if (!isProductionBackendUrl) return;
-    warmBackendInBackground();
-    const a = setTimeout(() => warmBackendInBackground(), 3000);
-    const b = setTimeout(() => warmBackendInBackground(), 8000);
-    return () => {
-      clearTimeout(a);
-      clearTimeout(b);
-    };
-  }, []);
 
   // Wait for HTTP only (/health/live). /health also pings Mongo; treating 503 DB errors as "still waking"
   // made login retry take minutes even when Render was already up.
@@ -123,10 +150,8 @@ export default function Login({
   useEffect(() => {
     if (!GOOGLE_CLIENT_ID || !gsiReady || !googleButtonRef.current) return;
     if (!window.google?.accounts?.id) return;
+    if (googleButtonRef.current.dataset.gsiRendered === "1") return;
     const el = googleButtonRef.current;
-    const cleanup = () => {
-      if (el?.firstChild) el.innerHTML = "";
-    };
     try {
       window.google.accounts.id.initialize({
         client_id: GOOGLE_CLIENT_ID,
@@ -140,10 +165,10 @@ export default function Login({
         width: 320,
         text: "signin_with",
       });
-    } catch (e) {
-      cleanup();
+      el.dataset.gsiRendered = "1";
+    } catch {
+      delete el.dataset.gsiRendered;
     }
-    return cleanup;
   }, [GOOGLE_CLIENT_ID, gsiReady]);
 
   const handleLogin = async (event) => {
@@ -193,9 +218,7 @@ export default function Login({
             ? "The server is awake, but the login request did not complete. Please try Login once more now."
             : "Server is waking up (Render free tier). This can take 1–2 minutes after idle. Please wait, then try Login again.";
         } else {
-          msg = backendOk
-            ? "Login request failed. Keep the Start_App.bat window open and try again in a moment."
-            : "Cannot reach backend. Run Start_App.bat (keep its window open), then try again.";
+          msg = "Login request failed. Keep the Start_App.bat window open and try again in a moment.";
         }
       } else if (status === 503 && detail) {
         msg = typeof detail === "string" ? detail : "Server temporarily unavailable. Try again in a moment.";
@@ -342,7 +365,7 @@ export default function Login({
                 type="submit"
                 className="w-full h-11 font-semibold shadow-md"
                 data-testid="login-submit"
-                disabled={isSubmitting || (backendOk === false && !isProductionBackendUrl)}
+                disabled={isSubmitting}
               >
                 {isSubmitting ? "Signing in..." : t("login")}
               </Button>
@@ -354,39 +377,36 @@ export default function Login({
                   <span className="bg-white px-2 dark:bg-slate-900">{t("or_sign_in_with_gmail")}</span>
                 </div>
               </div>
-              {GOOGLE_CLIENT_ID && gsiReady ? (
-                <div ref={googleButtonRef} className="flex justify-center min-h-[44px]" data-testid="google-signin-container" />
-              ) : (
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="w-full h-11 border-slate-300 text-slate-700 hover:bg-slate-50 font-medium dark:border-white/20 dark:text-slate-200 dark:hover:bg-white/5"
-                  onClick={handleGmailButtonClick}
-                  disabled={isGoogleLoading}
-                  data-testid="login-gmail-button"
-                >
-                  <Mail className="mr-2 h-5 w-5" />
-                  {t("sign_in_with_gmail") || "Sign in with Gmail"}
-                </Button>
-              )}
-              <div className="mt-2 min-h-[3.5rem] text-center">
-                {isGoogleLoading && (
-                  <p className="text-xs text-slate-500 dark:text-slate-400">Signing in with Google...</p>
-                )}
-                {backendOk === null && (
-                  <p className="text-xs text-slate-500 dark:text-slate-400">Checking server status...</p>
-                )}
-                {backendOk === true && (
-                  <p className="text-xs text-green-600 dark:text-emerald-400">Server and database connected</p>
-                )}
-                {backendOk === false && (
-                  <p className="text-xs text-amber-600 dark:text-amber-400">
-                    {isProductionBackendUrl
-                      ? "Server may be waking (Render free tier: up to ~2 min after idle). You can press Login — the app will retry automatically."
-                      : "Backend or database not reachable. Run Start_App.bat (keep it open). If this persists, open MongoDB Atlas → Network Access and allow your current IP (or 0.0.0.0/0 for testing), and ensure the cluster is not paused."}
-                  </p>
+              <div className="relative my-4 flex min-h-[44px] w-full items-center justify-center">
+                <div
+                  ref={googleButtonRef}
+                  className={cn(
+                    "flex w-full justify-center",
+                    (!GOOGLE_CLIENT_ID || !gsiReady) && "pointer-events-none opacity-0",
+                  )}
+                  aria-hidden={!GOOGLE_CLIENT_ID || !gsiReady}
+                  data-testid="google-signin-container"
+                />
+                {(!GOOGLE_CLIENT_ID || !gsiReady) && (
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="h-11 w-full border-slate-300 text-slate-700 hover:bg-slate-50 font-medium dark:border-white/20 dark:text-slate-200 dark:hover:bg-white/5"
+                      onClick={handleGmailButtonClick}
+                      disabled={isGoogleLoading}
+                      data-testid="login-gmail-button"
+                    >
+                      <Mail className="mr-2 h-5 w-5" />
+                      {t("sign_in_with_gmail") || "Sign in with Gmail"}
+                    </Button>
+                  </div>
                 )}
               </div>
+              <LoginServerStatus />
+              {isGoogleLoading && (
+                <p className="mt-1 text-center text-xs text-slate-500 dark:text-slate-400">Signing in with Google...</p>
+              )}
             </form>
           </CardContent>
         </Card>
@@ -394,3 +414,5 @@ export default function Login({
     </div>
   );
 }
+
+export default memo(LoginPage);

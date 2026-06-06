@@ -6,7 +6,7 @@ import {
   api,
   AUTH_TOKEN_KEY,
   checkBackendLive,
-  checkBackendHealth,
+  clearStoredAuthToken,
   getStoredAuthToken,
   isProductionBackendUrl,
   setStoredAuthToken,
@@ -172,6 +172,12 @@ function App() {
   useEffect(() => {
     if (!token) return;
     let cancelled = false;
+    const failSession = () => {
+      if (cancelled) return;
+      clearStoredAuthToken();
+      setToken(null);
+      setAuthReady(true);
+    };
     const loadProfile = async () => {
       if (isProductionBackendUrl) {
         warmBackendInBackground();
@@ -181,24 +187,30 @@ function App() {
         if (!cancelled) setAuthReady(true);
       } catch (err) {
         if (cancelled) return;
+        if (err?.response?.status === 401) {
+          failSession();
+          return;
+        }
         const isNetwork = !err?.response || err?.code === "ECONNABORTED" || err?.message === "Network Error";
         if (isNetwork && isProductionBackendUrl) {
           const isReady = await waitForBackendReady();
-          if (!cancelled && isReady) {
+          if (cancelled) return;
+          if (isReady) {
             try {
               await api.get("/users/profile", { timeout: 30000 });
-              if (!cancelled) {
-                setAuthReady(true);
-                return;
-              }
+              if (!cancelled) setAuthReady(true);
+              return;
             } catch (retryErr) {
               if (cancelled) return;
-              setAuthReady(true);
-              return;
+              if (retryErr?.response?.status === 401) {
+                failSession();
+                return;
+              }
             }
           }
         }
-        setAuthReady(true);
+        // Never enter the app with an unvalidated token — avoids login ↔ dashboard flicker.
+        failSession();
       }
     };
     loadProfile();
@@ -262,48 +274,6 @@ function App() {
     localStorage.setItem("quarter", String(quarter));
   }, [quarter]);
 
-  // Start backend health check as soon as app loads (when not logged in).
-  // One in-flight check at a time — overlapping /health calls (slow Render cold start) used to
-  // complete in bursts and flip backendOk every second, which remounted login UI via re-renders.
-  const [backendOk, setBackendOk] = useState(null);
-  useEffect(() => {
-    if (token) return;
-    let cancelled = false;
-    let intervalId = null;
-    let inFlight = false;
-    const safetyMs = isProductionBackendUrl ? 95000 : 12000;
-    const pollMs = isProductionBackendUrl ? 45000 : 15000;
-    const publishBackendOk = (ok) => {
-      setBackendOk((prev) => (prev === ok ? prev : ok));
-    };
-    const tick = async () => {
-      if (cancelled || inFlight) return;
-      inFlight = true;
-      try {
-        const ok = await checkBackendHealth();
-        if (cancelled) return;
-        publishBackendOk(ok);
-        // Stop polling after first success on Render — repeated pings made the status line flicker green/amber.
-        if (ok && isProductionBackendUrl && intervalId != null) {
-          clearInterval(intervalId);
-          intervalId = null;
-        }
-      } finally {
-        inFlight = false;
-      }
-    };
-    tick();
-    const safety = setTimeout(() => {
-      if (!cancelled) setBackendOk((v) => (v === null ? false : v));
-    }, safetyMs);
-    intervalId = setInterval(tick, pollMs);
-    return () => {
-      cancelled = true;
-      clearTimeout(safety);
-      if (intervalId != null) clearInterval(intervalId);
-    };
-  }, [token]);
-
   const handleLogin = useCallback((newToken) => {
     setLogoutReason(null);
     setStoredAuthToken(newToken);
@@ -315,6 +285,7 @@ function App() {
   // Single BrowserRouter for the whole app — avoids tearing down/remounting the router on login.
   const isAuthenticated = Boolean(token && authReady);
   const sessionChecking = Boolean(token && authReady === null);
+  const showLogin = !sessionChecking && !isAuthenticated;
 
   const authenticatedRoutes = (
     <Routes>
@@ -366,26 +337,19 @@ function App() {
         <BrowserRouter>
           {isAuthenticated ? (
             authenticatedRoutes
-          ) : (
-            <>
-              {sessionChecking && (
-                <div
-                  className="fixed inset-0 z-[100] flex items-center justify-center bg-background/80 pointer-events-none"
-                  aria-live="polite"
-                >
-                  <span className="text-muted-foreground">Checking session…</span>
-                </div>
-              )}
-              <Login
-                language={language}
-                theme={theme}
-                onLogin={handleLogin}
-                onLanguageChange={setLanguage}
-                serverStatus={backendOk}
-                logoutReason={logoutReason}
-              />
-            </>
-          )}
+          ) : sessionChecking ? (
+            <div className="flex min-h-screen items-center justify-center bg-background">
+              <span className="text-muted-foreground">Checking session…</span>
+            </div>
+          ) : showLogin ? (
+            <Login
+              language={language}
+              theme={theme}
+              onLogin={handleLogin}
+              onLanguageChange={setLanguage}
+              logoutReason={logoutReason}
+            />
+          ) : null}
         </BrowserRouter>
         <Toaster richColors position="top-right" />
       </div>
