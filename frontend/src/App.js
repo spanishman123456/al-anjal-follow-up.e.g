@@ -263,24 +263,34 @@ function App() {
   }, [quarter]);
 
   // Start backend health check as soon as app loads (when not logged in).
-  // Avoid polling every 3s on Render: cold /health often >10s and causes backendOk to flip → flickering UI.
+  // One in-flight check at a time — overlapping /health calls (slow Render cold start) used to
+  // complete in bursts and flip backendOk every second, which remounted login UI via re-renders.
   const [backendOk, setBackendOk] = useState(null);
   useEffect(() => {
     if (token) return;
     let cancelled = false;
     let intervalId = null;
+    let inFlight = false;
     const safetyMs = isProductionBackendUrl ? 95000 : 12000;
-    const pollMs = isProductionBackendUrl ? 45000 : 8000;
-    const tick = () => {
-      checkBackendHealth().then((ok) => {
+    const pollMs = isProductionBackendUrl ? 45000 : 15000;
+    const publishBackendOk = (ok) => {
+      setBackendOk((prev) => (prev === ok ? prev : ok));
+    };
+    const tick = async () => {
+      if (cancelled || inFlight) return;
+      inFlight = true;
+      try {
+        const ok = await checkBackendHealth();
         if (cancelled) return;
-        setBackendOk(ok);
+        publishBackendOk(ok);
         // Stop polling after first success on Render — repeated pings made the status line flicker green/amber.
         if (ok && isProductionBackendUrl && intervalId != null) {
           clearInterval(intervalId);
           intervalId = null;
         }
-      });
+      } finally {
+        inFlight = false;
+      }
     };
     tick();
     const safety = setTimeout(() => {
@@ -298,12 +308,13 @@ function App() {
     setLogoutReason(null);
     setStoredAuthToken(newToken);
     setToken(newToken);
-    setAuthReady(null);
+    // Login API already authenticated the user — skip a second "Checking session…" gate.
+    setAuthReady(true);
   }, []);
 
   // Single BrowserRouter for the whole app — avoids tearing down/remounting the router on login.
-  const authChecking = Boolean(token && authReady === null);
-  const showLogin = !token;
+  const isAuthenticated = Boolean(token && authReady);
+  const sessionChecking = Boolean(token && authReady === null);
 
   const authenticatedRoutes = (
     <Routes>
@@ -353,21 +364,27 @@ function App() {
     <AppErrorBoundary>
       <div className="App">
         <BrowserRouter>
-          {authChecking ? (
-            <div className="flex min-h-screen items-center justify-center bg-background">
-              <span className="text-muted-foreground">Checking session…</span>
-            </div>
-          ) : showLogin ? (
-            <Login
-              language={language}
-              theme={theme}
-              onLogin={handleLogin}
-              onLanguageChange={setLanguage}
-              serverStatus={backendOk}
-              logoutReason={logoutReason}
-            />
-          ) : (
+          {isAuthenticated ? (
             authenticatedRoutes
+          ) : (
+            <>
+              {sessionChecking && (
+                <div
+                  className="fixed inset-0 z-[100] flex items-center justify-center bg-background/80 pointer-events-none"
+                  aria-live="polite"
+                >
+                  <span className="text-muted-foreground">Checking session…</span>
+                </div>
+              )}
+              <Login
+                language={language}
+                theme={theme}
+                onLogin={handleLogin}
+                onLanguageChange={setLanguage}
+                serverStatus={backendOk}
+                logoutReason={logoutReason}
+              />
+            </>
           )}
         </BrowserRouter>
         <Toaster richColors position="top-right" />

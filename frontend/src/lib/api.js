@@ -104,6 +104,10 @@ api.interceptors.response.use(
     const requestUrl = `${error?.config?.baseURL || ""}${error?.config?.url || ""}`;
     const isAuthRequest = /\/auth\/(login|google)(\/|$)/.test(requestUrl);
     if (error?.response?.status === 401 && !isAuthRequest) {
+      // Ignore duplicate 401s from parallel requests — token is already cleared on the first one.
+      if (!getStoredAuthToken()) {
+        return Promise.reject(error);
+      }
       const detail = error?.response?.data?.detail;
       clearStoredAuthToken();
       window.dispatchEvent(new CustomEvent("auth-logout", {

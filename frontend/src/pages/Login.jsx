@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import { api, checkBackendHealth, checkBackendLive, isProductionBackendUrl, setStoredAuthToken, warmBackendInBackground } from "@/lib/api";
+import { api, checkBackendLive, isProductionBackendUrl, setStoredAuthToken, warmBackendInBackground } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Globe, MessageCircle, Mail } from "lucide-react";
 import { Input } from "@/components/ui/input";
@@ -26,51 +26,10 @@ export default function Login({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const [gsiReady, setGsiReady] = useState(false);
-  const [pageReady, setPageReady] = useState(false);
   const googleButtonRef = useRef(null);
-  // Use app-level server status when provided (check starts as soon as you open the site); otherwise check when Login mounts
-  const [localBackendOk, setLocalBackendOk] = useState(null);
-  const backendOk = serverStatusProp !== undefined ? serverStatusProp : localBackendOk;
-
-  useEffect(() => {
-    if (serverStatusProp !== undefined) return; // App is doing the health check
-    let cancelled = false;
-    checkBackendHealth().then((ok) => {
-      if (!cancelled) setLocalBackendOk(ok);
-    });
-    const safety = setTimeout(() => {
-      if (!cancelled) setLocalBackendOk((v) => (v === null ? false : v));
-    }, 12000);
-    const interval = setInterval(() => {
-      checkBackendHealth().then((ok) => {
-        if (!cancelled) setLocalBackendOk(ok);
-      });
-    }, 8000);
-    return () => {
-      cancelled = true;
-      clearTimeout(safety);
-      clearInterval(interval);
-    };
-  }, [serverStatusProp]);
-
-  useEffect(() => {
-    let cancelled = false;
-    const fontsReady =
-      typeof document !== "undefined" && document.fonts?.ready
-        ? document.fonts.ready.catch(() => null)
-        : Promise.resolve();
-
-    Promise.race([
-      fontsReady,
-      new Promise((resolve) => setTimeout(resolve, GOOGLE_CLIENT_ID ? 900 : 500)),
-    ]).then(() => {
-      if (!cancelled) setPageReady(true);
-    });
-
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  const handleGoogleSignInRef = useRef(null);
+  // App passes serverStatus from a single debounced health poll — no duplicate polling here.
+  const backendOk = serverStatusProp ?? null;
 
   // Nudge Render free tier to start waking as soon as the login page opens (cold start can take 1–2 min).
   useEffect(() => {
@@ -127,6 +86,7 @@ export default function Login({
     },
     [onLogin, navigate, t]
   );
+  handleGoogleSignInRef.current = handleGoogleSignIn;
 
   const handleGmailButtonClick = useCallback(() => {
     if (!GOOGLE_CLIENT_ID) {
@@ -170,7 +130,7 @@ export default function Login({
     try {
       window.google.accounts.id.initialize({
         client_id: GOOGLE_CLIENT_ID,
-        callback: (response) => handleGoogleSignIn(response.credential),
+        callback: (response) => handleGoogleSignInRef.current?.(response.credential),
         auto_select: false,
       });
       window.google.accounts.id.renderButton(el, {
@@ -184,7 +144,7 @@ export default function Login({
       cleanup();
     }
     return cleanup;
-  }, [GOOGLE_CLIENT_ID, gsiReady, handleGoogleSignIn]);
+  }, [GOOGLE_CLIENT_ID, gsiReady]);
 
   const handleLogin = async (event) => {
     event.preventDefault();
@@ -273,12 +233,6 @@ export default function Login({
           backgroundSize: "cover",
         }}
       />
-      <div
-        className={cn(
-          "w-full contents transition-opacity duration-200",
-          pageReady ? "opacity-100" : "opacity-0",
-        )}
-      >
       {/* Left column: logos top, social + Contact Us bottom, same horizontal center */}
       <div className="absolute left-0 top-0 bottom-0 z-10 flex flex-col items-center pt-5 pb-6 px-6 w-56 sm:w-60 bg-transparent border-0 shadow-none" data-testid="login-left-column">
         <div className="flex flex-col items-center gap-2">
@@ -436,7 +390,6 @@ export default function Login({
             </form>
           </CardContent>
         </Card>
-      </div>
       </div>
     </div>
   );
