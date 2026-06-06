@@ -31,21 +31,21 @@ export function AssessmentPageFooter({ language }) {
 
   return (
     <footer
-      className="mt-8 rounded-xl border border-border/60 bg-white px-4 py-3 shadow-sm dark:bg-card"
+      className="assessment-students-per-class-footer mt-8 rounded-xl border px-4 py-3 shadow-sm"
       data-testid="assessment-page-footer"
     >
-      <p className="text-xs font-medium text-muted-foreground mb-2">
+      <p className="assessment-students-per-class-title text-xs font-medium mb-2">
         {t("students_per_class")}
       </p>
       <div className="flex flex-wrap gap-x-6 gap-y-1 text-sm">
         {sortByClassOrder(classSummary).map((cls) => (
           <span
             key={cls.class_id}
-            className="text-foreground"
+            className="assessment-students-per-class-entry"
             data-testid={`footer-class-${cls.class_id}`}
           >
             <span className="font-medium">{cls.class_name}</span>
-            <span className="text-muted-foreground ml-1">({cls.student_count})</span>
+            <span className="assessment-students-per-class-count ml-1">({cls.student_count})</span>
           </span>
         ))}
       </div>
