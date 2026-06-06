@@ -214,7 +214,7 @@ export const AppShell = ({
 
   return (
     <div
-      className="flex min-h-screen w-full flex-col bg-background text-foreground"
+      className="flex min-h-screen w-full flex-col bg-page text-foreground"
       dir={isRTL ? "rtl" : "ltr"}
       data-testid="app-shell"
     >

@@ -47,6 +47,7 @@ code {
     /* Light tokens aligned to https://qyhfjkezskthq.ok.kimi.link/ (Al-Mubarmij reference CSS) */
     :root {
         --background: 0 0% 100%;
+        --page-background: 220 14% 96%;
         --foreground: 222.2 84% 4.9%;
         --card: 0 0% 100%;
         --card-foreground: 222.2 84% 4.9%;
@@ -75,7 +76,7 @@ code {
         --chart-5: 215.4 16.3% 46.9%;
         --section-header: 0 0% 100%;
         --section-context: 210 40% 96.1%;
-        --section-main: 210 40% 98.5%;
+        --section-main: 220 14% 96%;
         --section-toolbar: 210 40% 96.5%;
         --section-card: 0 0% 100%;
         --section-alt-1: 210 40% 96.1%;
@@ -92,6 +93,7 @@ code {
     /* Dark = cosmic navy “night sky” (reference landing hero) */
     .dark {
         --background: 222 42% 7%;
+        --page-background: 222 42% 7%;
         --foreground: 210 40% 98%;
         --card: 222 36% 12%;
         --card-foreground: 210 40% 98%;
@@ -158,7 +160,8 @@ code {
         @apply border-border;
     }
     body {
-        @apply bg-background text-foreground;
+        @apply text-foreground;
+        background-color: hsl(var(--page-background));
     }
     p, span, label, li, td, th, a, input, select, textarea, button {
         @apply font-semibold;
@@ -294,7 +297,7 @@ code {
 }
 
 .page-content-bg {
-    background: hsl(var(--section-main)) !important;
+    background: hsl(var(--page-background)) !important;
 }
 html.dark .page-content-bg {
     background: hsl(222 42% 7% / 0.55) !important;
@@ -811,11 +814,11 @@ table td:has(input.score-table-input-10-fill) {
 }
 
 body {
-    background-color: hsl(var(--background));
+    background-color: hsl(var(--page-background));
 }
 
 #root {
     min-height: 100dvh;
-    background-color: hsl(var(--background));
+    background-color: hsl(var(--page-background));
 }
 
