@@ -47,7 +47,7 @@ code {
     /* Light tokens aligned to https://qyhfjkezskthq.ok.kimi.link/ (Al-Mubarmij reference CSS) */
     :root {
         --background: 0 0% 100%;
-        --page-background: 220 14% 96%;
+        --page-background: 228 37% 16%;
         --foreground: 222.2 84% 4.9%;
         --card: 0 0% 100%;
         --card-foreground: 222.2 84% 4.9%;
@@ -76,7 +76,7 @@ code {
         --chart-5: 215.4 16.3% 46.9%;
         --section-header: 0 0% 100%;
         --section-context: 210 40% 96.1%;
-        --section-main: 220 14% 96%;
+        --section-main: 228 37% 16%;
         --section-toolbar: 210 40% 96.5%;
         --section-card: 0 0% 100%;
         --section-alt-1: 210 40% 96.1%;
@@ -297,7 +297,15 @@ code {
 }
 
 .page-content-bg {
-    background: hsl(var(--page-background)) !important;
+    background-color: hsl(var(--page-background)) !important;
+}
+html:not(.dark) .page-content-bg {
+    /* Match app-chrome header navy (#0d1222 → #1a2038) for a seamless page canvas */
+    background-color: #1a2038 !important;
+    background-image:
+        radial-gradient(ellipse 70% 90% at 95% 0%, rgba(230, 30, 143, 0.08) 0%, transparent 50%),
+        radial-gradient(ellipse 80% 120% at 10% -20%, rgba(139, 43, 236, 0.1) 0%, transparent 55%),
+        linear-gradient(180deg, #161c31 0%, #1a2038 100%) !important;
 }
 html.dark .page-content-bg {
     background: hsl(222 42% 7% / 0.55) !important;
@@ -417,8 +425,16 @@ html:not(.dark) .main-hero-sky::before {
 }
 
 .app-site-footer {
-    border-top: 1px solid hsl(var(--border) / 0.6);
-    background: hsl(var(--section-alt-2));
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    background: hsl(var(--page-background));
+}
+
+html:not(.dark) .app-site-footer {
+    background: #1a2038;
+}
+
+html:not(.dark) .app-site-footer .text-muted-foreground {
+    color: #9aa3b5;
 }
 
 .app-site-footer a {
@@ -463,6 +479,13 @@ html:not(.dark) .login-top-sky {
 .section-bg-alt-2 { background: hsl(var(--section-alt-2)); }
 .section-bg-alt-3 { background: hsl(var(--section-alt-3)); }
 .section-bg-alt-4 { background: hsl(var(--section-alt-4)); }
+
+html:not(.dark) .section-bg-alt-1,
+html:not(.dark) .section-bg-alt-2,
+html:not(.dark) .section-bg-alt-3,
+html:not(.dark) .section-bg-alt-4 {
+    background: rgba(255, 255, 255, 0.04);
+}
 .section-toolbar-bg { background: hsl(var(--section-toolbar)); }
 .section-card-bg { background: hsl(var(--section-card)); }
 .section-bg-alt-1,
@@ -817,8 +840,16 @@ body {
     background-color: hsl(var(--page-background));
 }
 
+html:not(.dark) body {
+    background-color: #1a2038;
+}
+
 #root {
     min-height: 100dvh;
     background-color: hsl(var(--page-background));
+}
+
+html:not(.dark) #root {
+    background-color: #1a2038;
 }
 
