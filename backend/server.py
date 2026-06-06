@@ -8653,7 +8653,7 @@ _cors_origins_raw = os.environ.get("CORS_ORIGINS", "*").strip()
 _extra_frontend_origins = [
     os.environ.get("FRONTEND_URL", "").strip(),
     os.environ.get("PUBLIC_FRONTEND_URL", "").strip(),
-    # Keep the Render frontend working even if CORS_ORIGINS still points to the old Vercel URL.
+    # Allow the Render frontend URL listed in CORS_ORIGINS (comma-separated if multiple).
     "https://al-anjal-follow-up-record.onrender.com",
 ]
 if _cors_origins_raw == "*":

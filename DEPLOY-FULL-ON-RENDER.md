@@ -1,52 +1,73 @@
 ## Deploy frontend + backend on Render
 
-This project can run fully on Render (not Vercel) using the existing `render.yaml`.
+This project runs **entirely on Render** (frontend and backend). Use the Blueprint in `render.yaml`.
 
 ### What is included
 
-- `al-anjal-frontend` (**Node Web Service** — `serve -s build` so SPA routes work without CDN rewrite rules)
-- `al-anjal-backend` (Python Web Service) from `backend/`
-- Optional keep-awake cron for backend
+- `al-anjal-frontend` — **Node Web Service** (`npm run build` + `npm run serve:prod` for React Router / SPA)
+- `al-anjal-backend` — Python Web Service (`uvicorn server:app`)
+- Optional keep-awake cron for the backend (`/health` ping)
 
 ### One-time setup in Render
 
-1. Open Render dashboard.
-2. Click **New +** -> **Blueprint**.
+1. Open [dashboard.render.com](https://dashboard.render.com).
+2. Click **New +** → **Blueprint**.
 3. Select this GitHub repository and branch `main`.
-4. Render will detect `render.yaml` and create services.
+4. Render detects `render.yaml` and creates the services.
+5. Set required secrets when prompted (see below).
 
 ### Required environment variables
 
-Set these in Render before first successful run:
+**Backend** (`al-anjal-backend`):
 
-- For **backend**:
-  - `MONGO_URL` (secret)
-  - `JWT_SECRET` (secret)
-  - `DB_NAME` (example: `school_db`)
-  - `CORS_ORIGINS` (set to your frontend Render URL after frontend deploy)
+| Key | Notes |
+|-----|--------|
+| `MONGO_URL` | MongoDB Atlas connection string (secret) |
+| `JWT_SECRET` | Long random secret |
+| `DB_NAME` | e.g. `school_db` |
+| `CORS_ORIGINS` | Your **frontend** Render URL after first deploy (no trailing slash) |
 
-- For **frontend**:
-  - `REACT_APP_BACKEND_URL` (set to backend Render URL, no trailing `/api`)
-    - Example: `https://al-anjal-follow-up-e-g.onrender.com`
+**Frontend** (`al-anjal-frontend`):
 
-### After deploy
+| Key | Notes |
+|-----|--------|
+| `REACT_APP_BACKEND_URL` | Backend Render URL, e.g. `https://al-anjal-follow-up-e-g.onrender.com` — **no** `/api` suffix |
 
-1. Copy frontend URL from `al-anjal-frontend`.
-2. Update backend `CORS_ORIGINS` to that exact frontend URL.
-3. Redeploy backend once.
+Optional Gmail login: `GOOGLE_CLIENT_ID` (backend) and `REACT_APP_GOOGLE_CLIENT_ID` (frontend, same value). See [GMAIL_LOGIN_SETUP.md](GMAIL_LOGIN_SETUP.md).
 
-### Fix plain "Not Found" on the frontend (React Router / SPA)
+### After first deploy
 
-- **Blueprint from this repo:** the frontend is a **Node** service with `serve -s build`, same idea as Vercel’s rewrites — **no dashboard rewrite needed**.
-- **If you still use an old manual Static Site:** either switch to a Node Web Service (see `render.yaml` for `buildCommand` / `startCommand`) or add **Redirects / Rewrites**: Source `/*`, Destination `/index.html`, Action **Rewrite**.
+1. Copy the **frontend** service URL from Render.
+2. Set backend `CORS_ORIGINS` to that exact URL.
+3. **Redeploy the backend** once.
 
-### Two different URLs (this is normal)
+### Deploying updates
 
-- **Backend (Web Service):** `https://…onrender.com` → JSON from `/`, `/health`, `/docs`. This is **not** the website UI.
-- **Frontend (Node Web Service in Blueprint):** another `https://…onrender.com` → the login page and app. Use this URL when you “open the website.”
+1. Push to `main` on GitHub.
+2. Render auto-deploys both services (if connected), or use **Manual Deploy → Deploy latest commit** on each service.
+3. Frontend env changes require a **new build** (redeploy), not just a restart.
 
-### Important performance note
+### Two different URLs (normal)
 
-Render free backend can sleep after inactivity. First request may take 30-60 seconds.
-If this is the speed issue, moving frontend from Vercel to Render will not remove backend cold start.
+| URL | What it is |
+|-----|------------|
+| Backend `https://…onrender.com` | API — `/health`, `/docs`, JSON |
+| Frontend `https://…onrender.com` | **Website** — login page and app |
 
+Always share the **frontend** URL with teachers.
+
+### SPA routing (“Not Found” on refresh)
+
+The Blueprint frontend uses Node + `serve -s build`, so React Router works without extra rewrite rules.
+
+If you still have an **old manual Static Site** on Render, delete it or add rewrite `/*` → `/index.html`, or recreate the frontend using `render.yaml`.
+
+### Performance (free tier)
+
+Render free services can sleep after inactivity. The first request may take 30–60 seconds (cold start). The optional cron job in `render.yaml` pings `/health` to reduce sleep; you can also use UptimeRobot on the backend `/health` URL.
+
+### Related docs
+
+- [DEPLOYMENT.md](DEPLOYMENT.md) — overview and troubleshooting
+- [DEPLOY-UPDATES.md](DEPLOY-UPDATES.md) — push and redeploy workflow
+- [GMAIL_LOGIN_SETUP.md](GMAIL_LOGIN_SETUP.md) — Google sign-in env vars on Render

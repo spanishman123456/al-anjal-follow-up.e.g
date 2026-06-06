@@ -1,5 +1,7 @@
 # Step-by-step: Push the fix and finish deployment
 
+> **Outdated:** Steps 2–3 refer to Vercel. Deploy **both frontend and backend on Render** — see **[DEPLOY-UPDATES.md](DEPLOY-UPDATES.md)** and **[DEPLOY-FULL-ON-RENDER.md](DEPLOY-FULL-ON-RENDER.md)**.
+
 Follow these in order. You only need a browser and (for Step 1) a terminal on your PC.
 
 ---

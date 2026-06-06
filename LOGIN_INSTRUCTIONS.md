@@ -27,7 +27,7 @@ The login only works when the **frontend talks to your local backend**. You must
 ## 3. Use the app at localhost
 
 - **Important:** Use **http://localhost:3000** in the browser (the address bar must say `localhost`).
-- Do **not** use a different URL (e.g. a Vercel or “Emergent” preview link). Those use a different server and your password reset will not work there.
+- Do **not** use a different URL (e.g. an old preview or staging link). Those use a different server and your password reset will not work there.
 
 ## 4. Log in
 

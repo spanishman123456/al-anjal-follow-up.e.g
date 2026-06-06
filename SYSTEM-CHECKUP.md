@@ -10,7 +10,7 @@ This document summarizes a full-stack check of the Al Anjal School Follow-up Rec
 |------|------------------|
 | **Frontend** | API client timeouts, health check, error handling, login/server messages, file uploads |
 | **Backend** | Health endpoint, CORS, startup, MongoDB, error responses |
-| **Deployment** | Vercel (frontend), Render (backend), env vars, cold start |
+| **Deployment** | Render (frontend + backend), env vars, cold start |
 
 ---
 
@@ -18,7 +18,7 @@ This document summarizes a full-stack check of the Al Anjal School Follow-up Rec
 
 ### 2.1 Backend – CORS origins
 
-- **Issue:** `CORS_ORIGINS` was split by comma without trimming. A value like `https://a.vercel.app, https://b.vercel.app` could produce an origin with a leading space and CORS could reject requests.
+- **Issue:** `CORS_ORIGINS` was split by comma without trimming. A value like `https://a.onrender.com, https://b.onrender.com` could produce an origin with a leading space and CORS could reject requests.
 - **Fix:** Origins are now trimmed: `[o.strip() for o in raw.split(",") if o.strip()]`.
 
 ### 2.2 Frontend – user-friendly API errors
@@ -51,13 +51,13 @@ So: **slowness and connection messages are expected when the backend has been id
    - **[UptimeRobot](https://uptimerobot.com)** (or similar): create an HTTP monitor for `https://al-anjal-follow-up-e-g.onrender.com/health` with a **5–10 minute** interval.
    - Result: Backend stays warm; first load and actions stay fast and reliable.
 
-2. **Vercel (frontend)**  
-   - Ensure **Environment Variable** `REACT_APP_BACKEND_URL` is set to your Render URL (e.g. `https://al-anjal-follow-up-e-g.onrender.com`) for **Production** (and Preview if you use it).
+2. **Render (frontend)**  
+   - **Environment** → `REACT_APP_BACKEND_URL` = your backend Render URL (e.g. `https://al-anjal-follow-up-e-g.onrender.com`) for **Production**.
    - Redeploy after changing env vars so the build picks them up.
 
 3. **Render (backend)**  
-   - **Environment** → `CORS_ORIGINS` = your exact Vercel URL (e.g. `https://al-anjal-follow-up-e-g.vercel.app`), no trailing slash.
-   - After changing env, Render redeploys automatically.
+   - **Environment** → `CORS_ORIGINS` = your exact **frontend** Render URL (e.g. `https://al-anjal-frontend.onrender.com`), no trailing slash.
+   - Redeploy after changing env vars.
 
 ---
 
@@ -65,8 +65,8 @@ So: **slowness and connection messages are expected when the backend has been id
 
 | Check | Where | What to verify |
 |-------|--------|----------------|
-| Backend URL in frontend | Vercel → Project → Settings → Environment Variables | `REACT_APP_BACKEND_URL` = `https://...onrender.com` (no `/api`) |
-| CORS | Render → Service → Environment | `CORS_ORIGINS` = `https://...vercel.app` (no trailing slash, no extra spaces) |
+| Backend URL in frontend | Render → **frontend** service → Environment | `REACT_APP_BACKEND_URL` = `https://...onrender.com` (no `/api`) |
+| CORS | Render → **backend** service → Environment | `CORS_ORIGINS` = `https://...onrender.com` (frontend URL, no trailing slash) |
 | Backend awake | UptimeRobot (or similar) | HTTP monitor every 5–10 min to `.../health` |
 | Login | Live site | After idle: wait up to ~1 min once; then login and navigation should be fast |
 | Excel import | Dashboard or Students | File with name + class (any order); no “class column required” or “no students” unless file really has no valid name/class |

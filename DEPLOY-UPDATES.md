@@ -1,78 +1,59 @@
-# Deploy the latest updates (Q1/Q2 separation + Classes fix)
+# Deploy the latest updates
 
-Follow these steps to get the updates live on Vercel (frontend) and Render (backend).
+Push code to GitHub and let **Render** redeploy **both** the frontend and backend services.
 
 ---
 
 ## 1. Open a terminal in the project folder
 
-In PowerShell or Command Prompt:
-
 ```powershell
-cd "c:\Users\hosam\OneDrive\Desktop\Desktop Stuff to review\New Source file of Al Anjal Foloow up Record Website\Hosam-main\Hosam-main"
+cd "C:\Users\hosam\OneDrive\Desktop\Desktop Stuff to review\New Source file of Al Anjal Foloow up Record Website\Hosam-main\Hosam-main"
 ```
 
 ---
 
-## 2. Check what changed
+## 2. Commit and push
 
 ```powershell
 git status
-```
-
-You should see modified files in `frontend/src`, `frontend/src/pages`, and `backend/server.py`.
-
----
-
-## 3. Stage all changes
-
-```powershell
 git add -A
-```
-
----
-
-## 4. Commit with a clear message
-
-```powershell
-git commit -m "Fix Q1/Q2 marks separation and classes list: Q2 uses quiz3/quiz4/chapter_test2, pages fetch classes when empty"
-```
-
----
-
-## 5. Push to GitHub
-
-```powershell
-git push
-```
-
-If you use a different branch (e.g. `main`):
-
-```powershell
+git commit -m "Your commit message here"
 git push origin main
 ```
 
 ---
 
-## 6. Let Vercel and Render deploy
+## 3. Deploy on Render
 
-- **Vercel** (frontend): If the repo is connected, Vercel will detect the push and start a new build. Check the Vercel dashboard for the deploy status.
-- **Render** (backend): If the repo is connected, Render will redeploy the backend. Check the Render dashboard for the deploy status.
+If auto-deploy is enabled (recommended), Render starts new builds for connected services when you push to `main`.
 
-If auto-deploy is **not** set up:
+Otherwise, for **each** service (frontend + backend):
 
-- **Vercel**: Dashboard → your project → **Deployments** → **Redeploy** (or connect the repo and enable “Deploy on push”).
-- **Render**: Dashboard → your Web Service → **Manual Deploy** → **Deploy latest commit**.
+1. Open [dashboard.render.com](https://dashboard.render.com).
+2. Select the service.
+3. **Manual Deploy** → **Deploy latest commit**.
+
+Wait until both show **Live**.
 
 ---
 
-## 7. Verify after deploy
+## 4. Verify
 
-1. Open your **Vercel app URL** (e.g. `https://your-app.vercel.app`).
-2. Log in and check:
-   - **1st Quarter Marks** (Assessment): edit Quiz 1 / Quiz 2 / Chapter Test 1 — only Q1 data should change.
-   - **2nd Quarter Marks** (Assessment): you should see **Quiz 3**, **Quiz 4**, **Chapter Test 2**; editing them should not change Q1.
-   - **Classes dropdown** and **Class** column should show the list of classes on Overview Students and both Assessment pages.
+1. Open your **frontend Render URL** (not the backend API URL).
+2. Log in and spot-check the pages you changed.
+3. Optional: open `https://your-backend.onrender.com/health` — should return OK.
+
+---
+
+## Environment variables (usually unchanged)
+
+| Service | Variable | Value |
+|---------|----------|--------|
+| Frontend | `REACT_APP_BACKEND_URL` | Backend Render URL (no `/api`) |
+| Backend | `CORS_ORIGINS` | Frontend Render URL (no trailing slash) |
+| Backend | `MONGO_URL`, `JWT_SECRET`, `DB_NAME` | As already configured |
+
+If you change any `REACT_APP_*` variable on the frontend, you must **redeploy** the frontend so the build picks it up.
 
 ---
 
@@ -80,12 +61,8 @@ If auto-deploy is **not** set up:
 
 | Step | Action |
 |------|--------|
-| 1 | `cd` to project folder |
-| 2 | `git status` (optional) |
-| 3 | `git add -A` |
-| 4 | `git commit -m "..."` |
-| 5 | `git push` (or `git push origin main`) |
-| 6 | Wait for Vercel + Render to finish deploying |
-| 7 | Test the app in the browser |
+| 1 | `git add` / `commit` / `push` to `main` |
+| 2 | Wait for Render frontend + backend deploys |
+| 3 | Test the live frontend URL |
 
-No need to change env vars or build commands; the same `REACT_APP_BACKEND_URL` and Render settings continue to work.
+Full setup guide: [DEPLOY-FULL-ON-RENDER.md](DEPLOY-FULL-ON-RENDER.md).

@@ -1,5 +1,7 @@
 # Deploy Al Anjal App — Visual Step-by-Step Guide
 
+> **Outdated:** This guide describes deploying the frontend on Vercel. The project now runs **frontend and backend on Render**. Use **[DEPLOY-FULL-ON-RENDER.md](DEPLOY-FULL-ON-RENDER.md)** and **[DEPLOYMENT.md](DEPLOYMENT.md)** instead.
+
 Follow each step below. The images show what to look for on each screen.
 
 > **Images:** The guide references images in the `assets` folder (`deploy-guide-step1-github.png` through `deploy-guide-step5-mongo.png`). If you opened this in Cursor, check the `assets` folder in your project. You can also follow the steps using only the text and the table at the end.
