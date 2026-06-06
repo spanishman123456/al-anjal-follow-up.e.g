@@ -671,11 +671,13 @@ export default function FinalExamsAssessmentQ2() {
                   );
                   const quarterExamTotal = computeQuarterExamTotal(current);
                   const total =
-                    !bulkEditMode &&
-                    !hasPendingChanges &&
-                    student.final_exams_q2_combined_total != null &&
-                    !Number.isNaN(Number(student.final_exams_q2_combined_total))
-                      ? Number(student.final_exams_q2_combined_total)
+                    !bulkEditMode && !hasPendingChanges
+                      ? student.final_exams_q2_combined_total != null &&
+                        !Number.isNaN(Number(student.final_exams_q2_combined_total))
+                        ? Number(student.final_exams_q2_combined_total)
+                        : student.final_exams_q2_performance_level === "no_data"
+                          ? 0
+                          : computeFinalTotal(student, current)
                       : computeFinalTotal(student, current);
                   const perfLevel =
                     !bulkEditMode && !hasPendingChanges && student.final_exams_q2_performance_level

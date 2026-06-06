@@ -1156,20 +1156,41 @@ async def build_full_year_score_map(student_ids: List[str]) -> Dict[str, Dict[in
     return scores_by_student
 
 
+_FOLLOWUP_FIELDS = ("attendance", "participation", "behavior", "homework")
+
+
+def _is_blank_score(v: Any) -> bool:
+    """True when a score field is unset (None, NaN, or blank string)."""
+    if v is None:
+        return True
+    if isinstance(v, float) and pd.isna(v):
+        return True
+    if isinstance(v, str) and not str(v).strip():
+        return True
+    return False
+
+
+def _week_has_entered_followup(score: Dict[str, Optional[float]]) -> bool:
+    """True when at least one follow-up field was entered (including explicit 0)."""
+    doc = score or {}
+    return any(not _is_blank_score(doc.get(field)) for field in _FOLLOWUP_FIELDS)
+
+
+def _week_followup_total(score: Dict[str, Optional[float]]) -> float:
+    doc = score or {}
+    total = sum(_safe_float_score(doc.get(field)) for field in _FOLLOWUP_FIELDS)
+    return round(min(max(0, total), TOTAL_SCORE_MAX), 2)
+
+
 def _collect_followup_week_totals_for_range(
     scores_by_week: Dict[int, Dict[str, Optional[float]]], start: int, end_inclusive: int
 ) -> List[float]:
     week_totals: List[float] = []
     for week_num in range(start, end_inclusive + 1):
         score = scores_by_week.get(week_num) or {}
-        a, p, b, h = score.get("attendance"), score.get("participation"), score.get("behavior"), score.get("homework")
-        if all(v is None or (isinstance(v, float) and pd.isna(v)) for v in [a, p, b, h]):
+        if not _week_has_entered_followup(score):
             continue
-        total = sum(
-            float(v) if v is not None and not (isinstance(v, float) and pd.isna(v)) else 0
-            for v in [a, p, b, h]
-        )
-        week_totals.append(min(total, TOTAL_SCORE_MAX))
+        week_totals.append(_week_followup_total(score))
     return week_totals
 
 
@@ -1200,18 +1221,9 @@ def compute_avg_first_9_weeks_inclusive(scores_by_week: Dict[int, Dict[str, Opti
 
 
 def compute_avg_weeks_10_18(scores_by_week: Dict[int, Dict[str, Optional[float]]]) -> Optional[float]:
-    """Average of student's follow-up total (attendance+participation+behavior+homework, max 15) over weeks 10-18. Only includes weeks that have at least one non-null score; returns None if no such weeks."""
-    week_totals: List[float] = []
-    for week_num in range(10, 19):
-        score = scores_by_week.get(week_num) or {}
-        a, p, b, h = score.get("attendance"), score.get("participation"), score.get("behavior"), score.get("homework")
-        if all(v is None or (isinstance(v, float) and pd.isna(v)) for v in [a, p, b, h]):
-            continue
-        total = sum(
-            float(v) if v is not None and not (isinstance(v, float) and pd.isna(v)) else 0
-            for v in [a, p, b, h]
-        )
-        week_totals.append(min(total, 15))
+    """Average follow-up total (max 15) over weeks 10-18 with entered data; None if no weeks have follow-up marks."""
+    scores_by_week = _normalize_scores_by_week_keys(scores_by_week)
+    week_totals = _collect_followup_week_totals_for_range(scores_by_week, 10, 18)
     if not week_totals:
         return None
     return round(sum(week_totals) / len(week_totals), 2)
@@ -1237,19 +1249,18 @@ def compute_students_total_for_assessment(
     avg_first_9_weeks: Optional[float] = None,
     avg_weeks_10_18: Optional[float] = None,
     weeks_10_18: bool = False,
-) -> float:
+) -> Optional[float]:
     """
     Students follow-up total (max 15) for the 30-point assessment / 50-point quarter model.
-    Uses averages over weeks that actually have follow-up scores (non-inclusive). Empty weeks are not
-    folded in, so early-term or partial data is not diluted across all nine weeks (which was forcing
-    healthy students into the Below band and emptying On-level / Approaching in dashboards and PDFs).
+    Uses averages over weeks that actually have follow-up scores (non-inclusive). Returns None when
+    no follow-up marks were entered in the quarter (distinct from an entered average of 0).
     """
     if weeks_10_18:
         avg = avg_weeks_10_18 if avg_weeks_10_18 is not None else compute_avg_weeks_10_18(scores_by_week)
     else:
         avg = avg_first_9_weeks if avg_first_9_weeks is not None else compute_avg_first_9_weeks(scores_by_week)
     if avg is None:
-        return 0.0
+        return None
     return round(min(max(0, float(avg)), 15), 2)
 
 
@@ -1369,6 +1380,40 @@ def compute_performance(scores: Dict[str, Optional[float]]) -> Dict[str, Any]:
     }
 
 
+def _quiz_chapter_fields_for_quarter(quarter: int) -> tuple:
+    if quarter == 2:
+        return ("quiz3", "quiz4", "chapter_test2_practical")
+    return ("quiz1", "quiz2", "chapter_test1_practical")
+
+
+def _quarter_exam_fields_for_quarter(quarter: int) -> tuple:
+    if quarter == 2:
+        return ("quarter2_practical", "quarter2_theory")
+    return ("quarter1_practical", "quarter1_theory")
+
+
+def _has_meaningful_quiz_chapter_scores(scores: Dict[str, Optional[float]], quarter: int) -> bool:
+    return any(_is_meaningful_score(scores.get(k)) for k in _quiz_chapter_fields_for_quarter(quarter))
+
+
+def _has_meaningful_quarter_exam_scores(scores: Dict[str, Optional[float]], quarter: int) -> bool:
+    return any(_is_meaningful_score(scores.get(k)) for k in _quarter_exam_fields_for_quarter(quarter))
+
+
+def _quiz_chapter_subtotal(scores: Dict[str, Optional[float]], quarter: int) -> float:
+    if quarter == 2:
+        q3 = _safe_float_score(scores.get("quiz3"))
+        q4 = _safe_float_score(scores.get("quiz4"))
+        pt = _safe_float_score(scores.get("chapter_test2_practical"))
+        best_quiz = max(q3, q4)
+    else:
+        q1 = _safe_float_score(scores.get("quiz1"))
+        q2 = _safe_float_score(scores.get("quiz2"))
+        pt = _safe_float_score(scores.get("chapter_test1_practical"))
+        best_quiz = max(q1, q2)
+    return round(min(max(0, best_quiz + pt), 15), 2)
+
+
 def compute_assessment_combined(
     scores: Dict[str, Optional[float]],
     avg_first_9_weeks: Optional[float] = None,
@@ -1376,42 +1421,36 @@ def compute_assessment_combined(
     students_total_override: Optional[float] = None,
 ) -> Dict[str, Any]:
     """Combined total = students part (max 15) + best(Quiz1, Quiz2) + Chapter Test (max 15), total max 30."""
-    avg_to_use = None  # so has_any can always reference it
     if students_total_override is not None:
         students_total = round(min(max(0, float(students_total_override)), 15), 2)
-        avg_to_use = students_total_override
+        has_followup = True
+    elif avg_weeks_10_18 is not None:
+        students_total = round(min(max(0, float(avg_weeks_10_18)), 15), 2)
+        has_followup = True
+    elif avg_first_9_weeks is not None:
+        students_total = round(min(max(0, float(avg_first_9_weeks)), 15), 2)
+        has_followup = True
     else:
-        avg_to_use = avg_weeks_10_18 if avg_weeks_10_18 is not None else avg_first_9_weeks
-        if avg_to_use is not None:
-            students_total = round(min(max(0, float(avg_to_use)), 15), 2)
-        else:
-            behavioral = {
-                "attendance": scores.get("attendance"),
-                "participation": scores.get("participation"),
-                "behavior": scores.get("behavior"),
-                "homework": scores.get("homework"),
-            }
-            students_total = sum(
-                float(v) if v is not None and not (isinstance(v, float) and pd.isna(v)) else 0
-                for v in behavioral.values()
-            )
-            students_total = round(min(max(0, students_total), 15), 2)
-    q1 = float(scores.get("quiz1")) if scores.get("quiz1") is not None and not (isinstance(scores.get("quiz1"), float) and pd.isna(scores.get("quiz1"))) else 0
-    q2 = float(scores.get("quiz2")) if scores.get("quiz2") is not None and not (isinstance(scores.get("quiz2"), float) and pd.isna(scores.get("quiz2"))) else 0
-    pt = float(scores.get("chapter_test1_practical")) if scores.get("chapter_test1_practical") is not None and not (isinstance(scores.get("chapter_test1_practical"), float) and pd.isna(scores.get("chapter_test1_practical"))) else 0
-    assessment_total = round(min(max(0, max(q1, q2) + pt), 15), 2)
+        behavioral = {
+            "attendance": scores.get("attendance"),
+            "participation": scores.get("participation"),
+            "behavior": scores.get("behavior"),
+            "homework": scores.get("homework"),
+        }
+        has_followup = any(not _is_blank_score(v) for v in behavioral.values())
+        students_total = round(
+            min(
+                max(
+                    0,
+                    sum(_safe_float_score(v) for v in behavioral.values()),
+                ),
+                15,
+            ),
+            2,
+        )
+    assessment_total = _quiz_chapter_subtotal(scores, quarter=1)
     combined = round(min(students_total + assessment_total, 30), 2)
-    has_any = (
-        avg_to_use is not None
-        or any(
-            v is not None and not (isinstance(v, float) and pd.isna(v))
-            for v in [scores.get("quiz1"), scores.get("quiz2"), scores.get("chapter_test1_practical")]
-        )
-        or any(
-            v is not None and not (isinstance(v, float) and pd.isna(v))
-            for v in [scores.get("attendance"), scores.get("participation"), scores.get("behavior"), scores.get("homework")]
-        )
-    )
+    has_any = has_followup or _has_meaningful_quiz_chapter_scores(scores, quarter=1)
     if not has_any:
         return {"combined_total": None, "students_total": None, "performance_level": "no_data", "performance_label": "No Data"}
     if combined >= 25:
@@ -1431,8 +1470,10 @@ def compute_assessment_combined_q2(
     """Q2 Assessment combined: students part (max 15) + best(Quiz3, Quiz4) + Chapter Test 2 Practical (max 15), total max 30."""
     if students_total_override is not None:
         students_total = round(min(max(0, float(students_total_override)), 15), 2)
+        has_followup = True
     elif avg_weeks_10_18 is not None:
         students_total = round(min(max(0, float(avg_weeks_10_18)), 15), 2)
+        has_followup = True
     else:
         behavioral = {
             "attendance": scores.get("attendance"),
@@ -1440,28 +1481,20 @@ def compute_assessment_combined_q2(
             "behavior": scores.get("behavior"),
             "homework": scores.get("homework"),
         }
-        students_total = sum(
-            float(v) if v is not None and not (isinstance(v, float) and pd.isna(v)) else 0
-            for v in behavioral.values()
+        has_followup = any(not _is_blank_score(v) for v in behavioral.values())
+        students_total = round(
+            min(
+                max(
+                    0,
+                    sum(_safe_float_score(v) for v in behavioral.values()),
+                ),
+                15,
+            ),
+            2,
         )
-        students_total = round(min(max(0, students_total), 15), 2)
-    q3 = float(scores.get("quiz3")) if scores.get("quiz3") is not None and not (isinstance(scores.get("quiz3"), float) and pd.isna(scores.get("quiz3"))) else 0
-    q4 = float(scores.get("quiz4")) if scores.get("quiz4") is not None and not (isinstance(scores.get("quiz4"), float) and pd.isna(scores.get("quiz4"))) else 0
-    pt = float(scores.get("chapter_test2_practical")) if scores.get("chapter_test2_practical") is not None and not (isinstance(scores.get("chapter_test2_practical"), float) and pd.isna(scores.get("chapter_test2_practical"))) else 0
-    assessment_total = round(min(max(0, max(q3, q4) + pt), 15), 2)
+    assessment_total = _quiz_chapter_subtotal(scores, quarter=2)
     combined = round(min(students_total + assessment_total, 30), 2)
-    has_any = (
-        avg_weeks_10_18 is not None
-        or students_total_override is not None
-        or any(
-            v is not None and not (isinstance(v, float) and pd.isna(v))
-            for v in [scores.get("quiz3"), scores.get("quiz4"), scores.get("chapter_test2_practical")]
-        )
-        or any(
-            v is not None and not (isinstance(v, float) and pd.isna(v))
-            for v in [scores.get("attendance"), scores.get("participation"), scores.get("behavior"), scores.get("homework")]
-        )
-    )
+    has_any = has_followup or _has_meaningful_quiz_chapter_scores(scores, quarter=2)
     if not has_any:
         return {"combined_total": None, "students_total": None, "performance_level": "no_data", "performance_label": "No Data"}
     if combined >= 25:
@@ -1492,25 +1525,19 @@ def compute_final_exams_combined(
             avg_weeks_10_18=avg_weeks_10_18,
             students_total_override=students_total_override,
         )
-    assessment_part = assessment_result.get("combined_total") or 0
+    assessment_part = float(assessment_result.get("combined_total") or 0)
     if quarter == 2:
-        qp = float(scores.get("quarter2_practical")) if scores.get("quarter2_practical") is not None and not (isinstance(scores.get("quarter2_practical"), float) and pd.isna(scores.get("quarter2_practical"))) else 0
-        qt = float(scores.get("quarter2_theory")) if scores.get("quarter2_theory") is not None and not (isinstance(scores.get("quarter2_theory"), float) and pd.isna(scores.get("quarter2_theory"))) else 0
-        quarter_fields = [scores.get("quarter2_practical"), scores.get("quarter2_theory")]
+        qp = _safe_float_score(scores.get("quarter2_practical"))
+        qt = _safe_float_score(scores.get("quarter2_theory"))
     else:
-        qp = float(scores.get("quarter1_practical")) if scores.get("quarter1_practical") is not None and not (isinstance(scores.get("quarter1_practical"), float) and pd.isna(scores.get("quarter1_practical"))) else 0
-        qt = float(scores.get("quarter1_theory")) if scores.get("quarter1_theory") is not None and not (isinstance(scores.get("quarter1_theory"), float) and pd.isna(scores.get("quarter1_theory"))) else 0
-        quarter_fields = [scores.get("quarter1_practical"), scores.get("quarter1_theory")]
+        qp = _safe_float_score(scores.get("quarter1_practical"))
+        qt = _safe_float_score(scores.get("quarter1_theory"))
     quarter_sum = round(min(max(0, qp + qt), 20), 2)
     # Full Quizzes & Chapter Test cumulative (assessment_part, max 30) + quarter exams (max 20) = max 50.
-    # When quarter exams are not entered yet, show assessment part only (e.g. 29/50), not just weekly subtotal (15).
     combined = round(min(assessment_part + quarter_sum, 50), 2)
     has_any = (
         assessment_result.get("combined_total") is not None
-        or any(
-            v is not None and not (isinstance(v, float) and pd.isna(v))
-            for v in quarter_fields
-        )
+        or _has_meaningful_quarter_exam_scores(scores, quarter)
     )
     if not has_any:
         return {"combined_total": None, "performance_level": "no_data", "performance_label": "No Data"}
@@ -1641,63 +1668,110 @@ def _quarter_has_quiz_chapter_or_exam_substance(
     return any(_is_meaningful_score(eq.get(k)) for k in keys)
 
 
+def compute_cumulative_quarter_score_50(
+    scores_by_week: Dict[int, Dict[str, Optional[float]]],
+    quarter: int,
+    exam_scores: Optional[Dict[str, Optional[float]]] = None,
+) -> Dict[str, Any]:
+    """
+    Canonical 50-point quarter total used across Assessment, Quizzes & Chapter Test, and Final Exams.
+    Breakdown: follow-up (max 15) + quizzes/chapter (max 15) + quarter exams (max 20).
+    Missing or blank values contribute 0; full marks are never assumed as defaults.
+    """
+    sw = _normalize_scores_by_week_keys(scores_by_week)
+    if quarter == 2:
+        avg = compute_avg_weeks_10_18(sw)
+        students_total = compute_students_total_for_assessment(sw, avg_weeks_10_18=avg, weeks_10_18=True)
+        eq = _effective_scores_q2(sw)
+        exam_src = exam_scores if exam_scores is not None else eq
+        qc_scores = {
+            "quiz3": eq.get("quiz3"),
+            "quiz4": eq.get("quiz4"),
+            "chapter_test2_practical": eq.get("chapter_test2_practical"),
+        }
+        assess = compute_assessment_combined_q2(
+            qc_scores, avg_weeks_10_18=avg, students_total_override=students_total
+        )
+        exam20 = round(
+            min(
+                max(
+                    0,
+                    _safe_float_score(exam_src.get("quarter2_practical"))
+                    + _safe_float_score(exam_src.get("quarter2_theory")),
+                ),
+                20,
+            ),
+            2,
+        )
+    else:
+        avg = compute_avg_first_9_weeks(sw)
+        students_total = compute_students_total_for_assessment(sw, avg_first_9_weeks=avg, weeks_10_18=False)
+        eq = _effective_scores_q1(sw)
+        exam_src = exam_scores if exam_scores is not None else eq
+        qc_scores = {
+            "quiz1": eq.get("quiz1"),
+            "quiz2": eq.get("quiz2"),
+            "chapter_test1_practical": eq.get("chapter_test1_practical"),
+        }
+        assess = compute_assessment_combined(
+            qc_scores, avg_first_9_weeks=avg, students_total_override=students_total
+        )
+        exam20 = round(
+            min(
+                max(
+                    0,
+                    _safe_float_score(exam_src.get("quarter1_practical"))
+                    + _safe_float_score(exam_src.get("quarter1_theory")),
+                ),
+                20,
+            ),
+            2,
+        )
+
+    followup_15 = float(assess.get("students_total") or 0)
+    quizzes_15 = round(max(0, float(assess.get("combined_total") or 0) - followup_15), 2)
+    total_50 = round(min(float(assess.get("combined_total") or 0) + exam20, 50), 2)
+
+    if assess.get("combined_total") is None and exam20 == 0:
+        return {
+            "followup_15": 0.0,
+            "quizzes_chapter_15": 0.0,
+            "exams_20": 0.0,
+            "total_50": None,
+            "combined_total": None,
+            "performance_level": "no_data",
+            "performance_label": "No Data",
+        }
+
+    if total_50 >= QUARTER_TOTAL_ON_LEVEL:
+        level, label = "on_level", "On Level"
+    elif total_50 >= QUARTER_TOTAL_APPROACH:
+        level, label = "approach", "Approach"
+    else:
+        level, label = "below", "Below"
+
+    return {
+        "followup_15": followup_15,
+        "quizzes_chapter_15": quizzes_15,
+        "exams_20": exam20,
+        "total_50": total_50,
+        "combined_total": total_50,
+        "performance_level": level,
+        "performance_label": label,
+    }
+
+
 def _compute_cumulative_final_quarter(
     scores_by_week: Dict[int, Dict[str, Optional[float]]],
     quarter: int,
 ) -> Dict[str, Any]:
-    """Quarter total out of 50, aligned with Final Exams + Quizzes pages: 30 (follow-up + quizzes/chapter) + 20 (exams)."""
-    scores_by_week = _normalize_scores_by_week_keys(scores_by_week)
-    if quarter == 2:
-        week_range = range(10, 19)
-        quarter_keys = ("quiz3", "quiz4", "chapter_test2_practical", "quarter2_practical", "quarter2_theory")
-        eq = _effective_scores_q2(scores_by_week)
-        exam20 = round(
-            min(
-                max(0, _safe_float_score(eq.get("quarter2_practical")) + _safe_float_score(eq.get("quarter2_theory"))),
-                20,
-            ),
-            2,
-        )
-    else:
-        week_range = range(1, 19)
-        quarter_keys = ("quiz1", "quiz2", "chapter_test1_practical", "quarter1_practical", "quarter1_theory")
-        eq = _effective_scores_q1(scores_by_week)
-        exam20 = round(
-            min(
-                max(0, _safe_float_score(eq.get("quarter1_practical")) + _safe_float_score(eq.get("quarter1_theory"))),
-                20,
-            ),
-            2,
-        )
-
-    has_any = False
-    for w in week_range:
-        s = scores_by_week.get(w) or {}
-        for k in ("attendance", "participation", "behavior", "homework", *quarter_keys):
-            if _is_meaningful_score(s.get(k)):
-                has_any = True
-                break
-        if has_any:
-            break
-    if not has_any and quarter == 2:
-        s19 = scores_by_week.get(19) or {}
-        for k in ("quarter2_practical", "quarter2_theory"):
-            if _is_meaningful_score(s19.get(k)):
-                has_any = True
-                break
-    if not has_any:
+    """Quarter total out of 50 — delegates to compute_cumulative_quarter_score_50 (single source of truth)."""
+    res = compute_cumulative_quarter_score_50(scores_by_week, quarter)
+    combined = res.get("combined_total")
+    if combined is None:
         return {"combined_total": None, "performance_level": "no_data", "performance_label": "No Data"}
-
-    qc30 = _compute_quizzes_chapter_assessment_sw(scores_by_week, quarter)
-    assessment_part = float(qc30) if qc30 is not None else 0.0
-    combined = round(min(assessment_part + exam20, 50), 2)
-    if combined >= QUARTER_TOTAL_ON_LEVEL:
-        level, label = "on_level", "On Level"
-    elif combined >= QUARTER_TOTAL_APPROACH:
-        level, label = "approach", "Approach"
-    else:
-        level, label = "below", "Below"
-    # Do not assign 'Below' (needs support) without real quiz/chapter/exam marks for this quarter.
+    level = res.get("performance_level")
+    label = res.get("performance_label")
     if level == "below" and not _quarter_has_quiz_chapter_or_exam_substance(scores_by_week, quarter):
         return {"combined_total": None, "performance_level": "no_data", "performance_label": "No Data"}
     return {"combined_total": combined, "performance_level": level, "performance_label": label}

@@ -754,11 +754,13 @@ export default function AssessmentMarks() {
                   }
                   // Use backend combined total when available (so 30/30 shows correctly); in bulk edit use local computation for live preview
                   const total =
-                    !bulkEditMode &&
-                    !hasPendingChanges &&
-                    student.assessment_combined_total != null &&
-                    !Number.isNaN(Number(student.assessment_combined_total))
-                      ? Number(student.assessment_combined_total)
+                    !bulkEditMode && !hasPendingChanges
+                      ? student.assessment_combined_total != null &&
+                        !Number.isNaN(Number(student.assessment_combined_total))
+                        ? Number(student.assessment_combined_total)
+                        : student.assessment_performance_level === "no_data"
+                          ? 0
+                          : computeCombinedTotal(student, current)
                       : computeCombinedTotal(student, current);
                   const perfLevel =
                     !bulkEditMode && !hasPendingChanges && student.assessment_performance_level

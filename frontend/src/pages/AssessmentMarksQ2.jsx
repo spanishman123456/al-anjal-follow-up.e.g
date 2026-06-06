@@ -749,11 +749,13 @@ export default function AssessmentMarksQ2() {
                     }
                   }
                   const total =
-                    !bulkEditMode &&
-                    !hasPendingChanges &&
-                    student.assessment_q2_combined_total != null &&
-                    !Number.isNaN(Number(student.assessment_q2_combined_total))
-                      ? Number(student.assessment_q2_combined_total)
+                    !bulkEditMode && !hasPendingChanges
+                      ? student.assessment_q2_combined_total != null &&
+                        !Number.isNaN(Number(student.assessment_q2_combined_total))
+                        ? Number(student.assessment_q2_combined_total)
+                        : student.assessment_q2_performance_level === "no_data"
+                          ? 0
+                          : computeCombinedTotal(student, current)
                       : computeCombinedTotal(student, current);
                   const perfLevel =
                     !bulkEditMode && !hasPendingChanges && student.assessment_q2_performance_level

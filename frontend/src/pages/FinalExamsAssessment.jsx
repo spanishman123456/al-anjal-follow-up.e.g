@@ -669,11 +669,13 @@ export default function FinalExamsAssessment() {
                   const quarterExamTotal = computeQuarterExamTotal(current);
                   // Use backend final-exams combined total when available (50/50); in bulk edit use local computation for live preview
                   const total =
-                    !bulkEditMode &&
-                    !hasPendingChanges &&
-                    student.final_exams_combined_total != null &&
-                    !Number.isNaN(Number(student.final_exams_combined_total))
-                      ? Number(student.final_exams_combined_total)
+                    !bulkEditMode && !hasPendingChanges
+                      ? student.final_exams_combined_total != null &&
+                        !Number.isNaN(Number(student.final_exams_combined_total))
+                        ? Number(student.final_exams_combined_total)
+                        : student.final_exams_performance_level === "no_data"
+                          ? 0
+                          : computeFinalTotal(student, current)
                       : computeFinalTotal(student, current);
                   const perfLevel =
                     !bulkEditMode && !hasPendingChanges && student.final_exams_performance_level
