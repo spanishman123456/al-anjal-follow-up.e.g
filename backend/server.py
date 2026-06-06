@@ -1919,31 +1919,43 @@ def _focus_component_snapshot(student: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
-def _focus_component_column_defs(quarter: int) -> List[Tuple[str, str]]:
-    if int(quarter or 1) == 2:
+def _focus_component_column_defs(
+    semester: int,
+    quarter: int,
+    lang: str = "en",
+) -> List[Tuple[str, str]]:
+    sem = int(semester or 1)
+    q = 2 if int(quarter or 1) == 2 else 1
+    practical_label, theory_label = _quarter_exam_component_labels(sem, q, lang)
+    if q == 2:
         return [
-            ("Assessment", "focus_assessment"),
-            ("Quiz 3", "focus_quiz_primary"),
-            ("Quiz 4", "focus_quiz_secondary"),
-            ("Chapter Test 2", "focus_chapter_test"),
-            ("Final Practical", "focus_final_practical"),
-            ("Final Theory", "focus_final_theory"),
+            (_tr("Assessment", lang), "focus_assessment"),
+            (f"{_tr('Quiz', lang)} 3", "focus_quiz_primary"),
+            (f"{_tr('Quiz', lang)} 4", "focus_quiz_secondary"),
+            (f"{_tr('Chapter Test', lang)} 2", "focus_chapter_test"),
+            (practical_label, "focus_final_practical"),
+            (theory_label, "focus_final_theory"),
         ]
     return [
-        ("Assessment", "focus_assessment"),
-        ("Quiz 1", "focus_quiz_primary"),
-        ("Quiz 2", "focus_quiz_secondary"),
-        ("Chapter Test 1", "focus_chapter_test"),
-        ("Final Practical", "focus_final_practical"),
-        ("Final Theory", "focus_final_theory"),
+        (_tr("Assessment", lang), "focus_assessment"),
+        (f"{_tr('Quiz', lang)} 1", "focus_quiz_primary"),
+        (f"{_tr('Quiz', lang)} 2", "focus_quiz_secondary"),
+        (f"{_tr('Chapter Test', lang)} 1", "focus_chapter_test"),
+        (practical_label, "focus_final_practical"),
+        (theory_label, "focus_final_theory"),
     ]
 
 
-def _focus_component_chart_rows(student: Dict[str, Any], quarter: int) -> List[Dict[str, Any]]:
+def _focus_component_chart_rows(
+    student: Dict[str, Any],
+    semester: int,
+    quarter: int,
+    lang: str = "en",
+) -> List[Dict[str, Any]]:
     palette = ["#0ea5e9", "#38bdf8", "#22c55e", "#f59e0b", "#8b5cf6", "#ef4444"]
     rows: List[Dict[str, Any]] = []
     quiz_values: List[float] = []
-    for _, key in _focus_component_column_defs(quarter):
+    for _, key in _focus_component_column_defs(semester, quarter, lang):
         if key not in ("focus_quiz_primary", "focus_quiz_secondary"):
             continue
         raw_quiz_value = student.get(key)
@@ -1956,7 +1968,7 @@ def _focus_component_chart_rows(student: Dict[str, Any], quarter: int) -> List[D
         quiz_values.append(quiz_value)
     best_quiz_index = 0 if len(quiz_values) == 2 and quiz_values[0] >= quiz_values[1] else 1
     current_quiz_index = 0
-    for idx, (label, key) in enumerate(_focus_component_column_defs(quarter)):
+    for idx, (label, key) in enumerate(_focus_component_column_defs(semester, quarter, lang)):
         raw_value = student.get(key)
         value = 0.0
         if raw_value is not None:
@@ -1987,9 +1999,14 @@ def _focus_component_chart_rows(student: Dict[str, Any], quarter: int) -> List[D
     return rows
 
 
-def _focus_component_summary_text(student: Dict[str, Any], quarter: int) -> str:
+def _focus_component_summary_text(
+    student: Dict[str, Any],
+    semester: int,
+    quarter: int,
+    lang: str = "en",
+) -> str:
     parts: List[str] = []
-    for row in _focus_component_chart_rows(student, quarter):
+    for row in _focus_component_chart_rows(student, semester, quarter, lang):
         value = "-" if row.get("raw_value") is None else row["value"]
         if row.get("excluded_from_total") and row["value"] > 0:
             parts.append(f"{row['label']}: {value} (shown only)")
@@ -2336,8 +2353,10 @@ def create_analytics_pass_donut(distribution: List[Dict[str, Any]]) -> io.BytesI
     return buf
 
 
-def create_component_breakdown_bar_chart(student: Dict[str, Any], quarter: int) -> io.BytesIO:
-    rows = _focus_component_chart_rows(student, quarter)
+def create_component_breakdown_bar_chart(
+    student: Dict[str, Any], semester: int, quarter: int, lang: str = "en"
+) -> io.BytesIO:
+    rows = _focus_component_chart_rows(student, semester, quarter, lang)
     if not rows:
         return _analytics_empty_chart("No score breakdown data")
     _chart_prepare_mpl()
@@ -2376,8 +2395,10 @@ def create_component_breakdown_bar_chart(student: Dict[str, Any], quarter: int) 
     return buf
 
 
-def create_component_breakdown_donut(student: Dict[str, Any], quarter: int) -> io.BytesIO:
-    rows = [row for row in _focus_component_chart_rows(student, quarter) if float(row["value"]) > 0]
+def create_component_breakdown_donut(
+    student: Dict[str, Any], semester: int, quarter: int, lang: str = "en"
+) -> io.BytesIO:
+    rows = [row for row in _focus_component_chart_rows(student, semester, quarter, lang) if float(row["value"]) > 0]
     if not rows:
         return _analytics_empty_chart("No score breakdown data")
     total = sum(float(row.get("counted_value") or 0) for row in rows)
@@ -2410,8 +2431,10 @@ def create_component_breakdown_donut(student: Dict[str, Any], quarter: int) -> i
     return buf
 
 
-def create_component_breakdown_area_chart(student: Dict[str, Any], quarter: int) -> io.BytesIO:
-    rows = _focus_component_chart_rows(student, quarter)
+def create_component_breakdown_area_chart(
+    student: Dict[str, Any], semester: int, quarter: int, lang: str = "en"
+) -> io.BytesIO:
+    rows = _focus_component_chart_rows(student, semester, quarter, lang)
     if not rows:
         return _analytics_empty_chart("No score breakdown data")
     _chart_prepare_mpl()
@@ -2573,6 +2596,12 @@ def _quarter_exam_export_headers(
         f"{ordinal} Quarter Practical Exam (10)",
         f"{ordinal} Quarter Theoretical Exam (10)",
     )
+
+
+def _quarter_exam_component_labels(semester: int, quarter: int, lang: str = "en") -> tuple[str, str]:
+    """Short practical/theory labels for analytics/report component columns (no point suffix)."""
+    practical, theory = _quarter_exam_export_headers(int(semester or 1), int(quarter or 1), "final_exams")
+    return practical.replace(" (10)", ""), theory.replace(" (10)", "")
 
 
 def _pdf_term_display_label(semester: int, quarter: int, lang: str = "en") -> str:
@@ -3268,7 +3297,7 @@ def generate_report_pdf(
     ]]
     for student in top_performers:
         strengths = ", ".join(student.get("strengths") or []) or "-"
-        breakdown = _focus_component_summary_text(student, rq)
+        breakdown = _focus_component_summary_text(student, int(report.get("semester", 1)), rq, lang)
         top_table_data.append(
             [
                 _fmt(student.get("full_name")),
@@ -3292,7 +3321,7 @@ def generate_report_pdf(
     ]]
     for student in support_students:
         weak_areas = ", ".join(student.get("weak_areas") or []) or "-"
-        breakdown = _focus_component_summary_text(student, rq)
+        breakdown = _focus_component_summary_text(student, int(report.get("semester", 1)), rq, lang)
         support_table_data.append(
             [
                 _fmt(student.get("full_name")),
@@ -3359,8 +3388,8 @@ def generate_analytics_dashboard_pdf(
     selected_student = overview.get("selected_student") or {}
     is_student_scope = bool(selected_student)
     if is_student_scope:
-        bar_buf = create_component_breakdown_bar_chart(selected_student, qn)
-        donut_buf = create_component_breakdown_donut(selected_student, qn)
+        bar_buf = create_component_breakdown_bar_chart(selected_student, sem_o, qn_o, lang)
+        donut_buf = create_component_breakdown_donut(selected_student, sem_o, qn_o, lang)
     else:
         bar_buf = create_analytics_class_avg_bar_chart(class_summaries)
         donut_buf = create_analytics_pass_donut(selected_dist)
@@ -3375,7 +3404,7 @@ def generate_analytics_dashboard_pdf(
             label_suffix="/50",
             legend_label="Quarter total (max 50)",
         )
-        area_buf = create_component_breakdown_area_chart(selected_student, qn)
+        area_buf = create_component_breakdown_area_chart(selected_student, sem_o, qn_o, lang)
     else:
         focus_rate = (q1o if qn_o == 1 else q2o).get("on_level_rate")
         line_buf = create_analytics_quarter_focus_bar_chart(
@@ -3438,7 +3467,7 @@ def generate_analytics_dashboard_pdf(
     if is_student_scope:
         donut_notes = [
             f"{label}: {_fmt(selected_student.get(key))}"
-            for label, key in _focus_component_column_defs(qn_o)
+            for label, key in _focus_component_column_defs(sem_o, qn_o, lang)
         ]
         donut_title = _tr("Marks breakdown", lang)
         donut_subtitle = _tr("Student component profile", lang)
@@ -3538,7 +3567,7 @@ def generate_analytics_dashboard_pdf(
     ]]
     for student in top_performers:
         strengths = ", ".join(student.get("strengths") or []) or "-"
-        breakdown = _focus_component_summary_text(student, rq)
+        breakdown = _focus_component_summary_text(student, int(report.get("semester", 1)), rq, lang)
         top_table_data.append(
             [
                 _fmt(student.get("full_name")),
@@ -3562,7 +3591,7 @@ def generate_analytics_dashboard_pdf(
     ]]
     for student in support_students:
         weak_areas = ", ".join(student.get("weak_areas") or []) or "-"
-        breakdown = _focus_component_summary_text(student, rq)
+        breakdown = _focus_component_summary_text(student, int(report.get("semester", 1)), rq, lang)
         support_table_data.append(
             [
                 _fmt(student.get("full_name")),
@@ -3751,13 +3780,13 @@ def generate_reports_dashboard_pdf(
     elements.append(Spacer(1, 14))
 
     if is_student_scope:
-        breakdown_rows = [[_tr("Student", lang), _tr("Class", lang), _tr("Quarter total (50)", lang)] + [label for label, _ in _focus_component_column_defs(qn)]]
+        breakdown_rows = [[_tr("Student", lang), _tr("Class", lang), _tr("Quarter total (50)", lang)] + [label for label, _ in _focus_component_column_defs(sem, qn, lang)]]
         breakdown_rows.append(
             [
                 _fmt(selected_student.get("full_name")),
                 _fmt(selected_student.get("class_name")),
                 _fmt(_pdf_focus_quarter_total(selected_student, qn)),
-                *[_fmt(selected_student.get(key)) for _, key in _focus_component_column_defs(qn)],
+                *[_fmt(selected_student.get(key)) for _, key in _focus_component_column_defs(sem, qn, lang)],
             ]
         )
         elements.append(Paragraph(_pdf_paragraph_text(_tr("Marks breakdown", lang), bold=True), section_style))
@@ -3812,7 +3841,7 @@ def generate_reports_dashboard_pdf(
         ]]
         for student in top_performers:
             strengths = ", ".join(student.get("strengths") or []) or "-"
-            breakdown = _focus_component_summary_text(student, rq)
+            breakdown = _focus_component_summary_text(student, int(report.get("semester", 1)), rq, lang)
             top_table_data.append(
                 [
                     _fmt(student.get("full_name")),
@@ -3836,7 +3865,7 @@ def generate_reports_dashboard_pdf(
         ]]
         for student in support_students:
             weak_areas = ", ".join(student.get("weak_areas") or []) or "-"
-            breakdown = _focus_component_summary_text(student, rq)
+            breakdown = _focus_component_summary_text(student, int(report.get("semester", 1)), rq, lang)
             support_table_data.append(
                 [
                     _fmt(student.get("full_name")),
@@ -3870,12 +3899,14 @@ def generate_reports_dashboard_pdf(
     return pdf_value
 
 
-def generate_report_excel(report: Dict[str, Any], scope: Any, report_type: str = "full") -> bytes:
+def generate_report_excel(report: Dict[str, Any], scope: Any, report_type: str = "full", lang: str = "en") -> bytes:
     buffer = io.BytesIO()
     scope_label = format_scope_label(scope)
+    sem = int(report.get("semester", 1))
     rq = int(report.get("quarter") or 1)
+    lang_code = _normalize_lang(lang)
     is_summary = str(report_type or "full").lower() == "summary"
-    component_defs = _focus_component_column_defs(rq)
+    component_defs = _focus_component_column_defs(sem, rq, lang_code)
     selected_student = report.get("selected_student") or {}
 
     def _focus_total(stu: Dict[str, Any]) -> Any:
@@ -3884,7 +3915,7 @@ def generate_report_excel(report: Dict[str, Any], scope: Any, report_type: str =
     summary_df = pd.DataFrame([
         {
             "Scope": scope_label,
-            "Term": _pdf_term_display_label(int(report.get("semester", 1)), rq, "en"),
+            "Term": _pdf_term_display_label(sem, rq, lang_code),
             "Total Students": report.get("total_students", 0),
             "Avg Total Score": report.get("avg_total_score"),
             "On-level %": report.get("exceeding_rate"),
@@ -7750,7 +7781,7 @@ async def export_grade_report(
     async def _produce():
         summary = await get_grade_report_data(grade, semester, quarter, current_user)
         if fmt == "excel":
-            return generate_report_excel(summary, grade, report_type=rt)
+            return generate_report_excel(summary, grade, report_type=rt, lang=lang_code)
         insights = {
             "analysis_strengths": analysis_strengths or "",
             "analysis_weaknesses": analysis_weaknesses or "",
@@ -7779,11 +7810,13 @@ async def export_grade_report(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Report export failed: {type(exc).__name__}. Please retry.",
         )
+    display_q = _display_quarter_number(sem, q)
+    fn_base = f"grade_{grade}_s{sem}_q{display_q}_{rt}_report"
     if fmt == "excel":
-        filename = f"grade_{grade}_report.xlsx"
+        filename = f"{fn_base}.xlsx"
         media_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     else:
-        filename = f"grade_{grade}_report.pdf"
+        filename = f"{fn_base}.pdf"
         media_type = "application/pdf"
     headers = {"Content-Disposition": f"attachment; filename={filename}"}
     return StreamingResponse(io.BytesIO(content), media_type=media_type, headers=headers)
@@ -7894,7 +7927,7 @@ async def export_analytics_summary(
             student_name = (student or {}).get("full_name") or student_id
             scope_label = f"{scope_label} · {student_name}"
         if fmt == "excel":
-            return generate_report_excel(summary, scope_label)
+            return generate_report_excel(summary, scope_label, lang=lang_code)
         insights = {
             "analysis_strengths": analysis_strengths or "",
             "analysis_weaknesses": analysis_weaknesses or "",

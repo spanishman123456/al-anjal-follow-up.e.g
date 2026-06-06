@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { useOutletContext, Link } from "react-router-dom";
 import { api } from "@/lib/api";
 import { getApiErrorMessage } from "@/lib/api";
-import { termScopeIdFromOutlet, resolveTermScope } from "@/lib/academicScope";
+import { termScopeIdFromOutlet, resolveTermScope, quarterExamColumnLabels, displayQuarterNumber } from "@/lib/academicScope";
 import { AcademicTermSelect } from "@/components/layout/AcademicTermSelect";
 import { buildAutoInsightsFromReport } from "@/lib/insightAutofill";
 import { useTranslations } from "@/lib/i18n";
@@ -196,7 +196,7 @@ export default function Reports() {
       link.href = url;
       link.setAttribute(
         "download",
-        `grade_${grade}_${termScopeId}_report.${format === "excel" ? "xlsx" : "pdf"}`,
+        `grade_${grade}_s${apiSemester}_q${displayQuarterNumber(semester, quarter)}_${reportType}_report.${format === "excel" ? "xlsx" : "pdf"}`,
       );
       document.body.appendChild(link);
       link.click();
@@ -246,22 +246,23 @@ export default function Reports() {
   };
 
   const classBreakdown = report?.class_breakdown || [];
-  const focusComponentLabels = apiQuarter === 2
+  const examColumnLabels = quarterExamColumnLabels(t, semester, quarter);
+  const focusComponentLabels = Number(quarter) === 2
     ? [
         { key: "focus_assessment", label: t("assessment") },
         { key: "focus_quiz_primary", label: t("quiz3") },
         { key: "focus_quiz_secondary", label: t("quiz4") },
         { key: "focus_chapter_test", label: t("chapter_test2_practical") },
-        { key: "focus_final_practical", label: t("quarter2_practical") },
-        { key: "focus_final_theory", label: t("quarter2_theory") },
+        { key: "focus_final_practical", label: examColumnLabels.practical },
+        { key: "focus_final_theory", label: examColumnLabels.theoretical },
       ]
     : [
         { key: "focus_assessment", label: t("assessment") },
         { key: "focus_quiz_primary", label: t("quiz1") },
         { key: "focus_quiz_secondary", label: t("quiz2") },
         { key: "focus_chapter_test", label: t("chapter_test1_practical") },
-        { key: "focus_final_practical", label: t("quarter1_practical") },
-        { key: "focus_final_theory", label: t("quarter1_theory") },
+        { key: "focus_final_practical", label: examColumnLabels.practical },
+        { key: "focus_final_theory", label: examColumnLabels.theoretical },
       ];
   const renderMarksBreakdown = (student) => (
     <div className="space-y-1 text-xs text-muted-foreground">

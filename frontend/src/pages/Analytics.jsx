@@ -19,6 +19,7 @@ import {
   resolveTermScope,
   displayQuarterLabel,
   displayQuarterNumber,
+  quarterExamColumnLabels,
 } from "@/lib/academicScope";
 import { AcademicTermSelect } from "@/components/layout/AcademicTermSelect";
 import { buildAutoInsightsFromOverview } from "@/lib/insightAutofill";
@@ -71,24 +72,26 @@ function toChartNumber(value) {
   return Number.isFinite(num) ? num : 0;
 }
 
-function buildStudentBreakdownData(student, apiQuarter, t) {
+function buildStudentBreakdownData(student, semester, quarter, t) {
   if (!student) return [];
-  const defs = apiQuarter === 2
+  const examLabels = quarterExamColumnLabels(t, semester, quarter);
+  const isSecondInternalQuarter = Number(quarter) === 2;
+  const defs = isSecondInternalQuarter
     ? [
         { key: "assessment", label: t("assessment"), value: student.focus_assessment, max: 15, kind: "assessment" },
         { key: "quiz3", label: t("quiz3"), value: student.focus_quiz_primary, max: 5, kind: "quiz" },
         { key: "quiz4", label: t("quiz4"), value: student.focus_quiz_secondary, max: 5, kind: "quiz" },
         { key: "chapter_test2", label: t("chapter_test2_practical"), value: student.focus_chapter_test, max: 10, kind: "chapter" },
-        { key: "quarter2_practical", label: t("quarter2_practical"), value: student.focus_final_practical, max: 10, kind: "final" },
-        { key: "quarter2_theory", label: t("quarter2_theory"), value: student.focus_final_theory, max: 10, kind: "final" },
+        { key: "quarter2_practical", label: examLabels.practical, value: student.focus_final_practical, max: 10, kind: "final" },
+        { key: "quarter2_theory", label: examLabels.theoretical, value: student.focus_final_theory, max: 10, kind: "final" },
       ]
     : [
         { key: "assessment", label: t("assessment"), value: student.focus_assessment, max: 15, kind: "assessment" },
         { key: "quiz1", label: t("quiz1"), value: student.focus_quiz_primary, max: 5, kind: "quiz" },
         { key: "quiz2", label: t("quiz2"), value: student.focus_quiz_secondary, max: 5, kind: "quiz" },
         { key: "chapter_test1", label: t("chapter_test1_practical"), value: student.focus_chapter_test, max: 10, kind: "chapter" },
-        { key: "quarter1_practical", label: t("quarter1_practical"), value: student.focus_final_practical, max: 10, kind: "final" },
-        { key: "quarter1_theory", label: t("quarter1_theory"), value: student.focus_final_theory, max: 10, kind: "final" },
+        { key: "quarter1_practical", label: examLabels.practical, value: student.focus_final_practical, max: 10, kind: "final" },
+        { key: "quarter1_theory", label: examLabels.theoretical, value: student.focus_final_theory, max: 10, kind: "final" },
       ];
   const quizDefs = defs.filter((item) => item.kind === "quiz");
   const quizScores = quizDefs.map((item) => toChartNumber(item.value));
@@ -141,7 +144,7 @@ export default function Analytics() {
   const term = resolveTermScope(termScopeId);
   const apiSemester = term.semester;
   const apiQuarter = term.quarter;
-  const sameSemesterQuarterOneLabel = displayQuarterLabel(t, apiSemester, 1);
+  const selectedQuarterLabel = displayQuarterLabel(t, semester, quarter);
   const [overview, setOverview] = useState(null);
   const [classSummary, setClassSummary] = useState([]);
   const [activeTab, setActiveTab] = useState("overview");
@@ -322,8 +325,8 @@ export default function Analytics() {
   }, [overview, apiQuarter, language]);
 
   useEffect(() => {
-    if (activeTab === "quarter2") setActiveTab("quarter1");
-  }, [activeTab]);
+    setActiveTab("overview");
+  }, [termScopeId]);
 
   const q1 = overview?.quarter1 || {};
   const q2 = overview?.quarter2 || {};
@@ -333,8 +336,8 @@ export default function Analytics() {
   const selectedStudentPerformanceLevel =
     apiQuarter === 2 ? selectedStudent?.performance_level_q2 : selectedStudent?.performance_level_q1;
   const studentBreakdownData = useMemo(
-    () => (isStudentScoped && selectedStudent ? buildStudentBreakdownData(selectedStudent, apiQuarter, t) : []),
-    [apiQuarter, isStudentScoped, selectedStudent, t],
+    () => (isStudentScoped && selectedStudent ? buildStudentBreakdownData(selectedStudent, semester, quarter, t) : []),
+    [isStudentScoped, quarter, selectedStudent, semester, t],
   );
   const selectedStudentAchievementRate = useMemo(() => {
     if (!isStudentScoped) return 0;
@@ -360,7 +363,7 @@ export default function Analytics() {
     const total = dist.reduce((sum, d) => sum + Number(d?.count ?? 0), 0);
     return total > 0 ? Math.round((onLevel / total) * 1000) / 10 : 0;
   }, [isStudentScoped, selectedQuarterDistribution, selectedStudentAchievementRate]);
-  const q1Distribution = isStudentScoped
+  const focusQuarterDistributionChart = isStudentScoped
     ? studentBreakdownData.map((item) => ({
         name: item.name,
         legendName: item.legendName,
@@ -370,7 +373,7 @@ export default function Analytics() {
         opacity: item.opacity,
         excludedFromTotal: item.excludedFromTotal,
       }))
-    : (q1.distribution || []).map((item) => ({
+    : (selectedQuarterDistribution || []).map((item) => ({
         name: t(item.level),
         value: item.count,
         level: item.level,
@@ -1044,7 +1047,7 @@ export default function Analytics() {
             {t("overview")}
           </TabsTrigger>
           <TabsTrigger value="quarter1" data-testid="analytics-tab-quarter1">
-            {sameSemesterQuarterOneLabel}
+            {selectedQuarterLabel}
           </TabsTrigger>
           <TabsTrigger value="struggling" data-testid="analytics-tab-struggling">
             {t("struggling_students")}
@@ -1111,15 +1114,15 @@ export default function Analytics() {
           <Card className="border-primary/20 shadow-sm">
             <CardHeader>
               <CardTitle>
-                {isStudentScoped ? t("analytics_student_component_share") : `${sameSemesterQuarterOneLabel} — ${t("performance_distribution")}`}
+                {isStudentScoped ? t("analytics_student_component_share") : `${selectedQuarterLabel} — ${t("performance_distribution")}`}
               </CardTitle>
             </CardHeader>
             <CardContent className="grid gap-6 md:grid-cols-2">
               <div className="h-64" data-testid="analytics-q1-chart">
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
-                    <Pie data={q1Distribution} dataKey="value" innerRadius={60} outerRadius={90}>
-                      {q1Distribution.map((entry) => (
+                    <Pie data={focusQuarterDistributionChart} dataKey="value" innerRadius={60} outerRadius={90}>
+                      {focusQuarterDistributionChart.map((entry) => (
                         <Cell
                           key={entry.level}
                           fill={isStudentScoped ? entry.fill : PERFORMANCE_CHART_COLORS[entry.level]}
@@ -1132,7 +1135,7 @@ export default function Analytics() {
                 </ResponsiveContainer>
               </div>
               <div className="space-y-3" data-testid="analytics-q1-list">
-                {q1Distribution.map((item) => (
+                {focusQuarterDistributionChart.map((item) => (
                   <div
                     key={item.level}
                     className="interactive-surface flex items-center justify-between rounded-lg border border-border/60 px-3 py-2"
