@@ -636,9 +636,9 @@ export default function FinalExamsAssessment() {
                 <TableHead>{t("class_name")}</TableHead>
                 <TableHead className="text-center">{t("quarter1_practical_exam")} (10)</TableHead>
                 <TableHead className="text-center">{t("quarter1_theoretical_exam")} (10)</TableHead>
-                <TableHead className="text-center">{t("total_score")}</TableHead>
-                <TableHead className="text-center">{t("performance_level")}</TableHead>
                 <TableHead className="text-center">{t("quarter_exams_total")} (20)</TableHead>
+                <TableHead className="text-center">{t("performance_level")}</TableHead>
+                <TableHead className="text-center">{t("total_score")}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -711,6 +711,12 @@ export default function FinalExamsAssessment() {
                           placeholder="0–10"
                         />
                       </TableCell>
+                      <TableCell className="text-center">
+                        <span className="font-semibold tabular-nums">{formatScore(quarterExamTotal, "/20")}</span>
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <PerformanceLevelBadge variant="outline" level={perfLevel} label={t(perfLevel)} />
+                      </TableCell>
                       <TableCell className="text-center" data-testid={`final-exams-total-${student.id}`}>
                         <div className="flex flex-col items-center gap-0.5">
                           <span className="font-semibold tabular-nums">
@@ -730,12 +736,6 @@ export default function FinalExamsAssessment() {
                               </span>
                             )}
                         </div>
-                      </TableCell>
-                      <TableCell className="text-center">
-                        <PerformanceLevelBadge variant="outline" level={perfLevel} label={t(perfLevel)} />
-                      </TableCell>
-                      <TableCell className="text-center">
-                        <span className="font-semibold tabular-nums">{formatScore(quarterExamTotal, "/20")}</span>
                       </TableCell>
                     </TableRow>
                   );
