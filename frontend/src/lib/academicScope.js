@@ -47,3 +47,12 @@ export function displayQuarterNumber(semester, quarter) {
 export function displayQuarterLabel(t, semester, quarter) {
   return `${t("quarter")} ${displayQuarterNumber(semester, quarter)}`;
 }
+
+/** Table/export labels for the selected term's practical and theoretical exam columns. */
+export function quarterExamColumnLabels(t, semester, quarter) {
+  const displayQuarter = displayQuarterNumber(semester, quarter);
+  return {
+    practical: t(`quarter${displayQuarter}_practical_exam`),
+    theoretical: t(`quarter${displayQuarter}_theoretical_exam`),
+  };
+}

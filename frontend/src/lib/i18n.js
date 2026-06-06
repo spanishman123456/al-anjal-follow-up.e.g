@@ -34,6 +34,10 @@ export const translations = {
     quarter1_theoretical_exam: "1st Quarter Theoretical Exam",
     quarter2_practical_exam: "2nd Quarter Practical Exam",
     quarter2_theoretical_exam: "2nd Quarter Theoretical Exam",
+    quarter3_practical_exam: "3rd Quarter Practical Exam",
+    quarter3_theoretical_exam: "3rd Quarter Theoretical Exam",
+    quarter4_practical_exam: "4th Quarter Practical Exam",
+    quarter4_theoretical_exam: "4th Quarter Theoretical Exam",
     classes: "Classes",
     analytics: "Analytics",
     analytics_page_description:
@@ -581,6 +585,10 @@ export const translations = {
     quarter1_theoretical_exam: "امتحان الربع الأول النظري",
     quarter2_practical_exam: "امتحان الربع الثاني العملي",
     quarter2_theoretical_exam: "امتحان الربع الثاني النظري",
+    quarter3_practical_exam: "امتحان الربع الثالث العملي",
+    quarter3_theoretical_exam: "امتحان الربع الثالث النظري",
+    quarter4_practical_exam: "امتحان الربع الرابع العملي",
+    quarter4_theoretical_exam: "امتحان الربع الرابع النظري",
     classes: "الفصول",
     analytics: "التحليلات",
     analytics_page_description:

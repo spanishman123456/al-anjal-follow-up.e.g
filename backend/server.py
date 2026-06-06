@@ -2543,6 +2543,38 @@ def _display_quarter_number(semester: int, quarter: int) -> int:
     return (q + 2) if sem == 2 else q
 
 
+def _ordinal_quarter_label(display_quarter: int) -> str:
+    labels = {1: "1st", 2: "2nd", 3: "3rd", 4: "4th"}
+    return labels.get(int(display_quarter), f"{int(display_quarter)}th")
+
+
+def _resolve_display_quarter_for_export(
+    semester: Optional[int],
+    quarter: Optional[int],
+    view_lower: str,
+) -> int:
+    if semester is not None and quarter is not None:
+        return _display_quarter_number(int(semester), int(quarter))
+    if view_lower in ("final_exams_q2", "total_marks_q2", "assessment_q2"):
+        return 2
+    if view_lower in ("final_exams", "total_marks", "assessment"):
+        return 1
+    return 1
+
+
+def _quarter_exam_export_headers(
+    semester: Optional[int],
+    quarter: Optional[int],
+    view_lower: str,
+) -> tuple[str, str]:
+    display_quarter = _resolve_display_quarter_for_export(semester, quarter, view_lower)
+    ordinal = _ordinal_quarter_label(display_quarter)
+    return (
+        f"{ordinal} Quarter Practical Exam (10)",
+        f"{ordinal} Quarter Theoretical Exam (10)",
+    )
+
+
 def _pdf_term_display_label(semester: int, quarter: int, lang: str = "en") -> str:
     sem = int(semester or 1)
     q_disp = _display_quarter_number(sem, quarter)
@@ -5353,6 +5385,8 @@ async def download_import_template(
     week_id: Optional[str] = Query(default=None),
     class_id: Optional[str] = Query(default=None),
     view: Optional[str] = Query(default=None),
+    semester: Optional[int] = Query(default=None),
+    quarter: Optional[int] = Query(default=None),
     current_user: Dict[str, Any] = Depends(get_current_user),
 ):
     """Return an Excel template for the score sheet / student import.
@@ -5368,6 +5402,9 @@ async def download_import_template(
     final_exams_q2_view = view_lower == "final_exams_q2"
     total_marks_view = view_lower == "total_marks"
     total_marks_q2_view = view_lower == "total_marks_q2"
+    exam_practical_header, exam_theory_header = _quarter_exam_export_headers(
+        semester, quarter, view_lower
+    )
     if class_id:
         students = await get_students(class_id=class_id, week_id=week_id, current_user=current_user)
         if students:
@@ -5402,8 +5439,8 @@ async def download_import_template(
                     {
                         "Student Name": s.get("full_name"),
                         "Class": s.get("class_name"),
-                        "1st Quarter Practical Exam (10)": "",
-                        "1st Quarter Theoretical Exam (10)": "",
+                        exam_practical_header: "",
+                        exam_theory_header: "",
                         "Total Score": "",
                         "Performance Level": "",
                     }
@@ -5414,8 +5451,8 @@ async def download_import_template(
                     {
                         "Student Name": s.get("full_name"),
                         "Class": s.get("class_name"),
-                        "2nd Quarter Practical Exam (10)": "",
-                        "2nd Quarter Theoretical Exam (10)": "",
+                        exam_practical_header: "",
+                        exam_theory_header: "",
                         "Total Score": "",
                         "Performance Level": "",
                     }
@@ -5433,8 +5470,8 @@ async def download_import_template(
                         "Attendance (2.5)": "",
                         "Participation (2.5)": "",
                         "Project (5)": "",
-                        "1st Quarter Practical Exam (10)": "",
-                        "1st Quarter Theoretical Exam (10)": "",
+                        exam_practical_header: "",
+                        exam_theory_header: "",
                         "Quarter Exams Total (20)": "",
                         "Total Marks (50)": "",
                     }
@@ -5452,8 +5489,8 @@ async def download_import_template(
                         "Attendance (2.5)": "",
                         "Participation (2.5)": "",
                         "Project (5)": "",
-                        "2nd Quarter Practical Exam (10)": "",
-                        "2nd Quarter Theoretical Exam (10)": "",
+                        exam_practical_header: "",
+                        exam_theory_header: "",
                         "Quarter Exams Total (20)": "",
                         "Total Marks (50)": "",
                     }
@@ -5479,9 +5516,9 @@ async def download_import_template(
             elif assessment_q2_view:
                 empty_row = {"Student Name": "", "Class": "", "Quiz 3 (5)": "", "Quiz 4 (5)": "", "Chapter Test 2 (Practical) (10)": "", "Total Score": "", "Performance Level": ""}
             elif final_exams_view:
-                empty_row = {"Student Name": "", "Class": "", "1st Quarter Practical Exam (10)": "", "1st Quarter Theoretical Exam (10)": "", "Total Score": "", "Performance Level": ""}
+                empty_row = {"Student Name": "", "Class": "", exam_practical_header: "", exam_theory_header: "", "Total Score": "", "Performance Level": ""}
             elif final_exams_q2_view:
-                empty_row = {"Student Name": "", "Class": "", "2nd Quarter Practical Exam (10)": "", "2nd Quarter Theoretical Exam (10)": "", "Total Score": "", "Performance Level": ""}
+                empty_row = {"Student Name": "", "Class": "", exam_practical_header: "", exam_theory_header: "", "Total Score": "", "Performance Level": ""}
             elif total_marks_view:
                 empty_row = {
                     "Student Name": "",
@@ -5493,8 +5530,8 @@ async def download_import_template(
                     "Attendance (2.5)": "",
                     "Participation (2.5)": "",
                     "Project (5)": "",
-                    "1st Quarter Practical Exam (10)": "",
-                    "1st Quarter Theoretical Exam (10)": "",
+                    exam_practical_header: "",
+                    exam_theory_header: "",
                     "Quarter Exams Total (20)": "",
                     "Total Marks (50)": "",
                 }
@@ -5509,8 +5546,8 @@ async def download_import_template(
                     "Attendance (2.5)": "",
                     "Participation (2.5)": "",
                     "Project (5)": "",
-                    "2nd Quarter Practical Exam (10)": "",
-                    "2nd Quarter Theoretical Exam (10)": "",
+                    exam_practical_header: "",
+                    exam_theory_header: "",
                     "Quarter Exams Total (20)": "",
                     "Total Marks (50)": "",
                 }
@@ -5523,9 +5560,9 @@ async def download_import_template(
         elif assessment_q2_view:
             empty_row = {"Student Name": "", "Class": "", "Quiz 3 (5)": "", "Quiz 4 (5)": "", "Chapter Test 2 (Practical) (10)": "", "Total Score": "", "Performance Level": ""}
         elif final_exams_view:
-            empty_row = {"Student Name": "", "Class": "", "1st Quarter Practical Exam (10)": "", "1st Quarter Theoretical Exam (10)": "", "Total Score": "", "Performance Level": ""}
+            empty_row = {"Student Name": "", "Class": "", exam_practical_header: "", exam_theory_header: "", "Total Score": "", "Performance Level": ""}
         elif final_exams_q2_view:
-            empty_row = {"Student Name": "", "Class": "", "2nd Quarter Practical Exam (10)": "", "2nd Quarter Theoretical Exam (10)": "", "Total Score": "", "Performance Level": ""}
+            empty_row = {"Student Name": "", "Class": "", exam_practical_header: "", exam_theory_header: "", "Total Score": "", "Performance Level": ""}
         elif total_marks_view:
             empty_row = {
                 "Student Name": "",
@@ -5537,8 +5574,8 @@ async def download_import_template(
                 "Attendance (2.5)": "",
                 "Participation (2.5)": "",
                 "Project (5)": "",
-                "1st Quarter Practical Exam (10)": "",
-                "1st Quarter Theoretical Exam (10)": "",
+                exam_practical_header: "",
+                exam_theory_header: "",
                 "Quarter Exams Total (20)": "",
                 "Total Marks (50)": "",
             }
@@ -5553,8 +5590,8 @@ async def download_import_template(
                 "Attendance (2.5)": "",
                 "Participation (2.5)": "",
                 "Project (5)": "",
-                "2nd Quarter Practical Exam (10)": "",
-                "2nd Quarter Theoretical Exam (10)": "",
+                exam_practical_header: "",
+                exam_theory_header: "",
                 "Quarter Exams Total (20)": "",
                 "Total Marks (50)": "",
             }
@@ -5583,6 +5620,8 @@ async def export_students_marks(
     week_id: Optional[str] = Query(default=None),
     class_id: Optional[str] = Query(default=None),
     view: Optional[str] = Query(default=None),
+    semester: Optional[int] = Query(default=None),
+    quarter: Optional[int] = Query(default=None),
     current_user: Dict[str, Any] = Depends(get_current_user),
 ):
     students = await get_students(class_id=class_id, week_id=week_id, current_user=current_user)
@@ -5593,6 +5632,9 @@ async def export_students_marks(
     final_exams_q2_view = view_lower == "final_exams_q2"
     total_marks_view = view_lower == "total_marks"
     total_marks_q2_view = view_lower == "total_marks_q2"
+    exam_practical_header, exam_theory_header = _quarter_exam_export_headers(
+        semester, quarter, view_lower
+    )
     export_rows = []
     def _plain_score_display(value):
         if value is None or (isinstance(value, float) and pd.isna(value)):
@@ -5679,8 +5721,8 @@ async def export_students_marks(
                 {
                     "Student Name": student.get("full_name"),
                     "Class": student.get("class_name"),
-                    "1st Quarter Practical Exam (10)": student.get("quarter1_practical"),
-                    "1st Quarter Theoretical Exam (10)": student.get("quarter1_theory"),
+                    exam_practical_header: student.get("quarter1_practical"),
+                    exam_theory_header: student.get("quarter1_theory"),
                     "Total Score": total_display,
                     "Performance Level": combined.get("performance_label") or "No Data",
                     "Quarter Exams Total (20)": _quarter_exam_total_display(
@@ -5710,8 +5752,8 @@ async def export_students_marks(
                 {
                     "Student Name": student.get("full_name"),
                     "Class": student.get("class_name"),
-                    "2nd Quarter Practical Exam (10)": student.get("quarter2_practical"),
-                    "2nd Quarter Theoretical Exam (10)": student.get("quarter2_theory"),
+                    exam_practical_header: student.get("quarter2_practical"),
+                    exam_theory_header: student.get("quarter2_theory"),
                     "Total Score": total_display,
                     "Performance Level": combined.get("performance_label") or "No Data",
                     "Quarter Exams Total (20)": _quarter_exam_total_display(
@@ -5733,8 +5775,8 @@ async def export_students_marks(
                     "Attendance (2.5)": _plain_score_display(student.get("attendance")),
                     "Participation (2.5)": _plain_score_display(student.get("participation")),
                     "Project (5)": _plain_score_display(student.get("behavior")),
-                    "1st Quarter Practical Exam (10)": _plain_score_display(student.get("total_marks_exam_practical")),
-                    "1st Quarter Theoretical Exam (10)": _plain_score_display(student.get("total_marks_exam_theory")),
+                    exam_practical_header: _plain_score_display(student.get("total_marks_exam_practical")),
+                    exam_theory_header: _plain_score_display(student.get("total_marks_exam_theory")),
                     "Quarter Exams Total (20)": _plain_score_display(student.get("total_marks_quarter_exams_total")),
                     "Total Marks (50)": total_display,
                 }
@@ -5752,8 +5794,8 @@ async def export_students_marks(
                     "Attendance (2.5)": _plain_score_display(student.get("attendance")),
                     "Participation (2.5)": _plain_score_display(student.get("participation")),
                     "Project (5)": _plain_score_display(student.get("behavior")),
-                    "2nd Quarter Practical Exam (10)": _plain_score_display(student.get("total_marks_exam_practical")),
-                    "2nd Quarter Theoretical Exam (10)": _plain_score_display(student.get("total_marks_exam_theory")),
+                    exam_practical_header: _plain_score_display(student.get("total_marks_exam_practical")),
+                    exam_theory_header: _plain_score_display(student.get("total_marks_exam_theory")),
                     "Quarter Exams Total (20)": _plain_score_display(student.get("total_marks_quarter_exams_total")),
                     "Total Marks (50)": total_display,
                 }
@@ -7994,44 +8036,56 @@ async def import_excel(
             "q1practical",
             "practicalq1",
             "1stquarterpracticalexam10",
+            "3rdquarterpracticalexam10",
             "اختبارعملي1",
             "اختبار عملي 1",
             "عملي 1",
             "اختبار عملي ربع اول",
             "اختبار عملي الربع الاول",
+            "اختبار عملي ربع ثالث",
+            "اختبار عملي الربع الثالث",
         ],
         "quarter1_theory": [
             "quarter1theory",
             "q1theory",
             "theoryq1",
             "1stquartertheoreticalexam10",
+            "3rdquartertheoreticalexam10",
             "اختبارنظري1",
             "اختبار نظري 1",
             "نظري 1",
             "اختبار نظري ربع اول",
             "اختبار نظري الربع الاول",
+            "اختبار نظري ربع ثالث",
+            "اختبار نظري الربع الثالث",
         ],
         "quarter2_practical": [
             "quarter2practical",
             "q2practical",
             "practicalq2",
             "2ndquarterpracticalexam10",
+            "4thquarterpracticalexam10",
             "اختبارعملي2",
             "اختبار عملي 2",
             "عملي 2",
             "اختبار عملي ربع ثاني",
             "اختبار عملي الربع الثاني",
+            "اختبار عملي ربع رابع",
+            "اختبار عملي الربع الرابع",
         ],
         "quarter2_theory": [
             "quarter2theory",
             "q2theory",
             "theoryq2",
             "2ndquartertheoreticalexam10",
+            "4thquartertheoreticalexam10",
             "اختبارنظري2",
             "اختبار نظري 2",
             "نظري 2",
             "اختبار نظري ربع ثاني",
             "اختبار نظري الربع الثاني",
+            "اختبار نظري ربع رابع",
+            "اختبار نظري الربع الرابع",
         ],
     }
 

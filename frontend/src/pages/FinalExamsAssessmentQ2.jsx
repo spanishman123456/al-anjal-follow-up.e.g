@@ -34,6 +34,7 @@ import {
 import { AssessmentPageFooter } from "@/components/AssessmentPageFooter";
 import { sortByClassOrder } from "@/lib/utils";
 import { PerformanceLevelBadge } from "@/components/PerformanceLevelBadge";
+import { quarterExamColumnLabels } from "@/lib/academicScope";
 
 const formatScore = (value, suffix = "") => {
   if (value === null || value === undefined) return "—";
@@ -130,6 +131,10 @@ export default function FinalExamsAssessmentQ2() {
   const [searchParams, setSearchParams] = useSearchParams();
   const t = useTranslations(language);
   const semesterNumber = semester === "semester2" ? 2 : 1;
+  const examColumnLabels = useMemo(
+    () => quarterExamColumnLabels(t, semester, quarter),
+    [t, semester, quarter]
+  );
   const [students, setStudents] = useState([]);
   const [classes, setClasses] = useState([]);
   const [weeks, setWeeks] = useState([]);
@@ -459,6 +464,8 @@ export default function FinalExamsAssessmentQ2() {
           week_id: activeWeekId || undefined,
           class_id: filterClass !== "all" ? filterClass : undefined,
           view: "final_exams_q2",
+          semester: semesterNumber,
+          quarter,
         },
         responseType: "blob",
       });
@@ -485,6 +492,8 @@ export default function FinalExamsAssessmentQ2() {
           week_id: activeWeekId || undefined,
           class_id: filterClass !== "all" ? filterClass : undefined,
           view: "final_exams_q2",
+          semester: semesterNumber,
+          quarter,
         },
         responseType: "blob",
       });
@@ -637,8 +646,8 @@ export default function FinalExamsAssessmentQ2() {
               <TableRow>
                 <TableHead>{t("student_name")}</TableHead>
                 <TableHead>{t("class_name")}</TableHead>
-                <TableHead className="text-center">{t("quarter2_practical_exam")} (10)</TableHead>
-                <TableHead className="text-center">{t("quarter2_theoretical_exam")} (10)</TableHead>
+                <TableHead className="text-center">{examColumnLabels.practical} (10)</TableHead>
+                <TableHead className="text-center">{examColumnLabels.theoretical} (10)</TableHead>
                 <TableHead className="text-center">{t("quarter_exams_total")} (20)</TableHead>
                 <TableHead className="text-center">{t("performance_level")}</TableHead>
                 <TableHead className="text-center">{t("total_score")}</TableHead>

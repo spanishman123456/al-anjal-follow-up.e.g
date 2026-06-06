@@ -23,6 +23,7 @@ import {
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { sortByClassOrder } from "@/lib/utils";
+import { quarterExamColumnLabels } from "@/lib/academicScope";
 
 const toNumberOrNull = (value) => {
   if (value === null || value === undefined || value === "") return null;
@@ -70,6 +71,10 @@ export default function TotalMarks() {
   const { language, semester, quarter, classes: contextClasses, classesLoaded } = useOutletContext();
   const t = useTranslations(language);
   const semesterNumber = semester === "semester2" ? 2 : 1;
+  const examColumnLabels = useMemo(
+    () => quarterExamColumnLabels(t, semester, quarter),
+    [t, semester, quarter]
+  );
   const [students, setStudents] = useState([]);
   const [classes, setClasses] = useState([]);
   const [weeks, setWeeks] = useState([]);
@@ -443,6 +448,8 @@ export default function TotalMarks() {
           week_id: activeWeekId || undefined,
           class_id: filterClass !== "all" ? filterClass : undefined,
           view: quarterConfig.view,
+          semester: semesterNumber,
+          quarter,
         },
         responseType: "blob",
       });
@@ -474,6 +481,8 @@ export default function TotalMarks() {
           week_id: activeWeekId || undefined,
           class_id: filterClass !== "all" ? filterClass : undefined,
           view: quarterConfig.view,
+          semester: semesterNumber,
+          quarter,
         },
         responseType: "blob",
       });
@@ -671,7 +680,8 @@ export default function TotalMarks() {
                 <TableHead className="text-center">{t("homework")} (5)</TableHead>
                 <TableHead className="text-center">{t("total_marks_participation_attendance")} (5)</TableHead>
                 <TableHead className="text-center">{t("behavior")} (5)</TableHead>
-                <TableHead className="text-center">{t("quarter_exams_total")} (20)</TableHead>
+                <TableHead className="text-center">{examColumnLabels.practical} (10)</TableHead>
+                <TableHead className="text-center">{examColumnLabels.theoretical} (10)</TableHead>
                 <TableHead className="text-center">{t("total_marks_overall")} (50)</TableHead>
               </TableRow>
             </TableHeader>
@@ -777,31 +787,29 @@ export default function TotalMarks() {
                     </div>
                   </TableCell>
                   <TableCell className="py-2">
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-center gap-1">
-                        <span className="w-10 text-[11px] text-muted-foreground">P</span>
-                        {renderMiniInput({
-                          value: fillValues.examPractical,
-                          onChange: (e) => handleFillValueChange("examPractical", e.target.value, 10),
-                          max: 10,
-                          placeholder: "0-10",
-                        })}
-                        <Button type="button" variant="outline" size="sm" className="h-8" onClick={() => applyFillColumn(quarterConfig.examPracticalField, "examPractical", 10)}>
-                          {t("fill_column")}
-                        </Button>
-                      </div>
-                      <div className="flex items-center justify-center gap-1">
-                        <span className="w-10 text-[11px] text-muted-foreground">T</span>
-                        {renderMiniInput({
-                          value: fillValues.examTheory,
-                          onChange: (e) => handleFillValueChange("examTheory", e.target.value, 10),
-                          max: 10,
-                          placeholder: "0-10",
-                        })}
-                        <Button type="button" variant="outline" size="sm" className="h-8" onClick={() => applyFillColumn(quarterConfig.examTheoryField, "examTheory", 10)}>
-                          {t("fill_column")}
-                        </Button>
-                      </div>
+                    <div className="flex items-center justify-center gap-1">
+                      {renderMiniInput({
+                        value: fillValues.examPractical,
+                        onChange: (e) => handleFillValueChange("examPractical", e.target.value, 10),
+                        max: 10,
+                        placeholder: "0-10",
+                      })}
+                      <Button type="button" variant="outline" size="sm" className="h-8" onClick={() => applyFillColumn(quarterConfig.examPracticalField, "examPractical", 10)}>
+                        {t("fill_column")}
+                      </Button>
+                    </div>
+                  </TableCell>
+                  <TableCell className="py-2">
+                    <div className="flex items-center justify-center gap-1">
+                      {renderMiniInput({
+                        value: fillValues.examTheory,
+                        onChange: (e) => handleFillValueChange("examTheory", e.target.value, 10),
+                        max: 10,
+                        placeholder: "0-10",
+                      })}
+                      <Button type="button" variant="outline" size="sm" className="h-8" onClick={() => applyFillColumn(quarterConfig.examTheoryField, "examTheory", 10)}>
+                        {t("fill_column")}
+                      </Button>
                     </div>
                   </TableCell>
                   <TableCell />
@@ -893,39 +901,33 @@ export default function TotalMarks() {
                         testId: `total-marks-project-${student.id}`,
                       })}
                     </TableCell>
-                    <TableCell className="py-3">
-                      <div className="space-y-2">
-                        <div className="flex items-center justify-center gap-2">
-                          <span className="w-10 text-[11px] text-muted-foreground">P</span>
-                          {renderMiniInput({
-                            value: student.examPractical,
-                            onChange: (e) => handleScoreChange(student.id, quarterConfig.examPracticalField, e.target.value, 10),
-                            max: 10,
-                            placeholder: "0-10",
-                            testId: `total-marks-exam-practical-${student.id}`,
-                          })}
-                        </div>
-                        <div className="flex items-center justify-center gap-2">
-                          <span className="w-10 text-[11px] text-muted-foreground">T</span>
-                          {renderMiniInput({
-                            value: student.examTheory,
-                            onChange: (e) => handleScoreChange(student.id, quarterConfig.examTheoryField, e.target.value, 10),
-                            max: 10,
-                            placeholder: "0-10",
-                            testId: `total-marks-exam-theory-${student.id}`,
-                          })}
-                        </div>
-                        <p className="text-center text-[11px] text-muted-foreground">
-                          Total: {formatScore(student.quarterExamTotal)}
-                        </p>
-                      </div>
+                    <TableCell className="text-center">
+                      {renderMiniInput({
+                        value: student.examPractical,
+                        onChange: (e) => handleScoreChange(student.id, quarterConfig.examPracticalField, e.target.value, 10),
+                        max: 10,
+                        placeholder: "0-10",
+                        testId: `total-marks-exam-practical-${student.id}`,
+                      })}
+                    </TableCell>
+                    <TableCell className="text-center">
+                      {renderMiniInput({
+                        value: student.examTheory,
+                        onChange: (e) => handleScoreChange(student.id, quarterConfig.examTheoryField, e.target.value, 10),
+                        max: 10,
+                        placeholder: "0-10",
+                        testId: `total-marks-exam-theory-${student.id}`,
+                      })}
+                      <p className="mt-2 text-center text-[11px] text-muted-foreground">
+                        Total: {formatScore(student.quarterExamTotal)}
+                      </p>
                     </TableCell>
                     <TableCell className="text-center font-semibold">{formatScore(student.total)}</TableCell>
                   </TableRow>
                 ))
               ) : (
                 <TableRow>
-                  <TableCell colSpan={9} className="text-center text-muted-foreground">
+                  <TableCell colSpan={10} className="text-center text-muted-foreground">
                     {t("no_data")}
                   </TableCell>
                 </TableRow>
