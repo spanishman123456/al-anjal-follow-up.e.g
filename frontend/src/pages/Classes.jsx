@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useOutletContext, Link } from "react-router-dom";
+import { buildAcademicExportFilename } from "@/lib/exportFilenames";
 import { toast } from "sonner";
 import { api, getApiErrorMessage } from "@/lib/api";
 import { displayQuarterLabel } from "@/lib/academicScope";
@@ -20,7 +21,7 @@ import { Trash2 } from "lucide-react";
 import { performanceStatCellClasses } from "@/lib/performanceBadges";
 
 export default function Classes() {
-  const { language, profile, semester, quarter, loadClasses: refreshGlobalClasses } = useOutletContext();
+  const { language, profile, semester, quarter, academicYear, loadClasses: refreshGlobalClasses } = useOutletContext();
   const semesterNumber = semester === "semester2" ? 2 : 1;
   const isTeacher = profile?.role_name === "Teacher";
   const t = useTranslations(language);
@@ -108,11 +109,16 @@ export default function Classes() {
       const url = window.URL.createObjectURL(new Blob([response.data]));
       const link = document.createElement("a");
       link.href = url;
-      const sLabel = semesterNumber === 2 ? "S2" : "S1";
-      const qLabel = `Q${quarter}`;
       link.setAttribute(
         "download",
-        `class_summary_${sLabel}_${qLabel}.${format === "excel" ? "xlsx" : "pdf"}`,
+        buildAcademicExportFilename({
+          prefix: "class-summary",
+          academicYear,
+          semester,
+          quarter,
+          className: "all-classes",
+          extension: format === "excel" ? "xlsx" : "pdf",
+        }),
       );
       document.body.appendChild(link);
       link.click();

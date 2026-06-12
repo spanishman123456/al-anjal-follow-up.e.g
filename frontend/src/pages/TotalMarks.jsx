@@ -24,6 +24,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { sortByClassOrder } from "@/lib/utils";
 import { quarterExamColumnLabels } from "@/lib/academicScope";
+import { buildAcademicExportFilename } from "@/lib/exportFilenames";
 
 const toNumberOrNull = (value) => {
   if (value === null || value === undefined || value === "") return null;
@@ -56,19 +57,10 @@ const formatScore = (value) => {
   return Number.isInteger(parsed) ? String(parsed) : String(parsed);
 };
 
-const formatDownloadFilePart = (value, fallback = "all-classes") => {
-  const raw = String(value || fallback)
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-  return raw || fallback;
-};
-
 const hasOwn = (obj, key) => Object.prototype.hasOwnProperty.call(obj || {}, key);
 
 export default function TotalMarks() {
-  const { language, semester, quarter, classes: contextClasses, classesLoaded } = useOutletContext();
+  const { language, semester, quarter, academicYear, classes: contextClasses, classesLoaded } = useOutletContext();
   const t = useTranslations(language);
   const semesterNumber = semester === "semester2" ? 2 : 1;
   const examColumnLabels = useMemo(
@@ -462,7 +454,15 @@ export default function TotalMarks() {
       link.href = url;
       link.setAttribute(
         "download",
-        `${quarter === 2 ? "total-marks-q2-class" : "total-marks-class"}-${formatDownloadFilePart(selectedClassName)}-template.xlsx`
+        buildAcademicExportFilename({
+          prefix: "total-marks",
+          academicYear,
+          semester,
+          quarter,
+          className: selectedClassName,
+          suffix: "template",
+          extension: "xlsx",
+        }),
       );
       document.body.appendChild(link);
       link.click();
@@ -495,7 +495,14 @@ export default function TotalMarks() {
       link.href = url;
       link.setAttribute(
         "download",
-        `${quarter === 2 ? "total-marks-q2-class" : "total-marks-class"}-${formatDownloadFilePart(selectedClassName)}.xlsx`
+        buildAcademicExportFilename({
+          prefix: "total-marks",
+          academicYear,
+          semester,
+          quarter,
+          className: selectedClassName,
+          extension: "xlsx",
+        }),
       );
       document.body.appendChild(link);
       link.click();

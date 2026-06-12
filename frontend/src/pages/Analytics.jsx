@@ -21,6 +21,7 @@ import {
   displayQuarterNumber,
   quarterExamColumnLabels,
 } from "@/lib/academicScope";
+import { buildAcademicExportFilename } from "@/lib/exportFilenames";
 import { AcademicTermSelect } from "@/components/layout/AcademicTermSelect";
 import { buildAutoInsightsFromOverview } from "@/lib/insightAutofill";
 import { useTranslations } from "@/lib/i18n";
@@ -138,7 +139,7 @@ const AnalyticsTooltip = ({ active, payload, label }) => {
 };
 
 export default function Analytics() {
-  const { language, semester, quarter } = useOutletContext();
+  const { language, semester, quarter, academicYear } = useOutletContext();
   const t = useTranslations(language);
   const termScopeId = termScopeIdFromOutlet(semester, quarter);
   const term = resolveTermScope(termScopeId);
@@ -561,16 +562,28 @@ export default function Analytics() {
       const url = window.URL.createObjectURL(new Blob([response.data]));
       const link = document.createElement("a");
       link.href = url;
-      const fnBase = `analytics_s${apiSemester}_q${displayQuarterNumber(apiSemester, apiQuarter)}${
-        selectedClassId !== "all"
-          ? `_${selectedClassId.replace(/[^a-zA-Z0-9]/g, "").slice(0, 24)}`
-          : ""
-      }${
-        selectedStudentId !== "all"
-          ? `_${selectedStudentId.replace(/[^a-zA-Z0-9]/g, "").slice(0, 24)}`
-          : ""
-      }`;
-      link.setAttribute("download", `${fnBase}.${format === "excel" ? "xlsx" : "pdf"}`);
+      const selectedClassName =
+        selectedClassId === "all"
+          ? (t("all_classes") || "all-classes")
+          : (classOptions.find((cls) => cls.id === selectedClassId)?.name || selectedClassId);
+      const selectedStudentName =
+        selectedStudentId === "all"
+          ? null
+          : (studentOptions.find((student) => student.id === selectedStudentId)?.full_name ||
+            studentOptions.find((student) => student.id === selectedStudentId)?.name ||
+            selectedStudentId);
+      link.setAttribute(
+        "download",
+        buildAcademicExportFilename({
+          prefix: "analytics",
+          academicYear,
+          semester,
+          quarter,
+          className: selectedClassName,
+          extraParts: selectedStudentName ? [selectedStudentName] : [],
+          extension: format === "excel" ? "xlsx" : "pdf",
+        }),
+      );
       document.body.appendChild(link);
       link.click();
       link.remove();

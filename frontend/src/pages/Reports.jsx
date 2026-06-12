@@ -3,6 +3,7 @@ import { useOutletContext, Link } from "react-router-dom";
 import { api } from "@/lib/api";
 import { getApiErrorMessage } from "@/lib/api";
 import { termScopeIdFromOutlet, resolveTermScope, quarterExamColumnLabels, displayQuarterNumber } from "@/lib/academicScope";
+import { buildAcademicExportFilename, formatDownloadFilePart } from "@/lib/exportFilenames";
 import { AcademicTermSelect } from "@/components/layout/AcademicTermSelect";
 import { buildAutoInsightsFromReport } from "@/lib/insightAutofill";
 import { useTranslations } from "@/lib/i18n";
@@ -54,7 +55,7 @@ import {
 } from "@/components/analytics";
 
 export default function Reports() {
-  const { language, semester, quarter, profile, classes: contextClasses = [] } = useOutletContext();
+  const { language, semester, quarter, academicYear, profile, classes: contextClasses = [] } = useOutletContext();
   const t = useTranslations(language);
   const isTeacher = profile?.role_name === "Teacher";
   const termScopeId = termScopeIdFromOutlet(semester, quarter);
@@ -196,7 +197,15 @@ export default function Reports() {
       link.href = url;
       link.setAttribute(
         "download",
-        `grade_${grade}_s${apiSemester}_q${displayQuarterNumber(semester, quarter)}_${reportType}_report.${format === "excel" ? "xlsx" : "pdf"}`,
+        buildAcademicExportFilename({
+          prefix: `reports-grade-${formatDownloadFilePart(grade)}`,
+          academicYear,
+          semester,
+          quarter,
+          className: "all-classes",
+          suffix: reportType,
+          extension: format === "excel" ? "xlsx" : "pdf",
+        }),
       );
       document.body.appendChild(link);
       link.click();

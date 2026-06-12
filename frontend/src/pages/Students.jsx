@@ -42,6 +42,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { MoreHorizontal, Award, FileText, MessageCircle, PartyPopper, X } from "lucide-react";
 import { AssessmentPageFooter } from "@/components/AssessmentPageFooter";
+import { buildAcademicExportFilename } from "@/lib/exportFilenames";
 import "@/reward-modal.css";
 import { PerformanceLevelBadge } from "@/components/PerformanceLevelBadge";
 
@@ -76,14 +77,6 @@ const parseScore = (value) => {
   }
   const parsed = Number(value);
   return Number.isNaN(parsed) ? null : parsed;
-};
-
-const formatDownloadFilePart = (value, fallback = "all-classes") => {
-  const cleaned = String(value || fallback)
-    .trim()
-    .replace(/[<>:"/\\|?*\u0000-\u001F]/g, "")
-    .replace(/\s+/g, "-");
-  return cleaned || fallback;
 };
 
 // Total Score = attendance (2.5) + participation (2.5) + behavior (5) + homework (5), max 15.
@@ -222,7 +215,7 @@ function RewardBadgeModal({
 }
 
 export default function Students() {
-  const { language, semester, quarter, profile, classes: contextClasses, classesLoaded } = useOutletContext();
+  const { language, semester, quarter, academicYear, profile, classes: contextClasses, classesLoaded } = useOutletContext();
   const t = useTranslations(language);
   const isTeacher = profile?.role_name === "Teacher";
   const semesterNumber = semester === "semester2" ? 2 : 1;
@@ -736,7 +729,15 @@ export default function Students() {
           : (classes.find((cls) => cls.id === filterClass)?.name || filterClass);
       link.setAttribute(
         "download",
-        `assessment-class-${formatDownloadFilePart(selectedClassName)}-template.xlsx`,
+        buildAcademicExportFilename({
+          prefix: "students-assessment",
+          academicYear,
+          semester,
+          quarter,
+          className: selectedClassName,
+          suffix: "template",
+          extension: "xlsx",
+        }),
       );
       document.body.appendChild(link);
       link.click();
@@ -766,7 +767,14 @@ export default function Students() {
           : (classes.find((cls) => cls.id === filterClass)?.name || filterClass);
       link.setAttribute(
         "download",
-        `assessment-class-${formatDownloadFilePart(selectedClassName)}.xlsx`,
+        buildAcademicExportFilename({
+          prefix: "students-assessment",
+          academicYear,
+          semester,
+          quarter,
+          className: selectedClassName,
+          extension: "xlsx",
+        }),
       );
       document.body.appendChild(link);
       link.click();

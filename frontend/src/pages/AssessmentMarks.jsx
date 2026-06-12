@@ -32,6 +32,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { AssessmentPageFooter } from "@/components/AssessmentPageFooter";
+import { buildAcademicExportFilename } from "@/lib/exportFilenames";
 import { sortByClassOrder } from "@/lib/utils";
 import { PerformanceLevelBadge } from "@/components/PerformanceLevelBadge";
 
@@ -55,14 +56,6 @@ const parseScore = (value) => {
   }
   const parsed = Number(value);
   return Number.isNaN(parsed) ? null : parsed;
-};
-
-const formatDownloadFilePart = (value, fallback = "all-classes") => {
-  const cleaned = String(value || fallback)
-    .trim()
-    .replace(/[<>:"/\\|?*\u0000-\u001F]/g, "")
-    .replace(/\s+/g, "-");
-  return cleaned || fallback;
 };
 
 // Students-page total = attendance (2.5) + participation (2.5) + behavior (5) + homework (5), max 15.
@@ -124,7 +117,7 @@ function computeAssessmentPerformanceLevel(baseStudent, currentStudent = baseStu
 }
 
 export default function AssessmentMarks() {
-  const { language, semester, quarter, profile, classes: contextClasses, classesLoaded } = useOutletContext();
+  const { language, semester, quarter, academicYear, profile, classes: contextClasses, classesLoaded } = useOutletContext();
   const t = useTranslations(language);
   const isTeacher = profile?.role_name === "Teacher";
   const semesterNumber = semester === "semester2" ? 2 : 1;
@@ -450,7 +443,15 @@ export default function AssessmentMarks() {
       link.href = url;
       link.setAttribute(
         "download",
-        `chapter-tests-and-quizzes-class-${formatDownloadFilePart(selectedClassName)}-template.xlsx`
+        buildAcademicExportFilename({
+          prefix: "chapter-tests-and-quizzes",
+          academicYear,
+          semester,
+          quarter,
+          className: selectedClassName,
+          suffix: "template",
+          extension: "xlsx",
+        })
       );
       document.body.appendChild(link);
       link.click();
@@ -476,7 +477,14 @@ export default function AssessmentMarks() {
       link.href = url;
       link.setAttribute(
         "download",
-        `chapter-tests-and-quizzes-class-${formatDownloadFilePart(selectedClassName)}.xlsx`
+        buildAcademicExportFilename({
+          prefix: "chapter-tests-and-quizzes",
+          academicYear,
+          semester,
+          quarter,
+          className: selectedClassName,
+          extension: "xlsx",
+        })
       );
       document.body.appendChild(link);
       link.click();

@@ -35,6 +35,7 @@ import { AssessmentPageFooter } from "@/components/AssessmentPageFooter";
 import { sortByClassOrder } from "@/lib/utils";
 import { PerformanceLevelBadge } from "@/components/PerformanceLevelBadge";
 import { quarterExamColumnLabels } from "@/lib/academicScope";
+import { buildAcademicExportFilename } from "@/lib/exportFilenames";
 
 const formatScore = (value, suffix = "") => {
   if (value === null || value === undefined) return "—";
@@ -45,14 +46,6 @@ const parseScore = (value) => {
   if (value === "" || value === null || value === undefined) return null;
   const parsed = Number(value);
   return Number.isNaN(parsed) ? null : parsed;
-};
-
-const formatDownloadFilePart = (value, fallback = "all-classes") => {
-  const cleaned = String(value || fallback)
-    .trim()
-    .replace(/[<>:"/\\|?*\u0000-\u001F]/g, "")
-    .replace(/\s+/g, "-");
-  return cleaned || fallback;
 };
 
 const STUDENTS_TOTAL_MAX = 15;
@@ -127,7 +120,7 @@ function computeQuarterExamTotal(currentStudent) {
 }
 
 export default function FinalExamsAssessmentQ2() {
-  const { language, semester, quarter, profile, classes: contextClasses, classesLoaded } = useOutletContext();
+  const { language, semester, quarter, academicYear, profile, classes: contextClasses, classesLoaded } = useOutletContext();
   const [searchParams, setSearchParams] = useSearchParams();
   const t = useTranslations(language);
   const semesterNumber = semester === "semester2" ? 2 : 1;
@@ -474,7 +467,15 @@ export default function FinalExamsAssessmentQ2() {
       link.href = url;
       link.setAttribute(
         "download",
-        `final-exams-q2-class-${formatDownloadFilePart(selectedClassName)}-template.xlsx`
+        buildAcademicExportFilename({
+          prefix: "final-exams",
+          academicYear,
+          semester,
+          quarter,
+          className: selectedClassName,
+          suffix: "template",
+          extension: "xlsx",
+        })
       );
       document.body.appendChild(link);
       link.click();
@@ -502,7 +503,14 @@ export default function FinalExamsAssessmentQ2() {
       link.href = url;
       link.setAttribute(
         "download",
-        `final-exams-q2-class-${formatDownloadFilePart(selectedClassName)}.xlsx`
+        buildAcademicExportFilename({
+          prefix: "final-exams",
+          academicYear,
+          semester,
+          quarter,
+          className: selectedClassName,
+          extension: "xlsx",
+        })
       );
       document.body.appendChild(link);
       link.click();
