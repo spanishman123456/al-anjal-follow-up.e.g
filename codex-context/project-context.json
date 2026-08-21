@@ -1,0 +1,158 @@
+{
+  "project_name": "Al Anjal School Follow-up Record",
+  "project_type": "Bilingual school academic follow-up / assessment web app",
+  "purpose": "Track weekly follow-up marks, quizzes, chapter tests, quarter exams, performance levels, analytics, and admin reports for Al Anjal National Schools",
+  "handoff_date": "2026-08-21",
+  "tech_stack": {
+    "frontend": ["React CRA", "Craco", "Tailwind CSS", "shadcn/Radix", "Recharts", "Axios", "HashRouter"],
+    "backend": ["FastAPI", "Uvicorn", "Motor", "PyMongo", "Pydantic v2", "PyJWT", "Passlib/bcrypt", "ReportLab", "Matplotlib", "pandas", "APScheduler"],
+    "database": "MongoDB",
+    "auth": ["JWT Bearer HS256", "Optional Google ID token + admin Gmail approval"],
+    "hosting": "Render (render.yaml)"
+  },
+  "frontend_root": "frontend/",
+  "backend_root": "backend/",
+  "main_entities": [
+    "users",
+    "roles",
+    "classes",
+    "students",
+    "weeks",
+    "student_scores",
+    "remedial_plans",
+    "rewards",
+    "reward_events",
+    "audit_logs",
+    "app_settings",
+    "calendar_events",
+    "notification_logs",
+    "report_settings"
+  ],
+  "key_features": [
+    "Student and class management",
+    "Weekly follow-up scores including attendance-as-points",
+    "Quizzes, chapter tests, final practical/theory",
+    "Performance levels on_level/approach/below/no_data",
+    "Analytics and Reports with PDF/Excel",
+    "Remedial plans and rewards certificates",
+    "Lesson plan generator",
+    "Teachers profiles and Gmail approval",
+    "Calendar and notifications",
+    "Global semester/quarter sync",
+    "EN/AR RTL UI with PageHero banners"
+  ],
+  "not_implemented": [
+    "Daily present/absent attendance roll-call system"
+  ],
+  "important_directories": [
+    "frontend/src/pages",
+    "frontend/src/components/layout",
+    "frontend/src/components/analytics",
+    "frontend/src/lib",
+    "backend",
+    "backend/assets/fonts",
+    "backend/scripts",
+    "codex-context"
+  ],
+  "critical_files": [
+    "AGENTS.md",
+    "backend/server.py",
+    "backend/pdf_report_engine.py",
+    "backend/lesson_plan_service.py",
+    "frontend/src/App.js",
+    "frontend/src/components/layout/AppShell.jsx",
+    "frontend/src/lib/academicScope.js",
+    "frontend/src/lib/i18n.js",
+    "frontend/src/lib/api.js",
+    "frontend/src/lib/navigationConfig.js",
+    "frontend/src/lib/pageHeroConfig.js",
+    "frontend/src/components/layout/PageHero.jsx",
+    "frontend/src/components/layout/AcademicTermSelect.jsx",
+    "render.yaml"
+  ],
+  "commands": {
+    "frontend_install": "cd frontend && npm ci",
+    "frontend_start": "cd frontend && npm start",
+    "frontend_build": "cd frontend && npm run build",
+    "backend_install": "cd backend && pip install -r requirements.txt",
+    "backend_start": "cd backend && uvicorn server:app --reload --host 0.0.0.0 --port 8000",
+    "pdf_smoke_test": "cd backend && python scripts/test_pdf_export.py --lang ar",
+    "backend_pytest": "cd backend && pytest"
+  },
+  "environment_variable_names": [
+    "MONGO_URL",
+    "DB_NAME",
+    "JWT_SECRET",
+    "GOOGLE_CLIENT_ID",
+    "CORS_ORIGINS",
+    "RESET_PASSWORD_SECRET",
+    "SENDGRID_API_KEY",
+    "SENDER_EMAIL",
+    "SENDER_NAME",
+    "TWILIO_ACCOUNT_SID",
+    "TWILIO_AUTH_TOKEN",
+    "TWILIO_PHONE_NUMBER",
+    "ADMIN_SMS_NUMBER",
+    "ADMIN_EMAIL",
+    "RECOVERY_ID",
+    "RECOVERY_PASSWORD",
+    "FRONTEND_URL",
+    "PUBLIC_FRONTEND_URL",
+    "RENDER",
+    "BACKEND_HEALTH_URL",
+    "REACT_APP_BACKEND_URL",
+    "REACT_APP_GOOGLE_CLIENT_ID"
+  ],
+  "owner_preferences": [
+    "Premium navy/purple/cyan consistent UI",
+    "Full redesigns when requested, not tiny cosmetics only",
+    "Preserve score calculations while improving presentation",
+    "Arabic and RTL must work including PDFs",
+    "Global academic term sync everywhere",
+    "Commit and push to main for Render when asked",
+    "Reuse PageHero and shared components"
+  ],
+  "protected_behaviors": [
+    "Quarter total out of 50 scoring pipeline",
+    "On-level >=46, approach >=43 thresholds",
+    "Semester 2 display quarters Q3/Q4",
+    "Global semester/quarter state sync",
+    "Amiri-embedded Arabic text in Analytics/Reports PDFs (reward certificates are a known exception)",
+    "Gmail users remain inactive until admin approval",
+    "attendance field is weekly score max 2.5 not roll-call"
+  ],
+  "high_risk_areas": [
+    "backend/server.py score compute helpers",
+    "Bulk score save and Excel import mapping",
+    "Auth JWT and Google approval",
+    "Destructive admin delete/reset endpoints",
+    "PDF font embedding and chart axis Arabic",
+    "Teacher assigned_class_ids scoping"
+  ],
+  "known_issues": [
+    "Monolithic server.py",
+    "Duplicated Q1/Q2 frontend pages",
+    "Frontend/backend score logic duplication risk",
+    "Role permission strings underused",
+    "Hardcoded calendar year content",
+    "design_guidelines.json partially outdated vs live UI",
+    "Reward certificates use Helvetica/direct text and are not yet Arabic-safe",
+    "Frontend academic year 2026-2027 differs from hardcoded 1447H/2025-2026 calendar data",
+    "Local .venv references an unavailable Python 3.14 interpreter while project configuration targets Python 3.13",
+    "Weekly report configuration uses a separate report_settings collection"
+  ],
+  "incomplete_features": [
+    "Full role-permission matrix enforcement",
+    "Counselor-centric workflows",
+    "Daily attendance product"
+  ],
+  "scoring_summary": {
+    "follow_up_max": 15,
+    "assessment_max": 30,
+    "quarter_max": 50,
+    "quarter_on_level_min": 46,
+    "quarter_approach_min": 43
+  },
+  "agents_entry": "AGENTS.md",
+  "codex_start": "codex-context/17-CODEX-START-HERE.md"
+}
