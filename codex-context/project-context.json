@@ -3,6 +3,7 @@
   "project_type": "Bilingual school academic follow-up / assessment web app",
   "purpose": "Track weekly follow-up marks, quizzes, chapter tests, quarter exams, performance levels, analytics, and admin reports for Al Anjal National Schools",
   "handoff_date": "2026-08-21",
+  "baseline_verified_date": "2026-08-22",
   "tech_stack": {
     "frontend": ["React CRA", "Craco", "Tailwind CSS", "shadcn/Radix", "Recharts", "Axios", "HashRouter"],
     "backend": ["FastAPI", "Uvicorn", "Motor", "PyMongo", "Pydantic v2", "PyJWT", "Passlib/bcrypt", "ReportLab", "Matplotlib", "pandas", "APScheduler"],
@@ -74,10 +75,24 @@
     "frontend_install": "cd frontend && npm ci",
     "frontend_start": "cd frontend && npm start",
     "frontend_build": "cd frontend && npm run build",
+    "frontend_build_windows": "cd frontend; $env:DISABLE_ESLINT_PLUGIN=\"true\"; npm exec -- craco build; node scripts/postbuild-spa.cjs",
     "backend_install": "cd backend && pip install -r requirements.txt",
     "backend_start": "cd backend && uvicorn server:app --reload --host 0.0.0.0 --port 8000",
     "pdf_smoke_test": "cd backend && python scripts/test_pdf_export.py --lang ar",
     "backend_pytest": "cd backend && pytest"
+  },
+  "verified_baseline": {
+    "python": "3.13.15",
+    "backend_venv": "Repository-root .venv recreated successfully with Python 3.13",
+    "backend_dependencies": "Installed from backend/requirements.txt; pip check passed",
+    "backend_focused_tests": "12 passed",
+    "backend_server_import": "passed offline",
+    "arabic_pdf_smoke": "passed with Amiri registration",
+    "node": "20.20.0",
+    "npm": "10.8.2",
+    "frontend_tests": "2 suites / 7 tests passed",
+    "frontend_build": "Windows-equivalent CRACO build and existing postbuild completed successfully",
+    "live_integration_tests": "not run; require external credentials and may touch live services"
   },
   "environment_variable_names": [
     "MONGO_URL",
@@ -138,7 +153,9 @@
     "design_guidelines.json partially outdated vs live UI",
     "Reward certificates use Helvetica/direct text and are not yet Arabic-safe",
     "Frontend academic year 2026-2027 differs from hardcoded 1447H/2025-2026 calendar data",
-    "Local .venv references an unavailable Python 3.14 interpreter while project configuration targets Python 3.13",
+    "Normal npm run build is not Windows-portable because it uses POSIX environment-variable syntax",
+    "npm ci reports 58 dependency vulnerabilities; automatic fixes/upgrades require explicit approval",
+    "Live MongoDB/login/integration tests are excluded from the safe offline baseline",
     "Weekly report configuration uses a separate report_settings collection"
   ],
   "incomplete_features": [

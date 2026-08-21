@@ -14,6 +14,9 @@
 - Favicon from Al Anjal logo
 - Render deployment blueprint
 - Lazy Mongo init + offline PDF test script
+- Verified local baseline: Python 3.13.15, healthy root `.venv`, Node.js 20.20.0, and npm 10.8.2
+- Backend focused verification passes (12 tests), offline server import passes, and Arabic PDF smoke generation passes
+- Frontend Jest verification passes (2 suites / 7 tests) and production compilation succeeds with the Windows-equivalent build command
 
 ## Recently modified themes (git)
 
@@ -35,7 +38,9 @@
 - Weekly report configuration lives in the separate `report_settings` collection, not `app_settings`
 - Reward certificates still use Helvetica/direct canvas text and do not yet support the protected Amiri Arabic rendering pipeline
 - Frontend academic year is dynamically 2026–2027, but synced calendar seed data remains hardcoded to 1447H / 2025–2026
-- Local root `.venv` is unusable on the current machine because it references a missing Python 3.14 interpreter; project configuration still targets Python 3.13
+- Normal `npm run build` remains non-portable on Windows because its script uses POSIX inline environment-variable syntax; the documented PowerShell-equivalent build succeeds
+- `npm ci` reports 58 dependency vulnerabilities; do not apply automatic audit fixes or upgrades without explicit approval
+- Live MongoDB/login/integration tests are not part of the safe offline baseline because they require external credentials and may touch live services
 
 ## Not implemented (CONFIRMED)
 
@@ -51,7 +56,7 @@
 5. Further PDF/report polish only if owner requests
 6. Bring reward certificates into the Amiri + Arabic shaping pipeline when explicitly requested
 7. Replace or refresh hardcoded calendar seed data for the active academic year
-8. Recreate the local Python environment with Python 3.13 before running backend verification locally
+8. Plan dependency-security review separately before changing the existing lockfile or package versions
 
 ## Owner expectation at handoff
 

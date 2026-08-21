@@ -6,12 +6,13 @@
 - Python **3.13** (see `render.yaml` / `.python-version`)
 - MongoDB Atlas or compatible `MONGO_URL`
 
-### Current local Python environment warning (CONFIRMED 2026-08-22)
+### Verified local development baseline (CONFIRMED 2026-08-22)
 
-- `.python-version` requests Python 3.13 and Render pins Python 3.13.5.
-- The existing repository-root `.venv/pyvenv.cfg` was created from Python 3.14 and points to an interpreter path that is no longer available on this machine.
-- Do not rely on that `.venv` until it has been recreated with an installed Python 3.13 runtime. This is a local environment issue, not an application dependency change.
-- After installing Python 3.13, recreate the virtual environment using the normal platform command and reinstall `backend/requirements.txt`; do not commit the virtual environment.
+- Python **3.13.15** is installed and working locally.
+- The broken repository-root `.venv` was removed and successfully recreated with Python 3.13.15.
+- Existing backend dependencies install successfully from `backend/requirements.txt`; `pip check` reports no broken requirements.
+- Node.js **20.20.0** and npm **10.8.2** are working locally.
+- `.venv`, `frontend/node_modules`, `frontend/build`, and backend PDF smoke outputs are ignored local artifacts and must not be committed.
 
 ## Install
 
@@ -20,11 +21,10 @@
 cd frontend
 npm ci
 
-# Backend
-cd backend
+# Backend (from repository root)
 python -m venv .venv
-# activate venv for your OS
-pip install -r requirements.txt
+# activate .venv for your OS, then:
+python -m pip install -r backend/requirements.txt
 ```
 
 ## Environment variable **names** (no values)
@@ -82,6 +82,17 @@ npm run build
 npm run serve:prod   # as per package.json / Render
 ```
 
+`npm run build` uses POSIX inline environment-variable syntax and works in the Linux Render environment, but is not directly portable to Windows `cmd.exe`. Verified Windows PowerShell equivalent:
+
+```powershell
+cd frontend
+$env:DISABLE_ESLINT_PLUGIN="true"
+npm exec -- craco build
+node scripts/postbuild-spa.cjs
+```
+
+The Windows-equivalent command compiled the production build successfully on 2026-08-22. Do not change the build script or dependencies merely to remove this portability limitation without explicit approval.
+
 Backend: `uvicorn server:app --host 0.0.0.0 --port $PORT`
 
 ## Tests
@@ -96,7 +107,16 @@ python scripts/test_pdf_export.py --lang ar
 
 Frontend: `npm test` (limited coverage).
 
-If Python commands fail before test collection because the interpreter cannot be found, verify the active interpreter and recreate the stale root `.venv` with Python 3.13 before treating the failure as an application-test regression.
+### Baseline verification results (2026-08-22)
+
+- Backend focused pytest: **12 passed** (`test_score_calculation.py` + `test_support_list_thresholds.py`).
+- Offline `server.py` import: **passed**.
+- Offline Arabic Analytics/Reports PDF smoke generation: **passed**, with Amiri registration confirmed.
+- Frontend Jest: **2 suites / 7 tests passed**.
+- Frontend production compilation via the Windows-equivalent command: **passed**.
+- Live MongoDB/login/integration scripts were intentionally not run because they require external credentials and may read or mutate live services.
+
+`npm ci` currently reports **58 dependency vulnerabilities** (12 low, 14 moderate, 30 high, 2 critical). Do **not** run `npm audit fix`, force upgrades, or change dependency versions without explicit owner approval and a scoped compatibility/security review.
 
 ## Lint / format (backend tooling present)
 
