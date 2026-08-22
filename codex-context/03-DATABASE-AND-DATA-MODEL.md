@@ -4,7 +4,7 @@
 
 | Collection | Purpose |
 |------------|---------|
-| `users` | Admin/Teacher (and seeded Counselor role users); auth, profile, schedule, assigned classes, Google linkage, gmail_approval_status |
+| `users` | Admin/Teacher (and seeded Counselor role users); auth, profile, scoped timetable records, assigned classes, Google linkage, gmail_approval_status |
 | `roles` | Role definitions + permission string lists (permissions largely unused for route checks) |
 | `classes` | Class sections (e.g. 4A–8B); name, grade metadata |
 | `students` | Student identity + class membership + some denormalized score fields |
@@ -86,6 +86,7 @@ Typical numeric fields (maxima in UI/comments):
 ### User / Teacher (CONFIRMED)
 
 - `role_name`, `active`, `password_hash`, `auth_version`, `assigned_class_ids`, schedule, subjects, avatar_base64.
+- `timetable_records.<school_section>__<academic_year>` stores each user's Sunday–Thursday, 8-period timetable by school section and academic year. The existing `schedule` field remains the current-year International fallback/mirror for backward compatibility; Arabic never reads or writes it.
 - Google: `google_sub` / email linkage + `gmail_approval_status` ∈ pending|approved|rejected (exact enum strings as implemented in server).
 
 ## Indexes (CONFIRMED on startup)

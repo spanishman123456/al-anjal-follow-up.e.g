@@ -32,6 +32,7 @@ Note: Root `design_guidelines.json` describes an older “EduTrack Pro / Swiss U
 - Custom events: `students-updated`, `app-refresh-data`, `auth-logout`, `profile-updated`.
 - Mobile: nav sheet; hero stacks; toolbars wrap.
 - Main chrome includes a persistent International/Arabic Section pill switcher. The selected section uses a restrained cyan/teal glow and is stored locally; missing legacy state defaults to International.
+- Both section Dashboards render the same `DashboardTimetable`/`TimetableEditor` surface in the equivalent bottom section: Sunday–Thursday, eight editable periods, academic-year label, illuminated save action, responsive horizontal scroll, and RTL/LTR labels.
 - Priority cards/buttons and active navigation may use subtle cyan illumination, polished hover transitions, and short fade/slide entrances. Respect reduced-motion rules and avoid decorative animation overload.
 - `components/ui/button.jsx` is the shared illuminated interaction language; semantic destructive/success/secondary variants retain their color meaning.
 - `components/ui/table.jsx` plus the `main table` normalization in `index.css` is the visual table baseline for both native and shared-table pages.

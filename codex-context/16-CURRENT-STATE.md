@@ -23,8 +23,9 @@
 - School-wide multi-year academic calendars imported once from approved Al Anjal PDFs, with immutable versions, automatic current-year selection, preserved history, and no live external synchronization
 - International Dashboard/Analytics now include compact completion + classes organization while retaining existing `/15 → /30 → /50` APIs and calculations; the superseded large Incomplete Assessment Alerts card has been removed
 - Shared illuminated button variants and navy-header table styling now normalize both application sections
+- International and Arabic Dashboards share the same editable weekly timetable in the same visual position, scoped per user + school section + academic year; legacy timetables remain current-year International.
 - Shared premium PDF system now covers International Analytics/Reports and Arabic `/100` reports, omits meaningless charts, uses compact empty states, repeats long-table headers, and preserves Amiri RTL rendering
-- Focused backend regression verification passes 20 synchronous tests, including protected International scoring, Arabic calculations/import isolation, multi-year PDF calendar parsing/rollover, and Arabic PDF/Excel generation
+- Focused backend regression verification passes 23 synchronous tests, including protected International scoring, Arabic calculations/import isolation, scoped timetable persistence, multi-year PDF calendar parsing/rollover, and Arabic PDF/Excel generation
 
 ## Recently modified themes (git)
 

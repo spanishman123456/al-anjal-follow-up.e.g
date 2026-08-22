@@ -18,12 +18,11 @@ import { displayQuarterNumber, termScopeIdFromOutlet } from "@/lib/academicScope
 import { AcademicTermSelect } from "@/components/layout/AcademicTermSelect";
 import { sortByClassOrder } from "@/lib/utils";
 import { PageHeader } from "@/components/layout/PageHeader";
-import { ExpandableSection } from "@/components/ExpandableSection";
 import { PerformanceLevelBadge } from "@/components/PerformanceLevelBadge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import TimetableEditor from "@/components/TimetableEditor";
+import { DashboardTimetable } from "@/components/dashboard/DashboardTimetable";
 import {
   PERFORMANCE_CHART_COLORS,
   performanceLegendSwatchClasses,
@@ -52,8 +51,6 @@ export default function Dashboard() {
   const fileInputRef = useRef(null);
   const lastMissedCountRef = useRef(null);
   const latestRequestIdRef = useRef(0);
-  const [schedule, setSchedule] = useState({});
-  const [savingSchedule, setSavingSchedule] = useState(false);
 
   const fetchSummary = async () => {
     const requestId = ++latestRequestIdRef.current;
@@ -106,23 +103,7 @@ export default function Dashboard() {
   useEffect(() => {
     lastMissedCountRef.current = null;
     fetchSummary();
-    api
-      .get("/users/profile")
-      .then((response) => setSchedule(response.data?.schedule || {}))
-      .catch(() => null);
   }, [semesterNumber, quarter]);
-
-  const handleScheduleSave = async () => {
-    try {
-      setSavingSchedule(true);
-      await api.put("/users/profile/update", { schedule });
-      toast.success(t("profile_updated"));
-    } catch (error) {
-      toast.error(t("profile_failed"));
-    } finally {
-      setSavingSchedule(false);
-    }
-  };
 
   const handleImportClick = () => {
     fileInputRef.current?.click();
@@ -558,36 +539,14 @@ export default function Dashboard() {
         </Card>
       </section>
 
-      <ExpandableSection
-        title={t("timetable")}
+      <DashboardTimetable
+        academicYear={academicYear}
         defaultOpen={isTeacher}
-        testId="dashboard-timetable-section"
-        className="section-hover"
-        headerExtra={
-          <Button
-            variant="success"
-            size="sm"
-            onClick={(e) => {
-              e.stopPropagation();
-              handleScheduleSave();
-            }}
-            disabled={savingSchedule}
-            data-testid="dashboard-timetable-save"
-          >
-            {t("save_changes")}
-          </Button>
-        }
-      >
-        <div data-testid="dashboard-timetable">
-          <TimetableEditor
-            schedule={schedule}
-            onChange={setSchedule}
-            orientation="days-rows"
-            dayLabels={[t("sunday"), t("monday"), t("tuesday"), t("wednesday"), t("thursday")]}
-            dayHeaderLabel={t("day")}
-          />
-        </div>
-      </ExpandableSection>
+        language={language}
+        schoolSection="international"
+        t={t}
+        testIdPrefix="dashboard-timetable"
+      />
     </div>
   );
 }

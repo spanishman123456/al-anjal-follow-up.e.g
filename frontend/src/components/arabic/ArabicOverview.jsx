@@ -12,6 +12,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { buildArabicPerformanceSummary } from "./arabicPerformanceSummary";
+import { DashboardTimetable } from "@/components/dashboard/DashboardTimetable";
 
 const semNumber = (semester) => (semester === "semester2" ? 2 : 1);
 const TESTS = ["theory_test_1", "theory_test_2", "practical_test_1", "practical_test_2"];
@@ -111,7 +112,7 @@ function ArabicPerformanceCards({ data, t }) {
 }
 
 export function ArabicOverview({ variant = "dashboard" }) {
-  const { language, semester, quarter, academicYear, classes = [] } = useOutletContext();
+  const { language, semester, quarter, academicYear, classes = [], profile } = useOutletContext();
   const t = useTranslations(language);
   const [classId, setClassId] = useState("all");
   const [data, setData] = useState(null);
@@ -164,5 +165,16 @@ export function ArabicOverview({ variant = "dashboard" }) {
     </div>
 
     {(variant === "analytics" || variant === "reports") && <Card><CardHeader><CardTitle>{t("tested")} / {t("not_tested")}</CardTitle><p className="text-sm text-muted-foreground">{t("no_performance_thresholds")}</p></CardHeader><CardContent className="p-0"><div className="overflow-x-auto"><table className="w-full min-w-[780px] text-sm"><thead className="bg-muted/60"><tr><th className="p-3 text-start">{t("student")}</th><th className="p-3 text-start">{t("class")}</th>{TESTS.map((key) => <th key={key} className="p-3 text-center">{t(key)}</th>)}</tr></thead><tbody>{(data?.students || []).map((student) => <tr key={student.id} className="border-b"><td className="p-3 font-medium">{student.full_name}</td><td className="p-3">{student.class_name}</td>{TESTS.map((key) => <td key={key} className={`p-3 text-center text-xs font-semibold ${student.test_completion?.[key] ? "text-emerald-600" : "text-rose-600"}`}>{student.test_completion?.[key] ? t("tested") : t("not_tested")}</td>)}</tr>)}</tbody></table></div></CardContent></Card>}
+
+    {variant === "dashboard" && (
+      <DashboardTimetable
+        academicYear={academicYear}
+        defaultOpen={profile?.role_name === "Teacher"}
+        language={language}
+        schoolSection="arabic"
+        t={t}
+        testIdPrefix="arabic-dashboard-timetable"
+      />
+    )}
   </div>;
 }

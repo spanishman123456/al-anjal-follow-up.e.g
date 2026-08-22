@@ -6,6 +6,7 @@
 - Section/year-scoped Classes and Students with Teacher `assigned_class_ids` preserved.
 - International routes retain the `/15 → /30 → /50` pages and calculations.
 - Arabic Section has scoped Excel student/class import, quarter `/100` grade entry, Dashboard, Analytics, Reports, test-completion lists, and Arabic-safe PDF/Excel export.
+- International and Arabic Dashboards share one user-owned weekly timetable editor; timetable records are isolated by school section and academic year, with legacy schedules treated as current-year International only.
 - Arabic performance thresholds remain intentionally undefined.
 
 | Feature | UI | Logic | Database | API (examples) | Main files |
@@ -13,6 +14,7 @@
 | Login | `Login.jsx` | JWT | `users` | `/api/auth/login` | `App.js`, `api.js`, `server.py` |
 | Google approval | Login + Settings | pending→approved | `users`, `notification_logs` | `/api/auth/google`, gmail-pending-* | `server.py`, `Settings.jsx` |
 | Dashboard | `Dashboard.jsx` | summary metrics | scores/students | `/analytics/summary`, missed-assessments | `Dashboard.jsx`, `server.py` |
+| Dashboard timetable | Both section Dashboards | Sunday–Thursday, 8 editable periods | `users.timetable_records` + legacy International `schedule` | `/timetables/profile` | `DashboardTimetable.jsx`, `TimetableEditor.jsx`, `server.py` |
 | Students weekly marks | `Students.jsx` | /15 follow-up | `students`, `student_scores`, `weeks` | students CRUD, bulk-scores | `Students.jsx`, `server.py` |
 | Quizzes/Chapter Q1 | `AssessmentMarks.jsx` | /30 | scores | students/export, bulk | page + server |
 | Quizzes/Chapter Q2 | `AssessmentMarksQ2.jsx` | /30 | scores | same | page + server |

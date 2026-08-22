@@ -2221,6 +2221,55 @@ def normalize_schedule(schedule: Optional[Dict[str, List[str]]]) -> Dict[str, Li
     return base
 
 
+def normalize_timetable_academic_year(value: Optional[str]) -> str:
+    academic_year = str(value or current_academic_year()).strip()
+    match = re.fullmatch(r"(\d{4})-(\d{4})", academic_year)
+    if not match or int(match.group(2)) != int(match.group(1)) + 1:
+        raise HTTPException(status_code=422, detail="Invalid academic year")
+    return academic_year
+
+
+def timetable_storage_key(school_section: Optional[str], academic_year: Optional[str]) -> str:
+    section = normalize_school_section(school_section)
+    year = normalize_timetable_academic_year(academic_year)
+    return f"{section}__{year.replace('-', '_')}"
+
+
+def resolve_user_timetable(
+    user: Dict[str, Any], school_section: Optional[str], academic_year: Optional[str]
+) -> Tuple[Dict[str, List[str]], bool]:
+    """Return a scoped user timetable, falling back to legacy schedule for International only."""
+    section = normalize_school_section(school_section)
+    year = normalize_timetable_academic_year(academic_year)
+    key = timetable_storage_key(section, year)
+    records = user.get("timetable_records")
+    record = records.get(key) if isinstance(records, dict) else None
+    if isinstance(record, dict) and isinstance(record.get("schedule"), dict):
+        return normalize_schedule(record["schedule"]), False
+    if section == SCHOOL_SECTION_INTERNATIONAL and year == current_academic_year():
+        return normalize_schedule(user.get("schedule")), True
+    return default_schedule(), False
+
+
+def current_international_timetable_fields(
+    schedule: Optional[Dict[str, List[str]]], updated_at: Optional[str] = None
+) -> Dict[str, Any]:
+    """Mirror legacy International schedule writes into the active-year scoped record."""
+    normalized = normalize_schedule(schedule)
+    year = current_academic_year()
+    now = updated_at or iso_now()
+    key = timetable_storage_key(SCHOOL_SECTION_INTERNATIONAL, year)
+    return {
+        "schedule": normalized,
+        f"timetable_records.{key}": {
+            "school_section": SCHOOL_SECTION_INTERNATIONAL,
+            "academic_year": year,
+            "schedule": normalized,
+            "updated_at": now,
+        },
+    }
+
+
 def create_distribution_chart(distribution: List[Dict[str, Any]]) -> io.BytesIO:
     """Pie chart for three performance bands only (on level, approach, below)."""
     _chart_prepare_mpl()
@@ -4818,6 +4867,10 @@ class UserProfileUpdate(BaseModel):
     schedule: Optional[Dict[str, List[str]]] = None
 
 
+class TimetableUpdate(BaseModel):
+    schedule: Dict[str, List[str]] = Field(default_factory=default_schedule)
+
+
 class TeacherProfileUpdate(BaseModel):
     phone: Optional[str] = None
     subjects: Optional[List[str]] = None
@@ -6372,7 +6425,7 @@ async def update_user(user_id: str, payload: UserUpdate, current_user: Dict[str,
         if "permissions" not in update_data:
             update_data["permissions"] = role_doc.get("permissions", [])
     if "schedule" in update_data:
-        update_data["schedule"] = normalize_schedule(update_data.get("schedule"))
+        update_data.update(current_international_timetable_fields(update_data.get("schedule")))
     update_data["updated_at"] = iso_now()
     result = await db.users.find_one_and_update({"id": user_id}, {"$set": update_data}, return_document=True)
     if not result:
@@ -6462,6 +6515,69 @@ async def get_user_audit_logs(user_id: str, current_user: Dict[str, Any] = Depen
     return logs
 
 
+@api_router.get("/timetables/profile")
+async def get_profile_timetable(
+    school_section: str = SCHOOL_SECTION_INTERNATIONAL,
+    academic_year: Optional[str] = None,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+):
+    section = normalize_school_section(school_section)
+    year = normalize_timetable_academic_year(academic_year)
+    user = await db.users.find_one({"id": current_user["id"]}, {"_id": 0})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    schedule, legacy_fallback = resolve_user_timetable(user, section, year)
+    return {
+        "school_section": section,
+        "academic_year": year,
+        "schedule": schedule,
+        "legacy_fallback": legacy_fallback,
+    }
+
+
+@api_router.put("/timetables/profile")
+async def update_profile_timetable(
+    payload: TimetableUpdate,
+    school_section: str = SCHOOL_SECTION_INTERNATIONAL,
+    academic_year: Optional[str] = None,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+):
+    section = normalize_school_section(school_section)
+    year = normalize_timetable_academic_year(academic_year)
+    key = timetable_storage_key(section, year)
+    schedule = normalize_schedule(payload.schedule)
+    now = iso_now()
+    record = {
+        "school_section": section,
+        "academic_year": year,
+        "schedule": schedule,
+        "updated_at": now,
+    }
+    update_fields: Dict[str, Any] = {
+        f"timetable_records.{key}": record,
+        "updated_at": now,
+    }
+    # Keep legacy International timetable consumers working during the scoped migration.
+    if section == SCHOOL_SECTION_INTERNATIONAL and year == current_academic_year():
+        update_fields.update(current_international_timetable_fields(schedule, now))
+    result = await db.users.update_one(
+        {"id": current_user["id"]},
+        {"$set": update_fields},
+    )
+    if not result.matched_count:
+        raise HTTPException(status_code=404, detail="User not found")
+    await log_user_action(
+        current_user,
+        "timetable_update",
+        f"Updated {section} timetable for {year}",
+    )
+    return {
+        "school_section": section,
+        "academic_year": year,
+        "schedule": schedule,
+    }
+
+
 @api_router.get("/users/profile", response_model=UserRecord)
 async def get_user_profile(current_user: Dict[str, Any] = Depends(get_current_user)):
     user = await db.users.find_one({"id": current_user["id"]}, {"_id": 0})
@@ -6509,7 +6625,7 @@ async def update_user_profile(
             new_password_plain = pwd
             update_data["password_hash"] = get_password_hash(pwd)
     if "schedule" in update_data:
-        update_data["schedule"] = normalize_schedule(update_data.get("schedule"))
+        update_data.update(current_international_timetable_fields(update_data.get("schedule")))
     update_data["updated_at"] = iso_now()
     await db.users.update_one({"id": user["id"]}, {"$set": update_data})
     result = await db.users.find_one({"id": user["id"]}, {"_id": 0})
@@ -6561,7 +6677,7 @@ async def update_teacher_profile(teacher_id: str, payload: TeacherProfileUpdate,
     if "assigned_class_ids" in payload.model_dump(exclude_unset=True):
         update_data["assigned_class_ids"] = payload.assigned_class_ids if payload.assigned_class_ids is not None else []
     if "schedule" in update_data:
-        update_data["schedule"] = normalize_schedule(update_data.get("schedule"))
+        update_data.update(current_international_timetable_fields(update_data.get("schedule")))
     update_data["updated_at"] = iso_now()
     await db.users.update_one({"id": teacher_id}, {"$set": update_data})
     updated = await db.users.find_one({"id": teacher_id}, {"_id": 0})
