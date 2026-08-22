@@ -108,3 +108,42 @@ Format: Decision → Context → Why → Status → Codex Guidance.
 **Why:** CONFIRMED field maxima and UI.  
 **Status:** Active.  
 **Codex Guidance:** See `05-ATTENDANCE-SYSTEM.md`.
+
+---
+
+## Decision: One application, two isolated school sections
+
+**Context:** Arabic Section added alongside the existing International Section.
+**Why:** Preserve one shared application/chrome while preventing records and scoring models from mixing.
+**Status:** Active.
+**Codex Guidance:** Use `school_section`, never repurpose `classes.section` (A/B). Legacy records default to International. Keep `assigned_class_ids` as the Teacher permission boundary inside both sections.
+
+---
+
+## Decision: Arabic grades use a separate quarter score collection
+
+**Context:** Arabic quarters are `/100` and are not weekly `/15 → /30 → /50`.
+**Why:** A dedicated `arabic_quarter_scores` collection prevents accidental reuse of International formulas while shared UI/report shells remain reusable.
+**Status:** Active; Arabic performance thresholds intentionally unset.
+**Codex Guidance:** Preserve `null` vs entered `0`; use student/year/semester/quarter keys and the Arabic calculation adapter.
+
+---
+
+## Decision: Calendar sync fails closed and preserves cache
+
+**Context:** The old sync deleted all events and reinserted a hardcoded 1447H list.
+**Why:** The authoritative source is now the Ministry General Education `rss.aspx / استعلام المحتوى` detailed event listing. The isolated adapter intersects those public events with the Ministry's own structured Hijri/Gregorian date map, validates completeness, and preserves the active verified version when a refresh fails. It never substitutes an older year for an incomplete latest publication.
+
+## Superseding decision: Approved school PDF calendars are versioned by academic year
+
+**Context:** The Ministry workflow was unreliable and did not represent the approved Al Anjal school calendar.
+**Decision:** Live synchronization and its scheduled job were removed. Admins import an approved four-page school PDF; each academic year owns an active immutable event version, historical years remain selectable, and current-year resolution follows imported date ranges.
+**Safety:** Parsing and structural validation complete before database writes, and the active version pointer changes only after the new event version is stored. Printed anomalies remain flagged for manual review rather than guessed.
+
+## Decision: Arabic Excel import is enrollment-only
+
+**Context:** Arabic Section needs practical bulk enrollment without passing `/100` grades through the International score mapper.
+**Status:** Active.
+**Codex Guidance:** Reuse `/api/import/excel` and its header/class detection with explicit Arabic section/year scope, but persist only student/class identity. Arabic grades remain exclusively in `arabic_quarter_scores`.
+**Status:** Active.
+**Codex Guidance:** Use the isolated official-source adapter, strict validation, versioned activation, and last-good cache. Never delete active events before a new version succeeds.

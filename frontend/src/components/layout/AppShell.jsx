@@ -41,6 +41,7 @@ import {
 } from "@/lib/academicScope";
 import {
   loadAnalyticsPage,
+  loadArabicGradesPage,
   loadAssessmentMarksPage,
   loadAssessmentMarksQ2Page,
   loadCalendarPage,
@@ -67,6 +68,8 @@ export const AppShell = ({
   setSemester,
   quarter,
   setQuarter,
+  schoolSection,
+  setSchoolSection,
   academicYear,
   classes = [],
   classesLoaded = false,
@@ -85,6 +88,7 @@ export const AppShell = ({
 
   const routePreloaders = {
     "/students": loadStudentsPage,
+    "/arabic-grades": loadArabicGradesPage,
     "/assessment-marks": loadAssessmentMarksPage,
     "/assessment-marks-q2": loadAssessmentMarksQ2Page,
     "/final-exams-assessment": loadFinalExamsAssessmentPage,
@@ -116,11 +120,19 @@ export const AppShell = ({
   // Keep URL in sync with header semester/quarter when on quarter-specific pages
   useEffect(() => {
     const path = location.pathname;
+    if (schoolSection === "arabic" && ["/assessment-marks", "/assessment-marks-q2", "/final-exams-assessment", "/final-exams-assessment-q2", "/total-marks"].includes(path)) {
+      navigate("/arabic-grades", { replace: true });
+      return;
+    }
+    if (schoolSection === "international" && path === "/arabic-grades") {
+      navigate("/students", { replace: true });
+      return;
+    }
     if (quarter === 2 && path === "/assessment-marks") navigate("/assessment-marks-q2", { replace: true });
     else if (quarter === 2 && path === "/final-exams-assessment") navigate("/final-exams-assessment-q2", { replace: true });
     else if (quarter === 1 && path === "/assessment-marks-q2") navigate("/assessment-marks", { replace: true });
     else if (quarter === 1 && path === "/final-exams-assessment-q2") navigate("/final-exams-assessment", { replace: true });
-  }, [quarter, location.pathname, navigate]);
+  }, [quarter, schoolSection, location.pathname, navigate]);
 
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -206,6 +218,7 @@ export const AppShell = ({
   const navGroups = buildNavigationGroups({
     t,
     quarter,
+    schoolSection,
     roleName: profile?.role_name || "Admin",
   });
 
@@ -359,6 +372,32 @@ export const AppShell = ({
           data-testid="academic-context-bar"
         >
           <div
+            className="section-switcher flex items-center rounded-full border border-cyan-300/30 bg-[#071528]/75 p-1 shadow-[0_10px_30px_-16px_rgba(34,211,238,0.95)] backdrop-blur-md"
+            data-testid="school-section-switcher"
+            aria-label={t("school_section")}
+          >
+            {[
+              ["international", t("international_section")],
+              ["arabic", t("arabic_section")],
+            ].map(([value, label]) => (
+              <button
+                key={value}
+                type="button"
+                onClick={() => setSchoolSection(value)}
+                className={cn(
+                  "rounded-full px-4 py-2 text-xs font-bold transition-all duration-200 sm:text-sm",
+                  schoolSection === value
+                    ? "bg-gradient-to-r from-cyan-400 to-teal-400 text-slate-950 shadow-[0_0_22px_rgba(34,211,238,0.55)]"
+                    : "text-slate-200 hover:bg-white/10 hover:text-white",
+                )}
+                aria-pressed={schoolSection === value}
+                data-testid={`school-section-${value}`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          <div
             className="rounded-full border border-white/25 bg-white/10 px-4 py-2 text-sm font-medium text-white shadow-sm backdrop-blur-sm"
             data-testid="academic-year-display"
           >
@@ -419,6 +458,8 @@ export const AppShell = ({
                 quarter,
                 setQuarter,
                 academicYear,
+                schoolSection,
+                setSchoolSection,
                 profile,
                 classes,
                 classesLoaded,

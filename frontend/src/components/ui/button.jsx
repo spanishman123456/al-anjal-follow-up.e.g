@@ -5,21 +5,21 @@ import { cva } from "class-variance-authority";
 import { cn } from "@/lib/utils"
 
 const buttonVariants = cva(
-  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-full text-sm font-medium transition-all duration-200 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 hover:translate-y-[-2px] hover:scale-[1.02] hover:shadow-md active:translate-y-0 active:scale-[0.98] disabled:hover:translate-y-0 disabled:hover:scale-100",
+  "premium-interactive inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-full text-sm font-semibold transition-all duration-200 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/70 focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 hover:translate-y-[-1px] active:translate-y-0 active:scale-[0.98] disabled:hover:translate-y-0",
   {
     variants: {
       variant: {
         default:
-          "bg-primary text-primary-foreground shadow hover:bg-primary/90 dark:bg-gradient-to-r dark:from-violet-600 dark:to-purple-600 dark:hover:from-violet-500 dark:hover:to-purple-500 dark:shadow-lg dark:shadow-violet-950/50",
+          "bg-gradient-to-r from-violet-700 via-purple-700 to-cyan-700 text-white shadow-[0_10px_24px_-15px_rgba(6,182,212,0.95)] hover:from-violet-600 hover:via-purple-600 hover:to-cyan-600 hover:shadow-[0_14px_28px_-13px_rgba(6,182,212,0.9)]",
         destructive:
-          "bg-destructive text-destructive-foreground shadow-sm hover:bg-destructive/90",
+          "bg-destructive text-destructive-foreground shadow-sm shadow-red-900/10 hover:bg-destructive/90 hover:shadow-md hover:shadow-red-500/20",
         outline:
-          "border border-input bg-transparent text-foreground shadow-sm hover:bg-accent hover:text-accent-foreground dark:border-white/20 dark:hover:bg-white/10 dark:hover:text-foreground",
+          "border border-input bg-background/70 text-foreground shadow-sm hover:border-cyan-400/45 hover:bg-cyan-50/70 hover:text-foreground hover:shadow-[0_10px_22px_-17px_rgba(6,182,212,0.9)] dark:border-white/20 dark:bg-white/[0.03] dark:hover:bg-cyan-400/10 dark:hover:text-foreground",
         secondary:
-          "bg-secondary text-secondary-foreground shadow-sm hover:bg-secondary/90",
+          "border border-violet-300/30 bg-secondary text-secondary-foreground shadow-sm hover:border-cyan-400/40 hover:bg-secondary/85 hover:shadow-[0_10px_22px_-17px_rgba(139,43,236,0.9)]",
         success:
-          "bg-success text-success-foreground shadow-sm hover:bg-success/90",
-        ghost: "text-foreground hover:bg-accent hover:text-accent-foreground",
+          "bg-success text-success-foreground shadow-sm hover:bg-success/90 hover:shadow-md hover:shadow-emerald-500/20",
+        ghost: "text-foreground hover:bg-cyan-500/10 hover:text-foreground",
         link: "text-primary underline-offset-4 hover:underline",
       },
       size: {

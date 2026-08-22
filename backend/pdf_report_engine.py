@@ -441,6 +441,78 @@ def pdf_recommendations_block(elements: List[Any], insights: Optional[Dict[str, 
     elements.append(Spacer(1, 12))
 
 
+def pdf_section_heading(title: str, lang: str, subtitle: str = "") -> Table:
+    """Compact branded section heading shared by every report family."""
+    s = _srv()
+    st = pdf_paragraph_styles(lang)
+    title_text = s._pdf_paragraph_text(title, bold=True)
+    subtitle_text = s._pdf_paragraph_text(subtitle) if subtitle else ""
+    content = f'<font color="{PDF_TEXT}"><b>{title_text}</b></font>'
+    if subtitle_text:
+        content += f'<br/><font color="{PDF_MUTED}" size="8">{subtitle_text}</font>'
+    cell = Paragraph(content, st["body"])
+    accent = colors.HexColor(PDF_CYAN)
+    table = Table([[cell]], colWidths=[PDF_CONTENT_WIDTH], hAlign="LEFT")
+    table.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor(PDF_BG_SOFT)),
+        ("LINEBEFORE", (0, 0), (0, -1), 4, accent),
+        ("BOX", (0, 0), (-1, -1), 0.5, colors.HexColor(PDF_BORDER)),
+        ("LEFTPADDING", (0, 0), (-1, -1), 12),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 12),
+        ("TOPPADDING", (0, 0), (-1, -1), 8),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+    ]))
+    return table
+
+
+def pdf_empty_state(message: str, lang: str) -> Table:
+    """Professional compact substitute for empty charts and empty detail tables."""
+    s = _srv()
+    st = pdf_paragraph_styles(lang)
+    text = Paragraph(
+        f'<font color="{PDF_MUTED}">{s._pdf_paragraph_text(message)}</font>',
+        st["body"],
+    )
+    table = Table([[text]], colWidths=[PDF_CONTENT_WIDTH], hAlign="LEFT")
+    table.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#F8FAFC")),
+        ("BOX", (0, 0), (-1, -1), 0.7, colors.HexColor(PDF_BORDER)),
+        ("LINEBEFORE", (0, 0), (0, -1), 3, colors.HexColor(PDF_CYAN)),
+        ("LEFTPADDING", (0, 0), (-1, -1), 14),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 14),
+        ("TOPPADDING", (0, 0), (-1, -1), 12),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 12),
+    ]))
+    return table
+
+
+def pdf_status_badge(label: str, status: str, lang: str) -> Table:
+    """Small semantic status badge usable inside summary/detail layouts."""
+    s = _srv()
+    st = pdf_paragraph_styles(lang)
+    palette = {
+        "success": ("#ECFDF5", PDF_SUCCESS),
+        "warning": ("#FFFBEB", PDF_WARNING),
+        "danger": ("#FEF2F2", PDF_DANGER),
+        "neutral": (PDF_BG_SOFT, PDF_MUTED),
+    }
+    background, foreground = palette.get(status, palette["neutral"])
+    table = Table(
+        [[Paragraph(s._pdf_paragraph_text(label, bold=True), st["table_body"])]],
+        hAlign="RIGHT" if lang == "ar" else "LEFT",
+    )
+    table.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor(background)),
+        ("TEXTCOLOR", (0, 0), (-1, -1), colors.HexColor(foreground)),
+        ("BOX", (0, 0), (-1, -1), 0.6, colors.HexColor(foreground)),
+        ("LEFTPADDING", (0, 0), (-1, -1), 7),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 7),
+        ("TOPPADDING", (0, 0), (-1, -1), 3),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+    ]))
+    return table
+
+
 def pdf_styled_table(
     data: List[List[Any]],
     lang: str,

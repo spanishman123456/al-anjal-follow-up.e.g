@@ -21,7 +21,7 @@ if str(BACKEND_DIR) not in sys.path:
 
 
 def _sample_report() -> dict:
-    return {
+    report = {
         "semester": 2,
         "quarter": 1,
         "total_students": 194,
@@ -41,8 +41,30 @@ def _sample_report() -> dict:
         "quarter1": {"avg_total": 24.5, "total_with_data": 190, "distribution": []},
         "quarter2": {"avg_total": 0, "total_with_data": 0, "distribution": []},
         "top_performers": [],
-        "students_needing_support": [{"full_name": "طالب تجريبي"}],
+        "students_needing_support": [],
     }
+    for index in range(1, 29):
+        common = {
+            "full_name": f"Sample Student {index:02d}",
+            "class_name": ["Grade 4A", "Grade 5B", "Grade 6A"][index % 3],
+            "quarter1_total": round(43 + (index % 8) * 0.8, 1),
+            "total_score_normalized": round(43 + (index % 8) * 0.8, 1),
+            "focus_assessment": 27,
+            "focus_quiz_primary": 5,
+            "focus_quiz_secondary": 4,
+            "focus_chapter_test": 9,
+            "focus_exam_practical": 9,
+            "focus_exam_theory": 9,
+        }
+        if index <= 14:
+            report["top_performers"].append({**common, "strengths": ["Assessment", "Quarter exams"]})
+        else:
+            report["students_needing_support"].append({
+                **common,
+                "performance_label": "Approach",
+                "weak_areas": ["Quiz follow-up", "Theory exam"],
+            })
+    return report
 
 
 def _sample_overview(report: dict) -> dict:
@@ -83,6 +105,34 @@ def _sample_insights(lang: str) -> dict:
     }
 
 
+def _sample_arabic_payload() -> dict:
+    students = []
+    for index in range(1, 57):
+        class_name = "الرابع أ" if index <= 28 else "الخامس ب"
+        complete = index % 5 != 0
+        continuous = 30 + index % 11
+        tests_total = 48 + index % 13 if complete else None
+        students.append({
+            "full_name": f"طالب عربي {index:02d}",
+            "class_name": class_name,
+            "continuous_total": continuous,
+            "tests_total": tests_total,
+            "quarter_total": continuous + tests_total if tests_total is not None else continuous,
+            "test_completion_count": 4 if complete else 2,
+            "has_grades": True,
+        })
+    completed = sum(item["test_completion_count"] for item in students)
+    return {
+        "academic_year": "2026-2027",
+        "semester": 1,
+        "quarter": 1,
+        "display_quarter": 1,
+        "students": students,
+        "tests_completed": completed,
+        "tests_missing": len(students) * 4 - completed,
+    }
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Offline PDF export smoke test")
     parser.add_argument("--lang", choices=("en", "ar"), default="ar", help="Report language")
@@ -102,7 +152,7 @@ def main() -> int:
     classes = _sample_classes()
     insights = _sample_insights(args.lang)
 
-    analytics_path = args.out / f"analytics_sample_{args.lang}.pdf"
+    analytics_path = args.out / f"international_quarter_analytics_{args.lang}.pdf"
     analytics_bytes = s.generate_analytics_dashboard_pdf(
         report,
         "Grades 4–8",
@@ -114,9 +164,14 @@ def main() -> int:
     )
     analytics_path.write_bytes(analytics_bytes)
 
-    reports_path = args.out / f"reports_sample_{args.lang}.pdf"
+    semester_report = dict(report)
+    semester_report["reporting_period_label"] = {
+        "en": "Semester 2 · Midterm management review",
+        "ar": "الفصل الدراسي الثاني · مراجعة منتصف الفصل",
+    }
+    reports_path = args.out / f"international_semester_midterm_{args.lang}.pdf"
     reports_bytes = s.generate_reports_dashboard_pdf(
-        report,
+        semester_report,
         "Grades 4–8",
         insights=insights,
         report_type="full",
@@ -124,8 +179,13 @@ def main() -> int:
     )
     reports_path.write_bytes(reports_bytes)
 
+    arabic_path = args.out / "arabic_quarter_report_ar.pdf"
+    arabic_bytes = s.generate_arabic_grades_pdf(_sample_arabic_payload(), "ar")
+    arabic_path.write_bytes(arabic_bytes)
+
     print(f"OK: wrote {analytics_path} ({len(analytics_bytes):,} bytes)")
     print(f"OK: wrote {reports_path} ({len(reports_bytes):,} bytes)")
+    print(f"OK: wrote {arabic_path} ({len(arabic_bytes):,} bytes)")
     print("Open the PDFs and verify Arabic text and chart axis labels (no square boxes).")
     return 0
 

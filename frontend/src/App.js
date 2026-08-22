@@ -13,11 +13,12 @@ import {
   warmBackendInBackground,
 } from "@/lib/api";
 import Login from "@/pages/Login";
-import Dashboard from "@/pages/Dashboard";
+import Dashboard from "@/pages/DashboardSectionPage";
 import { Toaster } from "@/components/ui/sonner";
 import { toast } from "sonner";
 import {
   loadAnalyticsPage,
+  loadArabicGradesPage,
   loadAssessmentMarksPage,
   loadAssessmentMarksQ2Page,
   loadCalendarPage,
@@ -38,6 +39,7 @@ import {
 
 // Dashboard is eager-loaded so first paint after login does not flash Suspense fallback (major flicker source).
 const Students = lazy(loadStudentsPage);
+const ArabicGrades = lazy(loadArabicGradesPage);
 const AssessmentMarks = lazy(loadAssessmentMarksPage);
 const FinalExamsAssessment = lazy(loadFinalExamsAssessmentPage);
 const TotalMarks = lazy(loadTotalMarksPage);
@@ -107,13 +109,16 @@ function App() {
   const [quarter, setQuarter] = useState(
     () => parseInt(localStorage.getItem("quarter") || "1", 10),
   );
+  const [schoolSection, setSchoolSection] = useState(
+    () => localStorage.getItem("school_section") || "international",
+  );
   const academicYear = (() => {
     const now = new Date();
     const startYear = now.getMonth() >= 7 ? now.getFullYear() : now.getFullYear() - 1;
     return `${startYear}-${startYear + 1}`;
   })();
 
-  const CLASSES_CACHE_KEY = "app_classes_cache";
+  const CLASSES_CACHE_KEY = `app_classes_cache_${schoolSection}_${academicYear}`;
   const CLASSES_CACHE_TTL_MS = 2 * 60 * 1000; // 2 minutes
   const [classes, setClasses] = useState(() => {
     try {
@@ -134,7 +139,7 @@ function App() {
   });
   const loadClasses = useCallback(async () => {
     try {
-      const r = await api.get("/classes");
+      const r = await api.get("/classes", { params: { school_section: schoolSection, academic_year: academicYear } });
       const list = r.data || [];
       setClasses(list);
       try {
@@ -145,14 +150,14 @@ function App() {
     } finally {
       setClassesLoaded(true);
     }
-  }, []);
+  }, [schoolSection, academicYear, CLASSES_CACHE_KEY]);
   useEffect(() => {
     setClasses([]);
     setClassesLoaded(false);
     try {
       sessionStorage.removeItem(CLASSES_CACHE_KEY);
     } catch { /* ignore */ }
-  }, [token]);
+  }, [token, schoolSection, CLASSES_CACHE_KEY]);
   const waitForBackendReady = useCallback(async ({ timeoutMs = 120000, intervalMs = 1500 } = {}) => {
     const started = Date.now();
     while (Date.now() - started < timeoutMs) {
@@ -273,6 +278,9 @@ function App() {
   useEffect(() => {
     localStorage.setItem("quarter", String(quarter));
   }, [quarter]);
+  useEffect(() => {
+    localStorage.setItem("school_section", schoolSection);
+  }, [schoolSection]);
 
   const handleLogin = useCallback((newToken) => {
     setLogoutReason(null);
@@ -302,6 +310,8 @@ function App() {
             setSemester={setSemester}
             quarter={quarter}
             setQuarter={setQuarter}
+            schoolSection={schoolSection}
+            setSchoolSection={setSchoolSection}
             academicYear={academicYear}
             classes={classes}
             classesLoaded={classesLoaded}
@@ -311,6 +321,7 @@ function App() {
       >
         <Route index element={<Dashboard />} />
         <Route path="students" element={<Suspense fallback={<PageFallback />}><Students /></Suspense>} />
+        <Route path="arabic-grades" element={<Suspense fallback={<PageFallback />}><ArabicGrades /></Suspense>} />
         <Route path="assessment-marks" element={<Suspense fallback={<PageFallback />}><AssessmentMarks /></Suspense>} />
         <Route path="final-exams-assessment" element={<Suspense fallback={<PageFallback />}><FinalExamsAssessment /></Suspense>} />
         <Route path="total-marks" element={<Suspense fallback={<PageFallback />}><TotalMarks /></Suspense>} />

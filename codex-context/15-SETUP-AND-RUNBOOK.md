@@ -1,5 +1,14 @@
 # 15 — Setup and Runbook
 
+## Academic calendar PDF import
+
+- Calendar data comes from an Admin-uploaded, approved Al Anjal school PDF. Normal page loading makes no Ministry or other external calendar request.
+- `backend/calendar_pdf_import.py` extracts the four-page school template once, validates 19 teaching weeks per semester plus required holidays/events, and flags malformed source cells for manual review.
+- `/api/calendar/import` parses fully before writing. It inserts an immutable event version first and changes that academic year's active pointer only after the insert succeeds.
+- `/api/calendar/years` lists preserved years. `/api/calendar/events` and `/api/calendar/status` accept an optional historical `academic_year`; omission resolves the current imported year by its date range.
+- The same records serve both school sections. No section-specific calendar copies are created.
+- No additional environment variable is required.
+
 ## Prerequisites
 
 - Node.js (project historically targets modern Node; Render frontend is Node runtime)
@@ -109,9 +118,9 @@ Frontend: `npm test` (limited coverage).
 
 ### Baseline verification results (2026-08-22)
 
-- Backend focused pytest: **12 passed** (`test_score_calculation.py` + `test_support_list_thresholds.py`).
+- Backend focused pytest: **22 synchronous tests passed**; the legacy async `test_connection.py` still requires a pytest async plugin when the entire folder is collected.
 - Offline `server.py` import: **passed**.
-- Offline Arabic Analytics/Reports PDF smoke generation: **passed**, with Amiri registration confirmed.
+- Offline International quarter, International semester/midterm, and Arabic quarter PDF smoke generation: **passed**. Multipage inspection found no blank/near-empty pages; Arabic output embeds Amiri and contains no replacement/tofu glyphs.
 - Frontend Jest: **2 suites / 7 tests passed**.
 - Frontend production compilation via the Windows-equivalent command: **passed**.
 - Live MongoDB/login/integration scripts were intentionally not run because they require external credentials and may read or mutate live services.

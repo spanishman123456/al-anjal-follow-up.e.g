@@ -10,13 +10,21 @@
 - Top navigation + PageHero banners (EN/AR)
 - Analytics & Reports with Visual Board and premium PDF/Excel paths
 - Remedial plans, rewards/certificates, lesson plan generator
-- Calendar sync page, notifications log, settings/users
+- Multi-year approved-school-PDF calendar import/history page, notifications log, settings/users
 - Favicon from Al Anjal logo
 - Render deployment blueprint
 - Lazy Mongo init + offline PDF test script
 - Verified local baseline: Python 3.13.15, healthy root `.venv`, Node.js 20.20.0, and npm 10.8.2
-- Backend focused verification passes (12 tests), offline server import passes, and Arabic PDF smoke generation passes
-- Frontend Jest verification passes (2 suites / 7 tests) and production compilation succeeds with the Windows-equivalent build command
+- Backend focused verification passes (19 tests), frontend tests pass, production build passes, and live Arabic/International exports pass
+- Frontend Jest verification passes (3 suites / 10 tests) and production compilation succeeds with the Windows-equivalent build command
+- International/Arabic Section switching with section/year-scoped classes and students; legacy data defaults to International
+- Arabic scoped Excel student/class import, quarter `/100` entry (`/40 + /60`), zero-vs-null completion semantics, dashboard/analytics/test lists, and Arabic PDF/Excel reports
+- Arabic Dashboard/Analytics now include `/100` quarter distribution, students-per-class, top-student, and data-aware average cards; the support card deliberately remains uncalculated until an Arabic threshold is approved
+- School-wide multi-year academic calendars imported once from approved Al Anjal PDFs, with immutable versions, automatic current-year selection, preserved history, and no live external synchronization
+- International Dashboard/Analytics now include compact completion + classes organization while retaining existing `/15 → /30 → /50` APIs and calculations; the superseded large Incomplete Assessment Alerts card has been removed
+- Shared illuminated button variants and navy-header table styling now normalize both application sections
+- Shared premium PDF system now covers International Analytics/Reports and Arabic `/100` reports, omits meaningless charts, uses compact empty states, repeats long-table headers, and preserves Amiri RTL rendering
+- Focused backend regression verification passes 20 synchronous tests, including protected International scoring, Arabic calculations/import isolation, multi-year PDF calendar parsing/rollover, and Arabic PDF/Excel generation
 
 ## Recently modified themes (git)
 
@@ -33,11 +41,10 @@
 - Permission strings on roles vs actual route guards
 - Frontend/backend score helper duplication
 - PRD backlog not fully aligned with shipped auth
-- Hardcoded calendar year content
+- The 1448H source PDF visibly contains three anomalies: Semester 1 Week 17 prints two Gregorian dates in 2020, Semester 1 Week 19 prints malformed Hijri cells, and Semester 2 Week 19 includes a stray `96`; imported rows are flagged rather than silently corrected.
 - Local reward storage vs server rewards (verify when editing Rewards)
 - Weekly report configuration lives in the separate `report_settings` collection, not `app_settings`
 - Reward certificates still use Helvetica/direct canvas text and do not yet support the protected Amiri Arabic rendering pipeline
-- Frontend academic year is dynamically 2026–2027, but synced calendar seed data remains hardcoded to 1447H / 2025–2026
 - Normal `npm run build` remains non-portable on Windows because its script uses POSIX inline environment-variable syntax; the documented PowerShell-equivalent build succeeds
 - `npm ci` reports 58 dependency vulnerabilities; do not apply automatic audit fixes or upgrades without explicit approval
 - Live MongoDB/login/integration tests are not part of the safe offline baseline because they require external credentials and may touch live services
@@ -52,10 +59,10 @@
 1. Deduplicate Q1/Q2 assessment pages safely
 2. Shared frontend scoring module matching `compute_cumulative_quarter_score_50`
 3. Strengthen automated tests around thresholds and imports
-4. Calendar year data maintenance workflow
+4. Visually review manual-review calendar cells and replace them only from an approved corrected school document
 5. Further PDF/report polish only if owner requests
 6. Bring reward certificates into the Amiri + Arabic shaping pipeline when explicitly requested
-7. Replace or refresh hardcoded calendar seed data for the active academic year
+7. Define Arabic Section performance thresholds only after an explicit owner decision
 8. Plan dependency-security review separately before changing the existing lockfile or package versions
 
 ## Owner expectation at handoff

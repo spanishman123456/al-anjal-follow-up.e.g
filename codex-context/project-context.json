@@ -20,11 +20,13 @@
     "students",
     "weeks",
     "student_scores",
+    "arabic_quarter_scores",
     "remedial_plans",
     "rewards",
     "reward_events",
     "audit_logs",
     "app_settings",
+    "academic_calendars",
     "calendar_events",
     "notification_logs",
     "report_settings"
@@ -40,7 +42,10 @@
     "Teachers profiles and Gmail approval",
     "Calendar and notifications",
     "Global semester/quarter sync",
-    "EN/AR RTL UI with PageHero banners"
+    "EN/AR RTL UI with PageHero banners",
+    "International/Arabic Section switching with isolated records",
+    "Arabic quarter grading out of 100 with test-completion analytics",
+    "Multi-year approved school PDF calendar import with preserved history and automatic current-year resolution"
   ],
   "not_implemented": [
     "Daily present/absent attendance roll-call system"
@@ -78,19 +83,19 @@
     "frontend_build_windows": "cd frontend; $env:DISABLE_ESLINT_PLUGIN=\"true\"; npm exec -- craco build; node scripts/postbuild-spa.cjs",
     "backend_install": "cd backend && pip install -r requirements.txt",
     "backend_start": "cd backend && uvicorn server:app --reload --host 0.0.0.0 --port 8000",
-    "pdf_smoke_test": "cd backend && python scripts/test_pdf_export.py --lang ar",
+    "pdf_smoke_test": "python backend/scripts/test_pdf_export.py --lang en --out test_reports/final-review-pdfs",
     "backend_pytest": "cd backend && pytest"
   },
   "verified_baseline": {
     "python": "3.13.15",
     "backend_venv": "Repository-root .venv recreated successfully with Python 3.13",
     "backend_dependencies": "Installed from backend/requirements.txt; pip check passed",
-    "backend_focused_tests": "12 passed",
+    "backend_focused_tests": "20 synchronous tests passed; legacy live Mongo diagnostic scripts are excluded from safe unit-test discovery",
     "backend_server_import": "passed offline",
-    "arabic_pdf_smoke": "passed with Amiri registration",
+    "pdf_smoke": "International quarter + semester/midterm and Arabic quarter passed; Amiri embedded and no blank pages",
     "node": "20.20.0",
     "npm": "10.8.2",
-    "frontend_tests": "2 suites / 7 tests passed",
+    "frontend_tests": "3 suites / 10 tests passed",
     "frontend_build": "Windows-equivalent CRACO build and existing postbuild completed successfully",
     "live_integration_tests": "not run; require external credentials and may touch live services"
   },
@@ -135,6 +140,8 @@
     "Amiri-embedded Arabic text in Analytics/Reports PDFs (reward certificates are a known exception)",
     "Gmail users remain inactive until admin approval",
     "attendance field is weekly score max 2.5 not roll-call"
+    ,"Arabic attendance is a quarter grading component max 10, not roll-call"
+    ,"Arabic performance thresholds remain unset until explicitly defined"
   ],
   "high_risk_areas": [
     "backend/server.py score compute helpers",
@@ -149,10 +156,9 @@
     "Duplicated Q1/Q2 frontend pages",
     "Frontend/backend score logic duplication risk",
     "Role permission strings underused",
-    "Hardcoded calendar year content",
+    "The 1448H approved school PDF contains three visibly malformed source entries that remain flagged for manual review",
     "design_guidelines.json partially outdated vs live UI",
     "Reward certificates use Helvetica/direct text and are not yet Arabic-safe",
-    "Frontend academic year 2026-2027 differs from hardcoded 1447H/2025-2026 calendar data",
     "Normal npm run build is not Windows-portable because it uses POSIX environment-variable syntax",
     "npm ci reports 58 dependency vulnerabilities; automatic fixes/upgrades require explicit approval",
     "Live MongoDB/login/integration tests are excluded from the safe offline baseline",
@@ -168,7 +174,11 @@
     "assessment_max": 30,
     "quarter_max": 50,
     "quarter_on_level_min": 46,
-    "quarter_approach_min": 43
+    "quarter_approach_min": 43,
+    "arabic_quarter_max": 100,
+    "arabic_continuous_max": 40,
+    "arabic_tests_max": 60,
+    "arabic_performance_thresholds": null
   },
   "agents_entry": "AGENTS.md",
   "codex_start": "codex-context/17-CODEX-START-HERE.md"

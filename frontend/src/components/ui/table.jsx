@@ -3,17 +3,17 @@ import * as React from "react"
 import { cn } from "@/lib/utils"
 
 const Table = React.forwardRef(({ className, ...props }, ref) => (
-  <div className="table-responsive-wrap relative w-full overflow-auto rounded-lg border-2 border-border">
+  <div className="table-responsive-wrap relative w-full overflow-auto rounded-xl border border-border/70 bg-card shadow-sm">
     <table
       ref={ref}
-      className={cn("w-full caption-bottom text-sm", className)}
+      className={cn("app-data-table w-full caption-bottom text-sm", className)}
       {...props} />
   </div>
 ))
 Table.displayName = "Table"
 
 const TableHeader = React.forwardRef(({ className, ...props }, ref) => (
-  <thead ref={ref} className={cn("[&_tr]:border-b-2 [&_tr]:border-border", className)} {...props} />
+  <thead ref={ref} className={cn("bg-gradient-to-r from-[#0D1222] via-[#17203A] to-[#2B1B4D] text-white [&_tr]:border-b [&_tr]:border-white/10", className)} {...props} />
 ))
 TableHeader.displayName = "TableHeader"
 
@@ -37,7 +37,7 @@ const TableRow = React.forwardRef(({ className, ...props }, ref) => (
   <tr
     ref={ref}
     className={cn(
-      "border-b-2 border-border transition-colors duration-200 ease-out hover:bg-muted/50 data-[state=selected]:bg-muted",
+      "border-b border-border/55 transition-colors duration-200 ease-out hover:bg-cyan-50/55 data-[state=selected]:bg-cyan-50/70 dark:hover:bg-cyan-950/15 dark:data-[state=selected]:bg-cyan-950/20",
       className
     )}
     {...props} />
@@ -48,7 +48,7 @@ const TableHead = React.forwardRef(({ className, ...props }, ref) => (
   <th
     ref={ref}
     className={cn(
-      "h-10 px-2 text-left align-middle font-semibold text-muted-foreground border-border border-r last:border-r-0 [&:has([role=checkbox])]:pr-0 [&>[role=checkbox]]:translate-y-[2px]",
+      "h-11 px-4 text-start align-middle text-xs font-bold uppercase tracking-wide text-white/90 border-white/10 border-e last:border-e-0 [&:has([role=checkbox])]:pe-0 [&>[role=checkbox]]:translate-y-[2px]",
       className
     )}
     {...props} />
@@ -59,7 +59,7 @@ const TableCell = React.forwardRef(({ className, ...props }, ref) => (
   <td
     ref={ref}
     className={cn(
-      "p-2 align-middle border-border border-r last:border-r-0 [&:has([role=checkbox])]:pr-0 [&>[role=checkbox]]:translate-y-[2px]",
+      "px-4 py-3 align-middle border-border/45 border-e last:border-e-0 [&:has([role=checkbox])]:pe-0 [&>[role=checkbox]]:translate-y-[2px]",
       className
     )}
     {...props} />

@@ -1,5 +1,13 @@
 # 13 — Feature Map
 
+## School sections (CONFIRMED 2026-08-22)
+
+- Global International/Arabic switcher in `AppShell`; legacy default is International.
+- Section/year-scoped Classes and Students with Teacher `assigned_class_ids` preserved.
+- International routes retain the `/15 → /30 → /50` pages and calculations.
+- Arabic Section has scoped Excel student/class import, quarter `/100` grade entry, Dashboard, Analytics, Reports, test-completion lists, and Arabic-safe PDF/Excel export.
+- Arabic performance thresholds remain intentionally undefined.
+
 | Feature | UI | Logic | Database | API (examples) | Main files |
 |---------|----|-------|----------|----------------|------------|
 | Login | `Login.jsx` | JWT | `users` | `/api/auth/login` | `App.js`, `api.js`, `server.py` |
@@ -20,7 +28,7 @@
 | Lesson plans | `LessonPlanGenerator.jsx` | DOCX fill | files on disk | lesson-plan* | `lesson_plan_service.py` |
 | Teachers | `Teachers.jsx`, `TeacherProfile.jsx` | profiles | `users` | `/teachers*` | pages + server |
 | Notifications | `Notifications.jsx` | logs/SMS templates | `notification_logs`, settings | `/notifications*` | page + server |
-| Calendar | `Calendar.jsx` | sync events | `calendar_events` | `/calendar*` | page + server |
+| Calendar | `Calendar.jsx` | Admin PDF import, year history/switching, bilingual week/event display | `academic_calendars` + versioned `calendar_events` | `/calendar/years`, `/calendar/events`, `/calendar/status`, `/calendar/import` | page + `calendar_pdf_import.py` + server |
 | Settings | `Settings.jsx` | users/roles/promotion | `users`, `roles`, `app_settings` | various admin | `Settings.jsx` |
 | Term selection | Header + `AcademicTermSelect` | global state | localStorage | query params | `App.js`, `academicScope.js` |
 | i18n/RTL | all pages | dictionaries | — | — | `i18n.js` |

@@ -21,7 +21,7 @@ import { Trash2 } from "lucide-react";
 import { performanceStatCellClasses } from "@/lib/performanceBadges";
 
 export default function Classes() {
-  const { language, profile, semester, quarter, academicYear, loadClasses: refreshGlobalClasses } = useOutletContext();
+  const { language, profile, semester, quarter, academicYear, schoolSection, loadClasses: refreshGlobalClasses } = useOutletContext();
   const semesterNumber = semester === "semester2" ? 2 : 1;
   const isTeacher = profile?.role_name === "Teacher";
   const t = useTranslations(language);
@@ -56,7 +56,7 @@ export default function Classes() {
   const loadClasses = async () => {
     const requestId = ++latestLoadRequestIdRef.current;
     try {
-      const baseClassesRes = await api.get("/classes");
+      const baseClassesRes = await api.get("/classes", { params: { school_section: schoolSection, academic_year: academicYear } });
       if (latestLoadRequestIdRef.current !== requestId) return;
       const baseClasses = (baseClassesRes.data || []).map((cls) => ({
         class_id: cls.id,
@@ -76,10 +76,12 @@ export default function Classes() {
       setClasses(filterTeacherClasses(baseClasses));
 
       api
-        .get("/classes/summary", { params: { semester: semesterNumber, quarter } })
+        .get(schoolSection === "arabic" ? "/arabic/grades" : "/classes/summary", { params: schoolSection === "arabic" ? { academic_year: academicYear, semester: semesterNumber, quarter } : { semester: semesterNumber, quarter } })
         .then((response) => {
           if (latestLoadRequestIdRef.current !== requestId) return;
-          const summaryData = response.data || [];
+          const summaryData = schoolSection === "arabic"
+            ? (response.data?.class_breakdown || []).map((item) => ({ ...item, avg_total_score: null, distribution: {}, students_needing_support_count: 0 }))
+            : (response.data || []);
           if (!summaryData.length) return;
           setClasses(filterTeacherClasses(summaryData));
         })
@@ -87,11 +89,11 @@ export default function Classes() {
     } catch (error) {
       if (latestLoadRequestIdRef.current !== requestId) return;
       try {
-        const response = await api.get("/classes/summary", {
-          params: { semester: semesterNumber, quarter },
+        const response = await api.get(schoolSection === "arabic" ? "/arabic/grades" : "/classes/summary", {
+          params: schoolSection === "arabic" ? { academic_year: academicYear, semester: semesterNumber, quarter } : { semester: semesterNumber, quarter },
         });
         if (latestLoadRequestIdRef.current !== requestId) return;
-        const summaryData = response.data || [];
+        const summaryData = schoolSection === "arabic" ? (response.data?.class_breakdown || []) : (response.data || []);
         setClasses(filterTeacherClasses(summaryData));
       } catch {
         if (latestLoadRequestIdRef.current !== requestId) return;
@@ -102,8 +104,8 @@ export default function Classes() {
 
   const handleDownload = async (format) => {
     try {
-      const response = await api.get("/classes/summary/export", {
-        params: { format, semester: semesterNumber, quarter },
+      const response = await api.get(schoolSection === "arabic" ? "/arabic/reports/export" : "/classes/summary/export", {
+        params: schoolSection === "arabic" ? { format, semester: semesterNumber, quarter, academic_year: academicYear, lang: language } : { format, semester: semesterNumber, quarter },
         responseType: "blob",
       });
       const url = window.URL.createObjectURL(new Blob([response.data]));
@@ -130,7 +132,7 @@ export default function Classes() {
 
   useEffect(() => {
     loadClasses();
-  }, [semesterNumber, quarter]);
+  }, [semesterNumber, quarter, schoolSection, academicYear]);
 
   // Refetch when user returns to this tab so class/student counts stay in sync with Assessment page
   useEffect(() => {
@@ -152,6 +154,8 @@ export default function Classes() {
         name: form.name,
         grade: form.grade ? Number(form.grade) : undefined,
         section: form.section || undefined,
+        school_section: schoolSection,
+        academic_year: academicYear,
       });
       toast.success(t("class_added"));
       setIsAddOpen(false);
@@ -211,7 +215,7 @@ export default function Classes() {
 
   const handleDeleteAllClasses = async () => {
     try {
-      await api.delete("/classes");
+      await api.delete("/classes", { params: { school_section: schoolSection, academic_year: academicYear } });
       toast.success(t("all_classes_deleted"));
       setDeleteAllDialogOpen(false);
       loadClasses();
@@ -266,12 +270,18 @@ export default function Classes() {
             {t("classes_synced_with_quarters")}
           </p>
           <div className="mt-2 flex flex-wrap gap-4">
+            {schoolSection === "arabic" ? (
+              <Link to="/arabic-grades" className="text-sm font-medium text-primary hover:underline">
+                {t("arabic_quarter_grades")} →
+              </Link>
+            ) : <>
             <Link
               to="/assessment-marks"
               className="text-sm font-medium text-primary hover:underline"
             >
               {t("first_quarter_marks")} →
             </Link>
+            </>}
             <Link
               to="/assessment-marks-q2"
               className="text-sm font-medium text-primary hover:underline"
@@ -305,12 +315,19 @@ export default function Classes() {
                 <span className="text-sm text-muted-foreground">{t("total_students")}</span>
                 <span className="text-sm font-semibold">{cls.student_count}</span>
               </div>
+              {schoolSection === "arabic" ? (
+                <>
+                  <div className="flex items-center justify-between"><span className="text-sm text-muted-foreground">{t("students_with_grades")}</span><span className="text-sm font-semibold">{cls.students_with_grades ?? 0}</span></div>
+                  <div className="flex items-center justify-between"><span className="text-sm text-muted-foreground">{t("completion_percentage")}</span><span className="text-sm font-semibold text-cyan-700 dark:text-cyan-300">{cls.completion_percentage ?? 0}%</span></div>
+                </>
+              ) : <>
               <div className="flex items-center justify-between" data-testid={`class-card-avg-${cls.class_id}`}>
                 <span className="text-sm text-muted-foreground">{t("avg_total_score")}</span>
                 <span className="text-sm font-semibold">
                   {cls.avg_total_score != null ? cls.avg_total_score : "—"}
                 </span>
               </div>
+              </>}
               <div className="grid grid-cols-1 gap-2 text-xs sm:grid-cols-2" data-testid={`class-card-quarter-rates-${cls.class_id}`}>
                 <div className={performanceStatCellClasses.on_level}>
                   {quarterOneLabel}: {(cls.quarter1_on_level_rate ?? 0)}% {t("on_level")}
@@ -342,6 +359,9 @@ export default function Classes() {
                 )}
               </div>
               <div className="flex flex-wrap gap-2 border-t border-border/60 pt-2">
+                {schoolSection === "arabic" ? (
+                  <Link to="/arabic-grades" className="text-xs font-medium text-primary hover:underline">{t("arabic_quarter_grades")}</Link>
+                ) : <>
                 <Link
                   to="/assessment-marks"
                   onClick={() => sessionStorage.setItem("app_selected_class_id_q1", cls.class_id)}
@@ -364,6 +384,7 @@ export default function Classes() {
                 >
                   {t("clear_quarter_scores")}
                 </button>
+                </>}
               </div>
             </CardContent>
           </Card>

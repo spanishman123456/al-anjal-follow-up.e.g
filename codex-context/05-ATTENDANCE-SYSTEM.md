@@ -29,6 +29,10 @@ Follow-up /15 =
 
 Exact aggregation lives in `backend/server.py` (`compute_cumulative_*` / follow-up helpers). **Do not change without regression tests.**
 
+### Arabic Section distinction
+
+The Arabic Section also has a field named `attendance`, but it is a **quarter grading component `/10`** inside `arabic_quarter_scores`. It is not daily roll-call and does not use the International weekly `/2.5` aggregation.
+
 ## Codex guidance
 
 1. **Do not build** a full attendance product unless the owner explicitly requests it and accepts schema/UI scope.

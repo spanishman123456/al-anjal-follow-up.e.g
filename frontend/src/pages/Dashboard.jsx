@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Link, useOutletContext } from "react-router-dom";
+import { useOutletContext } from "react-router-dom";
 import {
   PieChart,
   Pie,
@@ -22,7 +22,6 @@ import { ExpandableSection } from "@/components/ExpandableSection";
 import { PerformanceLevelBadge } from "@/components/PerformanceLevelBadge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import TimetableEditor from "@/components/TimetableEditor";
 import {
@@ -31,6 +30,7 @@ import {
   performanceMetricTextClasses,
 } from "@/lib/performanceBadges";
 import { cn } from "@/lib/utils";
+import { InternationalCompletionOverview } from "@/components/analytics/InternationalCompletionOverview";
 
 const formatScore = (value, suffix = "") => {
   if (value === null || value === undefined) {
@@ -47,6 +47,7 @@ export default function Dashboard() {
   const isTeacher = profile?.role_name === "Teacher";
   const [summary, setSummary] = useState(null);
   const [missedAssessments, setMissedAssessments] = useState(null);
+  const [classSummary, setClassSummary] = useState([]);
   const [loading, setLoading] = useState(false);
   const fileInputRef = useRef(null);
   const lastMissedCountRef = useRef(null);
@@ -92,6 +93,12 @@ export default function Dashboard() {
           );
         }
         lastMissedCountRef.current = missedCount;
+      })
+      .catch(() => null);
+    api
+      .get("/classes/summary", { params })
+      .then((response) => {
+        if (latestRequestIdRef.current === requestId) setClassSummary(response.data || []);
       })
       .catch(() => null);
   };
@@ -163,6 +170,23 @@ export default function Dashboard() {
   const supportCount = summary
     ? summary.students_needing_support?.length ?? (summary.counts?.approach || 0) + (summary.counts?.below || 0)
     : 0;
+  const assessmentCompletionItems = [
+    ["quiz", t("assessment_quiz")],
+    ["chapter_test", t("assessment_chapter_test")],
+    ["final_practical", t("assessment_final_practical")],
+    ["final_theory", t("assessment_final_theory")],
+  ].map(([id, label]) => ({
+    id,
+    label,
+    completed: Number(missedAssessments?.groups?.[id]?.submitted_count || 0),
+    missing: Number(missedAssessments?.groups?.[id]?.missed_count || 0),
+  }));
+  const classCompletionRows = sortByClassOrder(classSummary).map((item) => ({
+    id: item.class_id,
+    name: item.class_name,
+    total: Number(item.student_count || 0),
+    completed: Math.max(Number(item.student_count || 0) - Number(item.distribution?.no_data || 0), 0),
+  }));
 
   return (
     <div className="space-y-8" data-testid="dashboard-page">
@@ -318,88 +342,12 @@ export default function Dashboard() {
         {t("dashboard_metrics_scope_note")}
       </p>
 
-      <Card
-        className={`border ${
-          (summary?.total_students ?? 0) === 0
-            ? "border-slate-300 bg-slate-50/70 dark:border-slate-700/40 dark:bg-slate-950/20"
-            : [
-                "quiz",
-                "chapter_test",
-                "final_practical",
-                "final_theory",
-              ].some((key) => Number(missedAssessments?.groups?.[key]?.missed_count || 0) > 0)
-            ? "border-amber-300 bg-amber-50/70 dark:border-amber-700/40 dark:bg-amber-950/20"
-            : "border-emerald-300 bg-emerald-50/70 dark:border-emerald-700/40 dark:bg-emerald-950/20"
-        }`}
-        data-testid="dashboard-missed-assessment-alert"
-      >
-        <CardHeader className="pb-2">
-          <CardTitle className="text-base">{t("missed_assessment_alert_title")}</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-2">
-          {(summary?.total_students ?? 0) === 0 ? (
-            <div className="rounded-lg border border-border/60 p-3">
-              <p className="text-sm font-semibold">{t("no_students_enrolled_yet")}</p>
-              <p className="text-sm text-muted-foreground">{t("add_students_to_begin_tracking")}</p>
-            </div>
-          ) : (
-            [
-              {
-                key: "quiz",
-                title: t("assessment_quiz"),
-                link: quarter === 2 ? "/assessment-marks-q2" : "/assessment-marks",
-              },
-              {
-                key: "chapter_test",
-                title: t("assessment_chapter_test"),
-                link: quarter === 2 ? "/assessment-marks-q2" : "/assessment-marks",
-              },
-              {
-                key: "final_practical",
-                title: t("assessment_final_practical"),
-                link: quarter === 2 ? "/final-exams-assessment-q2" : "/final-exams-assessment",
-              },
-              {
-                key: "final_theory",
-                title: t("assessment_final_theory"),
-                link: quarter === 2 ? "/final-exams-assessment-q2" : "/final-exams-assessment",
-              },
-            ].map((item) => {
-              const group = missedAssessments?.groups?.[item.key];
-              const missedCount = Number(group?.missed_count || 0);
-              const submittedCount = Number(group?.submitted_count || 0);
-              return (
-                <div key={item.key} className="rounded-lg border border-border/60 p-3">
-                  <p className="text-sm font-semibold">{item.title}</p>
-                  <p className="text-sm text-muted-foreground">
-                    {missedCount > 0
-                      ? t("missed_assessment_alert_desc")
-                          .replace("{count}", String(missedCount))
-                          .replace("{submitted}", String(submittedCount))
-                      : t("no_missed_assessment_alert")}
-                  </p>
-                  {missedCount > 0 && (
-                    <>
-                      <div className="mt-2 flex flex-wrap gap-2">
-                        {(group?.students || []).slice(0, 8).map((student) => (
-                          <Badge key={student.id} variant="outline">
-                            {student.full_name} ({student.class_name})
-                          </Badge>
-                        ))}
-                      </div>
-                      <div className="mt-2">
-                        <Button asChild size="sm" variant="outline">
-                          <Link to={item.link}>{t("view_missing_assessment_students")}</Link>
-                        </Button>
-                      </div>
-                    </>
-                  )}
-                </div>
-              );
-            })
-          )}
-        </CardContent>
-      </Card>
+      <InternationalCompletionOverview
+        t={t}
+        testItems={assessmentCompletionItems}
+        classRows={classCompletionRows}
+        testIdPrefix="dashboard"
+      />
 
       <section className="section-bg-alt-2 grid gap-6 rounded-xl border border-border/50 p-4 lg:grid-cols-3 animate-stagger" data-testid="dashboard-main">
         <Card className="lg:col-span-2 card-hover" data-testid="dashboard-distribution">

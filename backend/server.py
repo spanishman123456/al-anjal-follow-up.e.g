@@ -56,7 +56,6 @@ from sendgrid.helpers.mail import (
     Disposition,
     Email as SGEmail,
 )
-import requests
 from pymongo import UpdateOne
 from twilio.rest import Client as TwilioClient
 import jwt
@@ -84,6 +83,7 @@ from lesson_plan_service import (
     sanitize_filename,
     save_generated_docx,
 )
+from calendar_pdf_import import CalendarImportError, parse_anjal_calendar_pdf, select_calendar_for_date
 
 # MongoDB: lazy init so `import server` / offline PDF tests do not resolve mongodb+srv at import time.
 from urllib.parse import quote_plus
@@ -526,6 +526,7 @@ PDF_LABELS: Dict[str, Dict[str, str]] = {
     "en": {
         "Report": "Report",
         "Analytics Dashboard": "Analytics Dashboard",
+        "Analytics Report": "Analytics Report",
         "Professional Performance Summary": "Professional Performance Summary",
         "Generated on": "Generated on",
         "Summary metrics": "Summary metrics",
@@ -567,10 +568,52 @@ PDF_LABELS: Dict[str, Dict[str, str]] = {
         "Recommendations": "Recommendations",
         "Insight": "Insight",
         "Details": "Details",
+        "Performance Overview": "Performance Overview",
+        "Detailed Analysis": "Detailed Analysis",
+        "No meaningful data is available for this section.": "No meaningful data is available for this section.",
+        "Arabic Section Grade Report": "Arabic Section Grade Report",
+        "Arabic Section": "Arabic Section",
+        "Academic Year": "Academic Year",
+        "Classes Included": "Classes Included",
+        "Average /100": "Average /100",
+        "Scored Students": "Scored Students",
+        "Fully Tested": "Fully Tested",
+        "Completion Overview": "Completion Overview",
+        "Continuous /40": "Continuous /40",
+        "Tests /60": "Tests /60",
+        "Quarter /100": "Quarter /100",
+        "Tests Completed": "Tests Completed",
+        "Missing Scores": "Missing Scores",
+        "Highest Recorded Totals": "Highest Recorded Totals",
+        "Students Requiring Completion": "Students Requiring Completion",
+        "No Arabic scores have been entered for the selected period.": "No Arabic scores have been entered for the selected period.",
+        "No students require score completion.": "No students require score completion.",
+        "On Level": "On Level",
+        "Approaching full score": "Approaching full score",
+        "Below Level": "Below Level",
+        "Average score by class": "Average score by class",
+        "Class mean total for the selected term": "Class mean total for the selected term",
+        "On-level rate (selected quarter)": "On-level rate (selected quarter)",
+        "Cohort on-level percent for selected term": "Cohort on-level percent for selected term",
+        "Quarter total achievement": "Quarter total achievement",
+        "Quarter total out of 50": "Quarter total out of 50",
+        "Performance levels": "Performance levels",
+        "Distribution for selected term": "Distribution for selected term",
+        "Student component profile": "Student component profile",
+        "Class averages profile": "Class averages profile",
+        "Student marks profile": "Student marks profile",
+        "How averages spread across groups": "How averages spread across groups",
+        "How averages spread across classes": "How averages spread across classes",
+        "Students per class": "Students per class",
+        "Enrollment by class section": "Enrollment by class section",
+        "Assessment": "Assessment",
+        "Quiz": "Quiz",
+        "Chapter Test": "Chapter Test",
     },
     "ar": {
         "Report": "تقرير",
         "Analytics Dashboard": "لوحة التحليلات",
+        "Analytics Report": "تقرير التحليلات",
         "Professional Performance Summary": "ملخص الأداء المهني",
         "Generated on": "تاريخ الإصدار",
         "Summary metrics": "المؤشرات الرئيسية",
@@ -612,6 +655,47 @@ PDF_LABELS: Dict[str, Dict[str, str]] = {
         "Recommendations": "التوصيات",
         "Insight": "المؤشر",
         "Details": "التفاصيل",
+        "Performance Overview": "نظرة عامة على الأداء",
+        "Detailed Analysis": "التحليل التفصيلي",
+        "No meaningful data is available for this section.": "لا تتوفر بيانات كافية لهذا القسم.",
+        "Arabic Section Grade Report": "تقرير درجات القسم العربي",
+        "Arabic Section": "القسم العربي",
+        "Academic Year": "العام الدراسي",
+        "Classes Included": "الفصول المشمولة",
+        "Average /100": "المتوسط من 100",
+        "Scored Students": "الطلاب المرصودة درجاتهم",
+        "Fully Tested": "مكتملو الاختبارات",
+        "Completion Overview": "نظرة عامة على الاكتمال",
+        "Continuous /40": "الأعمال المستمرة /40",
+        "Tests /60": "الاختبارات /60",
+        "Quarter /100": "إجمالي الربع /100",
+        "Tests Completed": "الاختبارات المكتملة",
+        "Missing Scores": "درجات غير مكتملة",
+        "Highest Recorded Totals": "أعلى الدرجات المرصودة",
+        "Students Requiring Completion": "طلاب يحتاجون إلى استكمال الرصد",
+        "No Arabic scores have been entered for the selected period.": "لم تُرصد درجات للقسم العربي في الفترة المحددة.",
+        "No students require score completion.": "لا يوجد طلاب يحتاجون إلى استكمال الدرجات.",
+        "On Level": "ضمن المستوى",
+        "Approaching full score": "قريب من الدرجة الكاملة",
+        "Below Level": "دون المستوى",
+        "Average score by class": "متوسط الدرجات حسب الفصل",
+        "Class mean total for the selected term": "متوسط إجمالي الفصل للفترة المحددة",
+        "On-level rate (selected quarter)": "نسبة المستوى المطلوب في الربع المحدد",
+        "Cohort on-level percent for selected term": "نسبة الطلاب ضمن المستوى للفترة المحددة",
+        "Quarter total achievement": "تحصيل إجمالي الربع",
+        "Quarter total out of 50": "إجمالي الربع من 50",
+        "Performance levels": "مستويات الأداء",
+        "Distribution for selected term": "التوزيع للفترة المحددة",
+        "Student component profile": "تفصيل مكونات درجة الطالب",
+        "Class averages profile": "ملف متوسطات الفصول",
+        "Student marks profile": "ملف درجات الطالب",
+        "How averages spread across groups": "توزيع المتوسطات بين المجموعات",
+        "How averages spread across classes": "توزيع المتوسطات بين الفصول",
+        "Students per class": "عدد الطلاب حسب الفصل",
+        "Enrollment by class section": "توزيع التسجيل حسب الفصل",
+        "Assessment": "التقييم",
+        "Quiz": "اختبار قصير",
+        "Chapter Test": "اختبار الوحدة",
     },
 }
 
@@ -2610,6 +2694,20 @@ def _pdf_term_display_label(semester: int, quarter: int, lang: str = "en") -> st
     return f"{_tr('Semester', lang)} {sem} · {_tr('Quarter', lang)} {q_disp}"
 
 
+def _pdf_reporting_period_label(report: Dict[str, Any], lang: str = "en") -> str:
+    """Presentation-only period override for quarter/midterm/semester/year exports."""
+    configured = report.get("reporting_period_label")
+    if isinstance(configured, dict):
+        localized = configured.get(_normalize_lang(lang)) or configured.get("en")
+        if localized:
+            return str(localized)
+    elif configured:
+        return str(configured)
+    return _pdf_term_display_label(
+        int(report.get("semester") or 1), int(report.get("quarter") or 1), lang
+    )
+
+
 def _pdf_term_short_label(report: Dict[str, Any]) -> str:
     sem = int(report.get("semester") or 1)
     qn = int(report.get("quarter") or 1)
@@ -2897,6 +2995,18 @@ def _pdf_engine_footer(lang: str, report_label: str = "Analytics Report"):
 def _pdf_engine_section_style(lang: str) -> ParagraphStyle:
     from pdf_report_engine import pdf_paragraph_styles
     return pdf_paragraph_styles(lang)["section"]
+
+
+def _pdf_engine_section_heading(title: str, lang: str, subtitle: str = "") -> Table:
+    from pdf_report_engine import pdf_section_heading
+    return pdf_section_heading(title, lang, subtitle)
+
+
+def _pdf_engine_empty_state(lang: str, message: Optional[str] = None) -> Table:
+    from pdf_report_engine import pdf_empty_state
+    return pdf_empty_state(
+        message or _tr("No meaningful data is available for this section.", lang), lang
+    )
 
 
 def _pdf_append_executive_summary(
@@ -3201,7 +3311,7 @@ def generate_report_pdf(
     dist_approach = next((int(item.get("count") or 0) for item in distribution if str(item.get("level")) == "approach"), 0)
     dist_below = next((int(item.get("count") or 0) for item in distribution if str(item.get("level")) == "below"), 0)
     support_count = len(report.get("students_needing_support") or [])
-    term_sub = _pdf_term_display_label(int(report.get("semester", 1)), rq, lang)
+    term_sub = _pdf_reporting_period_label(report, lang)
     generated_on_text = datetime.now(REPORT_TIMEZONE).strftime("%Y-%m-%d %H:%M")
     insights = insights or {}
     report_title = f"{scope_label} {_tr('Report', lang)}"
@@ -3233,11 +3343,14 @@ def generate_report_pdf(
         insights=insights,
         lang=lang,
     )
+    elements.append(PageBreak())
+    elements.append(_pdf_engine_section_heading(_tr("Performance Overview", lang), lang, term_sub))
+    elements.append(Spacer(1, 8))
     focus_q = q1 if rq == 1 else q2
     summary_data = [
         [_tr("Metric", lang), _tr("Value", lang)],
         [_tr("Scope", lang), scope_label],
-        [_tr("Term", lang), _pdf_term_display_label(int(report.get("semester", 1)), rq, lang)],
+        [_tr("Term", lang), _pdf_reporting_period_label(report, lang)],
         [_tr("Total Students", lang), _fmt(report.get("total_students"))],
         [_tr("Average Total Score", lang), _fmt(report.get("avg_total_score"))],
         [_tr("On Level % (focus quarter)", lang), _fmt(report.get("exceeding_rate"), "%")],
@@ -3252,44 +3365,49 @@ def generate_report_pdf(
     dist_rows = [[_tr("Level", lang), _tr("Count", lang)]]
     for item in distribution:
         dist_rows.append([str(item.get("level", "")).replace("_", " ").title(), _fmt(item.get("count"))])
-    if len(dist_rows) == 1:
-        dist_rows.append([_tr("No Data", lang), "0"])
-    elements.append(_pdf_wrap_card(_tr("Performance distribution (focus quarter)", lang), _styled_table(dist_rows, col_widths=[260, 270]), lang))
+    if len(dist_rows) > 1:
+        elements.append(_pdf_wrap_card(_tr("Performance distribution (focus quarter)", lang), _styled_table(dist_rows, col_widths=[260, 270]), lang))
+    else:
+        elements.append(_pdf_engine_empty_state(lang))
     elements.append(Spacer(1, 8))
 
-    distribution_chart = create_distribution_chart(distribution)
     class_breakdown = report.get("class_breakdown", []) or []
-    class_chart = create_class_breakdown_chart(class_breakdown)
-    chart_table = Table(
-        [[RLImage(distribution_chart, width=250, height=200), RLImage(class_chart, width=250, height=190)]],
-        colWidths=[260, 270],
-        hAlign="LEFT",
-    )
-    chart_table.setStyle(
-        TableStyle(
-            [
-                ("VALIGN", (0, 0), (-1, -1), "TOP"),
-                ("BOX", (0, 0), (-1, -1), 0.4, colors.HexColor("#cbd5e1")),
-                ("LEFTPADDING", (0, 0), (-1, -1), 6),
-                ("RIGHTPADDING", (0, 0), (-1, -1), 6),
-                ("TOPPADDING", (0, 0), (-1, -1), 6),
-                ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
-            ]
-        )
-    )
-    elements.append(_pdf_wrap_card(_tr("Visual dashboard", lang), chart_table, lang))
+    chart_cells: List[Any] = []
+    if sum(int(item.get("count") or 0) for item in distribution) > 0:
+        chart_cells.append(RLImage(create_distribution_chart(distribution), width=250, height=200))
+    if any(int(item.get("student_count") or 0) > 0 for item in class_breakdown):
+        chart_cells.append(RLImage(create_class_breakdown_chart(class_breakdown), width=250, height=190))
+    if chart_cells:
+        widths = [530 / len(chart_cells)] * len(chart_cells)
+        chart_table = Table([chart_cells], colWidths=widths, hAlign="LEFT")
+        chart_table.setStyle(TableStyle([
+            ("VALIGN", (0, 0), (-1, -1), "TOP"),
+            ("BOX", (0, 0), (-1, -1), 0.4, colors.HexColor("#cbd5e1")),
+            ("LEFTPADDING", (0, 0), (-1, -1), 6),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+            ("TOPPADDING", (0, 0), (-1, -1), 6),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+        ]))
+        elements.append(_pdf_wrap_card(_tr("Visual dashboard", lang), chart_table, lang))
+    else:
+        elements.append(_pdf_engine_empty_state(lang))
     elements.append(Spacer(1, 10))
 
-    elements.append(Paragraph(_pdf_paragraph_text(_tr("Class breakdown", lang), bold=True), section_style))
     class_table_data = [[_tr("Class", lang), _tr("Students", lang)]]
     for item in class_breakdown:
         class_table_data.append([_fmt(item.get("class_name")), _fmt(item.get("student_count"))])
-    if len(class_table_data) == 1:
-        class_table_data.append(["-", "0"])
-    elements.append(_styled_table(class_table_data, col_widths=[350, 180]))
-    elements.append(PageBreak())
-
+    if len(class_table_data) > 1:
+        class_flowable = _styled_table(class_table_data, col_widths=[350, 180])
+    else:
+        class_flowable = _pdf_engine_empty_state(lang)
+    elements.append(KeepTogether([
+        Paragraph(_pdf_paragraph_text(_tr("Class breakdown", lang), bold=True), section_style),
+        class_flowable,
+    ]))
     top_performers = report.get("top_performers", []) or []
+    elements.append(Spacer(1, 12))
+    elements.append(_pdf_engine_section_heading(_tr("Detailed Analysis", lang), lang, term_sub))
+    elements.append(Spacer(1, 8))
     elements.append(Paragraph(_pdf_paragraph_text(_tr("Top Performers", lang), bold=True), section_style))
     top_table_data = [[
         _tr("Student", lang), _tr("Class", lang), _tr("Quarter total (50)", lang),
@@ -3387,38 +3505,49 @@ def generate_analytics_dashboard_pdf(
     selected_dist = list((q1o.get("distribution") if qn == 1 else q2o.get("distribution")) or [])
     selected_student = overview.get("selected_student") or {}
     is_student_scope = bool(selected_student)
-    if is_student_scope:
-        bar_buf = create_component_breakdown_bar_chart(selected_student, sem_o, qn_o, lang)
-        donut_buf = create_component_breakdown_donut(selected_student, sem_o, qn_o, lang)
-    else:
-        bar_buf = create_analytics_class_avg_bar_chart(class_summaries)
-        donut_buf = create_analytics_pass_donut(selected_dist)
     sem_o = int(overview.get("semester") or 1)
     qn_o = int(overview.get("quarter") or 1)
+    focus_total = _pdf_focus_quarter_total(selected_student, qn_o) if is_student_scope else None
+    has_student_data = is_student_scope and focus_total is not None
+    has_class_data = any(item.get("avg_total_score") is not None for item in class_summaries)
+    has_distribution = sum(int(item.get("count") or 0) for item in selected_dist) > 0
+    has_scored_distribution = sum(
+        int(item.get("count") or 0)
+        for item in selected_dist
+        if str(item.get("level")) != "no_data"
+    ) > 0
     if is_student_scope:
-        focus_total = _pdf_focus_quarter_total(selected_student, qn_o)
+        bar_buf = create_component_breakdown_bar_chart(selected_student, sem_o, qn_o, lang) if has_student_data else None
+        donut_buf = create_component_breakdown_donut(selected_student, sem_o, qn_o, lang) if has_student_data else None
+    else:
+        bar_buf = create_analytics_class_avg_bar_chart(class_summaries) if has_class_data else None
+        donut_buf = create_analytics_pass_donut(selected_dist) if has_distribution else None
+    if is_student_scope:
         line_buf = create_analytics_quarter_focus_bar_chart(
             focus_total,
             (selected_student.get("full_name") or "Student")[:22],
             max_value=50.0,
             label_suffix="/50",
             legend_label="Quarter total (max 50)",
-        )
-        area_buf = create_component_breakdown_area_chart(selected_student, sem_o, qn_o, lang)
+        ) if has_student_data else None
+        area_buf = create_component_breakdown_area_chart(selected_student, sem_o, qn_o, lang) if has_student_data else None
     else:
         focus_rate = (q1o if qn_o == 1 else q2o).get("on_level_rate")
         line_buf = create_analytics_quarter_focus_bar_chart(
             focus_rate,
             _pdf_term_short_label({"semester": sem_o, "quarter": qn_o}),
+        ) if focus_rate is not None and has_scored_distribution else None
+        area_buf = (
+            create_analytics_class_area_chart(class_summaries)
+            if sum(item.get("avg_total_score") is not None for item in class_summaries) >= 2 else None
         )
-        area_buf = create_analytics_class_area_chart(class_summaries)
 
     doc = SimpleDocTemplate(buffer, pagesize=A4, leftMargin=28, rightMargin=28, topMargin=36, bottomMargin=36)
     elements: List[Any] = []
 
     grade_labels = [str(label).strip() for label in (selected_grade_labels or []) if str(label).strip()]
     grade_subtitle = ", ".join(grade_labels) if grade_labels else scope_label
-    term_subtitle = _pdf_term_display_label(sem_o, qn_o, lang)
+    term_subtitle = _pdf_reporting_period_label(report, lang)
 
     on_level_count = next((int(item.get("count") or 0) for item in selected_dist if str(item.get("level")) == "on_level"), 0)
     approach_count = next((int(item.get("count") or 0) for item in selected_dist if str(item.get("level")) == "approach"), 0)
@@ -3430,7 +3559,7 @@ def generate_analytics_dashboard_pdf(
     # Product requirement: keep this title exact in exports.
     _build_pdf_premium_intro(
         elements,
-        report_title="Analytics Report",
+        report_title=_tr("Analytics Report", lang),
         scope_line=grade_subtitle,
         term_line=term_subtitle,
         meta_rows=[
@@ -3455,8 +3584,9 @@ def generate_analytics_dashboard_pdf(
         insights=insights,
         lang=lang,
     )
-
-    elements.append(Paragraph(_pdf_paragraph_text(_tr("Visual dashboard", lang), bold=True), section_style))
+    elements.append(PageBreak())
+    elements.append(_pdf_engine_section_heading(_tr("Performance Overview", lang), lang, term_subtitle))
+    elements.append(Spacer(1, 8))
     no_data_count = next((int(item.get("count") or 0) for item in selected_dist if str(item.get("level")) == "no_data"), 0)
     levels_notes = [
         f"{_tr('On Level', lang)}: {on_level_count}",
@@ -3475,44 +3605,42 @@ def generate_analytics_dashboard_pdf(
         donut_notes = levels_notes
         donut_title = _tr("Performance levels", lang)
         donut_subtitle = _tr("Distribution for selected term", lang)
-    dashboard_row_1 = _pdf_side_by_side_panels(
-        _pdf_chart_panel(
+    chart_panels: List[Any] = []
+    if bar_buf is not None:
+        chart_panels.append(_pdf_chart_panel(
             _tr("Average score by class", lang) if not is_student_scope else _tr("Marks breakdown", lang),
             _tr("Class mean total for the selected term", lang) if not is_student_scope else _tr("Student component profile", lang),
             bar_buf,
             lang=lang,
-        ),
-        _pdf_chart_panel(
+        ))
+    if line_buf is not None:
+        chart_panels.append(_pdf_chart_panel(
             _tr("On-level rate (selected quarter)", lang) if not is_student_scope else _tr("Quarter total achievement", lang),
             _tr("Cohort on-level percent for selected term", lang) if not is_student_scope else _tr("Quarter total out of 50", lang),
             line_buf,
             lang=lang,
-        ),
-    )
-    donut_panel = _pdf_donut_split_panel(
-        donut_title,
-        donut_subtitle,
-        donut_buf,
-        donut_notes,
-        lang=lang,
-        panel_width=530,
-        chart_width=220,
-        chart_height=200,
-    )
-    area_panel = _pdf_chart_panel(
-        _tr("Class averages profile", lang) if not is_student_scope else _tr("Student marks profile", lang),
-        _tr("How averages spread across groups", lang),
-        area_buf,
-        lang=lang,
-        panel_width=530,
-        chart_width=500,
-        chart_height=150,
-    )
-    elements.append(dashboard_row_1)
-    elements.append(Spacer(1, 10))
-    elements.append(donut_panel)
-    elements.append(Spacer(1, 10))
-    elements.append(area_panel)
+        ))
+    if len(chart_panels) == 2:
+        elements.append(_pdf_side_by_side_panels(chart_panels[0], chart_panels[1]))
+    elif chart_panels:
+        elements.append(chart_panels[0])
+    if donut_buf is not None:
+        if chart_panels:
+            elements.append(Spacer(1, 10))
+        elements.append(_pdf_donut_split_panel(
+            donut_title, donut_subtitle, donut_buf, donut_notes, lang=lang,
+            panel_width=530, chart_width=220, chart_height=200,
+        ))
+    if area_buf is not None:
+        if chart_panels or donut_buf is not None:
+            elements.append(Spacer(1, 10))
+        elements.append(_pdf_chart_panel(
+            _tr("Class averages profile", lang) if not is_student_scope else _tr("Student marks profile", lang),
+            _tr("How averages spread across groups", lang), area_buf, lang=lang,
+            panel_width=530, chart_width=500, chart_height=150,
+        ))
+    if not chart_panels and donut_buf is None and area_buf is None:
+        elements.append(_pdf_engine_empty_state(lang))
     elements.append(Spacer(1, 14))
 
     q1 = report.get("quarter1") or {}
@@ -3522,7 +3650,7 @@ def generate_analytics_dashboard_pdf(
     summary_data = [
         [_tr("Metric", lang), _tr("Value", lang)],
         [_tr("Scope", lang), scope_label],
-        [_tr("Term", lang), _pdf_term_display_label(int(report.get("semester", 1)), rq, lang)],
+        [_tr("Term", lang), _pdf_reporting_period_label(report, lang)],
         [_tr("Total Students", lang), _fmt(report.get("total_students"))],
         [_tr("Average Total Score", lang), _fmt(report.get("avg_total_score"))],
         [_tr("On Level % (focus quarter)", lang), _fmt(report.get("exceeding_rate"), "%")],
@@ -3550,17 +3678,22 @@ def generate_analytics_dashboard_pdf(
     elements.append(Spacer(1, 10))
 
     class_breakdown = report.get("class_breakdown", []) or []
-    elements.append(Paragraph(_pdf_paragraph_text(_tr("Class breakdown", lang), bold=True), section_style))
     class_table_data = [[_tr("Class", lang), _tr("Students", lang)]]
     for item in class_breakdown:
         class_table_data.append([_fmt(item.get("class_name")), _fmt(item.get("student_count"))])
     if len(class_table_data) == 1:
         class_table_data.append(["-", "0"])
-    elements.append(_styled_table(class_table_data, col_widths=[350, 180]))
-    elements.append(PageBreak())
-
+    elements.append(KeepTogether([
+        Paragraph(_pdf_paragraph_text(_tr("Class breakdown", lang), bold=True), section_style),
+        _styled_table(class_table_data, col_widths=[350, 180]),
+    ]))
     top_performers = report.get("top_performers", []) or []
-    elements.append(Paragraph(_pdf_paragraph_text(_tr("Top Performers", lang), bold=True), section_style))
+    support_students = report.get("students_needing_support", []) or []
+    has_insights = any(str(value or "").strip() for value in insights.values())
+    if top_performers or support_students or has_insights:
+        elements.append(Spacer(1, 12))
+        elements.append(_pdf_engine_section_heading(_tr("Detailed Analysis", lang), lang, term_subtitle))
+        elements.append(Spacer(1, 8))
     top_table_data = [[
         _tr("Student", lang), _tr("Class", lang), _tr("Quarter total (50)", lang),
         _tr("Total", lang), _tr("Marks breakdown", lang), _tr("Strengths", lang),
@@ -3578,13 +3711,11 @@ def generate_analytics_dashboard_pdf(
                 strengths,
             ]
         )
-    if len(top_table_data) == 1:
-        top_table_data.append(["-", "-", "-", "-", "-", "-"])
-    elements.append(_styled_table(top_table_data, col_widths=[110, 52, 48, 42, 165, 115]))
-    elements.append(Spacer(1, 10))
+    if top_performers:
+        elements.append(Paragraph(_pdf_paragraph_text(_tr("Top Performers", lang), bold=True), section_style))
+        elements.append(_styled_table(top_table_data, col_widths=[110, 52, 48, 42, 165, 115]))
+        elements.append(Spacer(1, 10))
 
-    support_students = report.get("students_needing_support", []) or []
-    elements.append(Paragraph(_pdf_paragraph_text(_tr("Students Needing Support", lang), bold=True), section_style))
     support_table_data = [[
         _tr("Student", lang), _tr("Class", lang), _tr("Quarter total (50)", lang),
         _tr("Performance", lang), _tr("Marks breakdown", lang), _tr("Areas to Improve", lang),
@@ -3602,9 +3733,9 @@ def generate_analytics_dashboard_pdf(
                 weak_areas,
             ]
         )
-    if len(support_table_data) == 1:
-        support_table_data.append(["-", "-", "-", "-", "-", "-"])
-    elements.append(_styled_table(support_table_data, col_widths=[110, 52, 48, 60, 140, 117]))
+    if support_students:
+        elements.append(Paragraph(_pdf_paragraph_text(_tr("Students Needing Support", lang), bold=True), section_style))
+        elements.append(_styled_table(support_table_data, col_widths=[110, 52, 48, 60, 140, 117]))
 
     insight_rows = [
         [_tr("Insight", lang), _tr("Details", lang)],
@@ -3615,11 +3746,12 @@ def generate_analytics_dashboard_pdf(
         [_tr("Recommended Actions", lang), _pdf_clamp_text((insights.get("analysis_actions") or "").strip() or "-", max_chars=320)],
         [_tr("Recommendations", lang), _pdf_clamp_text((insights.get("analysis_recommendations") or "").strip() or "-", max_chars=320)],
     ]
-    elements.append(Spacer(1, 10))
-    elements.append(Paragraph(_pdf_paragraph_text(_tr("Key Insights", lang), bold=True), section_style))
-    elements.append(_styled_table(insight_rows, col_widths=[130, 380], repeat_header=True))
+    if has_insights:
+        elements.append(Spacer(1, 10))
+        elements.append(Paragraph(_pdf_paragraph_text(_tr("Key Insights", lang), bold=True), section_style))
+        elements.append(_styled_table(insight_rows, col_widths=[130, 380], repeat_header=True))
 
-    doc.build(elements, onFirstPage=_pdf_engine_footer(lang, "Analytics Report"), onLaterPages=_pdf_engine_footer(lang, "Analytics Report"))
+    doc.build(elements, onFirstPage=_pdf_engine_footer(lang, _tr("Analytics Report", lang)), onLaterPages=_pdf_engine_footer(lang, _tr("Analytics Report", lang)))
     pdf_value = buffer.getvalue()
     buffer.close()
     return pdf_value
@@ -3662,13 +3794,27 @@ def generate_reports_dashboard_pdf(
     selected_student = report.get("selected_student") or {}
     is_student_scope = bool(selected_student)
 
-    bar_buf = create_reports_enrollment_bar_chart(class_breakdown)
-    donut_buf = create_analytics_pass_donut(distribution)
-    if not is_summary:
-        line_buf = create_analytics_quarter_focus_bar_chart(report.get("exceeding_rate"), _pdf_term_short_label(report))
-        area_buf = create_reports_enrollment_area_chart(class_breakdown)
+    has_class_data = any(int(item.get("student_count") or 0) > 0 for item in class_breakdown)
+    has_distribution = sum(int(item.get("count") or 0) for item in distribution) > 0
+    has_scored_distribution = sum(
+        int(item.get("count") or 0)
+        for item in distribution
+        if str(item.get("level")) != "no_data"
+    ) > 0
+    has_focus_rate = report.get("exceeding_rate") is not None and has_scored_distribution
+    has_class_profile = sum(int(item.get("student_count") or 0) > 0 for item in class_breakdown) >= 2
+    bar_buf = create_reports_enrollment_bar_chart(class_breakdown) if has_class_data else None
+    donut_buf = create_analytics_pass_donut(distribution) if has_distribution else None
+    line_buf = (
+        create_analytics_quarter_focus_bar_chart(report.get("exceeding_rate"), _pdf_term_short_label(report))
+        if not is_summary and has_focus_rate else None
+    )
+    area_buf = (
+        create_reports_enrollment_area_chart(class_breakdown)
+        if not is_summary and has_class_profile else None
+    )
 
-    term_sub = _pdf_term_display_label(sem, qn, lang)
+    term_sub = _pdf_reporting_period_label(report, lang)
 
     doc = SimpleDocTemplate(buffer, pagesize=A4, leftMargin=28, rightMargin=28, topMargin=36, bottomMargin=36)
     elements: List[Any] = []
@@ -3713,8 +3859,9 @@ def generate_reports_dashboard_pdf(
         insights=insights,
         lang=lang,
     )
-
-    elements.append(Paragraph(_pdf_paragraph_text(_tr("Visual dashboard", lang), bold=True), section_style))
+    elements.append(PageBreak())
+    elements.append(_pdf_engine_section_heading(_tr("Performance Overview", lang), lang, term_sub))
+    elements.append(Spacer(1, 8))
     dist_no_data = next((int(item.get("count") or 0) for item in distribution if str(item.get("level")) == "no_data"), 0)
     notes = [
         f"{_tr('On Level', lang)}: {dist_on_level}",
@@ -3722,7 +3869,8 @@ def generate_reports_dashboard_pdf(
         f"{_tr('Below Level', lang)}: {dist_below}",
         f"{_tr('No Data', lang)}: {dist_no_data}",
     ]
-    if is_summary:
+    chart_count = 0
+    if is_summary and bar_buf is not None:
         elements.append(
             _pdf_chart_panel(
                 _tr("Students per class", lang),
@@ -3734,7 +3882,8 @@ def generate_reports_dashboard_pdf(
                 chart_height=150,
             )
         )
-    else:
+        chart_count += 1
+    elif not is_summary and bar_buf is not None and line_buf is not None:
         elements.append(
             _pdf_side_by_side_panels(
                 _pdf_chart_panel(
@@ -3751,9 +3900,27 @@ def generate_reports_dashboard_pdf(
                 ),
             )
         )
-    elements.append(Spacer(1, 10))
-    elements.append(
-        _pdf_donut_split_panel(
+        chart_count += 2
+    elif not is_summary:
+        lone_panel = None
+        if bar_buf is not None:
+            lone_panel = _pdf_chart_panel(
+                _tr("Students per class", lang), _tr("Enrollment by class section", lang),
+                bar_buf, lang=lang, panel_width=530, chart_width=500, chart_height=150,
+            )
+        elif line_buf is not None:
+            lone_panel = _pdf_chart_panel(
+                _tr("On-level rate (selected quarter)", lang),
+                _tr("Cohort on-level percent for selected term", lang),
+                line_buf, lang=lang, panel_width=530, chart_width=500, chart_height=150,
+            )
+        if lone_panel is not None:
+            elements.append(lone_panel)
+            chart_count += 1
+    if donut_buf is not None:
+        if chart_count:
+            elements.append(Spacer(1, 10))
+        elements.append(_pdf_donut_split_panel(
             _tr("Performance levels", lang),
             term_sub,
             donut_buf,
@@ -3762,10 +3929,11 @@ def generate_reports_dashboard_pdf(
             panel_width=530,
             chart_width=220,
             chart_height=200,
-        )
-    )
-    if not is_summary:
-        elements.append(Spacer(1, 10))
+        ))
+        chart_count += 1
+    if area_buf is not None:
+        if chart_count:
+            elements.append(Spacer(1, 10))
         elements.append(
             _pdf_chart_panel(
                 _tr("Class averages profile", lang),
@@ -3777,6 +3945,9 @@ def generate_reports_dashboard_pdf(
                 chart_height=150,
             )
         )
+        chart_count += 1
+    if chart_count == 0:
+        elements.append(_pdf_engine_empty_state(lang))
     elements.append(Spacer(1, 14))
 
     if is_student_scope:
@@ -3796,7 +3967,7 @@ def generate_reports_dashboard_pdf(
     summary_data = [
         [_tr("Metric", lang), _tr("Value", lang)],
         [_tr("Scope", lang), scope_label],
-        [_tr("Term", lang), _pdf_term_display_label(sem, rq, lang)],
+        [_tr("Term", lang), _pdf_reporting_period_label(report, lang)],
         [_tr("Total Students", lang), _fmt(report.get("total_students"))],
         [_tr("Average Total Score", lang), _fmt(report.get("avg_total_score"))],
         [_tr("On Level % (focus quarter)", lang), _fmt(report.get("exceeding_rate"), "%")],
@@ -3822,19 +3993,24 @@ def generate_reports_dashboard_pdf(
     elements.append(_pdf_wrap_card(_tr("Performance distribution (focus quarter)", lang), _styled_table(dist_rows, col_widths=[260, 270]), lang))
     elements.append(Spacer(1, 10))
 
-    elements.append(Paragraph(_pdf_paragraph_text(_tr("Class breakdown", lang), bold=True), section_style))
     class_table_data = [[_tr("Class", lang), _tr("Students", lang)]]
     for item in class_breakdown:
         class_table_data.append([_fmt(item.get("class_name")), _fmt(item.get("student_count"))])
     if len(class_table_data) == 1:
         class_table_data.append(["-", "0"])
-    elements.append(_styled_table(class_table_data, col_widths=[350, 180]))
+    elements.append(KeepTogether([
+        Paragraph(_pdf_paragraph_text(_tr("Class breakdown", lang), bold=True), section_style),
+        _styled_table(class_table_data, col_widths=[350, 180]),
+    ]))
 
     if not is_summary:
-        elements.append(PageBreak())
-
         top_performers = report.get("top_performers", []) or []
-        elements.append(Paragraph(_pdf_paragraph_text(_tr("Top Performers", lang), bold=True), section_style))
+        support_students = report.get("students_needing_support", []) or []
+        has_insights = any(str(value or "").strip() for value in insights.values())
+        if top_performers or support_students or has_insights:
+            elements.append(_pdf_engine_section_heading(_tr("Detailed Analysis", lang), lang, term_sub))
+            elements.append(Spacer(1, 8))
+
         top_table_data = [[
             _tr("Student", lang), _tr("Class", lang), _tr("Quarter total (50)", lang),
             _tr("Total", lang), _tr("Marks breakdown", lang), _tr("Strengths", lang),
@@ -3852,13 +4028,11 @@ def generate_reports_dashboard_pdf(
                     strengths,
                 ]
             )
-        if len(top_table_data) == 1:
-            top_table_data.append(["-", "-", "-", "-", "-", "-"])
-        elements.append(_styled_table(top_table_data, col_widths=[110, 52, 48, 42, 165, 115]))
-        elements.append(Spacer(1, 10))
+        if top_performers:
+            elements.append(Paragraph(_pdf_paragraph_text(_tr("Top Performers", lang), bold=True), section_style))
+            elements.append(_styled_table(top_table_data, col_widths=[110, 52, 48, 42, 165, 115]))
+            elements.append(Spacer(1, 10))
 
-        support_students = report.get("students_needing_support", []) or []
-        elements.append(Paragraph(_pdf_paragraph_text(_tr("Students Needing Support", lang), bold=True), section_style))
         support_table_data = [[
             _tr("Student", lang), _tr("Class", lang), _tr("Quarter total (50)", lang),
             _tr("Performance", lang), _tr("Marks breakdown", lang), _tr("Areas to Improve", lang),
@@ -3876,9 +4050,9 @@ def generate_reports_dashboard_pdf(
                     weak_areas,
                 ]
             )
-        if len(support_table_data) == 1:
-            support_table_data.append(["-", "-", "-", "-", "-", "-"])
-        elements.append(_styled_table(support_table_data, col_widths=[110, 52, 48, 60, 140, 117]))
+        if support_students:
+            elements.append(Paragraph(_pdf_paragraph_text(_tr("Students Needing Support", lang), bold=True), section_style))
+            elements.append(_styled_table(support_table_data, col_widths=[110, 52, 48, 60, 140, 117]))
 
         insight_rows = [
             [_tr("Insight", lang), _tr("Details", lang)],
@@ -3889,9 +4063,10 @@ def generate_reports_dashboard_pdf(
             [_tr("Recommended Actions", lang), _pdf_clamp_text((insights.get("analysis_actions") or "").strip() or "-", max_chars=320)],
             [_tr("Recommendations", lang), _pdf_clamp_text((insights.get("analysis_recommendations") or "").strip() or "-", max_chars=320)],
         ]
-        elements.append(Spacer(1, 10))
-        elements.append(Paragraph(_pdf_paragraph_text(_tr("Key Insights", lang), bold=True), section_style))
-        elements.append(_styled_table(insight_rows, col_widths=[130, 380], repeat_header=True))
+        if has_insights:
+            elements.append(Spacer(1, 10))
+            elements.append(Paragraph(_pdf_paragraph_text(_tr("Key Insights", lang), bold=True), section_style))
+            elements.append(_styled_table(insight_rows, col_widths=[130, 380], repeat_header=True))
 
     doc.build(elements, onFirstPage=_pdf_engine_footer(lang, reports_title_text), onLaterPages=_pdf_engine_footer(lang, reports_title_text))
     pdf_value = buffer.getvalue()
@@ -4276,59 +4451,60 @@ async def send_sms_notification(event_type: str, variables: Dict[str, Any]):
         await log_notification(event_type, message, to_number or "", "failed")
 
 
-def build_anjal_academic_calendar() -> List[Dict[str, Any]]:
-    """Returns Al Anjal National School academic calendar for 1447H (2025-2026)."""
-    SOURCE = "anjal-academic-calendar-1447H"
-    raw_events = [
-        # --- Preparation Week ---
-        ("أسبوع التهيئة / Preparation Week",              "2025-08-17T00:00:00+00:00"),
-        ("استقبال الروضة / KG Reception",                  "2025-08-19T00:00:00+00:00"),
-        ("استقبال المرحلة الابتدائية / Primary Reception", "2025-08-20T00:00:00+00:00"),
-        ("استقبال المرحلة المتوسطة والثانوية / Middle & Secondary Reception", "2025-08-21T00:00:00+00:00"),
-        # --- First Semester ---
-        ("بداية الفصل الدراسي الأول / First Semester Starts",   "2025-08-24T00:00:00+00:00"),
-        ("إجازة اليوم الوطني / National Day Holiday",            "2025-09-23T00:00:00+00:00"),
-        ("إجازة إضافية / Additional Holiday",                    "2025-10-12T00:00:00+00:00"),
-        ("بداية إجازة الخريف / Autumn Break Starts",             "2025-11-23T00:00:00+00:00"),
-        ("نهاية إجازة الخريف / Autumn Break Ends",               "2025-11-30T00:00:00+00:00"),
-        ("إجازة إضافية (الخميس) / Additional Holiday (Thu)",     "2025-12-11T00:00:00+00:00"),
-        ("إجازة إضافية (الأحد) / Additional Holiday (Sun)",      "2025-12-14T00:00:00+00:00"),
-        ("نهاية الفصل الدراسي الأول / First Semester Ends",      "2026-01-08T00:00:00+00:00"),
-        # --- Second Semester ---
-        ("بداية الفصل الدراسي الثاني / Second Semester Starts",  "2026-01-18T00:00:00+00:00"),
-        ("إجازة يوم التأسيس / Foundation Day Holiday",           "2026-02-22T00:00:00+00:00"),
-        ("بداية إجازة عيد الفطر / Eid Al-Fitr Break Starts",    "2026-03-05T00:00:00+00:00"),
-        ("العودة بعد إجازة عيد الفطر / Return from Eid Al-Fitr", "2026-03-29T00:00:00+00:00"),
-        ("بداية إجازة عيد الأضحى / Eid Al-Adha Break Starts",   "2026-05-21T00:00:00+00:00"),
-        ("العودة بعد إجازة عيد الأضحى / Return from Eid Al-Adha","2026-06-02T00:00:00+00:00"),
-        ("نهاية العام الدراسي للطلاب / Academic Year Ends",      "2026-06-25T00:00:00+00:00"),
-    ]
-    events = [
-        CalendarEventRecord(title=title, date=date, details={"source": SOURCE})
-        for title, date in raw_events
-    ]
-    return [event.model_dump() for event in events]
+SCHOOL_SECTION_INTERNATIONAL = "international"
+SCHOOL_SECTION_ARABIC = "arabic"
+SCHOOL_SECTIONS = {SCHOOL_SECTION_INTERNATIONAL, SCHOOL_SECTION_ARABIC}
 
 
-async def sync_moe_calendar() -> int:
-    events = build_anjal_academic_calendar()
-    source_value = "anjal-academic-calendar-1447H"
+def current_academic_year() -> str:
+    """Return the August-based school year used by the application (for example 2026-2027)."""
+    now = datetime.now(ZoneInfo("Asia/Riyadh"))
+    start_year = now.year if now.month >= 8 else now.year - 1
+    return f"{start_year}-{start_year + 1}"
 
-    await db.calendar_events.delete_many({})
-    if events:
-        await db.calendar_events.insert_many(events)
-    await db.app_settings.update_one(
-        {"id": "calendar_sync"},
-        {"$set": {"id": "calendar_sync", "synced_at": iso_now(), "source": source_value}},
-        upsert=True,
-    )
-    return len(events)
+
+def normalize_school_section(value: Optional[str]) -> str:
+    normalized = str(value or SCHOOL_SECTION_INTERNATIONAL).strip().lower()
+    if normalized not in SCHOOL_SECTIONS:
+        raise HTTPException(status_code=422, detail="Invalid school section")
+    return normalized
+
+
+def school_section_query(value: Optional[str], academic_year: Optional[str] = None) -> Dict[str, Any]:
+    """Mongo filter with safe legacy defaults for pre-section International records."""
+    school_section = normalize_school_section(value)
+    if school_section == SCHOOL_SECTION_INTERNATIONAL:
+        section_filter: Dict[str, Any] = {
+            "$or": [
+                {"school_section": SCHOOL_SECTION_INTERNATIONAL},
+                {"school_section": {"$exists": False}},
+                {"school_section": None},
+            ]
+        }
+    else:
+        section_filter = {"school_section": SCHOOL_SECTION_ARABIC}
+    if academic_year:
+        year_filter = {
+            "$or": [
+                {"academic_year": academic_year},
+                *([{"academic_year": {"$exists": False}}, {"academic_year": None}]
+                  if school_section == SCHOOL_SECTION_INTERNATIONAL else []),
+            ]
+        }
+        return {"$and": [section_filter, year_filter]}
+    return section_filter
+
+
+def record_school_section(record: Optional[Dict[str, Any]]) -> str:
+    return str((record or {}).get("school_section") or SCHOOL_SECTION_INTERNATIONAL).lower()
 
 
 class ClassBase(BaseModel):
     name: str
     grade: Optional[int] = None
     section: Optional[str] = None
+    school_section: str = SCHOOL_SECTION_INTERNATIONAL
+    academic_year: Optional[str] = None
     notes: Optional[str] = None
 
 
@@ -4343,6 +4519,8 @@ class ClassUpdate(BaseModel):
     name: Optional[str] = None
     grade: Optional[int] = None
     section: Optional[str] = None
+    school_section: Optional[str] = None
+    academic_year: Optional[str] = None
     notes: Optional[str] = None
 
 
@@ -4350,6 +4528,8 @@ class StudentBase(BaseModel):
     full_name: str
     class_id: str
     class_name: str
+    school_section: str = SCHOOL_SECTION_INTERNATIONAL
+    academic_year: Optional[str] = None
     attendance: Optional[float] = None
     participation: Optional[float] = None
     behavior: Optional[float] = None
@@ -4378,6 +4558,8 @@ class StudentRecord(StudentBase):
 class StudentCreate(BaseModel):
     full_name: str
     class_id: str
+    school_section: str = SCHOOL_SECTION_INTERNATIONAL
+    academic_year: Optional[str] = None
     attendance: Optional[float] = None
     participation: Optional[float] = None
     behavior: Optional[float] = None
@@ -4400,6 +4582,8 @@ class StudentCreate(BaseModel):
 class StudentUpdate(BaseModel):
     full_name: Optional[str] = None
     class_id: Optional[str] = None
+    school_section: Optional[str] = None
+    academic_year: Optional[str] = None
     attendance: Optional[float] = None
     participation: Optional[float] = None
     behavior: Optional[float] = None
@@ -4488,6 +4672,59 @@ class BulkScoreUpdate(BaseModel):
 class BulkScoresPayload(BaseModel):
     updates: List[BulkScoreUpdate]
     week_id: Optional[str] = None
+
+
+ARABIC_SCORE_LIMITS: Dict[str, float] = {
+    "performance_tasks": 10.0,
+    "participation": 10.0,
+    "interaction": 10.0,
+    "attendance": 10.0,
+    "theory_test_1": 15.0,
+    "theory_test_2": 15.0,
+    "practical_test_1": 15.0,
+    "practical_test_2": 15.0,
+}
+
+
+class ArabicQuarterScoreInput(BaseModel):
+    student_id: str
+    performance_tasks: Optional[float] = Field(default=None, ge=0, le=10)
+    participation: Optional[float] = Field(default=None, ge=0, le=10)
+    interaction: Optional[float] = Field(default=None, ge=0, le=10)
+    attendance: Optional[float] = Field(default=None, ge=0, le=10)
+    theory_test_1: Optional[float] = Field(default=None, ge=0, le=15)
+    theory_test_2: Optional[float] = Field(default=None, ge=0, le=15)
+    practical_test_1: Optional[float] = Field(default=None, ge=0, le=15)
+    practical_test_2: Optional[float] = Field(default=None, ge=0, le=15)
+
+
+class ArabicQuarterScoresPayload(BaseModel):
+    academic_year: str
+    semester: int = Field(ge=1, le=2)
+    quarter: int = Field(ge=1, le=2)
+    updates: List[ArabicQuarterScoreInput]
+
+
+def arabic_score_summary(score: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    """Calculate an Arabic-section quarter without inventing performance bands."""
+    source = score or {}
+    entered_fields = [key for key in ARABIC_SCORE_LIMITS if source.get(key) is not None]
+    continuous_fields = ["performance_tasks", "participation", "interaction", "attendance"]
+    test_fields = ["theory_test_1", "theory_test_2", "practical_test_1", "practical_test_2"]
+    continuous_total = round(sum(float(source.get(key) or 0) for key in continuous_fields), 2)
+    tests_total = round(sum(float(source.get(key) or 0) for key in test_fields), 2)
+    total = round(continuous_total + tests_total, 2) if entered_fields else None
+    completion = {key: source.get(key) is not None for key in test_fields}
+    return {
+        "continuous_total": continuous_total if entered_fields else None,
+        "tests_total": tests_total if entered_fields else None,
+        "quarter_total": total,
+        "has_grades": bool(entered_fields),
+        "all_tests_completed": all(completion.values()),
+        "test_completion": completion,
+        "test_completion_count": sum(1 for value in completion.values() if value),
+        "test_completion_percentage": round(sum(1 for value in completion.values() if value) * 25, 1),
+    }
 
 
 class RoleBase(BaseModel):
@@ -4709,9 +4946,29 @@ class AuditLogRecord(BaseModel):
 class CalendarEventRecord(BaseModel):
     model_config = ConfigDict(extra="ignore")
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    title: str
-    date: str
-    details: Dict[str, Any] = {}
+    calendar_id: Optional[str] = None
+    calendar_version: Optional[str] = None
+    academic_year: Optional[str] = None
+    hijri_year: Optional[str] = None
+    semester: Optional[int] = None
+    week_number: Optional[int] = None
+    event_type: str = "event"
+    title_ar: Optional[str] = None
+    title_en: Optional[str] = None
+    gregorian_start: Optional[str] = None
+    gregorian_end: Optional[str] = None
+    hijri_start: Optional[str] = None
+    hijri_end: Optional[str] = None
+    is_holiday: bool = False
+    is_exam_period: bool = False
+    source: Optional[str] = None
+    source_document: Optional[str] = None
+    verified: bool = False
+    manual_review_note: Optional[str] = None
+    # Backward-compatible display fields retained for pre-import calendar rows.
+    title: Optional[str] = None
+    date: Optional[str] = None
+    details: Dict[str, Any] = Field(default_factory=dict)
 
 
 class NotificationLogRecord(BaseModel):
@@ -4749,14 +5006,19 @@ def _teacher_assigned_class_ids(current_user: Optional[Dict[str, Any]]) -> Optio
 
 
 @api_router.get("/classes", response_model=List[ClassRecord])
-async def get_classes(current_user: Dict[str, Any] = Depends(get_current_user)):
+async def get_classes(
+    school_section: str = SCHOOL_SECTION_INTERNATIONAL,
+    academic_year: Optional[str] = None,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+):
     uid = current_user.get("id")
+    normalized_section = normalize_school_section(school_section)
 
     async def _produce():
-        query = _teacher_class_filter(current_user)
+        query = {"$and": [_teacher_class_filter(current_user), school_section_query(normalized_section, academic_year)]}
         return await db.classes.find(query, {"_id": 0}).sort("grade", 1).to_list(200)
 
-    return await cache_get_json(("classes_list", uid), CACHE_TTL_JSON, _produce)
+    return await cache_get_json(("classes_list", uid, normalized_section, academic_year or ""), CACHE_TTL_JSON, _produce)
 
 
 @api_router.post("/classes", response_model=ClassRecord)
@@ -4770,6 +5032,8 @@ async def create_class(payload: ClassBase, current_user: Dict[str, Any] = Depend
     if role not in {"admin", "teacher"}:
         raise HTTPException(status_code=403, detail="Not allowed to create classes")
     data = payload.model_dump()
+    data["school_section"] = normalize_school_section(data.get("school_section"))
+    data["academic_year"] = data.get("academic_year") or current_academic_year()
     if not data.get("grade") or not data.get("section"):
         parsed = parse_class_name(payload.name)
         data["grade"] = data.get("grade") or parsed.get("grade")
@@ -4777,7 +5041,10 @@ async def create_class(payload: ClassBase, current_user: Dict[str, Any] = Depend
     # Prevent duplicate: class with same normalized name (e.g. 5A, 5 A, 5a) already exists
     norm_name = _normalize_class_name_for_uniqueness(payload.name)
     if norm_name:
-        all_classes = await db.classes.find({}, {"_id": 0, "id": 1, "name": 1}).to_list(500)
+        all_classes = await db.classes.find(
+            school_section_query(data["school_section"], data["academic_year"]),
+            {"_id": 0, "id": 1, "name": 1},
+        ).to_list(500)
         for c in all_classes:
             if _normalize_class_name_for_uniqueness(c.get("name", "")) == norm_name:
                 raise HTTPException(
@@ -4799,6 +5066,8 @@ async def create_class(payload: ClassBase, current_user: Dict[str, Any] = Depend
 @api_router.put("/classes/{class_id}", response_model=ClassRecord)
 async def update_class(class_id: str, payload: ClassUpdate):
     update_data = {k: v for k, v in payload.model_dump(exclude_unset=True).items() if v is not None}
+    if "school_section" in update_data:
+        update_data["school_section"] = normalize_school_section(update_data["school_section"])
     if "name" in update_data and ("grade" not in update_data or "section" not in update_data):
         parsed = parse_class_name(update_data["name"])
         update_data.setdefault("grade", parsed.get("grade"))
@@ -4820,6 +5089,7 @@ async def delete_class(class_id: str, current_user: Dict[str, Any] = Depends(get
     student_ids = [student["id"] for student in students]
     if student_ids:
         await db.student_scores.delete_many({"student_id": {"$in": student_ids}})
+        await db.arabic_quarter_scores.delete_many({"student_id": {"$in": student_ids}})
     await db.students.delete_many({"class_id": class_id})
     await db.users.update_many({}, {"$pull": {"assigned_class_ids": class_id}})
     await db.classes.delete_one({"id": class_id})
@@ -4829,17 +5099,25 @@ async def delete_class(class_id: str, current_user: Dict[str, Any] = Depends(get
 
 
 @api_router.delete("/classes")
-async def delete_all_classes(current_user: Dict[str, Any] = Depends(require_admin)):
-    """Delete all classes and their students/score records. Clears assigned_class_ids from users."""
-    students = await db.students.find({}, {"_id": 0, "id": 1}).to_list(50000)
+async def delete_all_classes(
+    school_section: str = Query(default=SCHOOL_SECTION_INTERNATIONAL),
+    academic_year: Optional[str] = Query(default=None),
+    current_user: Dict[str, Any] = Depends(require_admin),
+):
+    """Delete classes only in the explicitly selected school section/year."""
+    scope = school_section_query(school_section, academic_year)
+    classes = await db.classes.find(scope, {"_id": 0, "id": 1}).to_list(5000)
+    class_ids = [item["id"] for item in classes]
+    students = await db.students.find({"class_id": {"$in": class_ids}}, {"_id": 0, "id": 1}).to_list(50000)
     student_ids = [s["id"] for s in students]
     scores_deleted = 0
     if student_ids:
         scores_result = await db.student_scores.delete_many({"student_id": {"$in": student_ids}})
         scores_deleted = scores_result.deleted_count
-    students_result = await db.students.delete_many({})
-    await db.users.update_many({}, {"$set": {"assigned_class_ids": []}})
-    classes_result = await db.classes.delete_many({})
+    students_result = await db.students.delete_many({"class_id": {"$in": class_ids}})
+    await db.arabic_quarter_scores.delete_many({"student_id": {"$in": student_ids}})
+    await db.users.update_many({}, {"$pull": {"assigned_class_ids": {"$in": class_ids}}})
+    classes_result = await db.classes.delete_many({"id": {"$in": class_ids}})
     await log_user_action(
         current_user,
         "classes_delete_all",
@@ -5007,16 +5285,18 @@ async def clear_class_quarter_scores(
 async def get_students(
     class_id: Optional[str] = Query(default=None),
     week_id: Optional[str] = Query(default=None),
+    school_section: str = SCHOOL_SECTION_INTERNATIONAL,
+    academic_year: Optional[str] = None,
     current_user: Dict[str, Any] = Depends(get_current_user),
 ):
-    query: Dict[str, Any] = {}
+    query: Dict[str, Any] = school_section_query(school_section, academic_year)
     if current_user.get("role_name") == "Teacher":
         assigned = current_user.get("assigned_class_ids", [])
         if class_id and class_id not in assigned:
             return []
-        query["class_id"] = {"$in": assigned} if assigned else {"$in": []}
+        query = {"$and": [query, {"class_id": {"$in": assigned} if assigned else {"$in": []}}]}
     if class_id:
-        query["class_id"] = class_id
+        query = {"$and": [query, {"class_id": class_id}]}
     # sort_order lets us pin specific students above the default alphabetical order (lower sort_order wins).
     students = (
         await db.students.find(query, {"_id": 0})
@@ -5215,7 +5495,15 @@ async def create_student(payload: StudentCreate, current_user: Dict[str, Any] = 
         raise HTTPException(status_code=404, detail="Class not found")
     student_data = payload.model_dump()
     week_id = student_data.pop("week_id", None)
+    requested_section = normalize_school_section(student_data.get("school_section"))
+    class_section = record_school_section(class_doc)
+    if requested_section != class_section:
+        raise HTTPException(status_code=409, detail="Student and class must belong to the same school section")
     student_data["class_name"] = class_doc["name"]
+    student_data["school_section"] = class_section
+    student_data["academic_year"] = student_data.get("academic_year") or class_doc.get("academic_year") or current_academic_year()
+    if class_section == SCHOOL_SECTION_ARABIC and week_id:
+        raise HTTPException(status_code=409, detail="Arabic-section grades must use the quarter /100 grading endpoint")
     for field in [
         "attendance",
         "participation",
@@ -5267,11 +5555,21 @@ async def create_student(payload: StudentCreate, current_user: Dict[str, Any] = 
 async def update_student(student_id: str, payload: StudentUpdate, current_user: Dict[str, Any] = Depends(get_current_user)):
     update_data = {k: v for k, v in payload.model_dump(exclude_unset=True).items()}
     week_id = update_data.pop("week_id", None)
+    existing_scope = await db.students.find_one({"id": student_id}, {"_id": 0, "school_section": 1})
+    if week_id and record_school_section(existing_scope) == SCHOOL_SECTION_ARABIC:
+        raise HTTPException(status_code=409, detail="Arabic-section grades must use the quarter /100 grading endpoint")
     if "class_id" in update_data:
         class_doc = await db.classes.find_one({"id": update_data["class_id"]}, {"_id": 0})
         if not class_doc:
             raise HTTPException(status_code=404, detail="Class not found")
         update_data["class_name"] = class_doc["name"]
+        existing_student = await db.students.find_one({"id": student_id}, {"_id": 0, "school_section": 1})
+        requested_section = normalize_school_section(update_data.get("school_section") or record_school_section(existing_student))
+        class_section = record_school_section(class_doc)
+        if requested_section != class_section:
+            raise HTTPException(status_code=409, detail="Student and class must belong to the same school section")
+        update_data["school_section"] = class_section
+        update_data["academic_year"] = update_data.get("academic_year") or class_doc.get("academic_year") or current_academic_year()
     for field in [
         "attendance",
         "participation",
@@ -5348,6 +5646,12 @@ async def update_student(student_id: str, payload: StudentUpdate, current_user: 
 @api_router.post("/students/bulk-scores")
 async def bulk_update_scores(payload: BulkScoresPayload, current_user: Dict[str, Any] = Depends(get_current_user)):
     """Bulk update scores in one DB round-trip for speed (no per-student round-trips)."""
+    target_ids = [item.id for item in payload.updates]
+    arabic_target = await db.students.find_one(
+        {"id": {"$in": target_ids}, "school_section": SCHOOL_SECTION_ARABIC}, {"_id": 0, "id": 1}
+    )
+    if arabic_target:
+        raise HTTPException(status_code=409, detail="Arabic-section grades must use the quarter /100 grading endpoint")
     score_field_names = {
         "attendance", "participation", "behavior", "homework",
         "quiz1", "quiz2", "quiz3", "quiz4",
@@ -5418,6 +5722,8 @@ async def download_import_template(
     view: Optional[str] = Query(default=None),
     semester: Optional[int] = Query(default=None),
     quarter: Optional[int] = Query(default=None),
+    school_section: str = Query(default=SCHOOL_SECTION_INTERNATIONAL),
+    academic_year: Optional[str] = Query(default=None),
     current_user: Dict[str, Any] = Depends(get_current_user),
 ):
     """Return an Excel template for the score sheet / student import.
@@ -5426,6 +5732,9 @@ async def download_import_template(
     Otherwise: Students page columns (Attendance, Participation, Behavior, Homework, Total Score, Performance Level).
     If class_id is provided, rows are pre-filled with student names and class; otherwise one empty row.
     """
+    normalized_section = normalize_school_section(school_section)
+    scoped_year = academic_year or current_academic_year()
+    arabic_import_view = normalized_section == SCHOOL_SECTION_ARABIC
     view_lower = (view or "").lower()
     assessment_view = view_lower == "assessment"
     assessment_q2_view = view_lower == "assessment_q2"
@@ -5437,9 +5746,20 @@ async def download_import_template(
         semester, quarter, view_lower
     )
     if class_id:
-        students = await get_students(class_id=class_id, week_id=week_id, current_user=current_user)
+        students = await get_students(
+            class_id=class_id,
+            week_id=None if arabic_import_view else week_id,
+            school_section=normalized_section,
+            academic_year=scoped_year,
+            current_user=current_user,
+        )
         if students:
-            if assessment_view:
+            if arabic_import_view:
+                template_rows = [
+                    {"Student Name": s.get("full_name"), "Class": s.get("class_name")}
+                    for s in students
+                ]
+            elif assessment_view:
                 template_rows = [
                     {
                         "Student Name": s.get("full_name"),
@@ -5542,7 +5862,9 @@ async def download_import_template(
                     for s in students
                 ]
         else:
-            if assessment_view:
+            if arabic_import_view:
+                empty_row = {"Student Name": "", "Class": ""}
+            elif assessment_view:
                 empty_row = {"Student Name": "", "Class": "", "Quiz 1 (5)": "", "Quiz 2 (5)": "", "Chapter Test 1 (Practical) (10)": "", "Total Score": "", "Performance Level": ""}
             elif assessment_q2_view:
                 empty_row = {"Student Name": "", "Class": "", "Quiz 3 (5)": "", "Quiz 4 (5)": "", "Chapter Test 2 (Practical) (10)": "", "Total Score": "", "Performance Level": ""}
@@ -5586,7 +5908,9 @@ async def download_import_template(
                 empty_row = {"Student Name": "", "Class": "", "Attendance (2.5)": "", "Participation (2.5)": "", "Project (5)": "", "Homework (5)": "", "Total Score": "", "Performance Level": ""}
             template_rows = [empty_row]
     else:
-        if assessment_view:
+        if arabic_import_view:
+            empty_row = {"Student Name": "", "Class": ""}
+        elif assessment_view:
             empty_row = {"Student Name": "", "Class": "", "Quiz 1 (5)": "", "Quiz 2 (5)": "", "Chapter Test 1 (Practical) (10)": "", "Total Score": "", "Performance Level": ""}
         elif assessment_q2_view:
             empty_row = {"Student Name": "", "Class": "", "Quiz 3 (5)": "", "Quiz 4 (5)": "", "Chapter Test 2 (Practical) (10)": "", "Total Score": "", "Performance Level": ""}
@@ -5638,7 +5962,8 @@ async def download_import_template(
         for col in range(len(df.columns)):
             sheet.set_column(col, col, 16, center_fmt)
     buffer.seek(0)
-    headers = {"Content-Disposition": "attachment; filename=student_score_sheet_template.xlsx"}
+    filename = "arabic_students_import_template.xlsx" if arabic_import_view else "student_score_sheet_template.xlsx"
+    headers = {"Content-Disposition": f"attachment; filename={filename}"}
     return StreamingResponse(
         buffer,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -5875,6 +6200,14 @@ async def transfer_student(student_id: str, payload: StudentTransferRequest, cur
     class_doc = await db.classes.find_one({"id": payload.class_id}, {"_id": 0})
     if not class_doc:
         raise HTTPException(status_code=404, detail="Class not found")
+    student_doc = await db.students.find_one({"id": student_id}, {"_id": 0})
+    if not student_doc:
+        raise HTTPException(status_code=404, detail="Student not found")
+    if record_school_section(student_doc) != record_school_section(class_doc):
+        raise HTTPException(status_code=409, detail="Students cannot be transferred between school sections")
+    assigned = _teacher_assigned_class_ids(current_user)
+    if assigned is not None and (student_doc.get("class_id") not in assigned or payload.class_id not in assigned):
+        raise HTTPException(status_code=403, detail="Teachers may transfer students only between assigned classes")
     update_data = {
         "class_id": payload.class_id,
         "class_name": class_doc["name"],
@@ -5903,6 +6236,11 @@ async def promote_students(payload: PromotionRequest, current_user: Dict[str, An
     target_class = await db.classes.find_one({"id": payload.to_class_id}, {"_id": 0})
     if not source_class or not target_class:
         raise HTTPException(status_code=404, detail="Class not found")
+    if record_school_section(source_class) != record_school_section(target_class):
+        raise HTTPException(status_code=409, detail="Students cannot be promoted between school sections")
+    assigned = _teacher_assigned_class_ids(current_user)
+    if assigned is not None and (payload.from_class_id not in assigned or payload.to_class_id not in assigned):
+        raise HTTPException(status_code=403, detail="Teachers may promote students only between assigned classes")
     result = await db.students.update_many(
         {"class_id": payload.from_class_id},
         {"$set": {"class_id": payload.to_class_id, "class_name": target_class["name"], "updated_at": iso_now()}},
@@ -5916,14 +6254,20 @@ async def promote_students(payload: PromotionRequest, current_user: Dict[str, An
 
 
 @api_router.delete("/students")
-async def delete_all_students(current_user: Dict[str, Any] = Depends(require_admin)):
-    """Delete all students and their score records."""
-    students = await db.students.find({}, {"_id": 0, "id": 1}).to_list(50000)
+async def delete_all_students(
+    school_section: str = Query(default=SCHOOL_SECTION_INTERNATIONAL),
+    academic_year: Optional[str] = Query(default=None),
+    current_user: Dict[str, Any] = Depends(require_admin),
+):
+    """Delete students only from the selected school section/year."""
+    scope = school_section_query(school_section, academic_year)
+    students = await db.students.find(scope, {"_id": 0, "id": 1}).to_list(50000)
     student_ids = [s["id"] for s in students]
     if not student_ids:
         return {"status": "deleted", "students_deleted": 0, "scores_deleted": 0, "message": "No students to delete"}
     scores_result = await db.student_scores.delete_many({"student_id": {"$in": student_ids}})
-    students_result = await db.students.delete_many({})
+    students_result = await db.students.delete_many({"id": {"$in": student_ids}})
+    await db.arabic_quarter_scores.delete_many({"student_id": {"$in": student_ids}})
     await log_user_action(current_user, "students_delete_all", f"Deleted all students: {students_result.deleted_count} students, {scores_result.deleted_count} score records")
     return {"status": "deleted", "students_deleted": students_result.deleted_count, "scores_deleted": scores_result.deleted_count}
 
@@ -6352,6 +6696,390 @@ async def get_certificate_file(filename: str):
     return FileResponse(str(target_path), media_type="application/pdf", filename=safe_name)
 
 
+def _arabic_scope_class_query(
+    current_user: Dict[str, Any], academic_year: str, class_id: Optional[str] = None
+) -> Dict[str, Any]:
+    filters: List[Dict[str, Any]] = [school_section_query(SCHOOL_SECTION_ARABIC, academic_year)]
+    assigned = _teacher_assigned_class_ids(current_user)
+    if assigned is not None:
+        if class_id and class_id not in assigned:
+            return {"id": {"$in": []}}
+        filters.append({"id": {"$in": assigned} if assigned else {"$in": []}})
+    if class_id:
+        filters.append({"id": class_id})
+    return {"$and": filters}
+
+
+async def build_arabic_grading_payload(
+    academic_year: str,
+    semester: int,
+    quarter: int,
+    class_id: Optional[str],
+    current_user: Dict[str, Any],
+) -> Dict[str, Any]:
+    classes = await db.classes.find(
+        _arabic_scope_class_query(current_user, academic_year, class_id), {"_id": 0}
+    ).sort("grade", 1).to_list(500)
+    class_ids = [item["id"] for item in classes]
+    students = await db.students.find(
+        {
+            "$and": [
+                school_section_query(SCHOOL_SECTION_ARABIC, academic_year),
+                {"class_id": {"$in": class_ids}},
+            ]
+        },
+        {"_id": 0},
+    ).sort([("class_name", 1), ("full_name", 1)]).to_list(10000)
+    student_ids = [item["id"] for item in students]
+    score_docs = await db.arabic_quarter_scores.find(
+        {
+            "student_id": {"$in": student_ids},
+            "academic_year": academic_year,
+            "semester": semester,
+            "quarter": quarter,
+            "school_section": SCHOOL_SECTION_ARABIC,
+        },
+        {"_id": 0},
+    ).to_list(10000)
+    score_map = {item["student_id"]: item for item in score_docs}
+    test_fields = ["theory_test_1", "theory_test_2", "practical_test_1", "practical_test_2"]
+    completion = {key: {"completed": 0, "missing": 0, "percentage": 0.0} for key in test_fields}
+    rows: List[Dict[str, Any]] = []
+    class_rollup: Dict[str, Dict[str, Any]] = {
+        item["id"]: {
+            "class_id": item["id"],
+            "class_name": item.get("name", item["id"]),
+            "student_count": 0,
+            "students_with_grades": 0,
+            "students_without_grades": 0,
+            "tests_completed": 0,
+            "tests_possible": 0,
+        }
+        for item in classes
+    }
+    for student in students:
+        score = score_map.get(student["id"], {})
+        calculated = arabic_score_summary(score)
+        row = {**student, **{key: score.get(key) for key in ARABIC_SCORE_LIMITS}, **calculated}
+        rows.append(row)
+        rollup = class_rollup[student["class_id"]]
+        rollup["student_count"] += 1
+        rollup["students_with_grades" if calculated["has_grades"] else "students_without_grades"] += 1
+        rollup["tests_completed"] += calculated["test_completion_count"]
+        rollup["tests_possible"] += 4
+        for key in test_fields:
+            bucket = completion[key]
+            bucket["completed" if calculated["test_completion"][key] else "missing"] += 1
+    total_students = len(rows)
+    for bucket in completion.values():
+        bucket["percentage"] = round(bucket["completed"] * 100 / total_students, 1) if total_students else 0.0
+    for item in class_rollup.values():
+        possible = item.pop("tests_possible")
+        item["completion_percentage"] = round(item["tests_completed"] * 100 / possible, 1) if possible else 0.0
+    with_grades = sum(1 for row in rows if row["has_grades"])
+    all_tests = sum(row["test_completion_count"] for row in rows)
+    return {
+        "school_section": SCHOOL_SECTION_ARABIC,
+        "academic_year": academic_year,
+        "semester": semester,
+        "quarter": quarter,
+        "display_quarter": quarter + 2 if semester == 2 else quarter,
+        "classes": classes,
+        "students": rows,
+        "total_students": total_students,
+        "students_with_grades": with_grades,
+        "students_without_grades": total_students - with_grades,
+        "test_completion": completion,
+        "tests_completed": all_tests,
+        "tests_missing": total_students * 4 - all_tests,
+        "completion_percentage": round(all_tests * 100 / (total_students * 4), 1) if total_students else 0.0,
+        "class_breakdown": list(class_rollup.values()),
+        "performance_thresholds": None,
+    }
+
+
+@api_router.get("/arabic/grades")
+async def get_arabic_grades(
+    academic_year: str = Query(...),
+    semester: int = Query(..., ge=1, le=2),
+    quarter: int = Query(..., ge=1, le=2),
+    class_id: Optional[str] = Query(default=None),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+):
+    return await build_arabic_grading_payload(academic_year, semester, quarter, class_id, current_user)
+
+
+@api_router.post("/arabic/grades/bulk")
+async def save_arabic_grades(
+    payload: ArabicQuarterScoresPayload,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+):
+    student_ids = [item.student_id for item in payload.updates]
+    students = await db.students.find(
+        {"id": {"$in": student_ids}}, {"_id": 0, "id": 1, "class_id": 1, "school_section": 1, "academic_year": 1}
+    ).to_list(10000)
+    student_map = {item["id"]: item for item in students}
+    assigned = _teacher_assigned_class_ids(current_user)
+    operations: List[UpdateOne] = []
+    for update in payload.updates:
+        student = student_map.get(update.student_id)
+        if not student or record_school_section(student) != SCHOOL_SECTION_ARABIC:
+            raise HTTPException(status_code=409, detail="Arabic grades can only be saved for Arabic-section students")
+        if student.get("academic_year") not in (None, payload.academic_year):
+            raise HTTPException(status_code=409, detail="Student academic year does not match the grading scope")
+        if assigned is not None and student.get("class_id") not in assigned:
+            raise HTTPException(status_code=403, detail="Not allowed to edit this student's class")
+        values = update.model_dump(exclude={"student_id"})
+        operations.append(
+            UpdateOne(
+                {
+                    "student_id": update.student_id,
+                    "academic_year": payload.academic_year,
+                    "semester": payload.semester,
+                    "quarter": payload.quarter,
+                },
+                {
+                    "$set": {
+                        **values,
+                        "school_section": SCHOOL_SECTION_ARABIC,
+                        "academic_year": payload.academic_year,
+                        "semester": payload.semester,
+                        "quarter": payload.quarter,
+                        "updated_at": iso_now(),
+                    },
+                    "$setOnInsert": {"id": str(uuid.uuid4()), "student_id": update.student_id, "created_at": iso_now()},
+                },
+                upsert=True,
+            )
+        )
+    if operations:
+        await db.arabic_quarter_scores.bulk_write(operations, ordered=False)
+    await log_user_action(current_user, "arabic_grades_save", f"Saved {len(operations)} Arabic quarter grade rows")
+    return {"status": "saved", "updated": len(operations)}
+
+
+def generate_arabic_grades_excel(payload: Dict[str, Any], lang: str = "en") -> bytes:
+    from openpyxl import Workbook
+    from openpyxl.styles import Alignment, Font, PatternFill
+
+    is_ar = _normalize_lang(lang) == "ar"
+    labels = {
+        "student": "الطالب" if is_ar else "Student",
+        "class": "الفصل" if is_ar else "Class",
+        "performance_tasks": "المهام الأدائية /10" if is_ar else "Performance Tasks /10",
+        "participation": "المشاركة /10" if is_ar else "Participation /10",
+        "interaction": "التفاعل /10" if is_ar else "Interaction /10",
+        "attendance": "الحضور /10" if is_ar else "Attendance /10",
+        "theory_test_1": "النظري 1 /15" if is_ar else "Theory Test 1 /15",
+        "theory_test_2": "النظري 2 /15" if is_ar else "Theory Test 2 /15",
+        "practical_test_1": "العملي 1 /15" if is_ar else "Practical Test 1 /15",
+        "practical_test_2": "العملي 2 /15" if is_ar else "Practical Test 2 /15",
+        "quarter_total": "إجمالي الربع /100" if is_ar else "Quarter Total /100",
+    }
+    wb = Workbook()
+    ws = wb.active
+    ws.title = f"Q{payload['display_quarter']}"
+    ws.sheet_view.rightToLeft = is_ar
+    headers = list(labels.keys())
+    ws.append([labels[key] for key in headers])
+    for cell in ws[1]:
+        cell.font = Font(bold=True, color="FFFFFF")
+        cell.fill = PatternFill("solid", fgColor="172554")
+        cell.alignment = Alignment(horizontal="center")
+    for row in payload["students"]:
+        ws.append([
+            row.get("full_name") if key == "student" else row.get("class_name") if key == "class" else row.get(key)
+            for key in headers
+        ])
+    ws.freeze_panes = "A2"
+    ws.auto_filter.ref = ws.dimensions
+    for column in ws.columns:
+        ws.column_dimensions[column[0].column_letter].width = min(30, max(12, max(len(str(cell.value or "")) for cell in column) + 2))
+    output = io.BytesIO()
+    wb.save(output)
+    return output.getvalue()
+
+
+def generate_arabic_grades_pdf(payload: Dict[str, Any], lang: str = "en") -> bytes:
+    code = _normalize_lang(lang)
+    students = payload.get("students") or []
+    scored = [row for row in students if row.get("quarter_total") is not None]
+    fully_tested = [row for row in students if int(row.get("test_completion_count") or 0) == 4]
+    incomplete = [
+        row for row in students
+        if int(row.get("test_completion_count") or 0) < 4
+        or not row.get("has_grades", row.get("quarter_total") is not None)
+    ]
+    recorded_totals = [float(row["quarter_total"]) for row in scored]
+    average_total = round(sum(recorded_totals) / len(recorded_totals), 2) if recorded_totals else None
+    class_names = sorted({str(row.get("class_name") or "-") for row in students})
+    class_scope = ", ".join(class_names) if class_names else "-"
+    semester_value = int(payload.get("semester") or 1)
+    quarter_value = int(payload.get("quarter") or payload.get("display_quarter") or 1)
+    if semester_value == 2 and quarter_value > 2:
+        quarter_value -= 2
+    term_label = _pdf_term_display_label(semester_value, quarter_value, code)
+    generated_on = datetime.now(REPORT_TIMEZONE).strftime("%Y-%m-%d %H:%M")
+    tests_completed = int(payload.get("tests_completed") or sum(int(row.get("test_completion_count") or 0) for row in students))
+    tests_missing = int(payload.get("tests_missing") if payload.get("tests_missing") is not None else len(students) * 4 - tests_completed)
+    class_breakdown = payload.get("class_breakdown") or []
+    if not class_breakdown and students:
+        for class_name in class_names:
+            class_students = [row for row in students if str(row.get("class_name") or "-") == class_name]
+            class_tests = sum(int(row.get("test_completion_count") or 0) for row in class_students)
+            class_breakdown.append({
+                "class_name": class_name,
+                "student_count": len(class_students),
+                "students_with_grades": sum(row.get("quarter_total") is not None for row in class_students),
+                "tests_completed": class_tests,
+                "completion_percentage": round(class_tests * 100 / (len(class_students) * 4), 1) if class_students else 0,
+            })
+
+    if code == "ar":
+        performance_text = (
+            f"بلغ متوسط الدرجات المرصودة {average_total} من 100 لعدد {len(scored)} طالبًا."
+            if average_total is not None else "لم تُرصد درجات كلية في الفترة المحددة."
+        )
+        completion_text = f"اكتمل رصد الاختبارات الأربعة لعدد {len(fully_tested)} من أصل {len(students)} طالبًا."
+        action_text = "استكمال الدرجات الناقصة ومراجعة سجلات الاختبارات قبل اعتماد التقرير النهائي."
+    else:
+        performance_text = (
+            f"The recorded average is {average_total}/100 across {len(scored)} students."
+            if average_total is not None else "No quarter totals are recorded for the selected period."
+        )
+        completion_text = f"All four tests are complete for {len(fully_tested)} of {len(students)} students."
+        action_text = "Complete missing entries and review test records before final report approval."
+
+    output = io.BytesIO()
+    doc = SimpleDocTemplate(output, pagesize=A4, rightMargin=28, leftMargin=28, topMargin=36, bottomMargin=36)
+    story: List[Any] = []
+    insights = {
+        "analysis_performance": performance_text,
+        "analysis_standout_data": completion_text,
+        "analysis_actions": action_text,
+        "analysis_recommendations": action_text,
+    }
+    _build_pdf_premium_intro(
+        story,
+        report_title=_tr("Arabic Section Grade Report", code),
+        scope_line=_tr("Arabic Section", code),
+        term_line=term_label,
+        meta_rows=[
+            (_tr("Academic Year", code), str(payload.get("academic_year") or "-")),
+            (_tr("Term", code), term_label),
+            (_tr("Classes Included", code), class_scope),
+            (_tr("Generated on", code), generated_on),
+        ],
+        kpi_cards=[
+            (_tr("Total Students", code), str(len(students))),
+            (_tr("Scored Students", code), str(len(scored))),
+            (_tr("Average /100", code), str(average_total) if average_total is not None else "—"),
+            (_tr("Fully Tested", code), str(len(fully_tested))),
+            (_tr("Tests Completed", code), str(tests_completed)),
+            (_tr("Missing Scores", code), str(tests_missing)),
+        ],
+        insight_triplet=[
+            (_tr("Executive Summary", code), performance_text),
+            (_tr("Completion Overview", code), completion_text),
+            (_tr("Recommended Actions", code), action_text),
+        ],
+        insights=insights,
+        lang=code,
+    )
+    story.append(PageBreak())
+    story.append(_pdf_engine_section_heading(_tr("Performance Overview", code), code, term_label))
+    story.append(Spacer(1, 8))
+
+    class_rows = [[
+        _tr("Class", code), _tr("Students", code), _tr("Scored Students", code),
+        _tr("Tests Completed", code), _tr("Completion Overview", code),
+    ]]
+    for item in class_breakdown:
+        class_rows.append([
+            item.get("class_name") or "-",
+            item.get("student_count") or 0,
+            item.get("students_with_grades") or 0,
+            item.get("tests_completed") or 0,
+            f"{item.get('completion_percentage') or 0}%",
+        ])
+    if len(class_rows) > 1:
+        story.append(_pdf_engine_styled_table(class_rows, code, [150, 75, 95, 95, 115]))
+    else:
+        story.append(_pdf_engine_empty_state(code, _tr("No meaningful data is available for this section.", code)))
+
+    story.append(Spacer(1, 12))
+    story.append(_pdf_engine_section_heading(_tr("Detailed Analysis", code), code, _tr("Quarter /100", code)))
+    story.append(Spacer(1, 8))
+    if students:
+        detail_rows = [[
+            _tr("Student", code), _tr("Class", code), _tr("Continuous /40", code),
+            _tr("Tests /60", code), _tr("Quarter /100", code), _tr("Tests Completed", code),
+        ]]
+        for row in students:
+            detail_rows.append([
+                row.get("full_name") or "-",
+                row.get("class_name") or "-",
+                row.get("continuous_total") if row.get("continuous_total") is not None else "—",
+                row.get("tests_total") if row.get("tests_total") is not None else "—",
+                row.get("quarter_total") if row.get("quarter_total") is not None else "—",
+                f"{row.get('test_completion_count', 0)}/4",
+            ])
+        story.append(_pdf_engine_styled_table(detail_rows, code, [150, 70, 76, 70, 78, 86]))
+    else:
+        story.append(_pdf_engine_empty_state(code, _tr("No Arabic scores have been entered for the selected period.", code)))
+
+    top_rows = sorted(scored, key=lambda row: float(row.get("quarter_total") or 0), reverse=True)[:5]
+    if top_rows:
+        story.append(Spacer(1, 12))
+        story.append(_pdf_engine_section_heading(_tr("Highest Recorded Totals", code), code))
+        story.append(Spacer(1, 8))
+        story.append(_pdf_engine_styled_table(
+            [[_tr("Student", code), _tr("Class", code), _tr("Quarter /100", code)]]
+            + [[row.get("full_name") or "-", row.get("class_name") or "-", row.get("quarter_total")] for row in top_rows],
+            code,
+            [280, 130, 120],
+        ))
+
+    story.append(Spacer(1, 12))
+    story.append(_pdf_engine_section_heading(_tr("Students Requiring Completion", code), code))
+    story.append(Spacer(1, 8))
+    if incomplete:
+        story.append(_pdf_engine_styled_table(
+            [[_tr("Student", code), _tr("Class", code), _tr("Tests Completed", code)]]
+            + [[row.get("full_name") or "-", row.get("class_name") or "-", f"{row.get('test_completion_count', 0)}/4"] for row in incomplete],
+            code,
+            [280, 130, 120],
+        ))
+    else:
+        story.append(_pdf_engine_empty_state(code, _tr("No students require score completion.", code)))
+
+    doc.build(
+        story,
+        onFirstPage=_pdf_engine_footer(code, _tr("Arabic Section Grade Report", code)),
+        onLaterPages=_pdf_engine_footer(code, _tr("Arabic Section Grade Report", code)),
+    )
+    return output.getvalue()
+
+
+@api_router.get("/arabic/reports/export")
+async def export_arabic_report(
+    academic_year: str = Query(...),
+    semester: int = Query(..., ge=1, le=2),
+    quarter: int = Query(..., ge=1, le=2),
+    class_id: Optional[str] = Query(default=None),
+    format: str = Query(default="pdf"),
+    lang: str = Query(default="en"),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+):
+    payload = await build_arabic_grading_payload(academic_year, semester, quarter, class_id, current_user)
+    fmt = format.strip().lower()
+    content = generate_arabic_grades_excel(payload, lang) if fmt in {"excel", "xlsx"} else generate_arabic_grades_pdf(payload, lang)
+    extension = "xlsx" if fmt in {"excel", "xlsx"} else "pdf"
+    media_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" if extension == "xlsx" else "application/pdf"
+    filename = f"arabic-section-{academic_year}-q{payload['display_quarter']}.{extension}"
+    return StreamingResponse(io.BytesIO(content), media_type=media_type, headers={"Content-Disposition": f'attachment; filename="{filename}"'})
+
+
 def build_summary(students: List[Dict[str, Any]], classes: List[Dict[str, Any]]) -> Dict[str, Any]:
     # Quarter totals come from _enrich_student_single_quarter. Never fall back to enrich_student():
     # that uses weekly behavioral scores only (max 15) and mislabels students as "below".
@@ -6439,16 +7167,16 @@ def _analytics_student_query(
     student_id: Optional[str],
     current_user: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
-    query: Dict[str, Any] = {}
+    query: Dict[str, Any] = school_section_query(SCHOOL_SECTION_INTERNATIONAL)
     assigned = _teacher_assigned_class_ids(current_user)
     if assigned is not None:
-        query["class_id"] = {"$in": assigned} if assigned else {"$in": []}
+        query = {"$and": [query, {"class_id": {"$in": assigned} if assigned else {"$in": []}}]}
     if class_id:
         if assigned is not None and class_id not in assigned:
             return {"class_id": {"$in": []}}
-        query["class_id"] = class_id
+        query = {"$and": [query, {"class_id": class_id}]}
     if student_id:
-        query["id"] = student_id
+        query = {"$and": [query, {"id": student_id}]}
     return query
 
 
@@ -6555,6 +7283,8 @@ async def get_missed_quiz_students(
     else:
         student_query = {"class_id": class_id} if class_id else {}
         class_query = {"id": class_id} if class_id else {}
+    student_query = {"$and": [student_query, school_section_query(SCHOOL_SECTION_INTERNATIONAL)]}
+    class_query = {"$and": [class_query, school_section_query(SCHOOL_SECTION_INTERNATIONAL)]}
     students = await db.students.find(
         student_query, {"_id": 0, "id": 1, "full_name": 1, "class_id": 1, "class_name": 1}
     ).to_list(5000)
@@ -6668,6 +7398,8 @@ async def get_missed_assessment_students(
     else:
         student_query = {"class_id": class_id} if class_id else {}
         class_query = {"id": class_id} if class_id else {}
+    student_query = {"$and": [student_query, school_section_query(SCHOOL_SECTION_INTERNATIONAL)]}
+    class_query = {"$and": [class_query, school_section_query(SCHOOL_SECTION_INTERNATIONAL)]}
     students = await db.students.find(
         student_query, {"_id": 0, "id": 1, "full_name": 1, "class_id": 1, "class_name": 1}
     ).to_list(5000)
@@ -7113,7 +7845,7 @@ async def _compute_classes_summary_payload(
     semester: Optional[int],
     quarter: Optional[int],
 ):
-    class_query = _teacher_class_filter(current_user)
+    class_query = {"$and": [_teacher_class_filter(current_user), school_section_query(SCHOOL_SECTION_INTERNATIONAL)]}
     classes = await db.classes.find(class_query, {"_id": 0}).sort("grade", 1).to_list(200)
     summaries = await _build_class_summary_list(classes, semester or 1, quarter or 1)
     return sorted(summaries, key=lambda x: _class_sort_key(x.get("class_name") or ""))
@@ -7163,10 +7895,10 @@ async def _compute_grade_report(
     """Grade report for one (semester, quarter) only. Full separation S1Q1, S1Q2, S2Q1, S2Q2."""
     sem = semester or 1
     q = quarter or 1
-    class_query: Dict[str, Any] = {"grade": grade}
+    class_query: Dict[str, Any] = {"$and": [{"grade": grade}, school_section_query(SCHOOL_SECTION_INTERNATIONAL)]}
     assigned = _teacher_assigned_class_ids(current_user)
     if assigned is not None:
-        class_query["id"] = {"$in": assigned} if assigned else {"$in": []}
+        class_query = {"$and": [class_query, {"id": {"$in": assigned} if assigned else {"$in": []}}]}
     classes = await db.classes.find(class_query, {"_id": 0}).to_list(200)
     class_ids = [c["id"] for c in classes]
     students = await db.students.find({"class_id": {"$in": class_ids}}, {"_id": 0}).to_list(5000)
@@ -7392,26 +8124,104 @@ async def update_promotion_settings(payload: Dict[str, bool], current_user: Dict
     return settings
 
 
+async def _resolve_academic_calendar(academic_year: Optional[str] = None) -> Optional[Dict[str, Any]]:
+    if academic_year:
+        return await db.academic_calendars.find_one({"academic_year": academic_year}, {"_id": 0})
+    calendars = await db.academic_calendars.find({}, {"_id": 0}).sort("academic_year_start", -1).to_list(200)
+    today = datetime.now(ZoneInfo("Asia/Riyadh")).date().isoformat()
+    return select_calendar_for_date(calendars, today)
+
+
+@api_router.get("/calendar/years")
+async def list_calendar_years(current_user: Dict[str, Any] = Depends(require_admin)):
+    active = await _resolve_academic_calendar()
+    calendars = await db.academic_calendars.find({}, {"_id": 0}).sort("academic_year_start", -1).to_list(200)
+    return {
+        "active_academic_year": (active or {}).get("academic_year"),
+        "calendars": calendars,
+    }
+
+
 @api_router.get("/calendar/events", response_model=List[CalendarEventRecord])
-async def get_calendar_events(current_user: Dict[str, Any] = Depends(require_admin)):
-    events = await db.calendar_events.find({}, {"_id": 0}).to_list(500)
+async def get_calendar_events(
+    academic_year: Optional[str] = Query(default=None),
+    current_user: Dict[str, Any] = Depends(require_admin),
+):
+    calendar = await _resolve_academic_calendar(academic_year)
+    if not calendar:
+        return []
+    events = await db.calendar_events.find(
+        {"calendar_version": calendar["active_version"]}, {"_id": 0}
+    ).sort([("semester", 1), ("gregorian_start", 1), ("week_number", 1)]).to_list(1000)
     return events
 
 
 @api_router.get("/calendar/status")
-async def get_calendar_status(current_user: Dict[str, Any] = Depends(require_admin)):
-    status = await db.app_settings.find_one({"id": "calendar_sync"}, {"_id": 0})
-    return status or {"id": "calendar_sync", "synced_at": None}
+async def get_calendar_status(
+    academic_year: Optional[str] = Query(default=None),
+    current_user: Dict[str, Any] = Depends(require_admin),
+):
+    calendar = await _resolve_academic_calendar(academic_year)
+    return calendar or {"academic_year": academic_year, "imported_at": None, "status": "not_imported"}
 
 
-@api_router.post("/calendar/sync")
-async def sync_calendar_events(current_user: Dict[str, Any] = Depends(require_admin)):
-    count = await sync_moe_calendar()
-    await send_sms_notification(
-        "calendar_sync",
-        {"count": count, "date": iso_now()},
-    )
-    return {"status": "synced", "count": count}
+@api_router.post("/calendar/import")
+async def import_calendar_pdf(
+    file: UploadFile = File(...),
+    current_user: Dict[str, Any] = Depends(require_admin),
+):
+    filename = Path(file.filename or "calendar.pdf").name
+    if not filename.lower().endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="Only approved PDF calendar files can be imported")
+    content = await file.read()
+    if not content or len(content) > 15 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="Calendar PDF must be between 1 byte and 15 MB")
+    try:
+        parsed = await asyncio.to_thread(parse_anjal_calendar_pdf, content, filename)
+    except CalendarImportError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    metadata = parsed["calendar"]
+    calendar_id = metadata["id"]
+    calendar_version = str(uuid.uuid4())
+    imported_at = iso_now()
+    events = []
+    for source_event in parsed["events"]:
+        event = CalendarEventRecord(
+            **source_event,
+            calendar_id=calendar_id,
+            calendar_version=calendar_version,
+            title=source_event["title_en"],
+            date=source_event.get("gregorian_start"),
+        ).model_dump()
+        events.append(event)
+
+    # Parse and validate fully before writing. A new immutable event version is inserted
+    # first; only after that succeeds is the academic year's active pointer changed.
+    await db.calendar_events.insert_many(events)
+    try:
+        calendar_record = {
+            **metadata,
+            "active_version": calendar_version,
+            "imported_at": imported_at,
+            "updated_at": imported_at,
+            "imported_by": current_user.get("id"),
+            "imported_by_name": current_user.get("name"),
+        }
+        await db.academic_calendars.update_one(
+            {"id": calendar_id}, {"$set": calendar_record}, upsert=True
+        )
+    except Exception:
+        await db.calendar_events.delete_many({"calendar_version": calendar_version})
+        raise
+    return {
+        "status": "imported",
+        "academic_year": metadata["academic_year"],
+        "hijri_year": metadata["hijri_year"],
+        "count": len(events),
+        "teaching_week_count": metadata["teaching_week_count"],
+        "manual_review_count": metadata["manual_review_count"],
+    }
 
 
 @api_router.get("/notifications", response_model=List[NotificationLogRecord])
@@ -8014,8 +8824,12 @@ async def export_classes_summary(
 async def import_excel(
     file: UploadFile = File(...),
     week_id: Optional[str] = Query(default=None),
+    school_section: str = Query(default=SCHOOL_SECTION_INTERNATIONAL),
+    academic_year: Optional[str] = Query(default=None),
     current_user: Dict[str, Any] = Depends(get_current_user),
 ):
+    normalized_section = normalize_school_section(school_section)
+    scoped_year = academic_year or current_academic_year()
     if not file.filename:
         raise HTTPException(status_code=400, detail="No file provided")
     content = await file.read()
@@ -8217,7 +9031,7 @@ async def import_excel(
     if column_lookup.get("grade") and column_lookup.get("section"):
         column_lookup.pop("class_name", None)
 
-    classes = await db.classes.find({}, {"_id": 0}).to_list(200)
+    classes = await db.classes.find(school_section_query(normalized_section, scoped_year), {"_id": 0}).to_list(200)
 
     def normalize_class_name(value: str) -> str:
         cleaned = re.sub(r"[^A-Za-z0-9]", "", value.upper())
@@ -8226,6 +9040,7 @@ async def import_excel(
         return cleaned
 
     class_map = {normalize_class_name(cls["name"]): cls for cls in classes}
+    created_classes = 0
     inferred_class_name = None
     for candidate in [file.filename, best_sheet]:
         if not candidate:
@@ -8243,13 +9058,19 @@ async def import_excel(
                 name=inferred_class_name,
                 grade=parsed.get("grade"),
                 section=parsed.get("section"),
+                school_section=normalized_section,
+                academic_year=scoped_year,
             )
             await db.classes.insert_one(class_record.model_dump())
             default_class_doc = class_record.model_dump()
             class_map[normalize_class_name(inferred_class_name)] = default_class_doc
+            created_classes += 1
     created_students = 0
     updated_students = 0
-    existing_students_docs = await db.students.find({}, {"_id": 0, "id": 1, "full_name": 1, "class_id": 1}).to_list(20000)
+    existing_students_docs = await db.students.find(
+        school_section_query(normalized_section, scoped_year),
+        {"_id": 0, "id": 1, "full_name": 1, "class_id": 1},
+    ).to_list(20000)
     existing_student_map: Dict[tuple, Dict[str, Any]] = {}
     for s in existing_students_docs:
         name_key = (s.get("full_name") or "").strip().lower()
@@ -8260,14 +9081,16 @@ async def import_excel(
         raise HTTPException(status_code=400, detail="Excel must include at least one column with student names.")
     # Class can come from: class column, grade+section columns, or filename (e.g. 5A.xlsx). No strict requirement here.
 
-    created_classes = 0
     processed_rows = 0
+    skipped_rows = 0
     for _, row in df.iterrows():
         student_name = row.get(column_lookup["student_name"])
         if pd.isna(student_name):
+            skipped_rows += 1
             continue
         student_name = str(student_name).strip()
         if not student_name:
+            skipped_rows += 1
             continue
 
         class_doc = None
@@ -8279,7 +9102,7 @@ async def import_excel(
                 combined = f"{gv}{sv}"
                 class_doc = class_map.get(normalize_class_name(combined))
                 if not class_doc:
-                    class_record = ClassRecord(name=combined, grade=gv, section=sv)
+                    class_record = ClassRecord(name=combined, grade=gv, section=sv, school_section=normalized_section, academic_year=scoped_year)
                     await db.classes.insert_one(class_record.model_dump())
                     class_doc = class_record.model_dump()
                     class_map[normalize_class_name(combined)] = class_doc
@@ -8301,6 +9124,8 @@ async def import_excel(
                                     name=new_class_name,
                                     grade=parsed["grade"],
                                     section=parsed["section"],
+                                    school_section=normalized_section,
+                                    academic_year=scoped_year,
                                 )
                                 await db.classes.insert_one(class_record.model_dump())
                                 class_doc = class_record.model_dump()
@@ -8311,11 +9136,17 @@ async def import_excel(
             class_doc = default_class_doc
 
         if not class_doc:
+            skipped_rows += 1
             continue
-        payload = {
+        identity_payload = {
             "full_name": student_name,
             "class_id": class_doc["id"],
             "class_name": class_doc["name"],
+            "school_section": normalized_section,
+            "academic_year": scoped_year,
+        }
+        payload = {
+            **identity_payload,
             "attendance": normalize_score(row.get(column_lookup.get("attendance"))),
             "participation": normalize_score(row.get(column_lookup.get("participation"))),
             "behavior": normalize_score(row.get(column_lookup.get("behavior"))),
@@ -8343,7 +9174,8 @@ async def import_excel(
         existing = existing_student_map.get((student_name.strip().lower(), class_doc["id"]))
         if not existing:
             # Enroll new student from Excel row
-            create_data = {k: payload[k] for k in payload if k in StudentRecord.model_fields}
+            source_payload = identity_payload if normalized_section == SCHOOL_SECTION_ARABIC else payload
+            create_data = {k: source_payload[k] for k in source_payload if k in StudentRecord.model_fields}
             new_record = StudentRecord(**create_data)
             await db.students.insert_one(new_record.model_dump())
             created_students += 1
@@ -8353,7 +9185,7 @@ async def import_excel(
                 "full_name": student_name,
                 "class_id": class_doc["id"],
             }
-            if week_id:
+            if normalized_section == SCHOOL_SECTION_INTERNATIONAL and week_id:
                 score_fields = [
                     "attendance", "participation", "behavior", "homework",
                     "quiz1", "quiz2", "quiz3", "quiz4",
@@ -8377,11 +9209,12 @@ async def import_excel(
                     )
             processed_rows += 1
             continue
-        payload["updated_at"] = iso_now()
-        await db.students.update_one({"id": existing["id"]}, {"$set": payload})
+        update_payload = identity_payload if normalized_section == SCHOOL_SECTION_ARABIC else payload
+        update_payload["updated_at"] = iso_now()
+        await db.students.update_one({"id": existing["id"]}, {"$set": update_payload})
         updated_students += 1
         student_id = existing["id"]
-        if week_id:
+        if normalized_section == SCHOOL_SECTION_INTERNATIONAL and week_id:
             # Only update score fields that (1) have a column in this file and (2) have a value.
             # This prevents e.g. Students template (with empty quiz columns) from overwriting assessment marks.
             score_fields = [
@@ -8417,12 +9250,17 @@ async def import_excel(
     await log_user_action(
         current_user,
         "import_excel",
-        f"Imported Excel: {created_students} created, {updated_students} updated, {created_classes} classes created",
+        f"Imported Excel to {normalized_section}/{scoped_year}: {created_students} created, "
+        f"{updated_students} updated, {created_classes} classes created, {skipped_rows} skipped",
     )
     return {
         "created_students": created_students,
         "updated_students": updated_students,
         "created_classes": created_classes,
+        "processed_rows": processed_rows,
+        "skipped_rows": skipped_rows,
+        "school_section": normalized_section,
+        "academic_year": scoped_year,
     }
 
 
@@ -8618,6 +9456,7 @@ async def seed_defaults():
         await db.students.create_index([("id", 1)])
         await db.students.create_index([("class_id", 1)])
         await db.students.create_index([("full_name", 1), ("class_id", 1)])
+        await db.students.create_index([("school_section", 1), ("academic_year", 1), ("class_id", 1)])
         await db.student_scores.create_index([("student_id", 1)])
         await db.student_scores.create_index([("week_id", 1)])
         await db.student_scores.create_index([("student_id", 1), ("week_id", 1)])
@@ -8625,9 +9464,26 @@ async def seed_defaults():
         await db.weeks.create_index([("semester", 1), ("quarter", 1), ("number", 1)])
         await db.classes.create_index([("id", 1)])
         await db.classes.create_index([("name", 1)])
+        await db.classes.create_index([("school_section", 1), ("academic_year", 1), ("grade", 1)])
+        await db.arabic_quarter_scores.create_index(
+            [("student_id", 1), ("academic_year", 1), ("semester", 1), ("quarter", 1)], unique=True
+        )
+        await db.academic_calendars.create_index([("academic_year", 1)], unique=True)
+        await db.academic_calendars.create_index([("academic_year_start", -1)])
+        await db.calendar_events.create_index([("calendar_version", 1), ("semester", 1), ("gregorian_start", 1)])
         await db.users.create_index([("id", 1)])
         await db.users.create_index([("role_name", 1)])
         await db.users.update_many({"auth_version": {"$exists": False}}, {"$set": {"auth_version": 0}})
+        # Backward-compatible school-section migration: every pre-feature record remains International.
+        legacy_year = current_academic_year()
+        await db.classes.update_many(
+            {"school_section": {"$exists": False}},
+            {"$set": {"school_section": SCHOOL_SECTION_INTERNATIONAL, "academic_year": legacy_year}},
+        )
+        await db.students.update_many(
+            {"school_section": {"$exists": False}},
+            {"$set": {"school_section": SCHOOL_SECTION_INTERNATIONAL, "academic_year": legacy_year}},
+        )
 
         if await db.classes.count_documents({}) == 0:
             default_classes = []

@@ -10,12 +10,14 @@
 | `students` | Student identity + class membership + some denormalized score fields |
 | `weeks` | Academic weeks per semester/quarter (Q1: 1–9, Q2: 10–18) |
 | `student_scores` | Per-student per-week score documents |
+| `arabic_quarter_scores` | Arabic Section quarter-level /100 grades, keyed by student + academic year + semester + quarter |
 | `remedial_plans` | Support plans |
 | `rewards` | Reward definitions |
 | `reward_events` | Award/remove badge events |
 | `audit_logs` | Action logging |
-| `app_settings` | General keyed settings such as sms_templates, promotion, and calendar_sync |
-| `calendar_events` | Synced academic calendar rows |
+| `app_settings` | General keyed settings such as sms_templates and promotion; legacy calendar_sync records may remain but are no longer read |
+| `academic_calendars` | One metadata/active-version record per imported academic year |
+| `calendar_events` | Immutable versioned rows extracted once from approved school calendar PDFs |
 | `notification_logs` | In-app notification history |
 | `report_settings` | Weekly admin report configuration (`id: weekly_report`, grade, report type, update timestamp) |
 
@@ -23,9 +25,16 @@ Default DB name: `school_db` (`DB_NAME`).
 
 ### Settings storage split (CONFIRMED)
 
-- `app_settings` stores general keyed settings such as SMS templates, promotion, and calendar sync.
+- `app_settings` stores general keyed settings such as SMS templates and promotion. Calendar imports now use `academic_calendars`; no external calendar synchronization runs.
 - `report_settings` is a separate collection used by `/api/reports/settings` and the scheduled weekly admin-report job.
 - Do not consolidate or rename these collections without an explicit schema/API impact review.
+
+### Academic calendars (CONFIRMED)
+
+- `academic_calendars.academic_year` is unique and points to one immutable `active_version` in `calendar_events`.
+- Re-importing a year inserts and validates a new event version before changing that pointer; older years and prior event versions are preserved.
+- Default calendar resolution is date-based (`academic_year_start <= today < next_academic_year_start`), while the API can request a historical `academic_year` explicitly.
+- Calendar records are school-wide and intentionally have no International/Arabic section field.
 
 ## Entity notes
 
@@ -34,6 +43,22 @@ Default DB name: `school_db` (`DB_NAME`).
 - Identity: `id`, `full_name`, `class_id`, optional student number fields used in import.
 - Lifecycle: create, update, transfer (class change), promote (settings-gated), delete.
 - Scores primarily live in `student_scores` keyed by week; some endpoints also surface aggregated fields on student payloads.
+- `school_section` is `international|arabic`; legacy records are migrated/defaulted to `international`.
+- `academic_year` scopes enrollment records. The student's section/year must match the target class.
+
+### School section ownership (CONFIRMED)
+
+- `classes.section` still means the A/B classroom suffix. It was deliberately **not** repurposed.
+- `classes.school_section` and `students.school_section` hold the school division.
+- `classes.academic_year` and `students.academic_year` support year isolation.
+- Arabic grades are stored separately in `arabic_quarter_scores`; International grades remain in `student_scores` unchanged.
+- Arabic score documents denormalize `school_section: arabic` and `academic_year` and have a unique compound index on student/year/semester/quarter.
+
+### ArabicQuarterScore (CONFIRMED)
+
+- Continuous `/40`: `performance_tasks`, `participation`, `interaction`, `attendance` (each `/10`).
+- Tests `/60`: `theory_test_1`, `theory_test_2`, `practical_test_1`, `practical_test_2` (each `/15`).
+- `null` means missing; numeric `0` means entered/tested.
 
 ### StudentScoreRecord / week scores (CONFIRMED fields)
 

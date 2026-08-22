@@ -53,6 +53,7 @@ import {
 import { ExpandableSection } from "@/components/ExpandableSection";
 import { PerformanceLevelBadge } from "@/components/PerformanceLevelBadge";
 import { PERFORMANCE_CHART_COLORS, getScoreBandBadgeClass } from "@/lib/performanceBadges";
+import { InternationalCompletionOverview } from "@/components/analytics/InternationalCompletionOverview";
 import {
   MetricCard,
   ChartCard,
@@ -416,6 +417,19 @@ export default function Analytics() {
       score: cls.avg_total_score || 0,
     }));
   }, [classSummary, isStudentScoped, selectedClassId, selectedStudent, studentBreakdownData]);
+
+  const classCompletionRows = useMemo(
+    () => sortByClassOrder(classSummary).map((item) => ({
+      id: item.class_id,
+      name: item.class_name,
+      total: Number(item.student_count || 0),
+      completed: Math.max(
+        Number(item.student_count || 0) - Number(item.distribution?.no_data || 0),
+        0,
+      ),
+    })),
+    [classSummary],
+  );
 
   const gradeSummary = useMemo(() => {
     if (isStudentScoped && selectedStudent) {
@@ -918,6 +932,14 @@ export default function Analytics() {
           />
         </div>
       </section>
+
+      {!isStudentScoped && (
+        <InternationalCompletionOverview
+          t={t}
+          classRows={classCompletionRows}
+          testIdPrefix="analytics"
+        />
+      )}
 
       {totalStudents > 0 && (
         <section className="space-y-3" data-testid="analytics-visual-board-grid">

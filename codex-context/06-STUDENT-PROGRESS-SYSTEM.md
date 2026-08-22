@@ -66,3 +66,15 @@ Per-week documents in `student_scores` provide history within the academic term 
 - `frontend/src/lib/performanceBadges.js`
 - `frontend/src/lib/insightAutofill.js`
 - Assessment/Final/TotalMarks/Students pages
+
+## Arabic Section quarter model (CONFIRMED)
+
+Arabic grading is dispatched separately from the protected International pipeline:
+
+```
+Continuous /40 = performance tasks 10 + participation 10 + interaction 10 + attendance 10
+Tests /60 = theory 1 15 + theory 2 15 + practical 1 15 + practical 2 15
+Quarter /100 = continuous 40 + tests 60
+```
+
+Semester 1 displays Q1/Q2; Semester 2 displays Q3/Q4. Each quarter is independent. A score of `0` counts as entered/tested; `null` is missing. Arabic performance thresholds are intentionally **not configured** yet, so Arabic analytics report totals and completion rather than applying International bands.
