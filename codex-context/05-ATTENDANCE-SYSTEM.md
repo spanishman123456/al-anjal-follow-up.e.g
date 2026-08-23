@@ -31,7 +31,7 @@ Exact aggregation lives in `backend/server.py` (`compute_cumulative_*` / follow-
 
 ### Arabic Section distinction
 
-The Arabic Section also has a field named `attendance`, but it is a **quarter grading component `/10`** inside `arabic_quarter_scores`. It is not daily roll-call and does not use the International weekly `/2.5` aggregation.
+The Arabic Section also has a field named `attendance`, but it is an unchanged **continuous quarter grading component `/10`** inside `arabic_quarter_scores`. It contributes to Arabic Continuous Assessment `/40`; it is not daily roll-call and does not use the International weekly `/2.5` aggregation.
 
 ## Codex guidance
 

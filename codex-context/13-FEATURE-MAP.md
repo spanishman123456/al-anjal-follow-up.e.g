@@ -5,7 +5,7 @@
 - Global International/Arabic switcher in `AppShell`; legacy default is International.
 - Section/year-scoped Classes and Students with Teacher `assigned_class_ids` preserved.
 - International routes retain the `/15 → /30 → /50` pages and calculations.
-- Arabic Section has scoped Excel student/class import, quarter `/100` grade entry, Dashboard, Analytics, Reports, test-completion lists, and Arabic-safe PDF/Excel export.
+- Arabic Section has scoped Excel student/class import, quarter `/100` grade entry (`/40` continuous + best theory `/30` + practical `/30`), Dashboard, Analytics, Reports, three-attempt completion lists, and Arabic-safe PDF/Excel export.
 - International and Arabic Dashboards share one user-owned weekly timetable editor; timetable records are isolated by school section and academic year, with legacy schedules treated as current-year International only.
 - Arabic performance thresholds remain intentionally undefined.
 

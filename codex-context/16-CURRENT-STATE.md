@@ -16,16 +16,17 @@
 - Lazy Mongo init + offline PDF test script
 - Verified local baseline: Python 3.13.15, healthy root `.venv`, Node.js 20.20.0, and npm 10.8.2
 - Backend focused verification passes (19 tests), frontend tests pass, production build passes, and live Arabic/International exports pass
-- Frontend Jest verification passes (3 suites / 10 tests) and production compilation succeeds with the Windows-equivalent build command
+- Frontend Jest verification passes (4 suites / 13 tests) and production compilation succeeds with the Windows-equivalent build command
 - International/Arabic Section switching with section/year-scoped classes and students; legacy data defaults to International
-- Arabic scoped Excel student/class import, quarter `/100` entry (`/40 + /60`), zero-vs-null completion semantics, dashboard/analytics/test lists, and Arabic PDF/Excel reports
+- Arabic scoped Excel student/class import and quarter `/100` entry: unchanged continuous `/40`, better of Theory 1/Theory 2 weighted to `/30`, and one Practical weighted to `/30`; raw maximum comes from class grade (`/15` Primary, `/20` Middle/Secondary). Zero-vs-null completion semantics, three-attempt dashboard/analytics lists, and Arabic PDF/Excel reports are aligned.
+- Legacy Arabic practical fields are preserved; unambiguous single/equal values migrate to the new practical field, while conflicting old values are surfaced for manual review.
 - Arabic Dashboard/Analytics now include `/100` quarter distribution, students-per-class, top-student, and data-aware average cards; the support card deliberately remains uncalculated until an Arabic threshold is approved
 - School-wide multi-year academic calendars imported once from approved Al Anjal PDFs, with immutable versions, automatic current-year selection, preserved history, and no live external synchronization
 - International Dashboard/Analytics now include compact completion + classes organization while retaining existing `/15 → /30 → /50` APIs and calculations; the superseded large Incomplete Assessment Alerts card has been removed
 - Shared illuminated button variants and navy-header table styling now normalize both application sections
 - International and Arabic Dashboards share the same editable weekly timetable in the same visual position, scoped per user + school section + academic year; legacy timetables remain current-year International.
 - Shared premium PDF system now covers International Analytics/Reports and Arabic `/100` reports, omits meaningless charts, uses compact empty states, repeats long-table headers, and preserves Amiri RTL rendering
-- Focused backend regression verification passes 23 synchronous tests, including protected International scoring, Arabic calculations/import isolation, scoped timetable persistence, multi-year PDF calendar parsing/rollover, and Arabic PDF/Excel generation
+- Focused backend regression verification passes 35 synchronous tests, including protected International scoring, stage-aware Arabic calculations/import isolation, scoped timetable persistence, multi-year PDF calendar parsing/rollover, and Arabic PDF/Excel generation
 
 ## Recently modified themes (git)
 

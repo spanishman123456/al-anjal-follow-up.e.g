@@ -127,6 +127,13 @@ Format: Decision → Context → Why → Status → Codex Guidance.
 **Status:** Active; Arabic performance thresholds intentionally unset.
 **Codex Guidance:** Preserve `null` vs entered `0`; use student/year/semester/quarter keys and the Arabic calculation adapter.
 
+## Decision: Arabic exams use best-of-two theory plus one stage-scaled practical
+
+**Context:** The former four-test `/15 + /15 + /15 + /15` model was replaced by the approved Arabic grading policy.
+**Why:** Theory 1 and Theory 2 are improvement attempts; only the better valid raw result contributes `/30`, while one Practical Test contributes `/30`.
+**Status:** Active. Primary raw exams are `/15`; Middle/Secondary raw exams are `/20`, derived from `classes.grade`.
+**Codex Guidance:** Never add both theory attempts, never infer stage from teacher identity, preserve entered `0`, require all three attempts for completion, and retain/flag ambiguous legacy practical data rather than overwriting it.
+
 ---
 
 ## Decision: Calendar sync fails closed and preserves cache

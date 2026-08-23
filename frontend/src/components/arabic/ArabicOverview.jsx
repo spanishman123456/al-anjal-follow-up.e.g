@@ -5,6 +5,7 @@ import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxi
 import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { displayQuarterNumber } from "@/lib/academicScope";
+import { ARABIC_EXAM_FIELDS, formatArabicScore } from "@/lib/arabicGrading";
 import { useTranslations } from "@/lib/i18n";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Button } from "@/components/ui/button";
@@ -15,7 +16,7 @@ import { buildArabicPerformanceSummary } from "./arabicPerformanceSummary";
 import { DashboardTimetable } from "@/components/dashboard/DashboardTimetable";
 
 const semNumber = (semester) => (semester === "semester2" ? 2 : 1);
-const TESTS = ["theory_test_1", "theory_test_2", "practical_test_1", "practical_test_2"];
+const TESTS = ARABIC_EXAM_FIELDS;
 const formatTotal = (value) => (value === null || value === undefined ? "—" : `${value} /100`);
 
 function ArabicPerformanceCards({ data, t }) {
@@ -164,7 +165,7 @@ export function ArabicOverview({ variant = "dashboard" }) {
       <Card><CardHeader><CardTitle>{t("classes")}</CardTitle></CardHeader><CardContent className="p-0"><div className="overflow-x-auto"><table className="w-full text-sm"><thead className="bg-[#10162A] text-white"><tr><th className="p-3 text-start">{t("class")}</th><th className="p-3 text-center">{t("students")}</th><th className="p-3 text-center">{t("students_with_grades")}</th><th className="p-3 text-center">{t("completion_percentage")}</th></tr></thead><tbody>{(data?.class_breakdown || []).map((item) => <tr key={item.class_id} className="border-b"><td className="p-3 font-medium">{item.class_name}</td><td className="p-3 text-center">{item.student_count}</td><td className="p-3 text-center">{item.students_with_grades}</td><td className="p-3 text-center font-bold">{item.completion_percentage}%</td></tr>)}</tbody></table></div></CardContent></Card>
     </div>
 
-    {(variant === "analytics" || variant === "reports") && <Card><CardHeader><CardTitle>{t("tested")} / {t("not_tested")}</CardTitle><p className="text-sm text-muted-foreground">{t("no_performance_thresholds")}</p></CardHeader><CardContent className="p-0"><div className="overflow-x-auto"><table className="w-full min-w-[780px] text-sm"><thead className="bg-muted/60"><tr><th className="p-3 text-start">{t("student")}</th><th className="p-3 text-start">{t("class")}</th>{TESTS.map((key) => <th key={key} className="p-3 text-center">{t(key)}</th>)}</tr></thead><tbody>{(data?.students || []).map((student) => <tr key={student.id} className="border-b"><td className="p-3 font-medium">{student.full_name}</td><td className="p-3">{student.class_name}</td>{TESTS.map((key) => <td key={key} className={`p-3 text-center text-xs font-semibold ${student.test_completion?.[key] ? "text-emerald-600" : "text-rose-600"}`}>{student.test_completion?.[key] ? t("tested") : t("not_tested")}</td>)}</tr>)}</tbody></table></div></CardContent></Card>}
+    {(variant === "analytics" || variant === "reports") && <Card><CardHeader><CardTitle>{t("tested")} / {t("not_tested")}</CardTitle><p className="text-sm text-muted-foreground">{t("no_performance_thresholds")}</p></CardHeader><CardContent className="p-0"><div className="overflow-x-auto"><table className="w-full min-w-[1120px] text-sm"><thead className="bg-muted/60"><tr><th className="p-3 text-start">{t("student")}</th><th className="p-3 text-start">{t("class")}</th>{TESTS.map((key) => <th key={key} className="p-3 text-center">{t(key)}</th>)}<th className="p-3 text-center">{t("best_theory")} /30</th><th className="p-3 text-center">{t("practical_weighted")} /30</th><th className="p-3 text-center">{t("tests_total")} /60</th></tr></thead><tbody>{(data?.students || []).map((student) => <tr key={student.id} className="border-b"><td className="p-3 font-medium">{student.full_name}</td><td className="p-3">{student.class_name}</td>{TESTS.map((key) => <td key={key} className={`p-3 text-center text-xs font-semibold ${student.test_completion?.[key] ? "text-emerald-600" : "text-rose-600"}`}>{student.test_completion?.[key] ? `${t("tested")} (${formatArabicScore(student[key])}/${student.exam_raw_max})` : t("not_tested")}</td>)}<td className="p-3 text-center font-semibold">{formatArabicScore(student.best_theory_weighted)}</td><td className="p-3 text-center font-semibold">{formatArabicScore(student.practical_weighted)}</td><td className="p-3 text-center font-bold">{formatArabicScore(student.tests_total)}</td></tr>)}</tbody></table></div></CardContent></Card>}
 
     {variant === "dashboard" && (
       <DashboardTimetable

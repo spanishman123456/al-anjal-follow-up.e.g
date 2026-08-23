@@ -4,6 +4,13 @@ import { Download, Save, TestTube2 } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { displayQuarterNumber } from "@/lib/academicScope";
+import {
+  ARABIC_CONTINUOUS_FIELDS,
+  ARABIC_EXAM_FIELDS,
+  ARABIC_SCORE_FIELDS,
+  calculateArabicQuarter,
+  formatArabicScore,
+} from "@/lib/arabicGrading";
 import { useTranslations } from "@/lib/i18n";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Button } from "@/components/ui/button";
@@ -11,17 +18,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-
-export const ARABIC_SCORE_FIELDS = [
-  { key: "performance_tasks", max: 10 },
-  { key: "participation", max: 10 },
-  { key: "interaction", max: 10 },
-  { key: "attendance", max: 10 },
-  { key: "theory_test_1", max: 15, test: true },
-  { key: "theory_test_2", max: 15, test: true },
-  { key: "practical_test_1", max: 15, test: true },
-  { key: "practical_test_2", max: 15, test: true },
-];
 
 const semesterNumber = (semester) => (semester === "semester2" ? 2 : 1);
 
@@ -172,27 +168,31 @@ export default function ArabicGrades() {
         </CardHeader>
         <CardContent>
           <Progress value={payload?.completion_percentage || 0} className="h-3" />
-          <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            {ARABIC_SCORE_FIELDS.filter((item) => item.test).map(({ key }) => {
+          <div className="mt-4 grid gap-3 sm:grid-cols-3">
+            {ARABIC_EXAM_FIELDS.map((key) => {
               const item = payload?.test_completion?.[key] || {};
               return <div key={key} className="rounded-xl border bg-muted/25 p-3"><p className="font-medium">{t(key)}</p><p className="mt-1 text-sm text-emerald-600">{t("tested")}: {item.completed || 0}</p><p className="text-sm text-rose-600">{t("not_tested")}: {item.missing || 0}</p></div>;
             })}
           </div>
+          {(payload?.migration?.manual_review_count || 0) > 0 && (
+            <div className="mt-4 rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-100">
+              <p className="font-semibold">{t("legacy_grades_manual_review")}: {payload.migration.manual_review_count}</p>
+              <p className="mt-1">{payload.migration.manual_review_students.map((student) => `${student.full_name} (${student.class_name})`).join(", ")}</p>
+            </div>
+          )}
         </CardContent>
       </Card>
 
       <Card>
         <CardContent className="p-0">
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[1380px] text-sm">
-              <thead className="bg-[#10162A] text-white"><tr><th className="sticky start-0 z-10 bg-[#10162A] p-3 text-start">{t("student")}</th><th className="p-3 text-start">{t("class")}</th>{ARABIC_SCORE_FIELDS.map(({ key, max }) => <th key={key} className="p-3 text-center">{t(key)} /{max}</th>)}<th className="p-3 text-center">/40</th><th className="p-3 text-center">/60</th><th className="p-3 text-center">/100</th></tr></thead>
+            <table className="w-full min-w-[1540px] text-sm">
+              <thead className="bg-[#10162A] text-white"><tr><th className="sticky start-0 z-10 bg-[#10162A] p-3 text-start">{t("student")}</th><th className="p-3 text-start">{t("class")}</th>{ARABIC_CONTINUOUS_FIELDS.map(({ key, max }) => <th key={key} className="p-3 text-center">{t(key)} /{max}</th>)}{ARABIC_EXAM_FIELDS.map((key) => <th key={key} className="p-3 text-center">{t(key)} ({t("raw_score")})</th>)}<th className="p-3 text-center">{t("best_theory")} /30</th><th className="p-3 text-center">{t("practical_weighted")} /30</th><th className="p-3 text-center">/40</th><th className="p-3 text-center">/60</th><th className="p-3 text-center">/100</th></tr></thead>
               <tbody>
                 {rows.map((student) => {
                   const current = values[student.id] || {};
-                  const continuous = ARABIC_SCORE_FIELDS.slice(0, 4).reduce((sum, item) => sum + Number(current[item.key] ?? 0), 0);
-                  const tests = ARABIC_SCORE_FIELDS.slice(4).reduce((sum, item) => sum + Number(current[item.key] ?? 0), 0);
-                  const hasAny = ARABIC_SCORE_FIELDS.some((item) => current[item.key] !== null && current[item.key] !== undefined);
-                  return <tr key={student.id} className="border-b transition-colors hover:bg-cyan-50/50 dark:hover:bg-cyan-950/10"><td className="sticky start-0 bg-background p-3 font-semibold">{student.full_name}</td><td className="p-3">{student.class_name}</td>{ARABIC_SCORE_FIELDS.map(({ key, max, test }) => <td key={key} className="p-2"><Input type="number" min="0" max={max} step="0.5" value={current[key] ?? ""} onChange={(event) => updateValue(student.id, key, event.target.value, max)} className={test && current[key] !== null ? "border-emerald-400/60 shadow-[0_0_12px_rgba(16,185,129,0.12)]" : ""} aria-label={`${student.full_name} ${t(key)}`} /></td>)}<td className="p-3 text-center font-semibold">{hasAny ? continuous : "—"}</td><td className="p-3 text-center font-semibold">{hasAny ? tests : "—"}</td><td className="p-3 text-center text-lg font-bold text-cyan-700 dark:text-cyan-300">{hasAny ? continuous + tests : "—"}</td></tr>;
+                  const calculated = calculateArabicQuarter(current, student.exam_raw_max);
+                  return <tr key={student.id} className="border-b transition-colors hover:bg-cyan-50/50 dark:hover:bg-cyan-950/10"><td className="sticky start-0 bg-background p-3 font-semibold">{student.full_name}</td><td className="p-3"><p>{student.class_name}</p><p className="text-xs text-muted-foreground">{t(student.educational_stage)} · /{student.exam_raw_max}</p></td>{ARABIC_CONTINUOUS_FIELDS.map(({ key, max }) => <td key={key} className="p-2"><Input type="number" min="0" max={max} step="0.5" value={current[key] ?? ""} onChange={(event) => updateValue(student.id, key, event.target.value, max)} aria-label={`${student.full_name} ${t(key)}`} /></td>)}{ARABIC_EXAM_FIELDS.map((key) => <td key={key} className="p-2"><div className="flex items-center gap-1"><Input type="number" min="0" max={student.exam_raw_max} step="0.5" value={current[key] ?? ""} onChange={(event) => updateValue(student.id, key, event.target.value, student.exam_raw_max)} className={current[key] !== null && current[key] !== undefined ? "border-emerald-400/60 shadow-[0_0_12px_rgba(16,185,129,0.12)]" : ""} aria-label={`${student.full_name} ${t(key)}`} /><span className="text-xs text-muted-foreground">/{student.exam_raw_max}</span></div></td>)}<td className="p-3 text-center font-semibold">{formatArabicScore(calculated.bestTheoryWeighted)}</td><td className="p-3 text-center font-semibold">{formatArabicScore(calculated.practicalWeighted)}</td><td className="p-3 text-center font-semibold">{formatArabicScore(calculated.continuousTotal)}</td><td className="p-3 text-center font-semibold">{formatArabicScore(calculated.testsTotal)}</td><td className="p-3 text-center text-lg font-bold text-cyan-700 dark:text-cyan-300">{formatArabicScore(calculated.quarterTotal)}</td></tr>;
                 })}
               </tbody>
             </table>

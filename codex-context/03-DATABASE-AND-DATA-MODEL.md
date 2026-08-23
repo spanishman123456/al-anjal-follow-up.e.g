@@ -57,8 +57,10 @@ Default DB name: `school_db` (`DB_NAME`).
 ### ArabicQuarterScore (CONFIRMED)
 
 - Continuous `/40`: `performance_tasks`, `participation`, `interaction`, `attendance` (each `/10`).
-- Tests `/60`: `theory_test_1`, `theory_test_2`, `practical_test_1`, `practical_test_2` (each `/15`).
+- Tests `/60`: `theory_test_1`, `theory_test_2`, and `practical_test` are raw attempts. Only the better valid theory attempt contributes (`/30` weighted), and the practical contributes `/30` weighted.
+- Raw maximum is derived from canonical `classes.grade`: Primary grades 1–6 use `/15`; Middle grades 7–9 and Secondary grade 10+ use `/20`.
 - `null` means missing; numeric `0` means entered/tested.
+- Legacy `practical_test_1` / `practical_test_2` fields are never deleted. Startup migration copies a sole/equal legacy practical score to `practical_test`; conflicting values are retained in `legacy_exam_backup` and flagged with `legacy_migration_status: manual_review`.
 
 ### StudentScoreRecord / week scores (CONFIRMED fields)
 

@@ -3,7 +3,7 @@
   "project_type": "Bilingual school academic follow-up / assessment web app",
   "purpose": "Track weekly follow-up marks, quizzes, chapter tests, quarter exams, performance levels, analytics, and admin reports for Al Anjal National Schools",
   "handoff_date": "2026-08-21",
-  "baseline_verified_date": "2026-08-22",
+  "baseline_verified_date": "2026-08-24",
   "tech_stack": {
     "frontend": ["React CRA", "Craco", "Tailwind CSS", "shadcn/Radix", "Recharts", "Axios", "HashRouter"],
     "backend": ["FastAPI", "Uvicorn", "Motor", "PyMongo", "Pydantic v2", "PyJWT", "Passlib/bcrypt", "ReportLab", "Matplotlib", "pandas", "APScheduler"],
@@ -44,7 +44,7 @@
     "Global semester/quarter sync",
     "EN/AR RTL UI with PageHero banners",
     "International/Arabic Section switching with isolated records",
-    "Arabic quarter grading out of 100 with test-completion analytics",
+    "Arabic quarter grading out of 100: continuous /40 plus best theory /30 and one practical /30, with stage-aware raw maxima and three-test completion analytics",
     "Multi-year approved school PDF calendar import with preserved history and automatic current-year resolution",
     "Section/year-isolated weekly timetable inside both section Dashboards"
   ],
@@ -91,12 +91,12 @@
     "python": "3.13.15",
     "backend_venv": "Repository-root .venv recreated successfully with Python 3.13",
     "backend_dependencies": "Installed from backend/requirements.txt; pip check passed",
-    "backend_focused_tests": "23 synchronous tests passed; legacy live Mongo diagnostic scripts are excluded from safe unit-test discovery",
+    "backend_focused_tests": "35 synchronous tests passed, including Arabic stage-aware grading and protected International /50 regression coverage; legacy live Mongo diagnostic scripts are excluded from safe unit-test discovery",
     "backend_server_import": "passed offline",
     "pdf_smoke": "International quarter + semester/midterm and Arabic quarter passed; Amiri embedded and no blank pages",
     "node": "20.20.0",
     "npm": "10.8.2",
-    "frontend_tests": "3 suites / 10 tests passed",
+    "frontend_tests": "4 suites / 13 tests passed",
     "frontend_build": "Windows-equivalent CRACO build and existing postbuild completed successfully",
     "live_integration_tests": "not run; require external credentials and may touch live services"
   },
@@ -180,6 +180,9 @@
     "arabic_quarter_max": 100,
     "arabic_continuous_max": 40,
     "arabic_tests_max": 60,
+    "arabic_primary_exam_raw_max": 15,
+    "arabic_middle_secondary_exam_raw_max": 20,
+    "arabic_exam_model": "best of theory_test_1/theory_test_2 weighted to 30 plus practical_test weighted to 30",
     "arabic_performance_thresholds": null
   },
   "agents_entry": "AGENTS.md",

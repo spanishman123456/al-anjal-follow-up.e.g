@@ -10,7 +10,7 @@
 **Al Anjal School Follow-up Record** is a bilingual (English/Arabic, RTL) web system for **Al Anjal National Schools** used by **Admin** and **Teacher** staff to:
 
 - Enroll and manage students in classes (grades 4–8, sections A/B).
-- Record **weekly follow-up marks** and **assessment / final exam scores** on a **50-point quarter** model.
+- Record **weekly follow-up marks** and **assessment / final exam scores** on the International **50-point quarter** model and the isolated Arabic **100-point quarter** model.
 - Classify performance (**On Level / Approach / Below / No Data**).
 - Run analytics and generate **PDF/Excel** reports suitable for school administration.
 - Support remedial plans, rewards/certificates, lesson-plan generation, calendar, notifications, and user management.
@@ -39,7 +39,7 @@ It is **not** a daily roll-call attendance product. The field named `attendance`
 2. **Preserve working behavior** unless the user explicitly asks to change it.
 3. **Prefer extending** existing components (`PageHero`, `AcademicTermSelect`, analytics kit, shadcn `ui/*`) over new frameworks.
 4. **Do not invent features** (e.g. daily attendance, new roles) that are not in the codebase.
-5. **Never silently change score formulas or performance thresholds** (quarter /50: On Level ≥46, Approach ≥43, Below &lt;43).
+5. **Never silently change score formulas or performance thresholds** (International quarter /50: On Level ≥46, Approach ≥43, Below &lt;43; Arabic quarter /100 currently has no performance thresholds).
 6. **Never silently modify MongoDB collections/field meanings** without impact analysis and docs update.
 7. **Protect student data integrity** — no accidental mass deletes, score wipes, or import overwrites without clear UX.
 8. **Keep bilingual + RTL** parity for any user-facing string.
@@ -57,7 +57,7 @@ It is **not** a daily roll-call attendance product. The field named `attendance`
 - [ ] Identify whether the change is UI-only, API, scoring, or schema-related.
 - [ ] Locate the real source of truth (often `server.py` for scores; `academicScope.js` for terms).
 - [ ] Check Teacher vs Admin permission impact (`assigned_class_ids`, `require_admin`).
-- [ ] If touching scores/reports/analytics: note which of /15, /30, /50 pipelines apply.
+- [ ] If touching scores/reports/analytics: note whether the International /15, /30, /50 pipeline or isolated Arabic /40 + /60 = /100 pipeline applies.
 - [ ] If touching PDF: Amiri fonts + arabic-reshaper/bidi + `pdf_report_engine.py`. Reward certificates are a known exception that still use Helvetica/direct canvas text and are not Arabic-safe.
 - [ ] If renaming routes: update `navigationConfig.js` and Q1/Q2 redirects in `AppShell`.
 
@@ -126,7 +126,7 @@ It is **not** a daily roll-call attendance product. The field named `attendance`
 6. Preserve UI consistency (PageHero, top nav, performance badge colors, RTL).
 7. Do not change schema or score structures without impact study.
 8. Keep backward compatibility where reasonable (Excel column aliases, legacy score fields).
-9. Any change touching the weekly `attendance` **score field** must check Students, Total Marks, exports, and /15 rollups — this is **not** a daily attendance product.
+9. Any change touching the International weekly `attendance` **score field** must check Students, Total Marks, exports, and /15 rollups; Arabic `attendance` is instead an isolated continuous-assessment component `/10` — neither is daily roll-call.
 10. Any change to “student progress” (scores, levels, analytics) must check calculations, historical week scores, dashboards, and PDF/Excel reports.
 11. Before deleting “unused” code, grep for dependencies (especially duplicated Q1/Q2 pages).
 12. Do not add dependencies without need.

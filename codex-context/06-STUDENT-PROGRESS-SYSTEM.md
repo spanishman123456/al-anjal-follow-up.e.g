@@ -73,8 +73,10 @@ Arabic grading is dispatched separately from the protected International pipelin
 
 ```
 Continuous /40 = performance tasks 10 + participation 10 + interaction 10 + attendance 10
-Tests /60 = theory 1 15 + theory 2 15 + practical 1 15 + practical 2 15
+Best Theory /30 = max(valid Theory 1 raw, valid Theory 2 raw) / stage raw maximum × 30
+Practical /30 = Practical Test raw / stage raw maximum × 30
+Tests /60 = Best Theory 30 + Practical 30
 Quarter /100 = continuous 40 + tests 60
 ```
 
-Semester 1 displays Q1/Q2; Semester 2 displays Q3/Q4. Each quarter is independent. A score of `0` counts as entered/tested; `null` is missing. Arabic performance thresholds are intentionally **not configured** yet, so Arabic analytics report totals and completion rather than applying International bands.
+Primary (grades 1–6) raw exams are `/15`; Middle (grades 7–9) and Secondary (grade 10+) raw exams are `/20`. Stage is derived only from canonical `classes.grade`. All three attempts—Theory 1, Theory 2, and Practical—must be entered for full completion, while available valid entries may produce a provisional total. Semester 1 displays Q1/Q2; Semester 2 displays Q3/Q4. Each quarter is independent. A score of `0` counts as entered/tested; `null` is missing. Arabic performance thresholds are intentionally **not configured** yet, so Arabic analytics report totals and completion rather than applying International bands.

@@ -4723,16 +4723,46 @@ class BulkScoresPayload(BaseModel):
     week_id: Optional[str] = None
 
 
-ARABIC_SCORE_LIMITS: Dict[str, float] = {
+ARABIC_CONTINUOUS_LIMITS: Dict[str, float] = {
     "performance_tasks": 10.0,
     "participation": 10.0,
     "interaction": 10.0,
     "attendance": 10.0,
-    "theory_test_1": 15.0,
-    "theory_test_2": 15.0,
-    "practical_test_1": 15.0,
-    "practical_test_2": 15.0,
 }
+ARABIC_EXAM_FIELDS = ("theory_test_1", "theory_test_2", "practical_test")
+ARABIC_SCORE_FIELDS = (*ARABIC_CONTINUOUS_LIMITS.keys(), *ARABIC_EXAM_FIELDS)
+
+
+def arabic_educational_stage_for_grade(grade: Any) -> str:
+    """Return the canonical Arabic exam stage derived from classes.grade."""
+    try:
+        numeric_grade = int(grade)
+    except (TypeError, ValueError):
+        raise ValueError("Arabic classes require a numeric grade to determine the exam maximum")
+    if numeric_grade < 1:
+        raise ValueError("Arabic class grade must be a positive integer")
+    if numeric_grade <= 6:
+        return "primary"
+    if numeric_grade <= 9:
+        return "middle"
+    return "secondary"
+
+
+def arabic_exam_raw_max_for_grade(grade: Any) -> float:
+    return 15.0 if arabic_educational_stage_for_grade(grade) == "primary" else 20.0
+
+
+def validate_arabic_exam_values(values: Dict[str, Any], exam_raw_max: float) -> None:
+    for field in ARABIC_EXAM_FIELDS:
+        value = values.get(field)
+        if value is not None and not 0 <= float(value) <= exam_raw_max:
+            raise ValueError(f"{field} cannot exceed {exam_raw_max:g}")
+
+
+def format_arabic_score(value: Any) -> str:
+    if value is None:
+        return "—"
+    return f"{round(float(value), 1):g}"
 
 
 class ArabicQuarterScoreInput(BaseModel):
@@ -4741,10 +4771,9 @@ class ArabicQuarterScoreInput(BaseModel):
     participation: Optional[float] = Field(default=None, ge=0, le=10)
     interaction: Optional[float] = Field(default=None, ge=0, le=10)
     attendance: Optional[float] = Field(default=None, ge=0, le=10)
-    theory_test_1: Optional[float] = Field(default=None, ge=0, le=15)
-    theory_test_2: Optional[float] = Field(default=None, ge=0, le=15)
-    practical_test_1: Optional[float] = Field(default=None, ge=0, le=15)
-    practical_test_2: Optional[float] = Field(default=None, ge=0, le=15)
+    theory_test_1: Optional[float] = Field(default=None, ge=0, le=20)
+    theory_test_2: Optional[float] = Field(default=None, ge=0, le=20)
+    practical_test: Optional[float] = Field(default=None, ge=0, le=20)
 
 
 class ArabicQuarterScoresPayload(BaseModel):
@@ -4754,26 +4783,97 @@ class ArabicQuarterScoresPayload(BaseModel):
     updates: List[ArabicQuarterScoreInput]
 
 
-def arabic_score_summary(score: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+def arabic_score_summary(score: Optional[Dict[str, Any]], exam_raw_max: float = 15.0) -> Dict[str, Any]:
     """Calculate an Arabic-section quarter without inventing performance bands."""
     source = score or {}
-    entered_fields = [key for key in ARABIC_SCORE_LIMITS if source.get(key) is not None]
-    continuous_fields = ["performance_tasks", "participation", "interaction", "attendance"]
-    test_fields = ["theory_test_1", "theory_test_2", "practical_test_1", "practical_test_2"]
-    continuous_total = round(sum(float(source.get(key) or 0) for key in continuous_fields), 2)
-    tests_total = round(sum(float(source.get(key) or 0) for key in test_fields), 2)
-    total = round(continuous_total + tests_total, 2) if entered_fields else None
-    completion = {key: source.get(key) is not None for key in test_fields}
+    if exam_raw_max not in (15, 20, 15.0, 20.0):
+        raise ValueError("Arabic exam raw maximum must be 15 or 20")
+    entered_fields = [key for key in ARABIC_SCORE_FIELDS if source.get(key) is not None]
+    continuous_total = sum(float(source.get(key) or 0) for key in ARABIC_CONTINUOUS_LIMITS)
+    theory_values = [
+        float(source[key]) for key in ("theory_test_1", "theory_test_2") if source.get(key) is not None
+    ]
+    best_theory_raw = max(theory_values) if theory_values else None
+    practical_raw = float(source["practical_test"]) if source.get("practical_test") is not None else None
+    best_theory_weighted = best_theory_raw / exam_raw_max * 30 if best_theory_raw is not None else None
+    practical_weighted = practical_raw / exam_raw_max * 30 if practical_raw is not None else None
+    tests_total = (best_theory_weighted or 0) + (practical_weighted or 0)
+    total = continuous_total + tests_total if entered_fields else None
+    completion = {key: source.get(key) is not None for key in ARABIC_EXAM_FIELDS}
     return {
         "continuous_total": continuous_total if entered_fields else None,
         "tests_total": tests_total if entered_fields else None,
         "quarter_total": total,
+        "exam_raw_max": exam_raw_max,
+        "best_theory_raw": best_theory_raw,
+        "best_theory_weighted": best_theory_weighted,
+        "practical_weighted": practical_weighted,
         "has_grades": bool(entered_fields),
         "all_tests_completed": all(completion.values()),
         "test_completion": completion,
         "test_completion_count": sum(1 for value in completion.values() if value),
-        "test_completion_percentage": round(sum(1 for value in completion.values() if value) * 25, 1),
+        "test_completion_percentage": round(sum(1 for value in completion.values() if value) * 100 / 3, 1),
     }
+
+
+def classify_legacy_arabic_practical(score: Dict[str, Any]) -> Dict[str, Any]:
+    """Plan a non-destructive migration from the former two-practical model."""
+    prior_status = score.get("legacy_migration_status")
+    if prior_status == "manual_review" and score.get("practical_test") is not None:
+        return {"status": "resolved_manual_review", "practical_test": score.get("practical_test")}
+    if prior_status in {"migrated_unambiguous", "manual_review"}:
+        return {"status": prior_status, "practical_test": score.get("practical_test")}
+    first = score.get("practical_test_1")
+    second = score.get("practical_test_2")
+    present = [value for value in (first, second) if value is not None]
+    if score.get("practical_test") is not None:
+        return {"status": "already_new", "practical_test": score.get("practical_test")}
+    if not present:
+        return {"status": "no_legacy_practical", "practical_test": None}
+    if len(present) == 1 or first == second:
+        return {"status": "migrated_unambiguous", "practical_test": present[0]}
+    return {"status": "manual_review", "practical_test": None}
+
+
+async def migrate_legacy_arabic_exam_records() -> Dict[str, int]:
+    """Preserve old fields, copy only unambiguous practical values, and flag conflicts."""
+    query = {
+        "school_section": SCHOOL_SECTION_ARABIC,
+        "$or": [
+            {"practical_test_1": {"$ne": None}},
+            {"practical_test_2": {"$ne": None}},
+            {"legacy_exam_model": "four_exam_v1"},
+        ],
+    }
+    counts = {
+        "examined": 0,
+        "migrated_unambiguous": 0,
+        "manual_review": 0,
+        "resolved_manual_review": 0,
+        "already_new": 0,
+    }
+    async for score in db.arabic_quarter_scores.find(query):
+        counts["examined"] += 1
+        plan = classify_legacy_arabic_practical(score)
+        status = plan["status"]
+        if status in counts:
+            counts[status] += 1
+        legacy_backup = {
+            "theory_test_1": score.get("theory_test_1"),
+            "theory_test_2": score.get("theory_test_2"),
+            "practical_test_1": score.get("practical_test_1"),
+            "practical_test_2": score.get("practical_test_2"),
+        }
+        changes: Dict[str, Any] = {
+            "legacy_exam_model": "four_exam_v1",
+            "legacy_exam_backup": legacy_backup,
+            "legacy_migration_status": status,
+            "legacy_migration_checked_at": iso_now(),
+        }
+        if status == "migrated_unambiguous":
+            changes["practical_test"] = plan["practical_test"]
+        await db.arabic_quarter_scores.update_one({"_id": score["_id"]}, {"$set": changes})
+    return counts
 
 
 class RoleBase(BaseModel):
@@ -6836,6 +6936,13 @@ async def build_arabic_grading_payload(
     classes = await db.classes.find(
         _arabic_scope_class_query(current_user, academic_year, class_id), {"_id": 0}
     ).sort("grade", 1).to_list(500)
+    class_map = {item["id"]: item for item in classes}
+    for item in classes:
+        try:
+            item["educational_stage"] = arabic_educational_stage_for_grade(item.get("grade"))
+            item["exam_raw_max"] = arabic_exam_raw_max_for_grade(item.get("grade"))
+        except ValueError as exc:
+            raise HTTPException(status_code=409, detail=f"Class {item.get('name', item['id'])}: {exc}")
     class_ids = [item["id"] for item in classes]
     students = await db.students.find(
         {
@@ -6858,7 +6965,7 @@ async def build_arabic_grading_payload(
         {"_id": 0},
     ).to_list(10000)
     score_map = {item["student_id"]: item for item in score_docs}
-    test_fields = ["theory_test_1", "theory_test_2", "practical_test_1", "practical_test_2"]
+    test_fields = list(ARABIC_EXAM_FIELDS)
     completion = {key: {"completed": 0, "missing": 0, "percentage": 0.0} for key in test_fields}
     rows: List[Dict[str, Any]] = []
     class_rollup: Dict[str, Dict[str, Any]] = {
@@ -6875,14 +6982,23 @@ async def build_arabic_grading_payload(
     }
     for student in students:
         score = score_map.get(student["id"], {})
-        calculated = arabic_score_summary(score)
-        row = {**student, **{key: score.get(key) for key in ARABIC_SCORE_LIMITS}, **calculated}
+        class_doc = class_map[student["class_id"]]
+        exam_raw_max = class_doc["exam_raw_max"]
+        calculated = arabic_score_summary(score, exam_raw_max)
+        row = {
+            **student,
+            "educational_stage": class_doc["educational_stage"],
+            **{key: score.get(key) for key in ARABIC_SCORE_FIELDS},
+            "legacy_migration_status": score.get("legacy_migration_status"),
+            "legacy_exam_backup": score.get("legacy_exam_backup"),
+            **calculated,
+        }
         rows.append(row)
         rollup = class_rollup[student["class_id"]]
         rollup["student_count"] += 1
         rollup["students_with_grades" if calculated["has_grades"] else "students_without_grades"] += 1
         rollup["tests_completed"] += calculated["test_completion_count"]
-        rollup["tests_possible"] += 4
+        rollup["tests_possible"] += 3
         for key in test_fields:
             bucket = completion[key]
             bucket["completed" if calculated["test_completion"][key] else "missing"] += 1
@@ -6894,6 +7010,11 @@ async def build_arabic_grading_payload(
         item["completion_percentage"] = round(item["tests_completed"] * 100 / possible, 1) if possible else 0.0
     with_grades = sum(1 for row in rows if row["has_grades"])
     all_tests = sum(row["test_completion_count"] for row in rows)
+    migration_review_rows = [
+        {"student_id": row["id"], "full_name": row.get("full_name"), "class_name": row.get("class_name")}
+        for row in rows
+        if row.get("legacy_migration_status") == "manual_review" and row.get("practical_test") is None
+    ]
     return {
         "school_section": SCHOOL_SECTION_ARABIC,
         "academic_year": academic_year,
@@ -6907,9 +7028,13 @@ async def build_arabic_grading_payload(
         "students_without_grades": total_students - with_grades,
         "test_completion": completion,
         "tests_completed": all_tests,
-        "tests_missing": total_students * 4 - all_tests,
-        "completion_percentage": round(all_tests * 100 / (total_students * 4), 1) if total_students else 0.0,
+        "tests_missing": total_students * 3 - all_tests,
+        "completion_percentage": round(all_tests * 100 / (total_students * 3), 1) if total_students else 0.0,
         "class_breakdown": list(class_rollup.values()),
+        "migration": {
+            "manual_review_count": len(migration_review_rows),
+            "manual_review_students": migration_review_rows,
+        },
         "performance_thresholds": None,
     }
 
@@ -6935,6 +7060,11 @@ async def save_arabic_grades(
         {"id": {"$in": student_ids}}, {"_id": 0, "id": 1, "class_id": 1, "school_section": 1, "academic_year": 1}
     ).to_list(10000)
     student_map = {item["id"]: item for item in students}
+    class_ids = sorted({item.get("class_id") for item in students if item.get("class_id")})
+    class_docs = await db.classes.find(
+        {"id": {"$in": class_ids}}, {"_id": 0, "id": 1, "name": 1, "grade": 1, "school_section": 1}
+    ).to_list(1000)
+    class_map = {item["id"]: item for item in class_docs}
     assigned = _teacher_assigned_class_ids(current_user)
     operations: List[UpdateOne] = []
     for update in payload.updates:
@@ -6946,6 +7076,19 @@ async def save_arabic_grades(
         if assigned is not None and student.get("class_id") not in assigned:
             raise HTTPException(status_code=403, detail="Not allowed to edit this student's class")
         values = update.model_dump(exclude={"student_id"})
+        class_doc = class_map.get(student.get("class_id"))
+        if not class_doc or record_school_section(class_doc) != SCHOOL_SECTION_ARABIC:
+            raise HTTPException(status_code=409, detail="Arabic student's class metadata is missing or mismatched")
+        try:
+            exam_raw_max = arabic_exam_raw_max_for_grade(class_doc.get("grade"))
+        except ValueError as exc:
+            raise HTTPException(status_code=409, detail=f"Class {class_doc.get('name', class_doc['id'])}: {exc}")
+        try:
+            validate_arabic_exam_values(values, exam_raw_max)
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=422, detail=f"{exc} for {class_doc.get('name', class_doc['id'])}"
+            )
         operations.append(
             UpdateOne(
                 {
@@ -6986,11 +7129,15 @@ def generate_arabic_grades_excel(payload: Dict[str, Any], lang: str = "en") -> b
         "participation": "المشاركة /10" if is_ar else "Participation /10",
         "interaction": "التفاعل /10" if is_ar else "Interaction /10",
         "attendance": "الحضور /10" if is_ar else "Attendance /10",
-        "theory_test_1": "النظري 1 /15" if is_ar else "Theory Test 1 /15",
-        "theory_test_2": "النظري 2 /15" if is_ar else "Theory Test 2 /15",
-        "practical_test_1": "العملي 1 /15" if is_ar else "Practical Test 1 /15",
-        "practical_test_2": "العملي 2 /15" if is_ar else "Practical Test 2 /15",
+        "exam_raw_max": "الحد الأعلى للاختبار الخام" if is_ar else "Raw Exam Maximum",
+        "theory_test_1": "الاختبار النظري 1 (خام)" if is_ar else "Theory Test 1 (Raw)",
+        "theory_test_2": "الاختبار النظري 2 (خام)" if is_ar else "Theory Test 2 (Raw)",
+        "practical_test": "الاختبار العملي (خام)" if is_ar else "Practical Test (Raw)",
+        "best_theory_weighted": "أفضل نظري /30" if is_ar else "Best Theory /30",
+        "practical_weighted": "العملي الموزون /30" if is_ar else "Practical Weighted /30",
+        "tests_total": "إجمالي الاختبارات /60" if is_ar else "Exam Total /60",
         "quarter_total": "إجمالي الربع /100" if is_ar else "Quarter Total /100",
+        "legacy_migration_status": "حالة ترحيل النموذج السابق" if is_ar else "Legacy Migration Status",
     }
     wb = Workbook()
     ws = wb.active
@@ -7020,10 +7167,10 @@ def generate_arabic_grades_pdf(payload: Dict[str, Any], lang: str = "en") -> byt
     code = _normalize_lang(lang)
     students = payload.get("students") or []
     scored = [row for row in students if row.get("quarter_total") is not None]
-    fully_tested = [row for row in students if int(row.get("test_completion_count") or 0) == 4]
+    fully_tested = [row for row in students if int(row.get("test_completion_count") or 0) == 3]
     incomplete = [
         row for row in students
-        if int(row.get("test_completion_count") or 0) < 4
+        if int(row.get("test_completion_count") or 0) < 3
         or not row.get("has_grades", row.get("quarter_total") is not None)
     ]
     recorded_totals = [float(row["quarter_total"]) for row in scored]
@@ -7037,7 +7184,7 @@ def generate_arabic_grades_pdf(payload: Dict[str, Any], lang: str = "en") -> byt
     term_label = _pdf_term_display_label(semester_value, quarter_value, code)
     generated_on = datetime.now(REPORT_TIMEZONE).strftime("%Y-%m-%d %H:%M")
     tests_completed = int(payload.get("tests_completed") or sum(int(row.get("test_completion_count") or 0) for row in students))
-    tests_missing = int(payload.get("tests_missing") if payload.get("tests_missing") is not None else len(students) * 4 - tests_completed)
+    tests_missing = int(payload.get("tests_missing") if payload.get("tests_missing") is not None else len(students) * 3 - tests_completed)
     class_breakdown = payload.get("class_breakdown") or []
     if not class_breakdown and students:
         for class_name in class_names:
@@ -7048,22 +7195,22 @@ def generate_arabic_grades_pdf(payload: Dict[str, Any], lang: str = "en") -> byt
                 "student_count": len(class_students),
                 "students_with_grades": sum(row.get("quarter_total") is not None for row in class_students),
                 "tests_completed": class_tests,
-                "completion_percentage": round(class_tests * 100 / (len(class_students) * 4), 1) if class_students else 0,
+                "completion_percentage": round(class_tests * 100 / (len(class_students) * 3), 1) if class_students else 0,
             })
 
     if code == "ar":
         performance_text = (
-            f"بلغ متوسط الدرجات المرصودة {average_total} من 100 لعدد {len(scored)} طالبًا."
+            f"بلغ متوسط الدرجات المرصودة {format_arabic_score(average_total)} من 100 لعدد {len(scored)} طالبًا."
             if average_total is not None else "لم تُرصد درجات كلية في الفترة المحددة."
         )
-        completion_text = f"اكتمل رصد الاختبارات الأربعة لعدد {len(fully_tested)} من أصل {len(students)} طالبًا."
+        completion_text = f"اكتمل رصد الاختبارات الثلاثة لعدد {len(fully_tested)} من أصل {len(students)} طالبًا."
         action_text = "استكمال الدرجات الناقصة ومراجعة سجلات الاختبارات قبل اعتماد التقرير النهائي."
     else:
         performance_text = (
-            f"The recorded average is {average_total}/100 across {len(scored)} students."
+            f"The recorded average is {format_arabic_score(average_total)}/100 across {len(scored)} students."
             if average_total is not None else "No quarter totals are recorded for the selected period."
         )
-        completion_text = f"All four tests are complete for {len(fully_tested)} of {len(students)} students."
+        completion_text = f"All three tests are complete for {len(fully_tested)} of {len(students)} students."
         action_text = "Complete missing entries and review test records before final report approval."
 
     output = io.BytesIO()
@@ -7089,7 +7236,7 @@ def generate_arabic_grades_pdf(payload: Dict[str, Any], lang: str = "en") -> byt
         kpi_cards=[
             (_tr("Total Students", code), str(len(students))),
             (_tr("Scored Students", code), str(len(scored))),
-            (_tr("Average /100", code), str(average_total) if average_total is not None else "—"),
+            (_tr("Average /100", code), format_arabic_score(average_total)),
             (_tr("Fully Tested", code), str(len(fully_tested))),
             (_tr("Tests Completed", code), str(tests_completed)),
             (_tr("Missing Scores", code), str(tests_missing)),
@@ -7128,19 +7275,28 @@ def generate_arabic_grades_pdf(payload: Dict[str, Any], lang: str = "en") -> byt
     story.append(Spacer(1, 8))
     if students:
         detail_rows = [[
-            _tr("Student", code), _tr("Class", code), _tr("Continuous /40", code),
-            _tr("Tests /60", code), _tr("Quarter /100", code), _tr("Tests Completed", code),
+            _tr("Student", code), _tr("Class", code), "T1", "T2", _tr("Practical", code),
+            _tr("Best Theory /30", code), _tr("Practical /30", code),
+            _tr("Tests /60", code), _tr("Quarter /100", code),
         ]]
         for row in students:
+            raw_max = f"{float(row.get('exam_raw_max') or 15):g}"
+
+            def raw_display(value: Any) -> str:
+                return "—" if value is None else f"{format_arabic_score(value)}/{raw_max}"
+
             detail_rows.append([
                 row.get("full_name") or "-",
                 row.get("class_name") or "-",
-                row.get("continuous_total") if row.get("continuous_total") is not None else "—",
-                row.get("tests_total") if row.get("tests_total") is not None else "—",
-                row.get("quarter_total") if row.get("quarter_total") is not None else "—",
-                f"{row.get('test_completion_count', 0)}/4",
+                raw_display(row.get("theory_test_1")),
+                raw_display(row.get("theory_test_2")),
+                raw_display(row.get("practical_test")),
+                format_arabic_score(row.get("best_theory_weighted")),
+                format_arabic_score(row.get("practical_weighted")),
+                format_arabic_score(row.get("tests_total")),
+                format_arabic_score(row.get("quarter_total")),
             ])
-        story.append(_pdf_engine_styled_table(detail_rows, code, [150, 70, 76, 70, 78, 86]))
+        story.append(_pdf_engine_styled_table(detail_rows, code, [110, 55, 42, 42, 50, 58, 58, 55, 60]))
     else:
         story.append(_pdf_engine_empty_state(code, _tr("No Arabic scores have been entered for the selected period.", code)))
 
@@ -7151,7 +7307,7 @@ def generate_arabic_grades_pdf(payload: Dict[str, Any], lang: str = "en") -> byt
         story.append(Spacer(1, 8))
         story.append(_pdf_engine_styled_table(
             [[_tr("Student", code), _tr("Class", code), _tr("Quarter /100", code)]]
-            + [[row.get("full_name") or "-", row.get("class_name") or "-", row.get("quarter_total")] for row in top_rows],
+            + [[row.get("full_name") or "-", row.get("class_name") or "-", format_arabic_score(row.get("quarter_total"))] for row in top_rows],
             code,
             [280, 130, 120],
         ))
@@ -7162,7 +7318,7 @@ def generate_arabic_grades_pdf(payload: Dict[str, Any], lang: str = "en") -> byt
     if incomplete:
         story.append(_pdf_engine_styled_table(
             [[_tr("Student", code), _tr("Class", code), _tr("Tests Completed", code)]]
-            + [[row.get("full_name") or "-", row.get("class_name") or "-", f"{row.get('test_completion_count', 0)}/4"] for row in incomplete],
+            + [[row.get("full_name") or "-", row.get("class_name") or "-", f"{row.get('test_completion_count', 0)}/3"] for row in incomplete],
             code,
             [280, 130, 120],
         ))
@@ -9600,6 +9756,9 @@ async def seed_defaults():
             {"school_section": {"$exists": False}},
             {"$set": {"school_section": SCHOOL_SECTION_INTERNATIONAL, "academic_year": legacy_year}},
         )
+        arabic_migration = await migrate_legacy_arabic_exam_records()
+        if arabic_migration["examined"]:
+            logger.warning("Arabic exam-model migration audit: %s", arabic_migration)
 
         if await db.classes.count_documents({}) == 0:
             default_classes = []

@@ -22,9 +22,9 @@ Primary users: **Admin**, **Teacher** (class-scoped). Role **Counselor** exists 
 ## Core product pillars (CONFIRMED)
 
 1. **Student & class records** (grades 4–8, A/B).
-2. **Weekly follow-up scores** (attendance/participation/behavior/homework → /15).
-3. **Quizzes + chapter tests** → assessment /30.
-4. **Quarter practical + theory exams** → quarter total /50.
+2. **International weekly follow-up scores** (attendance/participation/behavior/homework → /15).
+3. **International quizzes + chapter tests** → assessment /30 and quarter total /50.
+4. **Arabic quarter grades** → continuous /40 + better of two theory attempts /30 + one practical /30 = /100.
 5. **Performance bands** and support lists.
 6. **Analytics & Reports** with PDF/Excel (Arabic-capable).
 7. **Programs:** remedial plans, rewards/certificates, lesson-plan generator.
