@@ -11,6 +11,7 @@
 | `weeks` | Academic weeks per semester/quarter (Q1: 1–9, Q2: 10–18) |
 | `student_scores` | Per-student per-week score documents |
 | `arabic_quarter_scores` | Arabic Section quarter-level /100 grades, keyed by student + academic year + semester + quarter |
+| `baseline_assessments` | Separate pre-test / diagnostic mark-entry records; teacher, section, year, term, fixed maximum/roster, totals, revision |
 | `remedial_plans` | Support plans |
 | `rewards` | Reward definitions |
 | `reward_events` | Award/remove badge events |
@@ -92,6 +93,16 @@ Typical numeric fields (maxima in UI/comments):
 - Google: `google_sub` / email linkage + `gmail_approval_status` ∈ pending|approved|rejected (exact enum strings as implemented in server).
 
 ## Indexes (CONFIRMED on startup)
+
+### Baseline record impact (2026-08-28)
+
+- New collection only; no migration or write to existing enrollment, weekly or Arabic quarter scores.
+- Mongo `_id` and public `id` are the same UUID. An indexed scope is `school_section + academic_year + semester + quarter + teacher_id + created_at`.
+- Setup stores a title, test date, positive finite `max_score`, class IDs and names, and an immutable roster snapshot (`id`, `full_name`, `class_id`, `class_name`). It does not store questions or administer tests.
+- `scores` maps roster student IDs to numeric totals or `null`; omitted means unscored. `revision` starts at 1; writes compare and increment it atomically and store `updated_by` / `updated_at`.
+- Maximum, term and roster cannot be edited through the scores endpoint. A different test/maximum requires a separate record. Later enrollment/transfer/promotion/deletion does not silently rewrite historical rosters or clear saved results. Historical retention/deletion must be handled explicitly if a future policy requires it.
+- Teachers can read/update only their own records while **all** included classes remain assigned; Admin can read/update all. Lists, details and PDF exports use the same guard. Revoking one included class hides the whole record from that teacher rather than leaking the remaining roster.
+- No destructive baseline endpoint is supplied. Partial score updates preserve all untouched students; clearing a mark uses explicit `null` and the UI confirms clearing previously saved totals.
 
 Startup creates indexes on students, student_scores, weeks, classes, users (ids and common query fields).
 

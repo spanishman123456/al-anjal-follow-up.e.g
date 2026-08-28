@@ -21,6 +21,8 @@
 | Finals Q1 | `FinalExamsAssessment.jsx` | /50 | scores | same | page + server |
 | Finals Q2 | `FinalExamsAssessmentQ2.jsx` | /50 | scores | same | page + server |
 | Total marks matrix | `TotalMarks.jsx` | combined edit | scores | bulk-scores | `TotalMarks.jsx` |
+| Pre-test / diagnostic marks | `BaselineAssessments.jsx` entry mode | Variable maximum; independent >=75 / >=50 bands; revision-safe totals | `baseline_assessments` | `/baseline-assessments`, `/{id}/scores` | `baseline_assessments.py` |
+| Baseline analytics/PDF | Same page analytics mode | Shared snapshot, student donut, horizontal bars, numerical interpretation | Same collection | `/{id}`, `/{id}/export.pdf` | `baseline_assessments.py`, `baseline_pdf.py` |
 | Classes | `Classes.jsx` | CRUD + summary | `classes` | `/classes*` | `Classes.jsx` |
 | Analytics | `Analytics.jsx` | charts/insights | aggregated | `/analytics/overview`, export | VisualBoard, server PDF |
 | Reports | `Reports.jsx` | grade reports | aggregated | `/reports/grade`, export | Reports + pdf engine |

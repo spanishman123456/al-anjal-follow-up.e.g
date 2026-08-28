@@ -32,11 +32,13 @@ export function buildNavigationGroups({ t, quarter, schoolSection = "internation
       label: t("nav_group_assessments"),
       testId: "nav-assessments-group",
       items: isArabicSection
-        ? [{ to: "/arabic-grades", label: t("arabic_quarter_grades"), testId: "nav-arabic-grades" }]
+        ? [{ to: "/arabic-grades", label: t("arabic_quarter_grades"), testId: "nav-arabic-grades" },
+           { to: "/baseline-scores", label: t("baseline_diagnostic"), testId: "nav-baseline-scores" }]
         : [
             { to: assessmentMarksPath, label: t("nav_quizzes_chapter_test"), testId: "nav-assessment-marks" },
             { to: finalExamsPath, label: t("nav_final_exams"), testId: "nav-final-exams" },
             { to: "/total-marks", label: t("nav_total_marks"), testId: "nav-total-marks" },
+            { to: "/baseline-scores", label: t("baseline_pre"), testId: "nav-baseline-scores" },
           ],
     },
     {
@@ -47,6 +49,7 @@ export function buildNavigationGroups({ t, quarter, schoolSection = "internation
       items: [
         { to: "/analytics", label: t("analytics"), testId: "nav-analytics-link" },
         { to: "/reports", label: t("reports"), testId: "nav-reports-link" },
+        { to: "/baseline-analytics", label: t(isArabicSection ? "baseline_diagnostic_analytics" : "baseline_pre_analytics"), testId: "nav-baseline-analytics" },
       ],
     },
     ...(!isArabicSection ? [{

@@ -4,6 +4,14 @@ In this codebase, **“progress” means academic follow-up scoring and performa
 
 ## Score stack (CONFIRMED)
 
+### Isolated pre-test / diagnostic analysis (2026-08-28)
+
+`baseline_assessments.py` is authoritative for this new score-only workflow. Percentage = raw total / teacher-specified maximum × 100. A record can use any positive finite maximum (up to 1,000,000); it is not inferred from teacher or grade. High is >=75%, Medium >=50% and <75%, Needs support <50% (including 30%). Blank remains missing; numeric zero is assessed. Classification uses the unrounded Decimal ratio; displayed numbers are rounded half-up to two places.
+
+These thresholds apply in **both sections only to baseline tests**; they do not define Arabic quarter thresholds or change International grading. Averages exclude missing marks, completion counts numeric zero, distribution includes missing separately, and class comparisons stay within one test. Total scores support numerical interpretation/general recommendations, never invented topic weaknesses.
+
+One deterministic server snapshot provides students, class means, distribution, narratives and labels to both the UI and `baseline_pdf.py`. Export requires the screen's snapshot SHA-256; concurrent changes, a different language or a different class scope cause 409 instead of exporting mismatched results. PDF includes every student bar (paginated) and the chosen student's donut/comparison/interpretation.
+
 | Layer | Max | Composition |
 |-------|-----|-------------|
 | Follow-up (Students) | 15 | attendance + participation + behavior + homework |

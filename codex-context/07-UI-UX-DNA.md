@@ -18,6 +18,10 @@ Note: Root `design_guidelines.json` describes an older “EduTrack Pro / Swiss U
 
 ## Layout DNA
 
+- Baseline addition (2026-08-28): `/baseline-scores` under Assessments is **Pre-test Scores / الاختبارات القبلية** for International and **Diagnostic Test Scores / الاختبارات التشخيصية** for Arabic. `/baseline-analytics` under Insights provides overview, individual analysis and report preview. Reuses PageHeader/PageHero, AcademicTermSelect, MetricCard, ChartCard and existing cards/buttons.
+- Teachers set up **mark entry**, not a test builder. A title/date/maximum and selected classes define a fixed historical roster. Input accepts Western, Arabic and Persian digits, preserving blank vs zero. Saved results remain visible until edits are saved; transient drafts are in sessionStorage keyed by account and record, and revision conflicts require an explicit reload.
+- Baseline donut is prominent in overview, individual view and report preview. Horizontal percentage bars, level distribution and class comparisons use server values. PDF uses the same snapshot with vector charts and Amiri; print pagination differs from the responsive screen layout, but results, narratives and chart quantities do not.
+
 - Top horizontal grouped navigation (not left colorful sidebar — removed).
 - Academic context bar: year + semester/quarter select + refresh.
 - Cards with soft borders; tables share navy-gradient headers, comfortable cells, subtle cyan row hover, RTL/LTR logical alignment, and horizontal scroll wrappers.

@@ -1,5 +1,11 @@
 # 10 — Decision History
 
+## Decision: Baseline assessments record existing test totals only (2026-08-28)
+
+Owner approved publishing the reviewed pre-test/diagnostic preview. Implemented an isolated collection and API; no question authoring, test delivery, reading/grammar/vocabulary categories or changes to quarter grading. Each record fixes a maximum and historical roster, then accepts score corrections with optimistic concurrency. Teachers own records and require all assigned classes; Admin retains oversight. New enrollments or a changed maximum require a separate record, avoiding silent historical rescaling.
+
+Owner-approved baseline bands are High >=75%, Medium >=50%, Support <50%; missing is separate. A shared server snapshot drives the page and vector PDF, with snapshot validation before export. Numeric evidence and general action suggestions are valid; topic-specific diagnoses cannot be inferred from a total alone.
+
 Format: Decision → Context → Why → Status → Codex Guidance.
 
 ---

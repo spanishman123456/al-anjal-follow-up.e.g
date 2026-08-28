@@ -9745,6 +9745,11 @@ async def seed_defaults():
         await db.calendar_events.create_index([("calendar_version", 1), ("semester", 1), ("gregorian_start", 1)])
         await db.users.create_index([("id", 1)])
         await db.users.create_index([("role_name", 1)])
+        # Isolated baseline records: Mongo _id is the unique record identifier.
+        await db.baseline_assessments.create_index([
+            ("school_section", 1), ("academic_year", 1), ("semester", 1),
+            ("quarter", 1), ("teacher_id", 1), ("created_at", -1),
+        ])
         await db.users.update_many({"auth_version": {"$exists": False}}, {"$set": {"auth_version": 0}})
         # Backward-compatible school-section migration: every pre-feature record remains International.
         legacy_year = current_academic_year()
@@ -9863,6 +9868,9 @@ async def seed_defaults():
         logger.error(f"Error during database seeding: {e}")
         logger.warning("Continuing without seeding defaults. Some features may not work correctly.")
 
+
+from baseline_assessments import make_router as make_baseline_router
+api_router.include_router(make_baseline_router(db, get_current_user, school_section_query))
 
 app.include_router(auth_router)
 app.include_router(api_router)

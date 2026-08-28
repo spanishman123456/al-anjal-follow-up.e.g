@@ -2,6 +2,15 @@
 
 **Handoff created:** 2026-08-21 (Cursor → Codex knowledge transfer)
 
+## Baseline / diagnostic records (2026-08-28)
+
+- Implemented the owner-approved preview as real authenticated score-entry and analytics pages in both school sections. No existing grades changed; a separate collection holds teacher-owned records, fixed maxima/rosters and revision-safe totals.
+- Both sections use baseline-only >=75 / >=50 / <50 bands. Zero and missing stay distinct; percentages and numerical narratives are server-owned.
+- Real export uses the screen snapshot with stale-export protection. Arabic/English PDFs include class overview, all student bars, selected student donut and detailed interpretation; longer rosters paginate without dropping students.
+- Offline verification: 49 backend tests including 14 baseline tests and the protected grading suites passed. All six frontend suites / 35 tests passed, covering entry, validation, draft restoration, concurrent save rejection, bilingual navigation and donut data. Production build and SPA postbuild passed. Three-page Arabic and English PDF samples were rendered and all six pages visually inspected; a 100-student export retained all names.
+- Local browser check with synthetic in-memory data verified actual saving (15/20 →16/20 =80%, then restored), Arabic overview with 75% donut, class charts, section naming/filtering and an actual HTTP 200 PDF export. Mobile rendering had equal client/scroll width (375px) and a readable stacked donut. Production real-account acceptance remains separate; no student credentials or live marks were used for testing.
+- Baseline settings are intentionally immutable; use a separate record for a new maximum/test/roster. Historical results are retained after enrollment changes. No question creation or baseline deletion UI is included.
+
 ## Login latency and contact button (2026-08-28)
 
 - Removed the login page's automatic `/health` database probe and the always-visible English "Checking server status" row. That row was informational, not a precondition for submitting credentials.

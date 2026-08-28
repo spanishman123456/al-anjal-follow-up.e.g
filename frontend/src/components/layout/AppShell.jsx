@@ -42,6 +42,7 @@ import {
 import {
   loadAnalyticsPage,
   loadArabicGradesPage,
+  loadBaselinePage,
   loadAssessmentMarksPage,
   loadAssessmentMarksQ2Page,
   loadCalendarPage,
@@ -89,6 +90,8 @@ export const AppShell = ({
   const routePreloaders = {
     "/students": loadStudentsPage,
     "/arabic-grades": loadArabicGradesPage,
+    "/baseline-scores": loadBaselinePage,
+    "/baseline-analytics": loadBaselinePage,
     "/assessment-marks": loadAssessmentMarksPage,
     "/assessment-marks-q2": loadAssessmentMarksQ2Page,
     "/final-exams-assessment": loadFinalExamsAssessmentPage,

@@ -16,3 +16,4 @@ export const loadSettingsPage = () => import("@/pages/Settings");
 export const loadCalendarPage = () => import("@/pages/Calendar");
 export const loadNotificationsPage = () => import("@/pages/Notifications");
 export const loadArabicGradesPage = () => import("@/pages/ArabicGrades");
+export const loadBaselinePage = () => import("@/pages/BaselineAssessments");

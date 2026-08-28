@@ -19,6 +19,7 @@ import { toast } from "sonner";
 import {
   loadAnalyticsPage,
   loadArabicGradesPage,
+  loadBaselinePage,
   loadAssessmentMarksPage,
   loadAssessmentMarksQ2Page,
   loadCalendarPage,
@@ -40,6 +41,7 @@ import {
 // Dashboard is eager-loaded so first paint after login does not flash Suspense fallback (major flicker source).
 const Students = lazy(loadStudentsPage);
 const ArabicGrades = lazy(loadArabicGradesPage);
+const BaselineAssessments = lazy(loadBaselinePage);
 const AssessmentMarks = lazy(loadAssessmentMarksPage);
 const FinalExamsAssessment = lazy(loadFinalExamsAssessmentPage);
 const TotalMarks = lazy(loadTotalMarksPage);
@@ -322,6 +324,8 @@ function App() {
         <Route index element={<Dashboard />} />
         <Route path="students" element={<Suspense fallback={<PageFallback />}><Students /></Suspense>} />
         <Route path="arabic-grades" element={<Suspense fallback={<PageFallback />}><ArabicGrades /></Suspense>} />
+        <Route path="baseline-scores" element={<Suspense fallback={<PageFallback />}><BaselineAssessments /></Suspense>} />
+        <Route path="baseline-analytics" element={<Suspense fallback={<PageFallback />}><BaselineAssessments view="analytics" /></Suspense>} />
         <Route path="assessment-marks" element={<Suspense fallback={<PageFallback />}><AssessmentMarks /></Suspense>} />
         <Route path="final-exams-assessment" element={<Suspense fallback={<PageFallback />}><FinalExamsAssessment /></Suspense>} />
         <Route path="total-marks" element={<Suspense fallback={<PageFallback />}><TotalMarks /></Suspense>} />

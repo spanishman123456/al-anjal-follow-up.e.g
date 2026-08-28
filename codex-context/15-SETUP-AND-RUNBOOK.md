@@ -106,6 +106,8 @@ Backend: `uvicorn server:app --host 0.0.0.0 --port $PORT`
 
 ## Tests
 
+Baseline API/PDF tests use a synthetic in-memory collection, never MongoDB. Install `backend/requirements-test.txt` into the local environment for compatible Starlette TestClient support, then run `python -m pytest backend/test_baseline_assessments.py`. No new runtime dependency or secret is needed on Render. The collection is created on first use; startup adds its scope index. Deploy backend and frontend from the same commit before teacher acceptance testing.
+
 ```bash
 cd backend
 pytest

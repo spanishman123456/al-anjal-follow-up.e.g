@@ -1,7 +1,9 @@
 import { useCallback } from "react";
+import { baselineMessages } from "./baselineMessages";
 
 export const translations = {
   en: {
+    ...baselineMessages.en,
     app_name: "Al Anjal School Follow-up Record",
     app_subtitle: "Student Progress Hub",
     dashboard: "Dashboard",
@@ -625,6 +627,7 @@ export const translations = {
     calendar_no_external_sync: "Loaded from the approved school PDF; no external website synchronization.",
   },
   ar: {
+    ...baselineMessages.ar,
     app_name: "سجل متابعة مدارس الأنجال",
     app_subtitle: "مركز متابعة تقدم الطلاب",
     dashboard: "لوحة التحكم",
