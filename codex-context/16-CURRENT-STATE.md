@@ -2,6 +2,17 @@
 
 **Handoff created:** 2026-08-21 (Cursor → Codex knowledge transfer)
 
+## Login latency and contact button (2026-08-28)
+
+- Removed the login page's automatic `/health` database probe and the always-visible English "Checking server status" row. That row was informational, not a precondition for submitting credentials.
+- Password and Google sign-in now send their auth request immediately. A single non-blocking `/health/live` warm-up starts while the user types on Render; login never waits for it.
+- Replaced the password login's chained 180-second requests, readiness polling, and final diagnostic probe with at most two direct attempts under one 90-second production budget (60 seconds first, remaining time for a retry after one second). Local login retains 30 seconds. Only connection failures and HTTP 502/504 retry; credential, approval, and database errors do not.
+- Added duplicate-submit protection shared by password/Google sign-in, localized pending/connection messages, and a slow-request hint only after four seconds. Existing authentication, teacher approval, session validation, permissions, scoring, and global academic terms are unchanged.
+- Login contact control now uses one bubble and a 12px flex gap, with explicit EN/AR direction.
+- Regression tests: all five frontend Jest suites / 26 tests pass, including 13 login cases using simulated API responses (no live credentials or student data). Added Jest's `@/` alias to match webpack's existing source alias.
+- Production compilation and SPA postbuild passed. Browser review of the built page confirmed EN/LTR and AR/RTL, no idle status text, and exactly one contact SVG with a computed 12px gap. Existing build warnings about Browserslist data / disabled ESLint remain; dependencies were not changed.
+- Hosting limitation: Render Free services sleep after 15 minutes without traffic and take about a minute to restart ([Render docs](https://render.com/docs/free)). The current hosting plan was not verified or changed; removing UI waits cannot eliminate a host cold start. Real-account sign-in remains an owner-run acceptance check; no credentials are stored in this fix.
+
 ## What works today (CONFIRMED)
 
 - JWT login + Google pending-approval teachers

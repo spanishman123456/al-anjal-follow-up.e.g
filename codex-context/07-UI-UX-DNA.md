@@ -27,6 +27,7 @@ Note: Root `design_guidelines.json` describes an older “EduTrack Pro / Swiss U
 
 ## Interaction patterns
 
+- Login has one decorative contact bubble with a direction-independent `gap-3` before the bilingual label. No idle server/database-status row is shown; a localized waiting message appears only after an actual sign-in has been pending for four seconds.
 - Confirm dialogs for bulk save / destructive clears.
 - Visibility-change refetch on many pages.
 - Custom events: `students-updated`, `app-refresh-data`, `auth-logout`, `profile-updated`.

@@ -39,6 +39,11 @@ if (config.enableHealthCheck) {
 }
 
 const webpackConfig = {
+  jest: {
+    configure: {
+      moduleNameMapper: { '^@/(.*)$': '<rootDir>/src/$1' },
+    },
+  },
   // ESLint block removed: Craco looks for "ESLintWebpackPlugin" but the plugin is named "ESLintPlugin",
   // which caused "Cannot find ESLint plugin". Use .eslintrc.* or eslintConfig in package.json for rules.
   webpack: {

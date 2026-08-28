@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback, memo } from "react";
 import { useNavigate } from "react-router-dom";
-import { api, checkBackendHealth, checkBackendLive, isProductionBackendUrl, setStoredAuthToken, warmBackendInBackground } from "@/lib/api";
+import { api, isProductionBackendUrl, setStoredAuthToken, warmBackendInBackground } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Globe, MessageCircle, Mail } from "lucide-react";
 import { Input } from "@/components/ui/input";
@@ -12,47 +12,23 @@ import { SocialLinks } from "@/components/SocialLinks";
 
 const GOOGLE_CLIENT_ID = process.env.REACT_APP_GOOGLE_CLIENT_ID || "";
 
-/** One-shot server probe — never polls, so the status line cannot flicker. */
-const LoginServerStatus = memo(function LoginServerStatus() {
-  const [backendOk, setBackendOk] = useState(null);
-  const settledRef = useRef(false);
+const isConnectionError = (error) =>
+  !error?.response || [502, 504].includes(error.response.status);
 
-  useEffect(() => {
-    if (settledRef.current) return;
-    let cancelled = false;
-    const settle = (ok) => {
-      if (cancelled || settledRef.current) return;
-      settledRef.current = true;
-      setBackendOk(ok);
-    };
-    if (isProductionBackendUrl) warmBackendInBackground();
-    checkBackendHealth().then((ok) => settle(ok));
-    const safetyMs = isProductionBackendUrl ? 95000 : 12000;
-    const safety = setTimeout(() => settle(false), safetyMs);
-    return () => {
-      cancelled = true;
-      clearTimeout(safety);
-    };
-  }, []);
-
-  return (
-    <div className="mt-2 min-h-[3.5rem] text-center">
-      {backendOk === null && (
-        <p className="text-xs text-slate-500 dark:text-slate-400">Checking server status...</p>
-      )}
-      {backendOk === true && (
-        <p className="text-xs text-green-600 dark:text-emerald-400">Server and database connected</p>
-      )}
-      {backendOk === false && (
-        <p className="text-xs text-amber-600 dark:text-amber-400">
-          {isProductionBackendUrl
-            ? "Server may be waking (Render free tier: up to ~2 min after idle). You can press Login — the app will retry automatically."
-            : "Backend or database not reachable. Run Start_App.bat (keep it open). If this persists, open MongoDB Atlas → Network Access and allow your current IP (or 0.0.0.0/0 for testing), and ensure the cluster is not paused."}
-        </p>
-      )}
-    </div>
-  );
-});
+// Send credentials immediately. Allow one direct retry for a connection failure,
+// within a single 90-second budget, without waiting on separate health probes.
+async function submitLoginRequest(path, payload) {
+  const deadline = Date.now() + (isProductionBackendUrl ? 90000 : 30000);
+  try {
+    return await api.post(path, payload, { timeout: isProductionBackendUrl ? 60000 : 30000 });
+  } catch (error) {
+    if (!isProductionBackendUrl || !isConnectionError(error)) throw error;
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+    const remaining = deadline - Date.now();
+    if (remaining <= 0) throw error;
+    return api.post(path, payload, { timeout: remaining });
+  }
+}
 
 function LoginPage({
   language = "en",
@@ -66,37 +42,43 @@ function LoginPage({
   const [form, setForm] = useState({ username: "", password: "" });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
+  const [isSlowLogin, setIsSlowLogin] = useState(false);
   const [gsiReady, setGsiReady] = useState(false);
   const googleButtonRef = useRef(null);
   const handleGoogleSignInRef = useRef(null);
+  const loginInFlightRef = useRef(false);
+  const warmupStartedRef = useRef(false);
+  const isLoggingIn = isSubmitting || isGoogleLoading;
 
-  // Wait for HTTP only (/health/live). /health also pings Mongo; treating 503 DB errors as "still waking"
-  // made login retry take minutes even when Render was already up.
-  const waitForBackendReady = async ({ timeoutMs = 120000, intervalMs = 1500 } = {}) => {
-    const started = Date.now();
-    while (Date.now() - started < timeoutMs) {
-      const ok = await checkBackendLive();
-      if (ok) return true;
-      await new Promise((resolve) => setTimeout(resolve, intervalMs));
-    }
-    return false;
-  };
+  useEffect(() => {
+    if (!isProductionBackendUrl || warmupStartedRef.current) return;
+    warmupStartedRef.current = true;
+    // Start waking the host while the user types, never gate login on this ping.
+    warmBackendInBackground();
+  }, []);
 
-  const isNetworkLikeError = (error) =>
-    !error?.response || error?.code === "ECONNABORTED" || error?.message === "Network Error";
+  useEffect(() => {
+    if (!isLoggingIn) return;
+    const timer = setTimeout(() => setIsSlowLogin(true), 4000);
+    return () => clearTimeout(timer);
+  }, [isLoggingIn]);
 
   const handleGoogleSignIn = useCallback(
     async (credential) => {
-      if (!credential) return;
+      if (!credential || loginInFlightRef.current) return;
+      loginInFlightRef.current = true;
+      setIsSlowLogin(false);
       setIsGoogleLoading(true);
       try {
-        const response = await api.post("auth/google", { id_token: credential });
+        const response = await submitLoginRequest("/auth/google", { id_token: credential });
         setStoredAuthToken(response.data.access_token);
         onLogin?.(response.data.access_token);
         navigate("/", { replace: true });
       } catch (error) {
         const detail = error?.response?.data?.detail;
-        let msg = typeof detail === "string" ? detail : t("login_failed");
+        let msg = isConnectionError(error)
+          ? t("login_connection_failed")
+          : typeof detail === "string" ? detail : t("login_failed");
         if (typeof detail === "string") {
           if (detail.includes("request was sent to the administrator")) {
             msg = t("gmail_pending_approval_login");
@@ -108,6 +90,7 @@ function LoginPage({
         }
         toast.error(msg);
       } finally {
+        loginInFlightRef.current = false;
         setIsGoogleLoading(false);
       }
     },
@@ -173,60 +156,28 @@ function LoginPage({
 
   const handleLogin = async (event) => {
     event.preventDefault();
+    if (loginInFlightRef.current) return;
+    loginInFlightRef.current = true;
+    setIsSlowLogin(false);
     setIsSubmitting(true);
     try {
-      let response;
-      const submitLoginRequest = () =>
-        api.post("/auth/login", form, {
-          timeout: isProductionBackendUrl ? 180000 : undefined,
-        });
-      try {
-        response = await submitLoginRequest();
-      } catch (error) {
-        const isNetwork = isNetworkLikeError(error);
-        if (isNetwork && isProductionBackendUrl) {
-          toast.info("Waking the server and retrying login automatically...");
-          warmBackendInBackground();
-          const isReady = await waitForBackendReady();
-          if (isReady) {
-            try {
-              response = await submitLoginRequest();
-            } catch (retryError) {
-              if (!isNetworkLikeError(retryError)) throw retryError;
-              await new Promise((resolve) => setTimeout(resolve, 2000));
-              response = await submitLoginRequest();
-            }
-          } else {
-            throw error;
-          }
-        } else {
-          throw error;
-        }
-      }
+      const response = await submitLoginRequest("/auth/login", form);
       setStoredAuthToken(response.data.access_token);
       onLogin?.(response.data.access_token);
       navigate("/", { replace: true });
     } catch (error) {
-      const status = error?.response?.status;
       const detail = error?.response?.data?.detail;
-      const isNetwork = isNetworkLikeError(error);
       let msg = t("login_failed");
-      if (isNetwork) {
-        if (isProductionBackendUrl) {
-          const backendLive = await checkBackendLive();
-          msg = backendLive
-            ? "The server is awake, but the login request did not complete. Please try Login once more now."
-            : "Server is waking up (Render free tier). This can take 1–2 minutes after idle. Please wait, then try Login again.";
-        } else {
-          msg = "Login request failed. Keep the Start_App.bat window open and try again in a moment.";
-        }
-      } else if (status === 503 && detail) {
-        msg = typeof detail === "string" ? detail : "Server temporarily unavailable. Try again in a moment.";
-      } else if (detail && typeof detail === "string") {
+      if (isConnectionError(error)) {
+        msg = t("login_connection_failed");
+      } else if (detail === "Invalid credentials") {
+        msg = t("login_failed");
+      } else if (typeof detail === "string") {
         msg = detail;
       }
       toast.error(msg);
     } finally {
+      loginInFlightRef.current = false;
       setIsSubmitting(false);
     }
   };
@@ -235,6 +186,7 @@ function LoginPage({
     <div
       className="login-mubarmij-bg min-h-screen flex flex-col items-center px-6 pt-6 pb-10 relative overflow-hidden"
       data-testid="login-page"
+      dir={language === "ar" ? "rtl" : "ltr"}
     >
       {theme === "light" && <div className="login-top-sky" aria-hidden />}
       <div className="pointer-events-none absolute inset-0 overflow-hidden opacity-100 dark:opacity-40 z-[1]" aria-hidden>
@@ -276,13 +228,10 @@ function LoginPage({
           <SocialLinks layout="column" iconSize="h-9 w-11" />
           <a
             href="#contact"
-            className="flex items-center justify-center gap-2 rounded-lg bg-primary text-primary-foreground py-2.5 px-5 font-medium text-sm hover:bg-primary/90 transition-all duration-200 hover:translate-y-[-2px] hover:scale-[1.02] hover:shadow-md active:translate-y-0 active:scale-[0.98] shadow-md whitespace-nowrap dark:bg-gradient-to-r dark:from-violet-600 dark:to-purple-600 dark:hover:from-violet-500 dark:hover:to-purple-500"
+            className="flex items-center justify-center gap-3 rounded-lg bg-primary text-primary-foreground py-2.5 px-5 font-medium text-sm hover:bg-primary/90 transition-all duration-200 hover:translate-y-[-2px] hover:scale-[1.02] hover:shadow-md active:translate-y-0 active:scale-[0.98] shadow-md whitespace-nowrap dark:bg-gradient-to-r dark:from-violet-600 dark:to-purple-600 dark:hover:from-violet-500 dark:hover:to-purple-500"
             data-testid="login-contact-us"
           >
-            <span className="relative flex items-center">
-              <MessageCircle className="h-4 w-4 shrink-0" />
-              <MessageCircle className="h-4 w-4 shrink-0 -ml-2.5 opacity-90" aria-hidden />
-            </span>
+            <MessageCircle className="h-4 w-4 shrink-0" aria-hidden="true" />
             <span>{t("contact_us")}</span>
           </a>
         </div>
@@ -365,9 +314,9 @@ function LoginPage({
                 type="submit"
                 className="w-full h-11 font-semibold shadow-md"
                 data-testid="login-submit"
-                disabled={isSubmitting}
+                disabled={isLoggingIn}
               >
-                {isSubmitting ? "Signing in..." : t("login")}
+                {isSubmitting ? t("login_signing_in") : t("login")}
               </Button>
               <div className="relative my-4">
                 <div className="absolute inset-0 flex items-center">
@@ -382,9 +331,11 @@ function LoginPage({
                   ref={googleButtonRef}
                   className={cn(
                     "flex w-full justify-center",
+                    isLoggingIn && "pointer-events-none opacity-50",
                     (!GOOGLE_CLIENT_ID || !gsiReady) && "pointer-events-none opacity-0",
                   )}
                   aria-hidden={!GOOGLE_CLIENT_ID || !gsiReady}
+                  aria-disabled={isLoggingIn}
                   data-testid="google-signin-container"
                 />
                 {(!GOOGLE_CLIENT_ID || !gsiReady) && (
@@ -394,7 +345,7 @@ function LoginPage({
                       variant="outline"
                       className="h-11 w-full border-slate-300 text-slate-700 hover:bg-slate-50 font-medium dark:border-white/20 dark:text-slate-200 dark:hover:bg-white/5"
                       onClick={handleGmailButtonClick}
-                      disabled={isGoogleLoading}
+                      disabled={isLoggingIn}
                       data-testid="login-gmail-button"
                     >
                       <Mail className="mr-2 h-5 w-5" />
@@ -403,9 +354,13 @@ function LoginPage({
                   </div>
                 )}
               </div>
-              <LoginServerStatus />
+              {isLoggingIn && isSlowLogin && (
+                <p role="status" className="mt-2 text-center text-xs text-slate-500 dark:text-slate-400">
+                  {t("login_taking_longer")}
+                </p>
+              )}
               {isGoogleLoading && (
-                <p className="mt-1 text-center text-xs text-slate-500 dark:text-slate-400">Signing in with Google...</p>
+                <p className="mt-1 text-center text-xs text-slate-500 dark:text-slate-400">{t("login_google_signing_in")}</p>
               )}
             </form>
           </CardContent>
