@@ -68,6 +68,55 @@ describe("baseline page", () => {
     const input = container.querySelectorAll('input[inputmode="decimal"]')[index];
     await act(async () => { Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set.call(input, value); input.dispatchEvent(new Event("input", { bubbles: true })); });
   }
+  it.each(["en", "ar"])("starts maximum spinner at 0.01 and formats whole/decimal marks to two places in %s", async (lang) => {
+    mockContext.language = lang;
+    await render();
+    await act(async () => button(getTranslation(lang, "baseline_setup")).click());
+    const maximum = container.querySelector('[data-testid="baseline-max-score"]');
+    expect(maximum.placeholder).toBe("0.00");
+    expect(maximum.value).toBe("");
+    await act(async () => {
+      maximum.stepUp();
+      maximum.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    expect(maximum.value).toBe("0.01");
+    for (const [raw, formatted] of [["30", "30.00"], ["30.5", "30.50"], ["0.29", "0.29"], ["0", "0.00"]]) {
+      await act(async () => {
+        Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set.call(maximum, raw);
+        maximum.dispatchEvent(new Event("input", { bubbles: true }));
+      });
+      await act(async () => maximum.dispatchEvent(new FocusEvent("focusout", { bubbles: true })));
+      expect(maximum.value).toBe(formatted);
+    }
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set.call(maximum, "");
+      maximum.dispatchEvent(new Event("input", { bubbles: true }));
+      maximum.dispatchEvent(new FocusEvent("focusout", { bubbles: true }));
+    });
+    expect(maximum.value).toBe("");
+  });
+  it("rejects over-precise or zero maxima without rounding or posting them", async () => {
+    await render();
+    await act(async () => button("Set up mark entry").click());
+    const maximum = container.querySelector('[data-testid="baseline-max-score"]');
+    const title = container.querySelector("form input");
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set.call(title, "Computer science");
+      title.dispatchEvent(new Event("input", { bubbles: true }));
+      container.querySelector('form input[type="checkbox"]').click();
+    });
+    for (const raw of ["0.000001", "30.125", "0"]) {
+      await act(async () => {
+        Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set.call(maximum, raw);
+        maximum.dispatchEvent(new Event("input", { bubbles: true }));
+      });
+      expect(maximum.checkValidity()).toBe(false);
+      await act(async () => maximum.dispatchEvent(new FocusEvent("focusout", { bubbles: true })));
+      expect(maximum.value).toBe(raw === "0" ? "0.00" : raw);
+      await act(async () => container.querySelector("form").dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })));
+    }
+    expect(api.post).not.toHaveBeenCalled();
+  });
   it("loads the global scope and preserves unscored / zero", async () => {
     await render();
     expect(api.get).toHaveBeenCalledWith("/baseline-assessments", { params: { school_section: "international", academic_year: "2026-2027", semester: 2, quarter: 1 } });

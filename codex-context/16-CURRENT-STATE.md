@@ -2,6 +2,13 @@
 
 **Handoff created:** 2026-08-21 (Cursor → Codex knowledge transfer)
 
+## Baseline maximum field precision (2026-08-29)
+
+- Replaced the maximum input's `0.000001` minimum / unrestricted step with `0.01` minimum and step, preventing the spinner from inserting six decimal places.
+- Empty input shows `0.00`; exact hundredths are padded to two decimal places on blur. Zero is displayed as `0.00` but cannot be submitted. Excess precision is rejected, not silently rounded; existing maxima, student totals, thresholds, APIs and PDFs are untouched.
+- All six frontend suites / 38 tests pass, including EN/AR spinner, fixed-decimal formatting, clearing, and rejecting over-precise/zero new maxima.
+- Production build passes; local browser QA confirms `30.00` / `30.50` after blur and a clean Arabic RTL layout using synthetic records only.
+
 ## Baseline / diagnostic records (2026-08-28)
 
 - Implemented the owner-approved preview as real authenticated score-entry and analytics pages in both school sections. No existing grades changed; a separate collection holds teacher-owned records, fixed maxima/rosters and revision-safe totals.

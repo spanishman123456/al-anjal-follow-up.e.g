@@ -131,7 +131,7 @@ function BaselinePage({ context, view }) {
     event.preventDefault();
     if (busyRef.current) return;
     const max = Number(form.max_score);
-    if (!form.title.trim() || !form.test_date || !Number.isFinite(max) || max <= 0 || max > 1000000 || !form.class_ids.length) { toast.error(t("baseline_invalid_setup")); return; }
+    if (!form.title.trim() || !form.test_date || !Number.isFinite(max) || max < 0.01 || max > 1000000 || Number(max.toFixed(2)) !== max || !form.class_ids.length) { toast.error(t("baseline_invalid_setup")); return; }
     if (!window.confirm(`${t("baseline_confirm_setup")}\n${t("baseline_max")}: ${max}\n${form.class_ids.map((id) => classes.find((c) => c.id === id)?.name).join(", ")}`)) return;
     busyRef.current = true; setBusy(true);
     try {
@@ -188,7 +188,14 @@ function BaselinePage({ context, view }) {
       <form onSubmit={setup} className="space-y-5"><fieldset disabled={busy} className="grid gap-4 md:grid-cols-3">
         <label className="space-y-2 text-sm">{t("baseline_title")}<Input required maxLength={120} value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} /></label>
         <label className="space-y-2 text-sm">{t("baseline_date")}<Input required type="date" value={form.test_date} onChange={(e) => setForm({ ...form, test_date: e.target.value })} /></label>
-        <label className="space-y-2 text-sm">{t("baseline_max")}<Input required type="number" min="0.000001" max="1000000" step="any" value={form.max_score} onChange={(e) => setForm({ ...form, max_score: e.target.value })} /></label>
+        <label className="space-y-2 text-sm">{t("baseline_max")}<Input required type="number" min="0.01" max="1000000" step="0.01" placeholder="0.00" data-testid="baseline-max-score" aria-describedby="baseline-max-hint" value={form.max_score} onChange={(e) => setForm({ ...form, max_score: e.target.value })} onBlur={(e) => {
+          // Pad exact hundredths without rounding the maximum; 0.00 still cannot be submitted.
+          const numeric = Number(e.target.value);
+          if (e.target.value !== "" && Number.isFinite(numeric) && numeric >= 0 && numeric <= 1000000 && Number(numeric.toFixed(2)) === numeric) {
+            const formatted = numeric.toFixed(2);
+            setForm((previous) => ({ ...previous, max_score: formatted }));
+          }
+        }} /><span id="baseline-max-hint" className="block text-xs text-muted-foreground">{t("baseline_max_hint")}</span></label>
       </fieldset><fieldset disabled={busy}><legend className="mb-3 text-sm font-bold">{t("baseline_classes")}</legend><div className="flex flex-wrap gap-3">{classes.map((cls) => <label key={cls.id} className="flex cursor-pointer items-center gap-2 rounded-xl border p-3"><input type="checkbox" checked={form.class_ids.includes(cls.id)} onChange={(e) => setForm({ ...form, class_ids: e.target.checked ? [...form.class_ids, cls.id] : form.class_ids.filter((id) => id !== cls.id) })} />{cls.name}</label>)}</div></fieldset><Button type="submit" disabled={busy || !classes.length}>{t("baseline_create")}</Button></form>
     </CardContent></Card>}
     <Card><CardContent className="grid gap-4 pt-6 md:grid-cols-3"><label className="space-y-2 text-sm"><span>{t("baseline_select")}</span><select aria-label={t("baseline_select")} className={selectStyle} value={recordId} disabled={busy || !records?.length} onChange={(e) => { setRecordId(e.target.value); setClassId(""); setSearch({ record: e.target.value }, { replace: true }); }}><option value="" disabled>—</option>{records?.map((r) => <option key={r.id} value={r.id}>{r.title} · {r.teacher_name} · /{r.max_score}</option>)}</select></label>
