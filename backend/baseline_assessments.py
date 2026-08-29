@@ -276,6 +276,21 @@ def make_router(db, get_current_user, section_query):
             fail("baseline_invalid_classes")
         return build_snapshot(record, lang, class_id)
 
+    @router.delete("/{record_id}")
+    async def delete_record(record_id: str, revision: int = Query(..., ge=1), user=Depends(get_current_user)):
+        record = await record_for(record_id, user)
+        if record["revision"] != revision:
+            fail("baseline_conflict", 409)
+        result = await db.baseline_assessments.delete_one({"_id": record_id, "revision": revision})
+        if not result.deleted_count:
+            fail("baseline_conflict", 409)
+        return {
+            "status": "deleted",
+            "record_id": record_id,
+            "title": record.get("title") or record_id,
+            "students_in_snapshot": len(record.get("roster", [])),
+        }
+
     @router.patch("/{record_id}/scores")
     async def save_scores(record_id: str, payload: ScoreUpdate, user=Depends(get_current_user)):
         record = await record_for(record_id, user)

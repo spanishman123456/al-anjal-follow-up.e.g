@@ -16,6 +16,7 @@ Manage enrollment, class placement, weekly mark entry, transfers, promotion, imp
 - `GET/POST/PUT/DELETE` students (and bulk-scores). Admin bulk deletion may be restricted to one exact `class_id`; the backend verifies section/year ownership and deletes only that roster plus its International and Arabic score records.
 - Import Excel `POST /api/import/excel`.
 - Arabic Students reuses the same endpoint with explicit `school_section=arabic` + `academic_year` + selected `class_id`; it previews before apply, imports enrollment/class identity only, and never writes International weekly score fields. The selected class is authoritative, and a conflicting class column rejects the whole file before the first write.
+- Arabic diagnostic-test setup reuses that exact enrollment preview/apply helper when one class is selected. Import first repairs/creates the live roster; creating the diagnostic record afterwards snapshots `full_name` and the verified class name for historical reporting.
 - `GET /api/students/import-template` accepts the same section/year scope and returns the compatible two-column Arabic enrollment template when Arabic is active.
 - Export students Excel.
 - Transfer / promote / delete (Admin or permitted flows).
@@ -35,6 +36,7 @@ See `12-WORKFLOWS.md` (enroll, edit weekly scores, import, transfer).
 6. Destructive “clear all scores” / delete-all operations are Admin-grade. Class-roster deletion requires an exact selected class and a destructive confirmation; never connect a class button to the unscoped section-wide delete.
 7. The global `school_section` scope defaults to International for existing users/data. Class/student create, transfer, promotion, import, bulk delete, and grade writes must not cross sections.
 8. Arabic students use the dedicated quarter `/100` editor and `arabic_quarter_scores`; never send them through weekly International bulk-score endpoints.
+9. A baseline/diagnostic record is not a class. Deleting the record removes only its frozen roster/marks snapshot; deleting an enrollment class remains an Admin action on `Classes.jsx` with its separate confirmation.
 
 ## Related
 

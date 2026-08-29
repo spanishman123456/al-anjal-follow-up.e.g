@@ -1,32 +1,10 @@
-"""Test MongoDB connection for login. Run: py test_mongo_login.py"""
+"""Manual MongoDB connection diagnostic. Run: py test_mongo_login.py"""
 import os
 import sys
 from pathlib import Path
 from urllib.parse import quote_plus
 
-ROOT = Path(__file__).resolve().parent
-env_path = ROOT / ".env"
-try:
-    from dotenv import load_dotenv
-    load_dotenv(env_path)
-except ImportError:
-    if env_path.exists():
-        with open(env_path, encoding="utf-8") as f:
-            for line in f:
-                line = line.strip()
-                if line and not line.startswith("#") and "=" in line:
-                    k, _, v = line.partition("=")
-                    os.environ[k.strip()] = v.strip().strip('"').strip("'")
 
-mongo_url = (os.environ.get("MONGO_URL") or "").strip()
-db_name = (os.environ.get("DB_NAME") or "school_db").strip()
-
-if not mongo_url:
-    print("ERROR: MONGO_URL not set in .env")
-    print("Using .env at:", env_path)
-    sys.exit(1)
-
-# Show what we're using (masked) for debugging
 def mask_uri(uri):
     if "://" not in uri or "@" not in uri:
         return "mongodb+srv://***@***"
@@ -35,68 +13,90 @@ def mask_uri(uri):
     if at == -1:
         return uri[:20] + "***"
     user_part = uri[start:at]
-    if ":" in user_part:
-        user = user_part.split(":", 1)[0]
-    else:
-        user = "***"
-    rest = uri[at:]
-    return uri[:start] + user + ":****" + rest
+    user = user_part.split(":", 1)[0] if ":" in user_part else "***"
+    return uri[:start] + user + ":****" + uri[at:]
 
-print("Using .env:", env_path)
-print("Connection (masked):", mask_uri(mongo_url))
-print("Database:", db_name)
-print()
 
-# Encode password in URL if it contains special characters
-if "@" in mongo_url and "://" in mongo_url:
+def load_environment(env_path):
+    try:
+        from dotenv import load_dotenv
+        load_dotenv(env_path)
+    except ImportError:
+        if env_path.exists():
+            with open(env_path, encoding="utf-8") as env_file:
+                for line in env_file:
+                    line = line.strip()
+                    if line and not line.startswith("#") and "=" in line:
+                        key, _, value = line.partition("=")
+                        os.environ[key.strip()] = value.strip().strip('"').strip("'")
+
+
+def normalized_mongo_url(mongo_url):
+    if "@" not in mongo_url or "://" not in mongo_url:
+        return mongo_url
     try:
         start = mongo_url.find("://") + 3
         at = mongo_url.find("@", start)
-        if at > start and ":" in mongo_url[start:at]:
-            user, pw = mongo_url[start:at].split(":", 1)
-            pw_stripped = pw.strip()
-            if pw_stripped != pw:
-                mongo_url = mongo_url[:start] + user + ":" + pw_stripped + mongo_url[at:]
-                print("(Removed spaces from password in URL)")
-            for c in ["@", "#", "$", "%", "&", "+", "="]:
-                if c in pw_stripped:
-                    enc = quote_plus(pw_stripped)
-                    mongo_url = mongo_url[:start] + user + ":" + enc + mongo_url[at:]
-                    print("(URL-encoded password because it contains special characters)")
-                    break
+        if at <= start or ":" not in mongo_url[start:at]:
+            return mongo_url
+        user, password = mongo_url[start:at].split(":", 1)
+        stripped = password.strip()
+        if stripped != password:
+            mongo_url = mongo_url[:start] + user + ":" + stripped + mongo_url[at:]
+            print("(Removed spaces from password in URL)")
+        if any(char in stripped for char in ["@", "#", "$", "%", "&", "+", "="]):
+            mongo_url = mongo_url[:start] + user + ":" + quote_plus(stripped) + mongo_url[at:]
+            print("(URL-encoded password because it contains special characters)")
     except Exception:
         pass
+    return mongo_url
 
-print("Testing MongoDB connection...")
-print()
-try:
-    from pymongo import MongoClient
-    client = MongoClient(mongo_url, serverSelectionTimeoutMS=12000)
-    client.admin.command("ping")
-    print("SUCCESS: MongoDB is reachable.")
-    db = client[db_name]
-    cols = db.list_collection_names()
-    print("Collections:", ", ".join(cols) if cols else "(none)")
-    user_count = db.users.count_documents({})
-    print("Users in 'users' collection:", user_count)
-    client.close()
+
+def main():
+    root = Path(__file__).resolve().parent
+    env_path = root / ".env"
+    load_environment(env_path)
+    mongo_url = (os.environ.get("MONGO_URL") or "").strip()
+    db_name = (os.environ.get("DB_NAME") or "school_db").strip()
+    if not mongo_url:
+        print("ERROR: MONGO_URL not set in .env")
+        print("Using .env at:", env_path)
+        return 1
+
+    print("Using .env:", env_path)
+    print("Connection (masked):", mask_uri(mongo_url))
+    print("Database:", db_name)
     print()
-    print("You can now run Start_App.bat and log in.")
-except Exception as e:
-    err = str(e)
-    print("FAILED:", err)
+    mongo_url = normalized_mongo_url(mongo_url)
+    print("Testing MongoDB connection...")
     print()
-    if "bad auth" in err.lower() or "authentication failed" in err.lower():
-        print("--- BAD AUTH: Fix the password ---")
-        print("1. In Atlas: Security -> Database Access -> click 'spanishman123456_db_user' -> EDIT -> Edit Password.")
-        print("2. Set a SIMPLE password (only letters and numbers, e.g. TestPass123). Write it down.")
-        print("3. Open backend\\.env in Notepad. Find the line MONGO_URL=...")
-        print("4. Replace the password (between the first : and the @) with that EXACT password. No spaces before or after.")
-        print("5. Save .env and run this test again.")
+    try:
+        from pymongo import MongoClient
+        client = MongoClient(mongo_url, serverSelectionTimeoutMS=12000)
+        client.admin.command("ping")
+        print("SUCCESS: MongoDB is reachable.")
+        db = client[db_name]
+        collections = db.list_collection_names()
+        print("Collections:", ", ".join(collections) if collections else "(none)")
+        print("Users in 'users' collection:", db.users.count_documents({}))
+        client.close()
         print()
-        print("If it still fails: create a NEW database user in Atlas (Database Access -> Add New User),")
-        print("use a simple password, then in .env use that new username and password in MONGO_URL.")
-    else:
-        print("Open FIX_MONGODB_LOGIN.md in the backend folder and follow the steps.")
-        print("Most often: MongoDB Atlas Network Access must allow your IP.")
-    sys.exit(1)
+        print("You can now run Start_App.bat and log in.")
+        return 0
+    except Exception as exc:
+        error = str(exc)
+        print("FAILED:", error)
+        print()
+        if "bad auth" in error.lower() or "authentication failed" in error.lower():
+            print("--- BAD AUTH: Fix the password ---")
+            print("1. In Atlas: Security -> Database Access -> edit the database user's password.")
+            print("2. Open backend\\.env and replace only the password in MONGO_URL, without spaces.")
+            print("3. Save .env and run this diagnostic again.")
+        else:
+            print("Open FIX_MONGODB_LOGIN.md in the backend folder and follow the steps.")
+            print("Most often: MongoDB Atlas Network Access must allow your IP.")
+        return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())

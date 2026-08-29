@@ -1,5 +1,12 @@
 # 16 — Current State
 
+## Arabic diagnostic roster replacement (2026-08-30)
+
+- Diagnostic dropdown items are now explicitly deletable mark-entry records. Revision-guarded deletion removes only the selected frozen roster and its diagnostic marks; it leaves enrollment, classes and every other record unchanged, and tolerates legacy records with no title.
+- Arabic diagnostic setup now imports one exact class roster from Excel through the same preview/apply guard used by Arabic Student Management. The selected class remains authoritative, Arabic `الاسم` / `رقم الهوية` headers and legacy numeric-name repair are preserved, and the subsequently created record snapshots real student and class names.
+- A source-level lifecycle test protects Arabic enrollment import/deletion, actual class deletion, diagnostic roster import and diagnostic record deletion from silently disappearing.
+- Verification: all 74 backend tests and all 14 frontend suites / 75 tests pass; Python compilation, optimized CRACO build and SPA fallback generation also pass. No live MongoDB writes were used.
+
 ## Score-entry deletion coverage (2026-08-30)
 
 - All eight score-entry pages have a visible clear/delete control, protected by a source-level coverage test so future page changes cannot silently omit it.
@@ -46,7 +53,7 @@
 - Real export uses the screen snapshot with stale-export protection. Arabic/English PDFs include class overview, all student bars, selected student donut and detailed interpretation; longer rosters paginate without dropping students.
 - Offline verification: 49 backend tests including 14 baseline tests and the protected grading suites passed. All six frontend suites / 35 tests passed, covering entry, validation, draft restoration, concurrent save rejection, bilingual navigation and donut data. Production build and SPA postbuild passed. Three-page Arabic and English PDF samples were rendered and all six pages visually inspected; a 100-student export retained all names.
 - Local browser check with synthetic in-memory data verified actual saving (15/20 →16/20 =80%, then restored), Arabic overview with 75% donut, class charts, section naming/filtering and an actual HTTP 200 PDF export. Mobile rendering had equal client/scroll width (375px) and a readable stacked donut. Production real-account acceptance remains separate; no student credentials or live marks were used for testing.
-- Baseline settings are intentionally immutable; use a separate record for a new maximum/test/roster. Historical results are retained after enrollment changes. No question creation or baseline deletion UI is included.
+- Baseline settings are intentionally immutable; use a separate record for a new maximum/test/roster. Historical results are retained after enrollment changes unless the user explicitly deletes that whole record. No question creation UI is included.
 
 ## Login latency and contact button (2026-08-28)
 

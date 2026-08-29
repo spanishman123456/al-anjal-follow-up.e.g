@@ -8,6 +8,8 @@ In this codebase, **“progress” means academic follow-up scoring and performa
 
 Entry mode includes class-scope-aware smart tools: fill the visible score column with the fixed record maximum for review before saving, or immediately clear all saved marks in the selected class scope after an explicit count/scope confirmation. Both reuse the optimistic-revision score update and do not alter the record maximum or historical roster.
 
+The entire record can also be deleted with its current revision after a destructive confirmation. This removes only that baseline/diagnostic snapshot and its saved marks; enrollment, the class itself, and other assessment records are untouched. Arabic setup may import/repair one exact class roster through the guarded enrollment preview/apply flow before record creation, after which the new snapshot displays the stored student and class names.
+
 `baseline_assessments.py` is authoritative for this new score-only workflow. Percentage = raw total / teacher-specified maximum × 100. A record can use any positive finite maximum (up to 1,000,000); it is not inferred from teacher or grade. High is >=75%, Medium >=50% and <75%, Needs support <50% (including 30%). Blank remains missing; numeric zero is assessed. Classification uses the unrounded Decimal ratio; displayed numbers are rounded half-up to two places.
 
 These thresholds apply in **both sections only to baseline tests**; they do not define Arabic quarter thresholds or change International grading. Averages exclude missing marks, completion counts numeric zero, distribution includes missing separately, and class comparisons stay within one test. Total scores support numerical interpretation/general recommendations, never invented topic weaknesses.

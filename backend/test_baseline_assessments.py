@@ -55,6 +55,13 @@ class Collection:
                 return SimpleNamespace(matched_count=1)
         return SimpleNamespace(matched_count=0)
 
+    async def delete_one(self, query):
+        for index, row in enumerate(self.rows):
+            if _matches(row, query):
+                self.rows.pop(index)
+                return SimpleNamespace(deleted_count=1)
+        return SimpleNamespace(deleted_count=0)
+
 
 def sample_record(count=8):
     values = [15, 18, 10, 6, 13, 20, None, 0]
@@ -204,6 +211,20 @@ def test_list_scope_and_export_snapshot_guard(api_fixture):
     assert client.get(base + "/sample/export.pdf", params=export_params).status_code == 409
     state["user"]["id"] = "other"
     assert client.get(base + "/sample/export.pdf", params=export_params).status_code == 404
+
+
+def test_delete_record_removes_only_the_revision_matched_snapshot(api_fixture):
+    client, db, _ = api_fixture
+    url = "/api/baseline-assessments/sample"
+    stale = client.delete(url, params={"revision": 2})
+    assert stale.status_code == 409
+    assert len(db.baseline_assessments.rows) == 1
+    db.baseline_assessments.rows[0].pop("title")  # Legacy records may predate a title.
+    deleted = client.delete(url, params={"revision": 1})
+    assert deleted.status_code == 200
+    assert deleted.json()["title"] == "sample"
+    assert deleted.json()["students_in_snapshot"] == 8
+    assert db.baseline_assessments.rows == []
 
 
 def test_excel_import_preview_apply_and_revision_guard(api_fixture):

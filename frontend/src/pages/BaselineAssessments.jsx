@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useOutletContext, useSearchParams } from "react-router-dom";
-import { BarChart3, BookOpenCheck, Download, Eraser, Save, Sparkles, Users, Percent, CheckCircle2 } from "lucide-react";
+import { BarChart3, BookOpenCheck, Download, Eraser, Save, Sparkles, Trash2, Upload, Users, Percent, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
-import { api } from "@/lib/api";
+import { api, getLocalizedApiErrorMessage } from "@/lib/api";
 import { useTranslations } from "@/lib/i18n";
 import { displayQuarterNumber } from "@/lib/academicScope";
 import { BASELINE_COLORS, baselinePercent, changedBaselineMarks, fillBaselineMarksWithMaximum, parseBaselineMark, recordedBaselineMarksToClear } from "@/lib/baselineScores";
@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { ScoreSheetImportControl } from "@/components/ScoreSheetImportControl";
+import { importStudentsWithPreview } from "@/lib/studentEnrollmentImport";
 
 const selectStyle = "h-11 w-full min-w-0 rounded-xl border border-input bg-background px-3 text-sm text-foreground";
 const draftKey = (user, record) => `baseline-draft:${user}:${record}`;
@@ -63,6 +64,9 @@ function BaselinePage({ context, view }) {
   const [form, setForm] = useState({ title: "", max_score: "", test_date: `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,"0")}-${String(today.getDate()).padStart(2,"0")}`, class_ids: [] });
   const [busy, setBusy] = useState(false);
   const busyRef = useRef(false);
+  const rosterImportInputRef = useRef(null);
+  const [importingRoster, setImportingRoster] = useState(false);
+  const [rosterImportSummary, setRosterImportSummary] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [conflict, setConflict] = useState(false);
@@ -174,6 +178,57 @@ function BaselinePage({ context, view }) {
     } catch (e) { toast.error(errorMessage(e, "baseline_save_failed")); }
     finally { busyRef.current = false; setBusy(false); }
   }
+  async function importRoster(event) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    if (schoolSection !== "arabic" || form.class_ids.length !== 1) {
+      toast.error(t("baseline_import_roster_one_class"));
+      return;
+    }
+    const targetClassId = form.class_ids[0];
+    const targetClassName = classes.find((item) => item.id === targetClassId)?.name || "";
+    setImportingRoster(true); setRosterImportSummary(null);
+    try {
+      const result = await importStudentsWithPreview({
+        api,
+        file,
+        params: { school_section: "arabic", academic_year: academicYear, class_id: targetClassId },
+        confirmImport: (preview) => window.confirm(
+          t("student_import_confirm")
+            .replace("{count}", String(preview.processed_rows || 0))
+            .replace("{class}", preview.target_class_name || targetClassName),
+        ),
+      });
+      if (result.cancelled) return;
+      setRosterImportSummary(result.data);
+      toast.success(t("baseline_import_roster_ready"));
+      if (result.data.repaired_students) toast.success(t("student_import_repaired").replace("{count}", String(result.data.repaired_students)));
+      window.dispatchEvent(new CustomEvent("students-updated"));
+    } catch (error) {
+      toast.error(getLocalizedApiErrorMessage(error, t, "student_import_failed"));
+    } finally { setImportingRoster(false); }
+  }
+  async function deleteRecord() {
+    if (busyRef.current || !snapshot || dirty || conflict) return;
+    const recordTitle = snapshot.record.title
+      || records?.find((record) => record.id === recordId)?.title
+      || t(titleKey);
+    const message = t("baseline_delete_record_confirm")
+      .replace("{title}", recordTitle)
+      .replace("{count}", String(rows.length));
+    if (!window.confirm(message)) return;
+    busyRef.current = true; setBusy(true);
+    try {
+      await api.delete(`/baseline-assessments/${recordId}`, { params: { revision: snapshot.record.revision } });
+      removeDraft(storageKey); toast.success(t("baseline_record_deleted"));
+      setSnapshot(null); setRecordId(""); setClassId(""); initialRecord.current = null;
+      setSearch({}, { replace: true }); setListTick((value) => value + 1);
+    } catch (error) {
+      if (error?.response?.status === 409) setConflict(true);
+      toast.error(errorMessage(error, "baseline_delete_failed"));
+    } finally { busyRef.current = false; setBusy(false); }
+  }
   async function save() {
     if (busyRef.current || !snapshot || conflict) return;
     let changes;
@@ -211,6 +266,7 @@ function BaselinePage({ context, view }) {
   return <div dir={language === "ar" ? "rtl" : "ltr"} className="space-y-6" data-testid="baseline-page">
     <PageHeader title={t(analytics ? `${titleKey}_analytics` : titleKey)} description={t("baseline_description")} eyebrow={`${academicYear} · Q${displayQuarterNumber(semester, quarter)}`} badges={["75%+ · 50%+"]} action={<div className="flex flex-wrap gap-2">
       {!analytics && <Button onClick={() => setSetupOpen(!setupOpen)} disabled={busy}><BookOpenCheck className="me-2 h-4 w-4" />{t("baseline_setup")}</Button>}
+      {!analytics && snapshot && <Button variant="destructive" onClick={deleteRecord} disabled={busy || loading || dirty || conflict} data-testid="baseline-delete-record"><Trash2 className="me-2 h-4 w-4" />{t("baseline_delete_record")}</Button>}
       {analytics && <Button onClick={() => download("pdf", true)} disabled={!snapshot || busy || loading || conflict}><Download className="me-2 h-4 w-4" />{t(busy ? "baseline_exporting" : "baseline_export")}</Button>}
     </div>} />
     <nav className="flex flex-wrap gap-3" aria-label={t("baseline_analysis")}>
@@ -229,7 +285,9 @@ function BaselinePage({ context, view }) {
             setForm((previous) => ({ ...previous, max_score: formatted }));
           }
         }} /><span id="baseline-max-hint" className="block text-xs text-muted-foreground">{t("baseline_max_hint")}</span></label>
-      </fieldset><fieldset disabled={busy}><legend className="mb-3 text-sm font-bold">{t("baseline_classes")}</legend><div className="flex flex-wrap gap-3">{classes.map((cls) => <label key={cls.id} className="flex cursor-pointer items-center gap-2 rounded-xl border p-3"><input type="checkbox" checked={form.class_ids.includes(cls.id)} onChange={(e) => setForm({ ...form, class_ids: e.target.checked ? [...form.class_ids, cls.id] : form.class_ids.filter((id) => id !== cls.id) })} />{cls.name}</label>)}</div></fieldset><Button type="submit" disabled={busy || !classes.length}>{t("baseline_create")}</Button></form>
+      </fieldset><fieldset disabled={busy}><legend className="mb-3 text-sm font-bold">{t("baseline_classes")}</legend><div className="flex flex-wrap gap-3">{classes.map((cls) => <label key={cls.id} className="flex cursor-pointer items-center gap-2 rounded-xl border p-3"><input type="checkbox" checked={form.class_ids.includes(cls.id)} onChange={(e) => { setRosterImportSummary(null); setForm({ ...form, class_ids: e.target.checked ? [...form.class_ids, cls.id] : form.class_ids.filter((id) => id !== cls.id) }); }} />{cls.name}</label>)}</div></fieldset>
+      {schoolSection === "arabic" && <div className="rounded-2xl border border-primary/20 bg-primary/[0.03] p-4"><div className="flex flex-wrap items-center justify-between gap-3"><div><p className="font-semibold">{t("baseline_import_roster")}</p><p className="mt-1 max-w-3xl text-sm leading-7 text-muted-foreground">{t("baseline_import_roster_hint")}</p></div><input ref={rosterImportInputRef} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={importRoster} data-testid="baseline-roster-import-input" /><Button type="button" variant="secondary" onClick={() => rosterImportInputRef.current?.click()} disabled={busy || importingRoster || form.class_ids.length !== 1} data-testid="baseline-roster-import"><Upload className="me-2 h-4 w-4" />{importingRoster ? `${t("loading")}…` : t("baseline_import_roster")}</Button></div>{form.class_ids.length !== 1 && <p className="mt-2 text-sm font-medium text-amber-600">{t("baseline_import_roster_one_class")}</p>}{rosterImportSummary && <p className="mt-2 text-sm font-medium text-emerald-600" data-testid="baseline-roster-import-ready">{t("baseline_import_roster_ready")}</p>}</div>}
+      <Button type="submit" disabled={busy || importingRoster || !classes.length}>{t("baseline_create")}</Button></form>
     </CardContent></Card>}
     <Card><CardContent className="grid gap-4 pt-6 md:grid-cols-3"><label className="space-y-2 text-sm"><span>{t("baseline_select")}</span><select aria-label={t("baseline_select")} className={selectStyle} value={recordId} disabled={busy || !records?.length} onChange={(e) => { setRecordId(e.target.value); setClassId(""); setSearch({ record: e.target.value }, { replace: true }); }}><option value="" disabled>—</option>{records?.map((r) => <option key={r.id} value={r.id}>{r.title} · {r.teacher_name} · /{r.max_score}</option>)}</select></label>
       <label className="space-y-2 text-sm"><span>{t("baseline_classes")}</span><select aria-label={t("baseline_classes")} className={selectStyle} value={classId} disabled={!recordId || busy} onChange={(e) => setClassId(e.target.value)}><option value="">{t("baseline_all")}</option>{recordClasses.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></label>

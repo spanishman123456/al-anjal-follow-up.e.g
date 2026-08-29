@@ -1,5 +1,9 @@
 # 10 — Decision History
 
+## Decision: Diagnostic records have an explicit safe lifecycle (2026-08-30)
+
+A diagnostic dropdown item is a frozen mark-entry record, not an enrollment class. Admin/owning Teacher may delete the selected record only at its displayed revision; the operation removes its embedded roster and diagnostic marks but never deletes students, classes or unrelated records. Arabic setup reuses the exact-class enrollment Excel preview/apply flow, including numeric-name repair, before creating a fresh snapshot with real student and class names.
+
 ## Decision: Every score-entry page must expose safe score correction (2026-08-30)
 
 The score-entry UX contract now requires a visible clear/delete control on all eight entry surfaces. Existing International screens retain their week/class-scoped controls; baseline/diagnostic retains revision-guarded clearing; Arabic quarter grading gains a dedicated server DELETE limited to one selected class and exact academic term. Destructive actions show scope before execution and must not silently affect another class or term.

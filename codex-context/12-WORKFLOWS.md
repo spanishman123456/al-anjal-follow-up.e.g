@@ -14,6 +14,14 @@
 3. Use **Fill column with maximum** to stage the fixed maximum for every visible student, review the table, then select **Save marks**.
 4. Use **Clear recorded marks** only with no unsaved draft. The confirmation names the current class scope and affected saved-score count; confirmation clears only that scope and advances the record revision.
 
+## Replace an incorrect Arabic diagnostic roster
+
+1. Open Diagnostic Test Scores, select the incorrect old mark-entry record, and choose **Delete mark-entry record**. Confirm the title and frozen student count; enrollment and the class are not deleted.
+2. Choose **Set up mark entry**, select exactly one Arabic class, then choose **Import class students from Excel**.
+3. Review the preview counts and confirm. The exact selected class is authoritative; numeric identity values are kept as identities, not student names, and eligible legacy numeric-name rows are repaired.
+4. Enter the new record title, maximum and date, then create it. Record creation snapshots the corrected `full_name` and verified class name.
+5. To delete an actual enrollment class instead, use the separate Admin action in Classes; do not treat a diagnostic record as a class.
+
 ## W1 — Login (password)
 
 1. User opens SPA → if no token, `Login`.

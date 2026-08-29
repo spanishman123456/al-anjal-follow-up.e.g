@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { LoadErrorCard } from "@/components/LoadErrorCard";
+import { importStudentsWithPreview } from "@/lib/studentEnrollmentImport";
 
 export default function ArabicStudents() {
   const { language, academicYear, classes = [], loadClasses, profile } = useOutletContext();
@@ -135,38 +136,31 @@ export default function ArabicStudents() {
     }
     setImporting(true);
     setImportSummary(null);
-    const makeFormData = () => {
-      const formData = new FormData();
-      formData.append("file", file);
-      return formData;
-    };
     const params = { school_section: "arabic", academic_year: academicYear, class_id: classId };
     try {
-      const preview = await api.post("/import/excel", makeFormData(), {
-        params: { ...params, dry_run: true },
-        headers: { "Content-Type": "multipart/form-data" },
-      });
-      const confirmed = window.confirm(
-        t("student_import_confirm")
-          .replace("{count}", String(preview.data.processed_rows || 0))
-          .replace("{class}", preview.data.target_class_name || classMap[classId] || ""),
-      );
-      if (!confirmed) return;
-      const response = await api.post("/import/excel", makeFormData(), {
+      const result = await importStudentsWithPreview({
+        api,
+        file,
         params,
-        headers: { "Content-Type": "multipart/form-data" },
+        confirmImport: (preview) => window.confirm(
+          t("student_import_confirm")
+            .replace("{count}", String(preview.processed_rows || 0))
+            .replace("{class}", preview.target_class_name || classMap[classId] || ""),
+        ),
       });
-      setImportSummary(response.data);
+      if (result.cancelled) return;
+      const response = result.data;
+      setImportSummary(response);
       toast.success(
         t("student_import_summary")
-          .replace("{created}", String(response.data.created_students || 0))
-          .replace("{updated}", String(response.data.updated_students || 0))
-          .replace("{classes}", String(response.data.created_classes || 0))
-          .replace("{skipped}", String(response.data.skipped_rows || 0)),
+          .replace("{created}", String(response.created_students || 0))
+          .replace("{updated}", String(response.updated_students || 0))
+          .replace("{classes}", String(response.created_classes || 0))
+          .replace("{skipped}", String(response.skipped_rows || 0)),
       );
-      if (response.data.repaired_students) {
+      if (response.repaired_students) {
         toast.success(
-          t("student_import_repaired").replace("{count}", String(response.data.repaired_students)),
+          t("student_import_repaired").replace("{count}", String(response.repaired_students)),
         );
       }
       await Promise.all([load(), loadClasses?.()]);

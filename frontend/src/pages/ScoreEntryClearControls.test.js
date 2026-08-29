@@ -18,3 +18,16 @@ describe("score-entry pages expose a score-clear control", () => {
     expect(source).toContain(`data-testid=\"${testId}\"`);
   });
 });
+
+describe("Arabic roster and diagnostic lifecycle controls stay available", () => {
+  it.each([
+    ["ArabicStudents.jsx", "arabic-students-import"],
+    ["ArabicStudents.jsx", "delete-class-students-button"],
+    ["Classes.jsx", "delete-class-confirm"],
+    ["BaselineAssessments.jsx", "baseline-roster-import"],
+    ["BaselineAssessments.jsx", "baseline-delete-record"],
+  ])("keeps %s control %s", (fileName, testId) => {
+    const source = fs.readFileSync(path.join(__dirname, fileName), "utf8");
+    expect(source).toContain(`data-testid="${testId}"`);
+  });
+});

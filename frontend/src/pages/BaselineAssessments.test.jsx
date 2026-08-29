@@ -13,7 +13,10 @@ jest.mock("react-router-dom", () => ({
   useSearchParams: () => [mockSearch, mockSetSearch],
   Link: ({ to, children, ...props }) => <a href={to} {...props}>{children}</a>,
 }), { virtual: true });
-jest.mock("../lib/api", () => ({ api: { get: jest.fn(), patch: jest.fn(), post: jest.fn() } }));
+jest.mock("../lib/api", () => ({
+  api: { get: jest.fn(), patch: jest.fn(), post: jest.fn(), delete: jest.fn() },
+  getLocalizedApiErrorMessage: jest.fn((_error, t, fallback) => t(fallback)),
+}));
 jest.mock("sonner", () => ({ toast: { success: jest.fn(), error: jest.fn() } }));
 const BaselineAssessments = require("./BaselineAssessments").default;
 
@@ -60,6 +63,7 @@ describe("baseline page", () => {
     mockContext = { language: "en", schoolSection: "international", academicYear: "2026-2027", semester: "semester2", quarter: 1, profile: { id: "t1" }, classes: [{ id: "c1", name: "4A" }], setSemester: jest.fn(), setQuarter: jest.fn() };
     api.get.mockImplementation(async (url) => ({ data: url === "/baseline-assessments" ? [{ id: "r1", title: "Baseline", teacher_name: "Teacher", max_score: 20, classes: [{ id: "c1", name: "4A" }] }] : fixture() }));
     api.patch.mockResolvedValue({ data: { revision: 2 } });
+    api.delete.mockResolvedValue({ data: { status: "deleted" } });
     window.confirm = jest.fn(() => true);
     container = document.createElement("div"); document.body.appendChild(container); root = createRoot(container);
   });
@@ -147,6 +151,36 @@ describe("baseline page", () => {
     await act(async () => container.querySelector('[data-testid="baseline-clear-recorded"]').click());
     expect(window.confirm).toHaveBeenCalledWith(expect.stringContaining("Students affected: 2"));
     expect(api.patch).toHaveBeenCalledWith("/baseline-assessments/r1/scores", { revision: 1, scores: { s1: null, s3: null } });
+  });
+  it("deletes the current mark-entry record with its displayed revision", async () => {
+    await render();
+    await act(async () => container.querySelector('[data-testid="baseline-delete-record"]').click());
+    expect(window.confirm).toHaveBeenCalledWith(expect.stringContaining("Baseline"));
+    expect(api.delete).toHaveBeenCalledWith("/baseline-assessments/r1", { params: { revision: 1 } });
+  });
+  it("imports an Arabic class roster with the same preview/apply flow before record creation", async () => {
+    mockContext.language = "ar";
+    mockContext.schoolSection = "arabic";
+    api.post.mockImplementation(async (url, _body, config) => {
+      if (url !== "/import/excel") return { data: {} };
+      return config.params.dry_run
+        ? { data: { processed_rows: 2, target_class_name: "4A" } }
+        : { data: { created_students: 2, repaired_students: 1 } };
+    });
+    await render();
+    await act(async () => button(getTranslation("ar", "baseline_setup")).click());
+    await act(async () => container.querySelector('form input[type="checkbox"]').click());
+    const input = container.querySelector('[data-testid="baseline-roster-import-input"]');
+    const file = new File(["test"], "students.xlsx", { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+    Object.defineProperty(input, "files", { configurable: true, value: [file] });
+    await act(async () => input.dispatchEvent(new Event("change", { bubbles: true })));
+    expect(api.post).toHaveBeenNthCalledWith(1, "/import/excel", expect.any(FormData), expect.objectContaining({
+      params: { school_section: "arabic", academic_year: "2026-2027", class_id: "c1", dry_run: true },
+    }));
+    expect(api.post).toHaveBeenNthCalledWith(2, "/import/excel", expect.any(FormData), expect.objectContaining({
+      params: { school_section: "arabic", academic_year: "2026-2027", class_id: "c1" },
+    }));
+    expect(container.querySelector('[data-testid="baseline-roster-import-ready"]')).not.toBeNull();
   });
   it("blocks invalid scores and protects drafts across scope changes", async () => {
     await render(); await changeInput(1, "21");
