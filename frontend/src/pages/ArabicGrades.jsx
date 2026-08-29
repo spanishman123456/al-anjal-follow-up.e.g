@@ -18,6 +18,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { ScoreSheetImportControl } from "@/components/ScoreSheetImportControl";
 
 const semesterNumber = (semester) => (semester === "semester2" ? 2 : 1);
 
@@ -72,6 +73,14 @@ export default function ArabicGrades() {
   }, [loadGrades]);
 
   const rows = payload?.students || [];
+  const hasUnsavedChanges = useMemo(
+    () => rows.some((student) => ARABIC_SCORE_FIELDS.some(({ key }) => {
+      const saved = student[key] === undefined ? null : student[key];
+      const edited = values[student.id]?.[key] === undefined ? null : values[student.id][key];
+      return saved !== edited;
+    })),
+    [rows, values],
+  );
   const metrics = useMemo(
     () => [
       [t("total_students"), payload?.total_students ?? 0],
@@ -180,6 +189,36 @@ export default function ArabicGrades() {
               <p className="mt-1">{payload.migration.manual_review_students.map((student) => `${student.full_name} (${student.class_name})`).join(", ")}</p>
             </div>
           )}
+        </CardContent>
+      </Card>
+
+      <Card data-testid="arabic-grades-import-card">
+        <CardContent className="space-y-3 pt-6">
+          <div className="flex flex-wrap items-end justify-end gap-3">
+            <ScoreSheetImportControl
+              t={t}
+              endpoint="/score-sheet/import"
+              params={{
+                context: "arabic_theory",
+                academic_year: academicYear,
+                semester: sem,
+                quarter,
+                class_id: classId === "all" ? undefined : classId,
+              }}
+              targets={[
+                { value: "theory_test_1", label: `${t("theory_test_1")} (${t("raw_score")})` },
+                { value: "theory_test_2", label: `${t("theory_test_2")} (${t("raw_score")})` },
+              ]}
+              disabled={saving || loading || !rows.length || hasUnsavedChanges}
+              onImported={async () => {
+                window.dispatchEvent(new CustomEvent("students-updated"));
+                await loadGrades();
+              }}
+              testIdPrefix="arabic-grades-score-import"
+            />
+          </div>
+          <p className="text-sm text-muted-foreground">{t("score_sheet_attempt_hint")}</p>
+          {hasUnsavedChanges && <p className="text-sm text-amber-600">{t("score_sheet_save_first")}</p>}
         </CardContent>
       </Card>
 

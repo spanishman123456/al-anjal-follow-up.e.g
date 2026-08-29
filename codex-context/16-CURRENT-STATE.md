@@ -1,5 +1,13 @@
 # 16 — Current State
 
+## Score-sheet import/export (2026-08-29)
+
+- Pre-test (International) and diagnostic-test (Arabic) entry now show Import Excel, Export Excel and Export PDF together. Excel export uses the supplied 11 Arabic headers in the exact order and preserves the unshaded A/C/D/E versus shaded B/F–K convention.
+- Import trusts student name and submission grade for persistence, previews matches and overwrites, rejects out-of-range rows, and never imports shaded metadata or creates students/classes. Baseline apply is revision-safe and blank rows never clear existing scores.
+- International Q1/Q2 assessment pages now use one file per selected short-quiz attempt (`quiz1/quiz2` or `quiz3/quiz4`, `/5`). The legacy broad page import was removed. Chapter practical remains manual.
+- Arabic quarter grades now have the missing Excel import control for Theory 1 or Theory 2, using the per-student `/15` or `/20` raw maximum. Practical remains manual and the `/40 + /30 + /30 = /100` formulas are unchanged.
+- Verification: 48 protected backend tests and all 47 frontend tests passed. Production CRACO build plus SPA postbuild passed. A generated Excel export was inspected structurally and rendered visually; headers, RTL direction, values and white/gray column fills match the supplied layout. Live MongoDB was not used.
+
 **Handoff created:** 2026-08-21 (Cursor → Codex knowledge transfer)
 
 ## Automatic idle logout (2026-08-29)

@@ -162,10 +162,18 @@ Format: Decision → Context → Why → Status → Codex Guidance.
 **Decision:** Live synchronization and its scheduled job were removed. Admins import an approved four-page school PDF; each academic year owns an active immutable event version, historical years remain selectable, and current-year resolution follows imported date ranges.
 **Safety:** Parsing and structural validation complete before database writes, and the active version pointer changes only after the new event version is stored. Printed anomalies remain flagged for manual review rather than guessed.
 
-## Decision: Arabic Excel import is enrollment-only
+## Decision: Generic Arabic Excel import is enrollment-only
 
 **Context:** Arabic Section needs practical bulk enrollment without passing `/100` grades through the International score mapper.
 **Status:** Active.
-**Codex Guidance:** Reuse `/api/import/excel` and its header/class detection with explicit Arabic section/year scope, but persist only student/class identity. Arabic grades remain exclusively in `arabic_quarter_scores`.
+**Codex Guidance:** Reuse `/api/import/excel` and its header/class detection with explicit Arabic section/year scope, but persist only student/class identity. Grade-sheet imports use the separate `/api/score-sheet/import` route and still persist Arabic scores exclusively in `arabic_quarter_scores`.
+
+## Decision: External score sheets import one explicit attempt only (2026-08-29)
+
+**Context:** The owner replaced the older broad assessment-page import with the supplied 11-column school-platform Excel layout.
+
+**Decision:** Preview and apply are separate requests. Only `اسم الطالب` and `درجة التسليم` are trusted for score persistence; shaded metadata never changes local records. A file targets exactly one permitted attempt: International short quiz 1/2 for the active quarter or Arabic theory 1/2. Practical scores remain manual. Baseline imports additionally require the current optimistic-concurrency revision. Blank, invalid, duplicate, ambiguous and unmatched rows do not clear or overwrite marks.
+
+**Codex Guidance:** Never route score-page uploads back through the generic `/api/import/excel` enrollment upsert. Preserve the explicit target allowlist, academic scope, teacher class restrictions and preview warning before apply.
 **Status:** Active.
 **Codex Guidance:** Use the isolated official-source adapter, strict validation, versioned activation, and last-good cache. Never delete active events before a new version succeeds.

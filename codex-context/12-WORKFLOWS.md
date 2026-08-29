@@ -53,10 +53,19 @@
 
 ## W8 — Excel import
 
+Enrollment import:
+
 1. Dashboard or Students import control.
-2. `POST /api/import/excel` with auto header detection.
-3. Classes/students/scores upserted per mapping rules.
+2. `POST /api/import/excel` with auto header detection and explicit section/year scope.
+3. Classes/students are upserted per mapping rules; Arabic enrollment import does not map grades.
 4. Refresh lists.
+
+Score-sheet import:
+
+1. Select the exact quiz/theory attempt, then upload the approved Excel layout.
+2. `POST /api/score-sheet/import?apply=false` (or baseline `/{id}/import`) previews matching and validation counts.
+3. User confirms overwrites; the same file is posted with `apply=true`.
+4. Backend writes only the selected score field for existing scoped students. Practical and shaded metadata remain untouched.
 
 ## W9 — Award reward certificate
 

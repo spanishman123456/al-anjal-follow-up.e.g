@@ -124,6 +124,9 @@ describe("baseline page", () => {
     expect([...inputs].map((i) => i.value)).toEqual(["15", "", "0"]);
     expect(container.textContent).toContain("Q3");
     expect(button("Save marks").disabled).toBe(true);
+    expect(container.querySelector('[data-testid="baseline-score-import-button"]')).not.toBeNull();
+    expect(container.querySelector('[data-testid="baseline-export-excel"]')).not.toBeNull();
+    expect(container.querySelector('[data-testid="baseline-export-pdf"]')).not.toBeNull();
   });
   it("saves only changed totals with the displayed revision", async () => {
     await render(); await changeInput(1, "10");

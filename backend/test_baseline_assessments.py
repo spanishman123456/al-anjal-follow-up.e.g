@@ -6,12 +6,14 @@ from types import SimpleNamespace
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from openpyxl import Workbook, load_workbook
 from pypdf import PdfReader
 
 import server
 from baseline_assessments import build_snapshot, level, make_router, percentage
 from baseline_pdf import render_baseline_pdf, shaped
 from test_arabic_import import _matches
+from score_sheet import REFERENCE_HEADERS
 
 
 class Cursor:
@@ -63,6 +65,17 @@ def sample_record(count=8):
             "classes": [{"id": "c1", "name": "4A"}, {"id": "c2", "name": "4B"}],
             "roster": [{"id": f"s{i}", "full_name": f"طالب تجريبي {i+1:02}", "class_id": "c1" if i % 8 < 4 else "c2", "class_name": "4A" if i % 8 < 4 else "4B"} for i in range(count)],
             "scores": {f"s{i}": values[i % 8] for i in range(count)}}
+
+
+def score_file(rows):
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.append(REFERENCE_HEADERS)
+    for name, score in rows:
+        sheet.append([name, "لا يستورد", "4A", score, 0.5, "لا يستورد", "لا يستورد", 45, "لا يستورد", "لا يستورد", "لا يستورد"])
+    output = io.BytesIO()
+    workbook.save(output)
+    return output.getvalue()
 
 
 @pytest.fixture
@@ -191,6 +204,53 @@ def test_list_scope_and_export_snapshot_guard(api_fixture):
     assert client.get(base + "/sample/export.pdf", params=export_params).status_code == 409
     state["user"]["id"] = "other"
     assert client.get(base + "/sample/export.pdf", params=export_params).status_code == 404
+
+
+def test_excel_import_preview_apply_and_revision_guard(api_fixture):
+    client, db, _ = api_fixture
+    base = "/api/baseline-assessments/sample"
+    content = score_file([("طالب تجريبي 01", 19), ("طالب غير موجود", 10), ("طالب تجريبي 02", 21)])
+    preview = client.post(
+        base + "/import",
+        params={"revision": 1, "apply": "false", "class_id": "c1"},
+        files={"file": ("scores.xlsx", content, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")},
+    )
+    assert preview.status_code == 200, preview.text
+    assert preview.json()["matched_count"] == 1
+    assert preview.json()["unmatched_count"] == 1
+    assert preview.json()["invalid_count"] == 1
+    assert db.baseline_assessments.rows[0]["scores"]["s0"] == 15
+
+    applied = client.post(
+        base + "/import",
+        params={"revision": 1, "apply": "true", "class_id": "c1"},
+        files={"file": ("scores.xlsx", content, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")},
+    )
+    assert applied.status_code == 200, applied.text
+    assert applied.json()["imported_count"] == 1 and applied.json()["revision"] == 2
+    assert db.baseline_assessments.rows[0]["scores"]["s0"] == 19
+    stale = client.post(
+        base + "/import",
+        params={"revision": 1, "apply": "true"},
+        files={"file": ("scores.xlsx", content, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")},
+    )
+    assert stale.status_code == 409
+
+
+def test_excel_export_uses_reference_template_and_snapshot_guard(api_fixture):
+    client, _, _ = api_fixture
+    base = "/api/baseline-assessments/sample"
+    snapshot = client.get(base, params={"lang": "ar", "class_id": "c1"}).json()
+    response = client.get(base + "/export.xlsx", params={"lang": "ar", "class_id": "c1", "snapshot_id": snapshot["snapshot_id"]})
+    assert response.status_code == 200, response.text
+    sheet = load_workbook(io.BytesIO(response.content)).active
+    assert [cell.value for cell in sheet[1]] == REFERENCE_HEADERS
+    assert sheet.max_row == 5
+    assert sheet["A2"].value == "طالب تجريبي 01"
+    assert sheet["D2"].value == 15
+    assert sheet["B1"].fill.fgColor.rgb.endswith("D9D9D9")
+    assert response.headers["x-baseline-snapshot"] == snapshot["snapshot_id"]
+    assert client.get(base + "/export.xlsx", params={"lang": "en", "class_id": "c1", "snapshot_id": snapshot["snapshot_id"]}).status_code == 409
 
 
 @pytest.mark.parametrize("lang", ["en", "ar"])

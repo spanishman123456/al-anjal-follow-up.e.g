@@ -12,6 +12,7 @@ import { ChartCard, MetricCard } from "@/components/analytics";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { ScoreSheetImportControl } from "@/components/ScoreSheetImportControl";
 
 const selectStyle = "h-11 w-full min-w-0 rounded-xl border border-input bg-background px-3 text-sm text-foreground";
 const draftKey = (user, record) => `baseline-draft:${user}:${record}`;
@@ -156,14 +157,14 @@ function BaselinePage({ context, view }) {
       toast.error(errorMessage(e, "baseline_save_failed"));
     } finally { busyRef.current = false; setBusy(false); }
   }
-  async function download() {
+  async function download(format = "pdf", includeStudent = false) {
     if (busyRef.current || !snapshot) return;
     busyRef.current = true; setBusy(true);
     try {
-      const response = await api.get(`/baseline-assessments/${recordId}/export.pdf`, { params: { snapshot_id: snapshot.snapshot_id, lang: language, class_id: classId || undefined, student_id: selected?.id }, responseType: "blob" });
+      const response = await api.get(`/baseline-assessments/${recordId}/export.${format}`, { params: { snapshot_id: snapshot.snapshot_id, lang: language, class_id: classId || undefined, student_id: includeStudent ? selected?.id : undefined }, responseType: "blob" });
       const url = URL.createObjectURL(response.data);
       const anchor = document.createElement("a"); anchor.href = url;
-      anchor.download = `baseline-${academicYear}-Q${displayQuarterNumber(semester, quarter)}-${language}.pdf`;
+      anchor.download = `baseline-${academicYear}-Q${displayQuarterNumber(semester, quarter)}-${language}.${format}`;
       document.body.appendChild(anchor); anchor.click(); anchor.remove(); setTimeout(() => URL.revokeObjectURL(url), 1000);
     } catch (e) {
       if (e?.response?.status === 409) { setConflict(true); toast.error(t("baseline_conflict")); }
@@ -178,7 +179,7 @@ function BaselinePage({ context, view }) {
   return <div dir={language === "ar" ? "rtl" : "ltr"} className="space-y-6" data-testid="baseline-page">
     <PageHeader title={t(analytics ? `${titleKey}_analytics` : titleKey)} description={t("baseline_description")} eyebrow={`${academicYear} · Q${displayQuarterNumber(semester, quarter)}`} badges={["75%+ · 50%+"]} action={<div className="flex flex-wrap gap-2">
       {!analytics && <Button onClick={() => setSetupOpen(!setupOpen)} disabled={busy}><BookOpenCheck className="me-2 h-4 w-4" />{t("baseline_setup")}</Button>}
-      {analytics && <Button onClick={download} disabled={!snapshot || busy || loading || conflict}><Download className="me-2 h-4 w-4" />{t(busy ? "baseline_exporting" : "baseline_export")}</Button>}
+      {analytics && <Button onClick={() => download("pdf", true)} disabled={!snapshot || busy || loading || conflict}><Download className="me-2 h-4 w-4" />{t(busy ? "baseline_exporting" : "baseline_export")}</Button>}
     </div>} />
     <nav className="flex flex-wrap gap-3" aria-label={t("baseline_analysis")}>
       <Button asChild variant={!analytics ? "default" : "outline"}><Link to={`/baseline-scores${navQuery}`}>{t("baseline_entry")}</Link></Button>
@@ -202,6 +203,19 @@ function BaselinePage({ context, view }) {
       <label className="space-y-2 text-sm"><span>{t("baseline_classes")}</span><select aria-label={t("baseline_classes")} className={selectStyle} value={classId} disabled={!recordId || busy} onChange={(e) => setClassId(e.target.value)}><option value="">{t("baseline_all")}</option>{recordClasses.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></label>
       <div className="flex items-end"><AcademicTermSelect disabled={busy} testIdPrefix="baseline-term" triggerClassName="w-full sm:w-full" /></div>
     </CardContent></Card>
+    {!analytics && <Card data-testid="baseline-score-files"><CardContent className="space-y-3 pt-6"><div className="flex flex-wrap items-center gap-3">
+      <ScoreSheetImportControl
+        t={t}
+        endpoint={`/baseline-assessments/${recordId}/import`}
+        params={{ revision: snapshot?.record.revision, class_id: classId || undefined }}
+        targets={[{ value: "baseline_score", label: t("baseline_score") }]}
+        disabled={!snapshot || busy || loading || dirty || invalid || conflict}
+        testIdPrefix="baseline-score-import"
+        onImported={() => { removeDraft(storageKey); setTick((value) => value + 1); setListTick((value) => value + 1); }}
+      />
+      <Button variant="secondary" onClick={() => download("xlsx")} disabled={!snapshot || busy || loading || dirty || conflict} data-testid="baseline-export-excel"><Download className="me-2 h-4 w-4" />{t("score_sheet_export_excel")}</Button>
+      <Button variant="secondary" onClick={() => download("pdf")} disabled={!snapshot || busy || loading || dirty || conflict} data-testid="baseline-export-pdf"><Download className="me-2 h-4 w-4" />{t("score_sheet_export_pdf")}</Button>
+    </div><p className="text-sm text-muted-foreground">{t("score_sheet_columns_hint")}</p>{dirty && <p className="text-sm font-medium text-amber-600">{t("score_sheet_save_first")}</p>}</CardContent></Card>}
     {error && <div role="alert" className="rounded-xl border border-rose-300 p-4 text-rose-600">{error}<Button variant="outline" className="ms-3" onClick={reload}>{t("baseline_reload")}</Button></div>}
     {conflict && <div role="alert" className="rounded-xl border border-amber-400 p-4">{t("baseline_conflict")}<Button variant="outline" className="ms-3" onClick={reload}>{t("baseline_reload")}</Button></div>}
     {(loading || (!records && !error)) && <p role="status">{t("baseline_loading")}</p>}

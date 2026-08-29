@@ -35,6 +35,7 @@ import { AssessmentPageFooter } from "@/components/AssessmentPageFooter";
 import { buildAcademicExportFilename } from "@/lib/exportFilenames";
 import { sortByClassOrder } from "@/lib/utils";
 import { PerformanceLevelBadge } from "@/components/PerformanceLevelBadge";
+import { ScoreSheetImportControl } from "@/components/ScoreSheetImportControl";
 
 const formatScore = (value, suffix = "") => {
   if (value === null || value === undefined) {
@@ -132,7 +133,6 @@ export default function AssessmentMarksQ2() {
   const [clearScoresOpen, setClearScoresOpen] = useState(false);
   const [clearAllScoresOpen, setClearAllScoresOpen] = useState(false);
   const [fillValues, setFillValues] = useState({ quiz3: "", quiz4: "", chapter_test2_practical: "" });
-  const bulkFileInputRef = useRef(null);
   const latestLoadRequestIdRef = useRef(0);
 
   const loadData = async (weekId = activeWeekId) => {
@@ -424,40 +424,6 @@ export default function AssessmentMarksQ2() {
       ? (t("all_classes") || "all-classes")
       : (classes.find((cls) => cls.id === filterClass)?.name || filterClass);
 
-  const handleDownloadTemplate = async () => {
-    try {
-      const response = await api.get("/students/import-template", {
-        params: {
-          week_id: activeWeekId || undefined,
-          class_id: filterClass !== "all" ? filterClass : undefined,
-          view: "assessment_q2",
-        },
-        responseType: "blob",
-      });
-      const url = window.URL.createObjectURL(new Blob([response.data]));
-      const link = document.createElement("a");
-      link.href = url;
-      link.setAttribute(
-        "download",
-        buildAcademicExportFilename({
-          prefix: "chapter-tests-and-quizzes",
-          academicYear,
-          semester,
-          quarter,
-          className: selectedClassName,
-          suffix: "template",
-          extension: "xlsx",
-        })
-      );
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      window.URL.revokeObjectURL(url);
-      toast.success(t("export_success"));
-    } catch (error) {
-      toast.error(error?.response?.data?.detail || t("export_failed"));
-    }
-  };
   const handleDownloadMarks = async () => {
     try {
       const response = await api.get("/students/export", {
@@ -489,33 +455,6 @@ export default function AssessmentMarksQ2() {
       toast.success(t("export_success"));
     } catch (error) {
       toast.error(error?.response?.data?.detail || t("export_failed"));
-    }
-  };
-
-  const handleBulkImport = async (fileOverride) => {
-    const fileToUse = fileOverride;
-    if (!fileToUse) {
-      toast.error(t("please_select_file") || "Please select a file first");
-      return;
-    }
-    if (!activeWeekId) {
-      toast.error(t("select_week_before_import") || "Please select a week before importing marks so they are saved correctly.");
-      return;
-    }
-    const formData = new FormData();
-    formData.append("file", fileToUse);
-    try {
-      await api.post("/import/excel", formData, {
-        headers: { "Content-Type": "multipart/form-data" },
-        params: { week_id: activeWeekId },
-      });
-      toast.success(t("bulk_import_completed") || "Bulk import completed");
-      sessionStorage.setItem(`app_selected_week_id_s${semesterNumber}_q${quarter}`, activeWeekId);
-      if (bulkFileInputRef.current) bulkFileInputRef.current.value = "";
-      window.dispatchEvent(new CustomEvent("students-updated"));
-      loadData(activeWeekId);
-    } catch (error) {
-      toast.error(error?.response?.data?.detail || t("bulk_import_failed") || "Bulk import failed");
     }
   };
 
@@ -559,39 +498,34 @@ export default function AssessmentMarksQ2() {
       />
 
       <Card data-testid="assessment-q2-bulk-import-card">
-        <CardContent className="flex flex-wrap items-center justify-end gap-3 pt-6">
-          <Button
-            variant="secondary"
-            onClick={handleDownloadTemplate}
-            data-testid="assessment-q2-download-template"
-          >
-            {t("download_template")}
-          </Button>
+        <CardContent className="space-y-3 pt-6">
+          <div className="flex flex-wrap items-end justify-end gap-3">
+          <ScoreSheetImportControl
+            t={t}
+            endpoint="/score-sheet/import"
+            params={{ context: "international_quiz", week_id: activeWeekId || undefined, academic_year: academicYear, semester: semesterNumber, quarter, class_id: filterClass !== "all" ? filterClass : undefined }}
+            targets={[
+              { value: "quiz3", label: `${t("quiz3")} (5)` },
+              { value: "quiz4", label: `${t("quiz4")} (5)` },
+            ]}
+            disabled={!activeWeekId || bulkEditMode}
+            onImported={() => {
+              sessionStorage.setItem(`app_selected_week_id_s${semesterNumber}_q${quarter}`, activeWeekId);
+              window.dispatchEvent(new CustomEvent("students-updated"));
+              loadData(activeWeekId);
+            }}
+            testIdPrefix="assessment-q2-score-import"
+          />
           <Button
             variant="secondary"
             onClick={handleDownloadMarks}
             data-testid="assessment-q2-download-marks"
           >
-            {t("download_marks")}
+            {t("score_sheet_export_excel")}
           </Button>
-          <input
-            ref={bulkFileInputRef}
-            type="file"
-            accept=".xlsx,.xls,.csv"
-            className="hidden"
-            onChange={(e) => {
-              const file = e.target.files?.[0];
-              if (file) handleBulkImport(file);
-              e.target.value = "";
-            }}
-            data-testid="assessment-q2-import-file"
-          />
-          <Button
-            onClick={() => bulkFileInputRef.current?.click()}
-            data-testid="assessment-q2-import-excel"
-          >
-            {t("import_excel")}
-          </Button>
+          </div>
+          <p className="text-sm text-muted-foreground">{t("score_sheet_attempt_hint")}</p>
+          {bulkEditMode && <p className="text-sm text-amber-600">{t("score_sheet_save_first")}</p>}
         </CardContent>
       </Card>
 

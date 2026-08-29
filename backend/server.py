@@ -20,7 +20,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 from pydantic import BaseModel, Field, ConfigDict
-from typing import List, Optional, Dict, Any, Tuple
+from typing import List, Optional, Dict, Any, Tuple, Literal
 import uuid
 from datetime import datetime, timezone, timedelta
 import pandas as pd
@@ -84,6 +84,8 @@ from lesson_plan_service import (
     save_generated_docx,
 )
 from calendar_pdf_import import CalendarImportError, parse_anjal_calendar_pdf, select_calendar_for_date
+from score_sheet import ScoreSheetError, match_score_rows, read_score_sheet
+from starlette.concurrency import run_in_threadpool
 
 # MongoDB: lazy init so `import server` / offline PDF tests do not resolve mongodb+srv at import time.
 from urllib.parse import quote_plus
@@ -9534,6 +9536,116 @@ async def import_excel(
         "school_section": normalized_section,
         "academic_year": scoped_year,
     }
+
+
+@api_router.post("/score-sheet/import")
+async def import_score_sheet(
+    file: UploadFile = File(...),
+    context: Literal["international_quiz", "arabic_theory"] = Query(...),
+    target: str = Query(...),
+    apply: bool = Query(default=False),
+    week_id: Optional[str] = Query(default=None),
+    academic_year: Optional[str] = Query(default=None),
+    semester: Optional[int] = Query(default=None, ge=1, le=2),
+    quarter: Optional[int] = Query(default=None, ge=1, le=2),
+    class_id: Optional[str] = Query(default=None),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+):
+    """Preview/apply one external submission-grade column to one explicit attempt.
+
+    This endpoint never creates students/classes and never imports practical or
+    shaded metadata columns. The same file is previewed before the UI confirms
+    an apply request.
+    """
+    if context == "international_quiz":
+        if not week_id or not academic_year or semester is None or quarter is None:
+            raise HTTPException(status_code=422, detail="score_sheet_missing_scope")
+        allowed = ("quiz1", "quiz2") if quarter == 1 else ("quiz3", "quiz4")
+        if target not in allowed:
+            raise HTTPException(status_code=422, detail="score_sheet_invalid_target")
+        week_doc = await db.weeks.find_one({"id": week_id}, {"_id": 0, "semester": 1, "quarter": 1, "number": 1})
+        if not week_doc or week_doc.get("semester", 1) != semester or _week_quarter(week_doc) != quarter:
+            raise HTTPException(status_code=409, detail="score_sheet_week_scope_mismatch")
+        assigned = _teacher_assigned_class_ids(current_user)
+        if class_id and assigned is not None and class_id not in assigned:
+            raise HTTPException(status_code=403, detail="score_sheet_forbidden")
+        roster = await get_students(
+            class_id=class_id,
+            week_id=week_id,
+            school_section=SCHOOL_SECTION_INTERNATIONAL,
+            academic_year=academic_year,
+            current_user=current_user,
+        )
+        max_score_for = lambda _student: 5.0
+        current_score_for = lambda student: student.get(target)
+    else:
+        if not academic_year or semester is None or quarter is None:
+            raise HTTPException(status_code=422, detail="score_sheet_missing_scope")
+        if target not in ("theory_test_1", "theory_test_2"):
+            raise HTTPException(status_code=422, detail="score_sheet_invalid_target")
+        payload = await build_arabic_grading_payload(academic_year, semester, quarter, class_id, current_user)
+        roster = payload.get("students") or []
+        max_score_for = lambda student: float(student["exam_raw_max"])
+        current_score_for = lambda student: student.get(target)
+
+    try:
+        parsed = await run_in_threadpool(read_score_sheet, await file.read(), file.filename or "")
+    except ScoreSheetError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    summary, matches = match_score_rows(parsed["rows"], roster, max_score_for, current_score_for)
+    response = {**summary, "context": context, "target": target, "sheet_name": parsed["sheet_name"]}
+    if not apply:
+        return response
+    if not matches:
+        raise HTTPException(status_code=422, detail="score_sheet_no_matches")
+
+    changed = [
+        item for item in matches
+        if item["current"] is None or float(item["current"]) != item["score"]
+    ]
+    if context == "international_quiz":
+        operations = [
+            UpdateOne(
+                {"student_id": item["student_id"], "week_id": week_id},
+                {"$set": {target: item["score"], "updated_at": iso_now()}},
+                upsert=True,
+            )
+            for item in changed
+        ]
+        collection = db.student_scores
+    else:
+        operations = [
+            UpdateOne(
+                {
+                    "student_id": item["student_id"],
+                    "academic_year": academic_year,
+                    "semester": semester,
+                    "quarter": quarter,
+                },
+                {
+                    "$set": {
+                        target: item["score"],
+                        "school_section": SCHOOL_SECTION_ARABIC,
+                        "academic_year": academic_year,
+                        "semester": semester,
+                        "quarter": quarter,
+                        "updated_at": iso_now(),
+                    },
+                    "$setOnInsert": {"id": str(uuid.uuid4()), "student_id": item["student_id"], "created_at": iso_now()},
+                },
+                upsert=True,
+            )
+            for item in changed
+        ]
+        collection = db.arabic_quarter_scores
+    if operations:
+        await collection.bulk_write(operations, ordered=False)
+    await log_user_action(
+        current_user,
+        "score_sheet_import",
+        f"Imported {len(changed)} {context}/{target} scores; {summary['unmatched_count']} unmatched, {summary['invalid_count']} invalid",
+    )
+    return {**response, "imported_count": len(changed)}
 
 
 @api_router.post("/lesson-plan/preview-word")

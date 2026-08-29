@@ -12,10 +12,17 @@ from datetime import date, datetime, timezone
 from decimal import Decimal, ROUND_HALF_UP
 from typing import Dict, List, Literal, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from starlette.concurrency import run_in_threadpool
+
+from score_sheet import (
+    ScoreSheetError,
+    build_reference_score_workbook,
+    match_score_rows,
+    read_score_sheet,
+)
 
 
 def fail(code, status=422):
@@ -286,6 +293,85 @@ def make_router(db, get_current_user, section_query):
         if not result.matched_count:
             fail("baseline_conflict", 409)
         return {"revision": payload.revision + 1}
+
+    @router.post("/{record_id}/import")
+    async def import_scores(
+        record_id: str,
+        file: UploadFile = File(...),
+        apply: bool = Query(default=False),
+        revision: int = Query(..., ge=1),
+        class_id: Optional[str] = None,
+        user=Depends(get_current_user),
+    ):
+        record = await record_for(record_id, user)
+        if class_id and class_id not in record["class_ids"]:
+            fail("baseline_invalid_classes")
+        if record["revision"] != revision:
+            fail("baseline_conflict", 409)
+        try:
+            parsed = await run_in_threadpool(read_score_sheet, await file.read(), file.filename or "")
+        except ScoreSheetError as exc:
+            fail(str(exc), 400)
+        roster = [row for row in record["roster"] if not class_id or row["class_id"] == class_id]
+        summary, matches = match_score_rows(
+            parsed["rows"],
+            roster,
+            lambda _student: record["max_score"],
+            lambda student: record.get("scores", {}).get(student["id"]),
+        )
+        response = {**summary, "sheet_name": parsed["sheet_name"], "revision": record["revision"]}
+        if not apply:
+            return response
+        if not matches:
+            fail("score_sheet_no_matches")
+        changes = {
+            item["student_id"]: item["score"]
+            for item in matches
+            if item["current"] is None or float(item["current"]) != item["score"]
+        }
+        if not changes:
+            return {**response, "imported_count": 0, "revision": record["revision"]}
+        scores = {**record.get("scores", {}), **changes}
+        result = await db.baseline_assessments.update_one(
+            {"_id": record_id, "revision": revision},
+            {"$set": {"scores": scores, "updated_at": datetime.now(timezone.utc).isoformat(), "updated_by": user["id"]}, "$inc": {"revision": 1}},
+        )
+        if not result.matched_count:
+            fail("baseline_conflict", 409)
+        return {**response, "imported_count": len(changes), "revision": revision + 1}
+
+    @router.get("/{record_id}/export.xlsx")
+    async def export_excel(
+        record_id: str,
+        snapshot_id: str = Query(min_length=64, max_length=64),
+        lang: Literal["en", "ar"] = "en",
+        class_id: Optional[str] = None,
+        user=Depends(get_current_user),
+    ):
+        snapshot = await get_record(record_id, lang, class_id, user)
+        if snapshot["snapshot_id"] != snapshot_id:
+            fail("baseline_conflict", 409)
+        record = snapshot["record"]
+        rows = [
+            {
+                "student_name": student["full_name"],
+                "teacher_name": record["teacher_name"],
+                "level": student["class_name"],
+                "score": student["score"],
+                "percentage": None if student["percentage"] is None else number(student["percentage"] / 100),
+                "corrected": "تم التصحيح" if student["score"] is not None else "",
+                "test_name": record["title"],
+                "duration": "",
+                "submitted_at": "",
+                "published_at": "",
+                "due_at": record["test_date"],
+            }
+            for student in snapshot["students"]
+        ]
+        data = await run_in_threadpool(build_reference_score_workbook, rows)
+        return StreamingResponse(io.BytesIO(data), media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", headers={
+            "Content-Disposition": f'attachment; filename="baseline-{record_id}.xlsx"',
+            "Cache-Control": "no-store", "X-Baseline-Snapshot": snapshot_id})
 
     @router.get("/{record_id}/export.pdf")
     async def export_pdf(record_id: str, snapshot_id: str = Query(min_length=64, max_length=64), lang: Literal["en", "ar"] = "en", class_id: Optional[str] = None, student_id: Optional[str] = None, user=Depends(get_current_user)):

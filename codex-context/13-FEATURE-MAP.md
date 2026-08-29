@@ -16,13 +16,14 @@
 | Dashboard | `Dashboard.jsx` | summary metrics | scores/students | `/analytics/summary`, missed-assessments | `Dashboard.jsx`, `server.py` |
 | Dashboard timetable | Both section Dashboards | Sunday–Thursday, 8 editable periods | `users.timetable_records` + legacy International `schedule` | `/timetables/profile` | `DashboardTimetable.jsx`, `TimetableEditor.jsx`, `server.py` |
 | Students weekly marks | `Students.jsx` | /15 follow-up | `students`, `student_scores`, `weeks` | students CRUD, bulk-scores | `Students.jsx`, `server.py` |
-| Quizzes/Chapter Q1 | `AssessmentMarks.jsx` | /30 | scores | students/export, bulk | page + server |
-| Quizzes/Chapter Q2 | `AssessmentMarksQ2.jsx` | /30 | scores | same | page + server |
+| Quizzes/Chapter Q1 | `AssessmentMarks.jsx` | /30; previewed Excel import targets quiz1 or quiz2 only | scores | students/export, `/score-sheet/import`, bulk | page + `ScoreSheetImportControl.jsx` + server |
+| Quizzes/Chapter Q2 | `AssessmentMarksQ2.jsx` | /30; previewed Excel import targets quiz3 or quiz4 only | scores | same | page + shared import control + server |
 | Finals Q1 | `FinalExamsAssessment.jsx` | /50 | scores | same | page + server |
 | Finals Q2 | `FinalExamsAssessmentQ2.jsx` | /50 | scores | same | page + server |
 | Total marks matrix | `TotalMarks.jsx` | combined edit | scores | bulk-scores | `TotalMarks.jsx` |
-| Pre-test / diagnostic marks | `BaselineAssessments.jsx` entry mode | Variable maximum; independent >=75 / >=50 bands; revision-safe totals | `baseline_assessments` | `/baseline-assessments`, `/{id}/scores` | `baseline_assessments.py` |
-| Baseline analytics/PDF | Same page analytics mode | Shared snapshot, student donut, horizontal bars, numerical interpretation | Same collection | `/{id}`, `/{id}/export.pdf` | `baseline_assessments.py`, `baseline_pdf.py` |
+| Pre-test / diagnostic marks | `BaselineAssessments.jsx` entry mode | Variable maximum; independent >=75 / >=50 bands; revision-safe totals; previewed Excel import | `baseline_assessments` | `/baseline-assessments`, `/{id}/scores`, `/{id}/import` | `baseline_assessments.py`, `score_sheet.py` |
+| Baseline analytics/PDF/Excel | Same page | Shared snapshot, student donut, horizontal bars, numerical interpretation; exact 11-column Excel template | Same collection | `/{id}`, `/{id}/export.pdf`, `/{id}/export.xlsx` | `baseline_assessments.py`, `baseline_pdf.py`, `score_sheet.py` |
+| Arabic quarter grades | `ArabicGrades.jsx` | `/40 + best theory /30 + practical /30`; Excel import targets one theory attempt only | `arabic_quarter_scores` | `/arabic/grades`, `/score-sheet/import`, Arabic exports | page + shared import control + server |
 | Classes | `Classes.jsx` | CRUD + summary | `classes` | `/classes*` | `Classes.jsx` |
 | Analytics | `Analytics.jsx` | charts/insights | aggregated | `/analytics/overview`, export | VisualBoard, server PDF |
 | Reports | `Reports.jsx` | grade reports | aggregated | `/reports/grade`, export | Reports + pdf engine |

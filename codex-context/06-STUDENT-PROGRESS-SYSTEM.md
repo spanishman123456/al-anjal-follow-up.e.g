@@ -12,6 +12,8 @@ These thresholds apply in **both sections only to baseline tests**; they do not 
 
 One deterministic server snapshot provides students, class means, distribution, narratives and labels to both the UI and `baseline_pdf.py`. Export requires the screen's snapshot SHA-256; concurrent changes, a different language or a different class scope cause 409 instead of exporting mismatched results. PDF includes every student bar (paginated) and the chosen student's donut/comparison/interpretation.
 
+Baseline entry also supports the approved 11-column Excel layout. Import reads only student identity plus `درجة التسليم`, previews matched/new/overwrite/unmatched/duplicate/invalid counts, and applies only after confirmation with the record revision still current. It never changes enrollment or shaded metadata. Excel export preserves the exact header order and the white/gray column convention; PDF export remains snapshot-protected.
+
 | Layer | Max | Composition |
 |-------|-----|-------------|
 | Follow-up (Students) | 15 | attendance + participation + behavior + homework |
@@ -88,3 +90,5 @@ Quarter /100 = continuous 40 + tests 60
 ```
 
 Primary (grades 1–6) raw exams are `/15`; Middle (grades 7–9) and Secondary (grade 10+) raw exams are `/20`. Stage is derived only from canonical `classes.grade`. All three attempts—Theory 1, Theory 2, and Practical—must be entered for full completion, while available valid entries may produce a provisional total. Semester 1 displays Q1/Q2; Semester 2 displays Q3/Q4. Each quarter is independent. A score of `0` counts as entered/tested; `null` is missing. Arabic performance thresholds are intentionally **not configured** yet, so Arabic analytics report totals and completion rather than applying International bands.
+
+The dedicated score-sheet import maps `درجة التسليم` to one explicitly chosen Theory 1 or Theory 2 attempt and validates each student's `/15` or `/20` maximum. Practical remains manual. International assessment import uses the same one-file/one-target rule for Quiz 1 or Quiz 2 of the active quarter (stored as quiz1/quiz2 in Q1 and quiz3/quiz4 in Q2), maximum `/5`; chapter practical is never imported. These imports do not create or transfer students and do not use the broad enrollment importer.
