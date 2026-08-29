@@ -34,6 +34,8 @@
 
 ## Baseline / diagnostic records (2026-08-28)
 
+- Entry mode now provides class-scope-aware smart controls to fill the visible score column with the record maximum (review then save) and to clear all saved marks in the visible scope after confirming the class scope and affected count.
+
 - Implemented the owner-approved preview as real authenticated score-entry and analytics pages in both school sections. No existing grades changed; a separate collection holds teacher-owned records, fixed maxima/rosters and revision-safe totals.
 - Both sections use baseline-only >=75 / >=50 / <50 bands. Zero and missing stay distinct; percentages and numerical narratives are server-owned.
 - Real export uses the screen snapshot with stale-export protection. Arabic/English PDFs include class overview, all student bars, selected student donut and detailed interpretation; longer rosters paginate without dropping students.
@@ -69,6 +71,7 @@
 - Frontend Jest verification passes (4 suites / 13 tests) and production compilation succeeds with the Windows-equivalent build command
 - International/Arabic Section switching with section/year-scoped classes and students; legacy data defaults to International
 - Arabic scoped Excel enrollment import now requires one exact class, previews before apply, recognizes `الاسم`/`رقم الهوية`, rejects numeric names/duplicate identities/class conflicts before writes, and repairs the prior numeric-name/wrong-class failure on confirmed re-import. Quarter `/100` entry remains unchanged: continuous `/40`, better of Theory 1/Theory 2 weighted to `/30`, and one Practical weighted to `/30`; raw maximum comes from class grade (`/15` Primary, `/20` Middle/Secondary).
+- Arabic Student Management now localizes `اسم الطالب / الصف / حذف` correctly and gives Admin an exact-class roster delete with irreversible confirmation; its API deletes only that class’s students and related scores. Arabic Grades adds an exact-class smart fill tool for any editable column, using `/10` continuous maxima and stage-aware `/15` or `/20` exam maxima, with overwrite confirmation and normal Save Grades persistence.
 - Import regression verification (2026-08-30): the supplied `رابع أ.xlsx` previews as 30 valid names, target `رابع أ`, zero new classes and zero writes; 37 related backend tests, one focused frontend safeguard test, and the optimized production build pass.
 - Legacy Arabic practical fields are preserved; unambiguous single/equal values migrate to the new practical field, while conflicting old values are surfaced for manual review.
 - Arabic Dashboard/Analytics now include `/100` quarter distribution, students-per-class, top-student, and data-aware average cards; the support card deliberately remains uncalculated until an Arabic threshold is approved

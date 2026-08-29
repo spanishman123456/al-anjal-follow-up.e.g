@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useOutletContext, useSearchParams } from "react-router-dom";
-import { BarChart3, BookOpenCheck, Download, Save, Users, Percent, CheckCircle2 } from "lucide-react";
+import { BarChart3, BookOpenCheck, Download, Eraser, Save, Sparkles, Users, Percent, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { useTranslations } from "@/lib/i18n";
 import { displayQuarterNumber } from "@/lib/academicScope";
-import { BASELINE_COLORS, baselinePercent, changedBaselineMarks, parseBaselineMark } from "@/lib/baselineScores";
+import { BASELINE_COLORS, baselinePercent, changedBaselineMarks, fillBaselineMarksWithMaximum, parseBaselineMark, recordedBaselineMarksToClear } from "@/lib/baselineScores";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { AcademicTermSelect } from "@/components/layout/AcademicTermSelect";
 import { ChartCard, MetricCard } from "@/components/analytics";
@@ -124,6 +124,38 @@ function BaselinePage({ context, view }) {
     } catch { /* Preserve invalid drafts until corrected. */ }
     try { sessionStorage.setItem(storageKey, JSON.stringify({ revision: snapshot.record.revision, values: next })); } catch { /* beforeunload still warns */ }
   }
+  function fillVisibleMaximum() {
+    if (!snapshot || !visibleRows.length || busy || conflict) return;
+    const maximum = snapshot.record.max_score;
+    const replacesEnteredMark = visibleRows.some((student) => {
+      try {
+        const current = parseBaselineMark(values[student.id], maximum);
+        return current != null && current !== maximum;
+      } catch { return true; }
+    });
+    if (replacesEnteredMark && !window.confirm(t("baseline_fill_max_confirm"))) return;
+    const next = fillBaselineMarksWithMaximum(values, visibleRows, maximum);
+    setValues(next);
+    try { sessionStorage.setItem(storageKey, JSON.stringify({ revision: snapshot.record.revision, values: next })); } catch { /* beforeunload still warns */ }
+    toast.success(t("baseline_fill_max_staged"));
+  }
+  async function clearVisibleSavedMarks() {
+    if (busyRef.current || !snapshot || dirty || invalid || conflict) return;
+    const changes = recordedBaselineMarksToClear(visibleRows);
+    const count = Object.keys(changes).length;
+    if (!count) { toast.error(t("baseline_no_recorded_marks")); return; }
+    const scopeLabel = classId ? recordClasses.find((item) => item.id === classId)?.name || classId : t("baseline_all");
+    const message = `${t("baseline_clear_all_confirm")}\n${t("baseline_current_scope")}: ${scopeLabel}\n${t("baseline_students_affected")}: ${count}`;
+    if (!window.confirm(message)) return;
+    busyRef.current = true; setBusy(true);
+    try {
+      await api.patch(`/baseline-assessments/${recordId}/scores`, { revision: snapshot.record.revision, scores: changes });
+      removeDraft(storageKey); toast.success(`${t("baseline_clear_all_done")}: ${count}`); setTick((value) => value + 1); setListTick((value) => value + 1);
+    } catch (e) {
+      if (e?.response?.status === 409) setConflict(true);
+      toast.error(errorMessage(e, "baseline_save_failed"));
+    } finally { busyRef.current = false; setBusy(false); }
+  }
   function reload() {
     if (dirty && !window.confirm(t("baseline_leave"))) return;
     removeDraft(storageKey); setTick((v) => v + 1); setListTick((v) => v + 1);
@@ -216,6 +248,11 @@ function BaselinePage({ context, view }) {
       <Button variant="secondary" onClick={() => download("xlsx")} disabled={!snapshot || busy || loading || dirty || conflict} data-testid="baseline-export-excel"><Download className="me-2 h-4 w-4" />{t("score_sheet_export_excel")}</Button>
       <Button variant="secondary" onClick={() => download("pdf")} disabled={!snapshot || busy || loading || dirty || conflict} data-testid="baseline-export-pdf"><Download className="me-2 h-4 w-4" />{t("score_sheet_export_pdf")}</Button>
     </div><p className="text-sm text-muted-foreground">{t("score_sheet_columns_hint")}</p>{dirty && <p className="text-sm font-medium text-amber-600">{t("score_sheet_save_first")}</p>}</CardContent></Card>}
+    {!analytics && snapshot && !loading && <Card data-testid="baseline-smart-tools"><CardHeader className="pb-3"><CardTitle className="flex items-center gap-2"><Sparkles className="h-5 w-5 text-primary" />{t("baseline_smart_tools")}</CardTitle><p className="text-sm leading-7 text-muted-foreground">{t("baseline_smart_tools_hint")}</p></CardHeader><CardContent className="flex flex-wrap gap-3">
+      <Button type="button" variant="secondary" onClick={fillVisibleMaximum} disabled={busy || !visibleRows.length || conflict} data-testid="baseline-fill-maximum"><Sparkles className="me-2 h-4 w-4" />{t("baseline_fill_max")}</Button>
+      <Button type="button" variant="destructive" onClick={clearVisibleSavedMarks} disabled={busy || dirty || invalid || conflict || !visibleRows.some((student) => student.score != null)} data-testid="baseline-clear-recorded"><Eraser className="me-2 h-4 w-4" />{t("baseline_clear_all")}</Button>
+      {dirty && <p className="basis-full text-sm font-medium text-amber-600">{t("baseline_clear_save_first")}</p>}
+    </CardContent></Card>}
     {error && <div role="alert" className="rounded-xl border border-rose-300 p-4 text-rose-600">{error}<Button variant="outline" className="ms-3" onClick={reload}>{t("baseline_reload")}</Button></div>}
     {conflict && <div role="alert" className="rounded-xl border border-amber-400 p-4">{t("baseline_conflict")}<Button variant="outline" className="ms-3" onClick={reload}>{t("baseline_reload")}</Button></div>}
     {(loading || (!records && !error)) && <p role="status">{t("baseline_loading")}</p>}

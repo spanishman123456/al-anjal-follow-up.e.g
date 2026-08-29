@@ -6503,19 +6503,50 @@ async def promote_students(payload: PromotionRequest, current_user: Dict[str, An
 async def delete_all_students(
     school_section: str = Query(default=SCHOOL_SECTION_INTERNATIONAL),
     academic_year: Optional[str] = Query(default=None),
+    class_id: Optional[str] = Query(default=None),
     current_user: Dict[str, Any] = Depends(require_admin),
 ):
-    """Delete students only from the selected school section/year."""
+    """Delete students only from the selected section/year and optional exact class."""
     scope = school_section_query(school_section, academic_year)
+    target_class = None
+    if class_id:
+        target_class = await db.classes.find_one(
+            {"$and": [scope, {"id": class_id}]},
+            {"_id": 0, "id": 1, "name": 1},
+        )
+        if not target_class:
+            raise HTTPException(status_code=404, detail="student_delete_class_not_found")
+        scope = {"$and": [scope, {"class_id": class_id}]}
     students = await db.students.find(scope, {"_id": 0, "id": 1}).to_list(50000)
     student_ids = [s["id"] for s in students]
     if not student_ids:
-        return {"status": "deleted", "students_deleted": 0, "scores_deleted": 0, "message": "No students to delete"}
+        return {
+            "status": "deleted",
+            "students_deleted": 0,
+            "scores_deleted": 0,
+            "arabic_scores_deleted": 0,
+            "target_class_id": class_id,
+            "target_class_name": (target_class or {}).get("name"),
+            "message": "No students to delete",
+        }
     scores_result = await db.student_scores.delete_many({"student_id": {"$in": student_ids}})
     students_result = await db.students.delete_many({"id": {"$in": student_ids}})
-    await db.arabic_quarter_scores.delete_many({"student_id": {"$in": student_ids}})
-    await log_user_action(current_user, "students_delete_all", f"Deleted all students: {students_result.deleted_count} students, {scores_result.deleted_count} score records")
-    return {"status": "deleted", "students_deleted": students_result.deleted_count, "scores_deleted": scores_result.deleted_count}
+    arabic_scores_result = await db.arabic_quarter_scores.delete_many({"student_id": {"$in": student_ids}})
+    target_label = (target_class or {}).get("name") or f"{normalize_school_section(school_section)}/{academic_year or 'all years'}"
+    await log_user_action(
+        current_user,
+        "students_delete_class" if class_id else "students_delete_all",
+        f"Deleted {students_result.deleted_count} students from {target_label}: "
+        f"{scores_result.deleted_count} weekly and {arabic_scores_result.deleted_count} Arabic score records",
+    )
+    return {
+        "status": "deleted",
+        "students_deleted": students_result.deleted_count,
+        "scores_deleted": scores_result.deleted_count,
+        "arabic_scores_deleted": arabic_scores_result.deleted_count,
+        "target_class_id": class_id,
+        "target_class_name": (target_class or {}).get("name"),
+    }
 
 
 @api_router.delete("/students/{student_id}")

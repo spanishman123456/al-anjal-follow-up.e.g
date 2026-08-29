@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useOutletContext } from "react-router-dom";
-import { Download, Save, TestTube2 } from "lucide-react";
+import { Download, Save, Sparkles, TestTube2 } from "lucide-react";
 import { toast } from "sonner";
 import { api, getLocalizedApiErrorMessage } from "@/lib/api";
 import { displayQuarterNumber } from "@/lib/academicScope";
@@ -9,7 +9,9 @@ import {
   ARABIC_EXAM_FIELDS,
   ARABIC_SCORE_FIELDS,
   calculateArabicQuarter,
+  fillArabicScoreColumnWithMaximum,
   formatArabicScore,
+  getArabicFieldMaximum,
 } from "@/lib/arabicGrading";
 import { useTranslations } from "@/lib/i18n";
 import { PageHeader } from "@/components/layout/PageHeader";
@@ -31,6 +33,7 @@ export default function ArabicGrades() {
   const [values, setValues] = useState({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [bulkFillField, setBulkFillField] = useState(ARABIC_SCORE_FIELDS[0].key);
   const [loadError, setLoadError] = useState("");
   const sem = semesterNumber(semester);
   const displayQuarter = displayQuarterNumber(semester, quarter);
@@ -104,6 +107,29 @@ export default function ArabicGrades() {
       ...previous,
       [studentId]: { ...previous[studentId], [key]: Number.isFinite(next) ? next : null },
     }));
+  };
+
+  const fillSelectedColumnWithMaximum = () => {
+    if (classId === "all") {
+      toast.error(t("bulk_grade_class_required"));
+      return;
+    }
+    if (!rows.length) return;
+    const overwritesEnteredScore = rows.some((student) => {
+      const current = values[student.id]?.[bulkFillField];
+      if (current === null || current === undefined || current === "") return false;
+      return Number(current) !== getArabicFieldMaximum(bulkFillField, student);
+    });
+    if (
+      overwritesEnteredScore
+      && !window.confirm(t("fill_max_overwrite_confirm").replace("{field}", t(bulkFillField)))
+    ) return;
+    setValues((previous) => fillArabicScoreColumnWithMaximum(previous, rows, bulkFillField));
+    toast.success(
+      t("fill_max_completed")
+        .replace("{count}", String(rows.length))
+        .replace("{field}", t(bulkFillField)),
+    );
   };
 
   const save = async () => {
@@ -228,6 +254,32 @@ export default function ArabicGrades() {
           </div>
           <p className="text-sm text-muted-foreground">{t("score_sheet_attempt_hint")}</p>
           {hasUnsavedChanges && <p className="text-sm text-amber-600">{t("score_sheet_save_first")}</p>}
+        </CardContent>
+      </Card>
+
+      <Card data-testid="arabic-bulk-grade-tools">
+        <CardContent className="flex flex-col gap-4 pt-6 lg:flex-row lg:items-end lg:justify-between">
+          <div className="space-y-1">
+            <p className="font-semibold">{t("bulk_grade_tools")}</p>
+            <p className="max-w-3xl text-sm text-muted-foreground">{t("bulk_grade_tools_hint")}</p>
+            {classId === "all" && <p className="text-sm text-amber-600" data-testid="arabic-bulk-grade-class-required">{t("bulk_grade_class_required")}</p>}
+          </div>
+          <div className="flex w-full flex-col gap-2 sm:flex-row lg:w-auto">
+            <Select value={bulkFillField} onValueChange={setBulkFillField}>
+              <SelectTrigger className="w-full sm:w-64" data-testid="arabic-bulk-grade-field"><SelectValue placeholder={t("bulk_grade_select_field")} /></SelectTrigger>
+              <SelectContent>
+                {ARABIC_SCORE_FIELDS.map(({ key }) => <SelectItem key={key} value={key}>{t(key)}</SelectItem>)}
+              </SelectContent>
+            </Select>
+            <Button
+              variant="secondary"
+              onClick={fillSelectedColumnWithMaximum}
+              disabled={saving || loading || !rows.length || classId === "all"}
+              data-testid="arabic-fill-max-column"
+            >
+              <Sparkles className="me-2 h-4 w-4" />{t("fill_max_for_class")}
+            </Button>
+          </div>
         </CardContent>
       </Card>
 

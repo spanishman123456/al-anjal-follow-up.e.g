@@ -15,5 +15,15 @@ export function changedBaselineMarks(students, values, maximum) {
   }));
 }
 
+export function fillBaselineMarksWithMaximum(values, students, maximum) {
+  const next = { ...values };
+  students.forEach((student) => { next[student.id] = maximum; });
+  return next;
+}
+
+export function recordedBaselineMarksToClear(students) {
+  return Object.fromEntries(students.filter((student) => student.score != null).map((student) => [student.id, null]));
+}
+
 export const BASELINE_COLORS = { high: "#8B2BEC", medium: "#D97706", support: "#E11D48", missing: "#64748B" };
 export const baselinePercent = (value) => value == null ? "—" : `${value}%`;

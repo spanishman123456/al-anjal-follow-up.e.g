@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useOutletContext } from "react-router-dom";
-import { Download, Upload } from "lucide-react";
+import { AlertTriangle, Download, Trash2, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { api, getLocalizedApiErrorMessage } from "@/lib/api";
 import { useTranslations } from "@/lib/i18n";
@@ -13,7 +13,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "
 import { LoadErrorCard } from "@/components/LoadErrorCard";
 
 export default function ArabicStudents() {
-  const { language, academicYear, classes = [], loadClasses } = useOutletContext();
+  const { language, academicYear, classes = [], loadClasses, profile } = useOutletContext();
   const t = useTranslations(language);
   const [students, setStudents] = useState([]);
   const [classId, setClassId] = useState("all");
@@ -22,6 +22,9 @@ export default function ArabicStudents() {
   const [newClassId, setNewClassId] = useState("");
   const [importing, setImporting] = useState(false);
   const [importSummary, setImportSummary] = useState(null);
+  const [deleteClassOpen, setDeleteClassOpen] = useState(false);
+  const [deletingClass, setDeletingClass] = useState(false);
+  const [loadedClassId, setLoadedClassId] = useState(null);
   const [loadError, setLoadError] = useState("");
   const importInputRef = useRef(null);
 
@@ -32,9 +35,11 @@ export default function ArabicStudents() {
         params: { school_section: "arabic", academic_year: academicYear, class_id: classId === "all" ? undefined : classId },
       });
       setStudents(response.data || []);
+      setLoadedClassId(classId);
     } catch (error) {
       const message = getLocalizedApiErrorMessage(error, t);
       setStudents([]);
+      setLoadedClassId(classId);
       setLoadError(message);
       toast.error(message);
     }
@@ -42,6 +47,7 @@ export default function ArabicStudents() {
 
   useEffect(() => { load(); }, [load]);
   const classMap = useMemo(() => Object.fromEntries(classes.map((item) => [item.id, item.name])), [classes]);
+  const isAdmin = profile?.role_name === "Admin";
 
   const create = async () => {
     if (!fullName.trim() || !newClassId) return;
@@ -71,6 +77,30 @@ export default function ArabicStudents() {
       window.dispatchEvent(new CustomEvent("students-updated"));
     } catch {
       toast.error(t("delete_failed"));
+    }
+  };
+
+  const deleteSelectedClassStudents = async () => {
+    if (classId === "all" || !isAdmin) return;
+    const selectedClassName = classMap[classId] || "";
+    setDeletingClass(true);
+    try {
+      const response = await api.delete("/students", {
+        params: { school_section: "arabic", academic_year: academicYear, class_id: classId },
+      });
+      toast.success(
+        t("class_students_deleted")
+          .replace("{count}", String(response.data?.students_deleted || 0))
+          .replace("{class}", response.data?.target_class_name || selectedClassName),
+      );
+      setDeleteClassOpen(false);
+      setImportSummary(null);
+      await load();
+      window.dispatchEvent(new CustomEvent("students-updated"));
+    } catch (error) {
+      toast.error(getLocalizedApiErrorMessage(error, t, "delete_failed"));
+    } finally {
+      setDeletingClass(false);
     }
   };
 
@@ -184,6 +214,22 @@ export default function ArabicStudents() {
               {importing ? `${t("loading")}…` : t("import_students_excel")}
             </Button>
             <Button onClick={() => setOpen(true)} className="active-glow">{t("add_student")}</Button>
+            {isAdmin && (
+              <Button
+                variant="destructive"
+                onClick={() => {
+                  if (classId === "all") {
+                    toast.error(t("student_management_class_required"));
+                    return;
+                  }
+                  setDeleteClassOpen(true);
+                }}
+                disabled={deletingClass || (classId !== "all" && loadedClassId !== classId)}
+                data-testid="delete-class-students-button"
+              >
+                <Trash2 className="me-2 h-4 w-4" />{t("delete_class_students")}
+              </Button>
+            )}
           </div>
         }
       />
@@ -198,9 +244,27 @@ export default function ArabicStudents() {
         </div>
       )}
       <Card className="premium-active-card"><CardContent className="flex flex-wrap items-center justify-between gap-4 pt-6"><div><p className="text-sm text-muted-foreground">{t("total_students")}</p><p className="text-3xl font-bold">{students.length}</p></div><Select value={classId} onValueChange={setClassId}><SelectTrigger className="w-64"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">{t("all_classes")}</SelectItem>{classes.map((item) => <SelectItem key={item.id} value={item.id}>{item.name}</SelectItem>)}</SelectContent></Select></CardContent></Card>
-      {classId === "all" && <p className="text-sm text-amber-700 dark:text-amber-300" data-testid="arabic-import-class-required">{t("student_import_class_required")}</p>}
+      {classId === "all" && <p className="text-sm text-amber-700 dark:text-amber-300" data-testid="arabic-import-class-required">{t("student_management_class_required")}</p>}
       <Card><CardContent className="p-0"><div className="overflow-x-auto"><table className="w-full text-sm"><thead className="bg-[#10162A] text-white"><tr><th className="p-3 text-start">{t("student")}</th><th className="p-3 text-start">{t("class")}</th><th className="p-3 text-end">{t("actions")}</th></tr></thead><tbody>{students.map((student) => <tr key={student.id} className="border-b hover:bg-cyan-50/50 dark:hover:bg-cyan-950/10"><td className="p-3 font-medium">{student.full_name}</td><td className="p-3">{classMap[student.class_id] || student.class_name}</td><td className="p-3 text-end"><Button size="sm" variant="ghost" onClick={() => remove(student.id)}>{t("delete")}</Button></td></tr>)}</tbody></table></div>{!students.length && <p className="p-8 text-center text-muted-foreground">{t("no_data")}</p>}</CardContent></Card>
       <Dialog open={open} onOpenChange={setOpen}><DialogContent><DialogHeader><DialogTitle>{t("add_student")}</DialogTitle></DialogHeader><div className="grid gap-4"><Input value={fullName} onChange={(event) => setFullName(event.target.value)} placeholder={t("full_name")} autoFocus /><Select value={newClassId} onValueChange={setNewClassId}><SelectTrigger><SelectValue placeholder={t("select_class")} /></SelectTrigger><SelectContent>{classes.map((item) => <SelectItem key={item.id} value={item.id}>{item.name}</SelectItem>)}</SelectContent></Select></div><DialogFooter><Button variant="outline" onClick={() => setOpen(false)}>{t("cancel")}</Button><Button onClick={create}>{t("create")}</Button></DialogFooter></DialogContent></Dialog>
+      <Dialog open={deleteClassOpen} onOpenChange={setDeleteClassOpen}>
+        <DialogContent data-testid="delete-class-students-dialog">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-destructive"><AlertTriangle className="h-5 w-5" />{t("delete_class_students")}</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            {t("delete_class_students_confirm")
+              .replace("{count}", String(students.length))
+              .replace("{class}", classMap[classId] || "")}
+          </p>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteClassOpen(false)} disabled={deletingClass}>{t("cancel")}</Button>
+            <Button variant="destructive" onClick={deleteSelectedClassStudents} disabled={deletingClass} data-testid="delete-class-students-confirm">
+              {deletingClass ? `${t("loading")}…` : t("delete_class_students")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       </>}
     </div>
   );

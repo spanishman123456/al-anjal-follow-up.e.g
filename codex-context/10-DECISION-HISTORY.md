@@ -1,5 +1,9 @@
 # 10 — Decision History
 
+## Decision: Diagnostic/pre-test bulk correction tools (2026-08-30)
+
+Added two class-scope-aware actions to baseline/diagnostic entry: stage the record maximum for every visible student, and clear all saved visible marks after a destructive confirmation showing scope and affected count. Clearing reuses the existing revision-guarded score patch rather than adding a second persistence path; staged maximums still require the normal Save marks action so teachers can review before committing.
+
 ## Decision: Baseline assessments record existing test totals only (2026-08-28)
 
 Owner approved publishing the reviewed pre-test/diagnostic preview. Implemented an isolated collection and API; no question authoring, test delivery, reading/grammar/vocabulary categories or changes to quarter grading. Each record fixes a maximum and historical roster, then accepts score corrections with optimistic concurrency. Teachers own records and require all assigned classes; Admin retains oversight. New enrollments or a changed maximum require a separate record, avoiding silent historical rescaling.
@@ -182,6 +186,14 @@ Format: Decision → Context → Why → Status → Codex Guidance.
 **Decision:** Require and authorize one exact Arabic target class, recognize Arabic name/identity aliases, use Unicode-safe class keys, preview before apply, and validate the whole target-scoped file before the first write. Store `student_number` separately and repair matching legacy numeric-name records during a confirmed re-import.
 
 **Codex Guidance:** Never restore first-column-as-name or second-column-as-class fallbacks for recognized enrollment files. Never normalize Arabic class text with ASCII-only regexes. Keep the selected class authoritative and preserve the dry-run/apply sequence.
+
+## Decision: Destructive roster actions and smart grade fills are exact-class scoped (2026-08-30)
+
+**Context:** Removing a wrongly imported Arabic roster one student at a time was impractical, while a section-wide delete was too dangerous. Repeatedly entering full marks for an entire class was also unnecessary manual work.
+
+**Decision:** Admins may delete all students only from one selected and server-verified class, including only those students’ related score records. Arabic bulk grade fill also requires one selected class, stages one chosen column at its correct fixed/stage-aware maximum, confirms overwrites, and relies on the existing Save Grades action for persistence.
+
+**Codex Guidance:** Never broaden either action to “all classes” implicitly. Keep deletion Admin-only and irreversible-confirmed. Keep fill changes reviewable/unsaved until the normal bulk-save request.
 
 ## Decision: External score sheets import one explicit attempt only (2026-08-29)
 

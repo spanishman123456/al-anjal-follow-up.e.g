@@ -1,5 +1,12 @@
 # 12 — Workflows
 
+## Bulk-correct pre-test / diagnostic marks
+
+1. Open Pre-test Scores / Diagnostic Test Scores and select the mark-entry record.
+2. Optionally select one included class; leaving “All included classes” applies the action to the entire saved roster.
+3. Use **Fill column with maximum** to stage the fixed maximum for every visible student, review the table, then select **Save marks**.
+4. Use **Clear recorded marks** only with no unsaved draft. The confirmation names the current class scope and affected saved-score count; confirmation clears only that scope and advances the record revision.
+
 ## W1 — Login (password)
 
 1. User opens SPA → if no token, `Login`.
@@ -68,6 +75,20 @@ Score-sheet import:
 2. `POST /api/score-sheet/import?apply=false` (or baseline `/{id}/import`) previews matching and validation counts.
 3. User confirms overwrites; the same file is posted with `apply=true`.
 4. Backend writes only the selected score field for existing scoped students. Practical and shaded metadata remain untouched.
+
+Class roster deletion:
+
+1. Admin selects one exact class on Arabic Student Management.
+2. UI displays the loaded roster count and irreversible confirmation.
+3. `DELETE /api/students` sends section/year/class scope.
+4. Backend verifies the class belongs to that scope, then deletes only its students and their weekly/Arabic-quarter score records. Other classes and sections remain untouched.
+
+Arabic smart bulk grading:
+
+1. Select one exact class and one editable grade column.
+2. “Fill maximum” stages `/10` for continuous fields or each student’s stage-aware `/15` or `/20` raw exam maximum.
+3. Confirm before overwriting an entered non-maximum value.
+4. Review the table and use the existing Save Grades action; the fill action itself does not persist.
 
 ## W9 — Award reward certificate
 

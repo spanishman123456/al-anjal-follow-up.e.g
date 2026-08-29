@@ -43,6 +43,7 @@ describe("Arabic student import safeguards", () => {
       academicYear: "2026-2027",
       classes: [{ id: "c4a", name: "رابع أ" }, { id: "c6b", name: "سادس ب" }],
       loadClasses: jest.fn(),
+      profile: { role_name: "Admin" },
     };
     api.get.mockResolvedValue({ data: [] });
     window.confirm = jest.fn(() => true);
@@ -82,5 +83,32 @@ describe("Arabic student import safeguards", () => {
     expect(api.post.mock.calls[0][2].params).toEqual({ school_section: "arabic", academic_year: "2026-2027", class_id: "c4a", dry_run: true });
     expect(api.post.mock.calls[1][2].params).toEqual({ school_section: "arabic", academic_year: "2026-2027", class_id: "c4a" });
     expect(window.confirm).toHaveBeenCalledWith(expect.stringContaining("رابع أ"));
+  });
+
+  it("uses Arabic table labels and deletes only the selected class roster", async () => {
+    api.get.mockResolvedValue({
+      data: [
+        { id: "s1", full_name: "طالب أول", class_id: "c6b", class_name: "سادس ب" },
+        { id: "s2", full_name: "طالب ثان", class_id: "c6b", class_name: "سادس ب" },
+      ],
+    });
+    api.delete.mockResolvedValue({ data: { students_deleted: 2, target_class_name: "سادس ب" } });
+    await act(async () => root.render(<ArabicStudents />));
+
+    expect(container.querySelector("thead").textContent).toContain("اسم الطالب");
+    expect(container.querySelector("thead").textContent).toContain("الصف");
+    expect(container.querySelector("tbody").textContent).toContain("حذف");
+
+    const classSelect = container.querySelector("select");
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value").set.call(classSelect, "c6b");
+      classSelect.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    await act(async () => container.querySelector('[data-testid="delete-class-students-button"]').click());
+    await act(async () => container.querySelector('[data-testid="delete-class-students-confirm"]').click());
+
+    expect(api.delete).toHaveBeenCalledWith("/students", {
+      params: { school_section: "arabic", academic_year: "2026-2027", class_id: "c6b" },
+    });
   });
 });

@@ -6,6 +6,8 @@ In this codebase, **“progress” means academic follow-up scoring and performa
 
 ### Isolated pre-test / diagnostic analysis (2026-08-28)
 
+Entry mode includes class-scope-aware smart tools: fill the visible score column with the fixed record maximum for review before saving, or immediately clear all saved marks in the selected class scope after an explicit count/scope confirmation. Both reuse the optimistic-revision score update and do not alter the record maximum or historical roster.
+
 `baseline_assessments.py` is authoritative for this new score-only workflow. Percentage = raw total / teacher-specified maximum × 100. A record can use any positive finite maximum (up to 1,000,000); it is not inferred from teacher or grade. High is >=75%, Medium >=50% and <75%, Needs support <50% (including 30%). Blank remains missing; numeric zero is assessed. Classification uses the unrounded Decimal ratio; displayed numbers are rounded half-up to two places.
 
 These thresholds apply in **both sections only to baseline tests**; they do not define Arabic quarter thresholds or change International grading. Averages exclude missing marks, completion counts numeric zero, distribution includes missing separately, and class comparisons stay within one test. Total scores support numerical interpretation/general recommendations, never invented topic weaknesses.
@@ -90,5 +92,7 @@ Quarter /100 = continuous 40 + tests 60
 ```
 
 Primary (grades 1–6) raw exams are `/15`; Middle (grades 7–9) and Secondary (grade 10+) raw exams are `/20`. Stage is derived only from canonical `classes.grade`. All three attempts—Theory 1, Theory 2, and Practical—must be entered for full completion, while available valid entries may produce a provisional total. Semester 1 displays Q1/Q2; Semester 2 displays Q3/Q4. Each quarter is independent. A score of `0` counts as entered/tested; `null` is missing. Arabic performance thresholds are intentionally **not configured** yet, so Arabic analytics report totals and completion rather than applying International bands.
+
+The Arabic grade editor includes class-scoped smart bulk grading. An Admin/Teacher selects one exact class and one of the seven editable fields, then can stage the correct maximum for every visible student (`/10` continuous fields; per-student `/15` or `/20` exam raw maximum). Existing different marks require overwrite confirmation, and no database write occurs until the normal Save Grades action. Calculations and completion rules are unchanged.
 
 The dedicated score-sheet import maps `درجة التسليم` to one explicitly chosen Theory 1 or Theory 2 attempt and validates each student's `/15` or `/20` maximum. Practical remains manual. International assessment import uses the same one-file/one-target rule for Quiz 1 or Quiz 2 of the active quarter (stored as quiz1/quiz2 in Q1 and quiz3/quiz4 in Q2), maximum `/5`; chapter practical is never imported. These imports do not create or transfer students and do not use the broad enrollment importer.

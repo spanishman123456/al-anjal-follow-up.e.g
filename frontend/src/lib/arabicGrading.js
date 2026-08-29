@@ -11,6 +11,23 @@ export const ARABIC_SCORE_FIELDS = [
   ...ARABIC_EXAM_FIELDS.map((key) => ({ key, test: true })),
 ];
 
+export function getArabicFieldMaximum(fieldKey, student) {
+  const field = ARABIC_SCORE_FIELDS.find(({ key }) => key === fieldKey);
+  if (!field) throw new Error(`Unknown Arabic score field: ${fieldKey}`);
+  return field.test ? Number(student?.exam_raw_max) : field.max;
+}
+
+export function fillArabicScoreColumnWithMaximum(values, students, fieldKey) {
+  const next = { ...(values || {}) };
+  for (const student of students || []) {
+    next[student.id] = {
+      ...(next[student.id] || {}),
+      [fieldKey]: getArabicFieldMaximum(fieldKey, student),
+    };
+  }
+  return next;
+}
+
 const entered = (value) => value !== null && value !== undefined && value !== "";
 
 export function calculateArabicQuarter(values, examRawMax) {

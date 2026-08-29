@@ -72,6 +72,12 @@ class _Collection:
             return SimpleNamespace(modified_count=0, upserted_id="new")
         return SimpleNamespace(modified_count=0, upserted_id=None)
 
+    async def delete_many(self, query):
+        kept = [row for row in self.rows if not _matches(row, query)]
+        deleted_count = len(self.rows) - len(kept)
+        self.rows = kept
+        return SimpleNamespace(deleted_count=deleted_count)
+
 
 def test_arabic_excel_import_creates_only_arabic_identity_records():
     international_class = {
@@ -279,3 +285,45 @@ def test_arabic_import_rejects_unassigned_teacher_target_class():
     assert forbidden.value.status_code == 403
     assert forbidden.value.detail == "student_import_target_class_forbidden"
     assert fake_db.students.rows == []
+
+
+def test_delete_all_students_can_be_scoped_to_one_arabic_class():
+    class_4a = {
+        "id": "arabic-4a", "name": "رابع أ", "school_section": "arabic", "academic_year": "2026-2027",
+    }
+    class_6b = {
+        "id": "arabic-6b", "name": "سادس ب", "school_section": "arabic", "academic_year": "2026-2027",
+    }
+    students = [
+        {"id": "keep-4a", "class_id": "arabic-4a", "school_section": "arabic", "academic_year": "2026-2027"},
+        {"id": "delete-6b-1", "class_id": "arabic-6b", "school_section": "arabic", "academic_year": "2026-2027"},
+        {"id": "delete-6b-2", "class_id": "arabic-6b", "school_section": "arabic", "academic_year": "2026-2027"},
+        {"id": "keep-international", "class_id": "international-6b", "school_section": "international", "academic_year": "2026-2027"},
+    ]
+    fake_db = SimpleNamespace(
+        classes=_Collection([class_4a, class_6b]),
+        students=_Collection(students),
+        student_scores=_Collection([
+            {"student_id": "keep-4a"}, {"student_id": "delete-6b-1"}, {"student_id": "delete-6b-2"},
+        ]),
+        arabic_quarter_scores=_Collection([
+            {"student_id": "keep-4a"}, {"student_id": "delete-6b-1"}, {"student_id": "delete-6b-2"},
+        ]),
+    )
+    with patch.object(server, "db", fake_db), patch.object(server, "log_user_action", AsyncMock()):
+        result = asyncio.run(
+            server.delete_all_students(
+                school_section="arabic",
+                academic_year="2026-2027",
+                class_id="arabic-6b",
+                current_user={"id": "admin", "role_name": "Admin", "name": "Admin"},
+            )
+        )
+
+    assert result["students_deleted"] == 2
+    assert result["scores_deleted"] == 2
+    assert result["arabic_scores_deleted"] == 2
+    assert result["target_class_name"] == "سادس ب"
+    assert {row["id"] for row in fake_db.students.rows} == {"keep-4a", "keep-international"}
+    assert fake_db.student_scores.rows == [{"student_id": "keep-4a"}]
+    assert fake_db.arabic_quarter_scores.rows == [{"student_id": "keep-4a"}]

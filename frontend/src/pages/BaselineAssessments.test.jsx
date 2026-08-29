@@ -1,7 +1,7 @@
 import React, { act } from "react";
 import { createRoot } from "react-dom/client";
 import { api } from "../lib/api";
-import { changedBaselineMarks, parseBaselineMark } from "../lib/baselineScores";
+import { changedBaselineMarks, fillBaselineMarksWithMaximum, parseBaselineMark, recordedBaselineMarksToClear } from "../lib/baselineScores";
 import { buildNavigationGroups } from "../lib/navigationConfig";
 import { getTranslation } from "../lib/i18n";
 
@@ -39,6 +39,8 @@ describe("baseline inputs and navigation", () => {
     expect(parseBaselineMark("١٥٫٥", 20)).toBe(15.5);
     for (const raw of ["NaN", "Infinity", "-1", "21", "abc"]) expect(() => parseBaselineMark(raw, 20)).toThrow();
     expect(changedBaselineMarks(fixture().students, { s1: "15", s2: "0", s3: "" }, 20)).toEqual({ s2: 0, s3: null });
+    expect(fillBaselineMarksWithMaximum({ s1: "11", hidden: "7" }, fixture().students.slice(0, 2), 20)).toEqual({ s1: 20, s2: 20, hidden: "7" });
+    expect(recordedBaselineMarksToClear(fixture().students)).toEqual({ s1: null, s3: null });
   });
   it.each(["en", "ar"])("keeps both section labels and existing assessment links in %s", (lang) => {
     for (const section of ["arabic", "international"]) {
@@ -132,6 +134,19 @@ describe("baseline page", () => {
     await render(); await changeInput(1, "10");
     await act(async () => button("Save marks").click());
     expect(api.patch).toHaveBeenCalledWith("/baseline-assessments/r1/scores", { revision: 1, scores: { s2: 10 } });
+  });
+  it("fills the visible score column with the maximum and saves it after review", async () => {
+    await render();
+    await act(async () => container.querySelector('[data-testid="baseline-fill-maximum"]').click());
+    expect([...container.querySelectorAll('input[inputmode="decimal"]')].map((input) => input.value)).toEqual(["20", "20", "20"]);
+    await act(async () => button("Save marks").click());
+    expect(api.patch).toHaveBeenCalledWith("/baseline-assessments/r1/scores", { revision: 1, scores: { s1: 20, s2: 20, s3: 20 } });
+  });
+  it("clears all saved marks in the visible scope with one confirmed action", async () => {
+    await render();
+    await act(async () => container.querySelector('[data-testid="baseline-clear-recorded"]').click());
+    expect(window.confirm).toHaveBeenCalledWith(expect.stringContaining("Students affected: 2"));
+    expect(api.patch).toHaveBeenCalledWith("/baseline-assessments/r1/scores", { revision: 1, scores: { s1: null, s3: null } });
   });
   it("blocks invalid scores and protects drafts across scope changes", async () => {
     await render(); await changeInput(1, "21");
