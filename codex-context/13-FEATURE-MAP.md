@@ -23,8 +23,8 @@
 | Total marks matrix | `TotalMarks.jsx` | combined edit | scores | bulk-scores | `TotalMarks.jsx` |
 | Pre-test / diagnostic marks | `BaselineAssessments.jsx` entry mode | Variable maximum; independent >=75 / >=50 bands; revision-safe totals; previewed Excel import | `baseline_assessments` | `/baseline-assessments`, `/{id}/scores`, `/{id}/import` | `baseline_assessments.py`, `score_sheet.py` |
 | Baseline analytics/PDF/Excel | Same page | Shared snapshot, student donut, horizontal bars, numerical interpretation; exact 11-column Excel template | Same collection | `/{id}`, `/{id}/export.pdf`, `/{id}/export.xlsx` | `baseline_assessments.py`, `baseline_pdf.py`, `score_sheet.py` |
-| Arabic quarter grades | `ArabicGrades.jsx` | `/40 + best theory /30 + practical /30`; Excel import targets one theory attempt only | `arabic_quarter_scores` | `/arabic/grades`, `/score-sheet/import`, Arabic exports | page + shared import control + server |
-| Classes | `Classes.jsx` | CRUD + summary | `classes` | `/classes*` | `Classes.jsx` |
+| Arabic quarter grades | `ArabicGrades.jsx` | `/40 + best theory /30 + practical /30`; Excel import targets one theory attempt only; persistent localized load failure + retry | `arabic_quarter_scores` | `/arabic/grades`, `/score-sheet/import`, Arabic exports | page + shared import control + server |
+| Classes | `Classes.jsx` | CRUD + summary; Arabic grade required and legacy Arabic ordinal metadata backfill | `classes` | `/classes*` | `Classes.jsx` + server startup migration |
 | Analytics | `Analytics.jsx` | charts/insights | aggregated | `/analytics/overview`, export | VisualBoard, server PDF |
 | Reports | `Reports.jsx` | grade reports | aggregated | `/reports/grade`, export | Reports + pdf engine |
 | Weekly report settings | Settings/report scheduling paths | scheduled admin report configuration | `report_settings` | `/reports/settings` | `server.py` |

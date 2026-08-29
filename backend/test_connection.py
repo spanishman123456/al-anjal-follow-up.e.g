@@ -12,7 +12,7 @@ import asyncio
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
-async def test_connection():
+async def check_connection():
     mongo_url = os.environ.get('MONGO_URL')
     db_name = os.environ.get('DB_NAME', 'school_db')
     
@@ -54,4 +54,4 @@ async def test_connection():
         return False
 
 if __name__ == "__main__":
-    asyncio.run(test_connection())
+    asyncio.run(check_connection())

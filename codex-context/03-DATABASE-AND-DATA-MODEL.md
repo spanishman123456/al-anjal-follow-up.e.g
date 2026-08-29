@@ -52,6 +52,7 @@ Default DB name: `school_db` (`DB_NAME`).
 - `classes.section` still means the A/B classroom suffix. It was deliberately **not** repurposed.
 - `classes.school_section` and `students.school_section` hold the school division.
 - `classes.academic_year` and `students.academic_year` support year isolation.
+- `classes.grade` is required scoring metadata for Arabic classes. Startup safely backfills a missing/invalid grade and A/B section only when an Arabic class name is unambiguous (for example `رابع أ`); it never renames the class or guesses an unparseable grade.
 - Arabic grades are stored separately in `arabic_quarter_scores`; International grades remain in `student_scores` unchanged.
 - Arabic score documents denormalize `school_section: arabic` and `academic_year` and have a unique compound index on student/year/semester/quarter.
 

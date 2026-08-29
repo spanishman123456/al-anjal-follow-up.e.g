@@ -1,5 +1,13 @@
 # 16 — Current State
 
+## Arabic page load recovery (2026-08-29)
+
+- Live read-only diagnosis confirmed that the repeated `load_failed` was not the normal empty-roster state: six Arabic classes had valid names (`رابع أ` through `سادس ب`) but null numeric `grade` metadata, causing `/api/arabic/grades` to fail before reading the empty student roster.
+- Arabic class-name parsing now understands Arabic ordinals and Arabic A/B suffixes. Startup safely backfills only unambiguous missing grade/section values; new Arabic classes cannot be created without a resolvable numeric grade.
+- An unresolved empty legacy class no longer takes down the Arabic grades/dashboard response. If enrolled students depend on unresolved metadata, score entry fails closed with the stable bilingual `arabic_class_grade_required` message.
+- Arabic Grades, Students and Overview no longer replace a failed request with misleading zero cards. They show a persistent bilingual error with Retry; shared API error localization prevents raw keys such as `load_failed` appearing to users.
+- Verification: all 68 backend tests passed, all 10 frontend suites / 51 tests passed, Python compilation passed, and the optimized CRACO production build plus SPA postbuild passed. The legacy Mongo connection utility remains directly runnable but is no longer mis-collected as an async unit test.
+
 ## Score-sheet import/export (2026-08-29)
 
 - Pre-test (International) and diagnostic-test (Arabic) entry now show Import Excel, Export Excel and Export PDF together. Excel export uses the supplied 11 Arabic headers in the exact order and preserves the unshaded A/C/D/E versus shaded B/F–K convention.

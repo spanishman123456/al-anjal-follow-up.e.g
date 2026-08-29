@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { api, getApiErrorMessage } from "@/lib/api";
+import { api, getApiErrorMessage, getLocalizedApiErrorMessage } from "@/lib/api";
 import { ExpandableSection } from "@/components/ExpandableSection";
 import TimetableEditor from "@/components/TimetableEditor";
 import { Button } from "@/components/ui/button";
@@ -29,7 +29,7 @@ export function DashboardTimetable({
         if (active) setSchedule(response.data?.schedule || {});
       })
       .catch((error) => {
-        if (active) toast.error(getApiErrorMessage(error) || t("load_failed"));
+        if (active) toast.error(getLocalizedApiErrorMessage(error, t));
       })
       .finally(() => {
         if (active) setLoading(false);

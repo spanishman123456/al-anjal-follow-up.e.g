@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useOutletContext, Link } from "react-router-dom";
 import { buildAcademicExportFilename } from "@/lib/exportFilenames";
 import { toast } from "sonner";
-import { api, getApiErrorMessage } from "@/lib/api";
+import { api, getApiErrorMessage, getLocalizedApiErrorMessage } from "@/lib/api";
 import { displayQuarterLabel } from "@/lib/academicScope";
 import { useTranslations } from "@/lib/i18n";
 import { PageHeader } from "@/components/layout/PageHeader";
@@ -170,7 +170,7 @@ export default function Classes() {
         loadClasses();
         if (typeof refreshGlobalClasses === "function") refreshGlobalClasses();
       } else {
-        toast.error(getApiErrorMessage(error) || t("class_add_failed"));
+        toast.error(getLocalizedApiErrorMessage(error, t, "class_add_failed"));
       }
     }
   };

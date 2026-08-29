@@ -141,5 +141,25 @@ export function getApiErrorMessage(error) {
   return error.message || "Something went wrong.";
 }
 
+/** Translate stable backend error codes and avoid leaking raw i18n keys to users. */
+export function getLocalizedApiErrorMessage(error, t, fallbackKey = "load_failed") {
+  const translate = (key) => {
+    if (!key || typeof t !== "function") return null;
+    const translated = t(key);
+    return translated && translated !== key ? translated : null;
+  };
+  const detail = error?.response?.data?.detail;
+  if (typeof detail === "string") return translate(detail) || detail;
+  if (detail && typeof detail === "object") {
+    const code = detail.code || detail.error_code;
+    if (code) return translate(code) || detail.message || code;
+    if (detail.msg) return detail.msg;
+  }
+  if (error?.code === "ECONNABORTED" || error?.message === "Network Error") {
+    return translate("load_failed_connection") || getApiErrorMessage(error);
+  }
+  return translate(fallbackKey) || getApiErrorMessage(error);
+}
+
 export const API_BASE_URL = API_BASE;
 export const BACKEND_ROOT_URL = BACKEND_ROOT;

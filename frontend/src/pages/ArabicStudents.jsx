@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useOutletContext } from "react-router-dom";
 import { Download, Upload } from "lucide-react";
 import { toast } from "sonner";
-import { api } from "@/lib/api";
+import { api, getLocalizedApiErrorMessage } from "@/lib/api";
 import { useTranslations } from "@/lib/i18n";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Button } from "@/components/ui/button";
@@ -10,6 +10,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { LoadErrorCard } from "@/components/LoadErrorCard";
 
 export default function ArabicStudents() {
   const { language, academicYear, classes = [], loadClasses } = useOutletContext();
@@ -21,16 +22,21 @@ export default function ArabicStudents() {
   const [newClassId, setNewClassId] = useState("");
   const [importing, setImporting] = useState(false);
   const [importSummary, setImportSummary] = useState(null);
+  const [loadError, setLoadError] = useState("");
   const importInputRef = useRef(null);
 
   const load = useCallback(async () => {
+    setLoadError("");
     try {
       const response = await api.get("/students", {
         params: { school_section: "arabic", academic_year: academicYear, class_id: classId === "all" ? undefined : classId },
       });
       setStudents(response.data || []);
-    } catch {
-      toast.error(t("load_failed"));
+    } catch (error) {
+      const message = getLocalizedApiErrorMessage(error, t);
+      setStudents([]);
+      setLoadError(message);
+      toast.error(message);
     }
   }, [academicYear, classId, t]);
 
@@ -152,6 +158,7 @@ export default function ArabicStudents() {
           </div>
         }
       />
+      {loadError ? <LoadErrorCard message={loadError} onRetry={load} t={t} testId="arabic-students-load-error" /> : <>
       {importSummary && (
         <div className="rounded-2xl border border-emerald-300/60 bg-emerald-50/70 px-4 py-3 text-sm text-emerald-900 dark:border-emerald-700/60 dark:bg-emerald-950/20 dark:text-emerald-100" data-testid="arabic-import-summary">
           {t("student_import_summary")
@@ -164,6 +171,7 @@ export default function ArabicStudents() {
       <Card className="premium-active-card"><CardContent className="flex flex-wrap items-center justify-between gap-4 pt-6"><div><p className="text-sm text-muted-foreground">{t("total_students")}</p><p className="text-3xl font-bold">{students.length}</p></div><Select value={classId} onValueChange={setClassId}><SelectTrigger className="w-64"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">{t("all_classes")}</SelectItem>{classes.map((item) => <SelectItem key={item.id} value={item.id}>{item.name}</SelectItem>)}</SelectContent></Select></CardContent></Card>
       <Card><CardContent className="p-0"><div className="overflow-x-auto"><table className="w-full text-sm"><thead className="bg-[#10162A] text-white"><tr><th className="p-3 text-start">{t("student")}</th><th className="p-3 text-start">{t("class")}</th><th className="p-3 text-end">{t("actions")}</th></tr></thead><tbody>{students.map((student) => <tr key={student.id} className="border-b hover:bg-cyan-50/50 dark:hover:bg-cyan-950/10"><td className="p-3 font-medium">{student.full_name}</td><td className="p-3">{classMap[student.class_id] || student.class_name}</td><td className="p-3 text-end"><Button size="sm" variant="ghost" onClick={() => remove(student.id)}>{t("delete")}</Button></td></tr>)}</tbody></table></div>{!students.length && <p className="p-8 text-center text-muted-foreground">{t("no_data")}</p>}</CardContent></Card>
       <Dialog open={open} onOpenChange={setOpen}><DialogContent><DialogHeader><DialogTitle>{t("add_student")}</DialogTitle></DialogHeader><div className="grid gap-4"><Input value={fullName} onChange={(event) => setFullName(event.target.value)} placeholder={t("full_name")} autoFocus /><Select value={newClassId} onValueChange={setNewClassId}><SelectTrigger><SelectValue placeholder={t("select_class")} /></SelectTrigger><SelectContent>{classes.map((item) => <SelectItem key={item.id} value={item.id}>{item.name}</SelectItem>)}</SelectContent></Select></div><DialogFooter><Button variant="outline" onClick={() => setOpen(false)}>{t("cancel")}</Button><Button onClick={create}>{t("create")}</Button></DialogFooter></DialogContent></Dialog>
+      </>}
     </div>
   );
 }

@@ -3,7 +3,7 @@ import { useOutletContext } from "react-router-dom";
 import { BarChart3, Download, Medal, ShieldAlert, Sigma, UsersRound } from "lucide-react";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { toast } from "sonner";
-import { api } from "@/lib/api";
+import { api, getLocalizedApiErrorMessage } from "@/lib/api";
 import { displayQuarterNumber } from "@/lib/academicScope";
 import { ARABIC_EXAM_FIELDS, formatArabicScore } from "@/lib/arabicGrading";
 import { useTranslations } from "@/lib/i18n";
@@ -14,6 +14,7 @@ import { Progress } from "@/components/ui/progress";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { buildArabicPerformanceSummary } from "./arabicPerformanceSummary";
 import { DashboardTimetable } from "@/components/dashboard/DashboardTimetable";
+import { LoadErrorCard } from "@/components/LoadErrorCard";
 
 const semNumber = (semester) => (semester === "semester2" ? 2 : 1);
 const TESTS = ARABIC_EXAM_FIELDS;
@@ -117,13 +118,20 @@ export function ArabicOverview({ variant = "dashboard" }) {
   const t = useTranslations(language);
   const [classId, setClassId] = useState("all");
   const [data, setData] = useState(null);
+  const [loadError, setLoadError] = useState("");
   const displayQ = displayQuarterNumber(semester, quarter);
 
   const load = useCallback(async () => {
+    setLoadError("");
     try {
       const response = await api.get("/arabic/grades", { params: { academic_year: academicYear, semester: semNumber(semester), quarter, class_id: classId === "all" ? undefined : classId } });
       setData(response.data);
-    } catch { toast.error(t("load_failed")); }
+    } catch (error) {
+      const message = getLocalizedApiErrorMessage(error, t);
+      setData(null);
+      setLoadError(message);
+      toast.error(message);
+    }
   }, [academicYear, classId, quarter, semester, t]);
 
   useEffect(() => { load(); }, [load]);
@@ -156,6 +164,8 @@ export function ArabicOverview({ variant = "dashboard" }) {
   return <div className="space-y-6" data-testid={`arabic-${variant}`}>
     <PageHeader title={title} eyebrow={`${t("arabic_section")} · ${academicYear} · Q${displayQ}`} description={t("arabic_grading_description")} badges={["S1 = Q1 + Q2", "S2 = Q3 + Q4", "Each quarter /100"]} testIdPrefix={`arabic-${variant}`} action={<div className="flex flex-wrap gap-2"><Select value={classId} onValueChange={setClassId}><SelectTrigger className="w-52 border-white/30 bg-white/10 text-white"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">{t("all_classes")}</SelectItem>{classes.map((item) => <SelectItem key={item.id} value={item.id}>{item.name}</SelectItem>)}</SelectContent></Select>{variant === "reports" && <><Button variant="secondary" onClick={() => download("pdf")}><Download className="me-2 h-4 w-4" />PDF</Button><Button variant="secondary" onClick={() => download("excel")}><Download className="me-2 h-4 w-4" />Excel</Button></>}</div>} />
 
+    {loadError ? <LoadErrorCard message={loadError} onRetry={load} t={t} testId={`arabic-${variant}-load-error`} /> : <>
+
     <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4 animate-stagger">{metrics.map(([label, value]) => <Card key={label} className="premium-active-card card-hover"><CardContent className="pt-6"><p className="text-sm text-muted-foreground">{label}</p><p className="mt-2 text-3xl font-bold">{value}</p></CardContent></Card>)}</div>
 
     {showPerformanceSummary && <ArabicPerformanceCards data={data} t={t} />}
@@ -177,5 +187,6 @@ export function ArabicOverview({ variant = "dashboard" }) {
         testIdPrefix="arabic-dashboard-timetable"
       />
     )}
+    </>}
   </div>;
 }

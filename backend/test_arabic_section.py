@@ -1,20 +1,93 @@
+import asyncio
 import io
+from types import SimpleNamespace
+from unittest.mock import patch
 
 import pytest
+from fastapi import HTTPException
 from openpyxl import load_workbook
 
+import server
 from server import (
     SCHOOL_SECTION_ARABIC,
     SCHOOL_SECTION_INTERNATIONAL,
     arabic_educational_stage_for_grade,
     arabic_exam_raw_max_for_grade,
     arabic_score_summary,
+    build_arabic_grading_payload,
+    ClassBase,
+    ClassUpdate,
     classify_legacy_arabic_practical,
+    create_class,
     generate_arabic_grades_excel,
     generate_arabic_grades_pdf,
     school_section_query,
+    parse_class_name,
+    migrate_arabic_class_metadata,
+    update_class,
     validate_arabic_exam_values,
 )
+from test_arabic_import import _matches
+
+
+class _Cursor:
+    def __init__(self, rows):
+        self.rows = list(rows)
+
+    def sort(self, *_args):
+        return self
+
+    async def to_list(self, limit):
+        return [dict(row) for row in self.rows[:limit]]
+
+    def __aiter__(self):
+        self._index = 0
+        return self
+
+    async def __anext__(self):
+        if self._index >= len(self.rows):
+            raise StopAsyncIteration
+        row = dict(self.rows[self._index])
+        self._index += 1
+        return row
+
+
+class _Collection:
+    def __init__(self, rows=()):
+        self.rows = [dict(row) for row in rows]
+
+    def find(self, query=None, projection=None):
+        rows = [row for row in self.rows if _matches(row, query or {})]
+        if projection:
+            included = [key for key, value in projection.items() if value and key != "_id"]
+            if included:
+                rows = [{key: row[key] for key in included if key in row} for row in rows]
+            elif projection.get("_id") == 0:
+                rows = [{key: value for key, value in row.items() if key != "_id"} for row in rows]
+        return _Cursor(rows)
+
+    async def update_one(self, query, update):
+        for row in self.rows:
+            if _matches(row, query):
+                row.update(update.get("$set", {}))
+                return SimpleNamespace(matched_count=1)
+        return SimpleNamespace(matched_count=0)
+
+    async def find_one(self, query, projection=None):
+        for row in self.rows:
+            if _matches(row, query):
+                result = dict(row)
+                if projection and projection.get("_id") == 0:
+                    result.pop("_id", None)
+                return result
+        return None
+
+    async def find_one_and_update(self, query, update, return_document=None):
+        for row in self.rows:
+            if _matches(row, query):
+                row.update(update.get("$set", {}))
+                return dict(row)
+        return None
 
 
 def test_primary_uses_best_theory_and_weights_each_contribution_to_30():
@@ -86,6 +159,90 @@ def test_stage_is_derived_from_canonical_class_grade():
     assert arabic_exam_raw_max_for_grade(12) == 20
     with pytest.raises(ValueError):
         arabic_exam_raw_max_for_grade(None)
+
+
+@pytest.mark.parametrize(
+    ("name", "grade", "section"),
+    [
+        ("رابع أ", 4, "A"), ("رابع ب", 4, "B"), ("خامس أ", 5, "A"),
+        ("سادس ب", 6, "B"), ("الصف الحادي عشر أ", 11, "A"), ("٤A", 4, "A"),
+    ],
+)
+def test_arabic_class_names_resolve_canonical_grade_and_section(name, grade, section):
+    assert parse_class_name(name) == {"grade": grade, "section": section}
+
+
+def test_empty_arabic_roster_loads_even_when_legacy_class_name_is_unresolved():
+    fake_db = SimpleNamespace(
+        classes=_Collection([{
+            "_id": "mongo-c1", "id": "c1", "name": "حلقة الحاسب", "grade": None,
+            "section": None, "school_section": "arabic", "academic_year": "2026-2027",
+        }]),
+        students=_Collection(),
+        arabic_quarter_scores=_Collection(),
+    )
+    with patch.object(server, "db", fake_db):
+        payload = asyncio.run(build_arabic_grading_payload(
+            "2026-2027", 1, 1, None, {"id": "admin", "role_name": "Admin"},
+        ))
+    assert payload["total_students"] == 0
+    assert payload["class_breakdown"][0]["student_count"] == 0
+    assert payload["configuration_issues"] == [{
+        "code": "arabic_class_grade_required", "class_id": "c1", "class_name": "حلقة الحاسب",
+    }]
+
+
+def test_arabic_class_metadata_migration_repairs_only_unambiguous_legacy_names():
+    classes = _Collection([
+        {"_id": "m1", "id": "c1", "name": "رابع أ", "grade": None, "section": "رابع أ", "school_section": "arabic"},
+        {"_id": "m2", "id": "c2", "name": "حلقة الحاسب", "grade": None, "section": None, "school_section": "arabic"},
+    ])
+    with patch.object(server, "db", SimpleNamespace(classes=classes)):
+        result = asyncio.run(migrate_arabic_class_metadata())
+    assert result == {"examined": 2, "updated": 1, "unresolved": 1}
+    assert classes.rows[0]["grade"] == 4 and classes.rows[0]["section"] == "A"
+    assert classes.rows[1]["grade"] is None
+
+
+def test_new_arabic_class_requires_resolvable_positive_grade():
+    with patch.object(server, "db", SimpleNamespace(classes=_Collection())), pytest.raises(HTTPException) as error:
+        asyncio.run(create_class(
+            ClassBase(name="حلقة الحاسب", school_section="arabic", academic_year="2026-2027"),
+            {"id": "admin", "role_name": "Admin"},
+        ))
+    assert error.value.status_code == 422
+    assert error.value.detail == "arabic_class_grade_required"
+
+
+def test_renaming_arabic_class_to_unparseable_name_preserves_existing_grade():
+    classes = _Collection([{
+        "id": "c1", "name": "رابع أ", "grade": 4, "section": "A",
+        "school_section": "arabic", "academic_year": "2026-2027",
+    }])
+    with patch.object(server, "db", SimpleNamespace(classes=classes)):
+        result = asyncio.run(update_class("c1", ClassUpdate(name="حلقة الحاسب")))
+    assert result["name"] == "حلقة الحاسب"
+    assert result["grade"] == 4
+
+
+def test_unresolved_arabic_class_with_students_returns_stable_configuration_error():
+    fake_db = SimpleNamespace(
+        classes=_Collection([{
+            "id": "c1", "name": "حلقة الحاسب", "grade": None, "section": None,
+            "school_section": "arabic", "academic_year": "2026-2027",
+        }]),
+        students=_Collection([{
+            "id": "s1", "full_name": "طالب تجريبي", "class_id": "c1", "class_name": "حلقة الحاسب",
+            "school_section": "arabic", "academic_year": "2026-2027",
+        }]),
+        arabic_quarter_scores=_Collection(),
+    )
+    with patch.object(server, "db", fake_db), pytest.raises(HTTPException) as error:
+        asyncio.run(build_arabic_grading_payload(
+            "2026-2027", 1, 1, None, {"id": "admin", "role_name": "Admin"},
+        ))
+    assert error.value.status_code == 409
+    assert error.value.detail == "arabic_class_grade_required"
 
 
 def test_stage_specific_raw_validation_rejects_scores_above_maximum():

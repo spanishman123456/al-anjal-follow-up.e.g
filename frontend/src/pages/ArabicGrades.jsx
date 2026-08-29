@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useOutletContext } from "react-router-dom";
 import { Download, Save, TestTube2 } from "lucide-react";
 import { toast } from "sonner";
-import { api } from "@/lib/api";
+import { api, getLocalizedApiErrorMessage } from "@/lib/api";
 import { displayQuarterNumber } from "@/lib/academicScope";
 import {
   ARABIC_CONTINUOUS_FIELDS,
@@ -19,6 +19,7 @@ import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ScoreSheetImportControl } from "@/components/ScoreSheetImportControl";
+import { LoadErrorCard } from "@/components/LoadErrorCard";
 
 const semesterNumber = (semester) => (semester === "semester2" ? 2 : 1);
 
@@ -30,12 +31,14 @@ export default function ArabicGrades() {
   const [values, setValues] = useState({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [loadError, setLoadError] = useState("");
   const sem = semesterNumber(semester);
   const displayQuarter = displayQuarterNumber(semester, quarter);
 
   const loadGrades = useCallback(async () => {
     if (schoolSection !== "arabic") return;
     setLoading(true);
+    setLoadError("");
     try {
       const response = await api.get("/arabic/grades", {
         params: {
@@ -55,8 +58,12 @@ export default function ArabicGrades() {
           ]),
         ),
       );
-    } catch {
-      toast.error(t("load_failed"));
+    } catch (error) {
+      const message = getLocalizedApiErrorMessage(error, t);
+      setPayload(null);
+      setValues({});
+      setLoadError(message);
+      toast.error(message);
     } finally {
       setLoading(false);
     }
@@ -159,6 +166,8 @@ export default function ArabicGrades() {
         }
       />
 
+      {loadError ? <LoadErrorCard message={loadError} onRetry={loadGrades} t={t} testId="arabic-grades-load-error" /> : <>
+
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4 animate-stagger">
         {metrics.map(([label, value]) => (
           <Card key={label} className="premium-active-card card-hover">
@@ -239,6 +248,7 @@ export default function ArabicGrades() {
           {!loading && !rows.length && <div className="p-10 text-center text-muted-foreground"><TestTube2 className="mx-auto mb-3 h-8 w-8" />{t("no_data")}</div>}
         </CardContent>
       </Card>
+      </>}
     </div>
   );
 }

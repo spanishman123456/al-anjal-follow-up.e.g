@@ -149,6 +149,13 @@ Format: Decision → Context → Why → Status → Codex Guidance.
 **Status:** Active. Primary raw exams are `/15`; Middle/Secondary raw exams are `/20`, derived from `classes.grade`.
 **Codex Guidance:** Never add both theory attempts, never infer stage from teacher identity, preserve entered `0`, require all three attempts for completion, and retain/flag ambiguous legacy practical data rather than overwriting it.
 
+## Decision: Arabic class grade metadata fails safely and self-repairs only when unambiguous
+
+**Context:** Legacy Arabic classes could have names such as `رابع أ` while `classes.grade` was null. The Arabic grades API validated every class before reading students, so even an empty roster returned `load_failed` and the UI displayed misleading zero metrics.
+**Why:** Arabic raw exam maxima depend on the numeric grade, but an empty legacy class must not take down every Arabic dashboard.
+**Status:** Active. Arabic ordinal names are parsed bilingually, startup backfills missing grade/section metadata when unambiguous, and new Arabic classes require a numeric grade.
+**Codex Guidance:** Keep `classes.grade` authoritative. Do not guess unparseable names. Allow unresolved empty legacy classes to load with a configuration issue, but block score operations with stable `arabic_class_grade_required` once students depend on that class.
+
 ---
 
 ## Decision: Calendar sync fails closed and preserves cache

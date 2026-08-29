@@ -27,6 +27,7 @@ import pandas as pd
 import re
 import io
 import base64
+import unicodedata
 from xml.sax.saxutils import escape
 from zoneinfo import ZoneInfo
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -2102,7 +2103,7 @@ def _focus_component_summary_text(
 
 
 def parse_class_name(name: str) -> Dict[str, Optional[Any]]:
-    normalized = (name or "").strip()
+    normalized = (name or "").strip().translate(str.maketrans("٠١٢٣٤٥٦٧٨٩", "0123456789"))
     if not normalized:
         return {"grade": None, "section": None}
 
@@ -2125,7 +2126,77 @@ def parse_class_name(name: str) -> Dict[str, Optional[Any]]:
     grade = int(match.group(1)) if match else None
     section_match = re.search(r"([A-Za-z])$", normalized)
     section = section_match.group(1).upper() if section_match else None
+    if grade is not None:
+        return {"grade": grade, "section": section}
+
+    # Arabic class names are common in the Arabic section (e.g. "رابع أ").
+    # Normalize orthography, remove optional definite articles, then resolve an
+    # unambiguous ordinal without changing the user-facing class name.
+    arabic = unicodedata.normalize("NFKC", normalized)
+    arabic = re.sub(r"[\u064b-\u065f\u0670\u06d6-\u06ed\u0640]", "", arabic)
+    arabic = arabic.translate(str.maketrans({"أ": "ا", "إ": "ا", "آ": "ا", "ٱ": "ا", "ى": "ي"}))
+    words = [word[2:] if word.startswith("ال") and len(word) > 3 else word for word in arabic.split()]
+    normalized_arabic = " ".join(word for word in words if word != "صف")
+    arabic_grades = [
+        ("حادي عشر", 11), ("احد عشر", 11), ("ثاني عشر", 12),
+        ("اول", 1), ("اولي", 1), ("ثاني", 2), ("ثالث", 3),
+        ("رابع", 4), ("خامس", 5), ("سادس", 6), ("سابع", 7),
+        ("ثامن", 8), ("تاسع", 9), ("عاشر", 10),
+    ]
+    for phrase, value in arabic_grades:
+        if re.search(rf"(?:^|\s){re.escape(phrase)}(?:\s|$)", normalized_arabic):
+            grade = value
+            break
+    last_word = normalized_arabic.split()[-1] if normalized_arabic else ""
+    section = {"ا": "A", "ب": "B", "ج": "C", "د": "D"}.get(last_word, section)
     return {"grade": grade, "section": section}
+
+
+def normalize_class_section(value: Any) -> Optional[str]:
+    """Return the canonical A/B-style suffix for Latin or Arabic input."""
+    if value is None:
+        return None
+    text = unicodedata.normalize("NFKC", str(value)).strip().upper()
+    if re.fullmatch(r"[A-Z]", text):
+        return text
+    arabic = text.translate(str.maketrans({"أ": "ا", "إ": "ا", "آ": "ا"}))
+    return {"ا": "A", "ب": "B", "ج": "C", "د": "D"}.get(arabic)
+
+
+def resolve_arabic_class_grade(class_doc: Dict[str, Any]) -> int:
+    """Resolve legacy Arabic names while keeping classes.grade authoritative."""
+    raw_grade = class_doc.get("grade")
+    try:
+        grade = int(raw_grade)
+    except (TypeError, ValueError):
+        grade = parse_class_name(class_doc.get("name") or "").get("grade")
+    if grade is None or grade < 1:
+        raise ValueError("arabic_class_grade_required")
+    return grade
+
+
+async def migrate_arabic_class_metadata() -> Dict[str, int]:
+    """Backfill only missing/invalid grade and section on unambiguous Arabic classes."""
+    examined = updated = unresolved = 0
+    async for class_doc in db.classes.find({"school_section": SCHOOL_SECTION_ARABIC}):
+        examined += 1
+        parsed = parse_class_name(class_doc.get("name") or "")
+        changes: Dict[str, Any] = {}
+        try:
+            existing_grade = int(class_doc.get("grade"))
+        except (TypeError, ValueError):
+            existing_grade = None
+        if (existing_grade is None or existing_grade < 1) and parsed.get("grade") is not None:
+            changes["grade"] = parsed["grade"]
+        if normalize_class_section(class_doc.get("section")) is None and parsed.get("section"):
+            changes["section"] = parsed["section"]
+        if changes:
+            changes["updated_at"] = iso_now()
+            await db.classes.update_one({"_id": class_doc["_id"]}, {"$set": changes})
+            updated += 1
+        if (existing_grade is None or existing_grade < 1) and parsed.get("grade") is None:
+            unresolved += 1
+    return {"examined": examined, "updated": updated, "unresolved": unresolved}
 
 
 def _normalize_excel_grade(val: Any) -> Optional[int]:
@@ -2151,6 +2222,9 @@ def _normalize_excel_section(val: Any) -> Optional[str]:
     s = str(val).strip().upper()
     if not s:
         return None
+    normalized = normalize_class_section(s)
+    if normalized:
+        return normalized
     m = re.match(r"^([A-Z])$", s)
     if m:
         return m.group(1)
@@ -5189,10 +5263,14 @@ async def create_class(payload: ClassBase, current_user: Dict[str, Any] = Depend
     data = payload.model_dump()
     data["school_section"] = normalize_school_section(data.get("school_section"))
     data["academic_year"] = data.get("academic_year") or current_academic_year()
-    if not data.get("grade") or not data.get("section"):
-        parsed = parse_class_name(payload.name)
-        data["grade"] = data.get("grade") or parsed.get("grade")
-        data["section"] = data.get("section") or parsed.get("section")
+    parsed = parse_class_name(payload.name)
+    data["grade"] = data.get("grade") or parsed.get("grade")
+    data["section"] = normalize_class_section(data.get("section")) or parsed.get("section")
+    if data["school_section"] == SCHOOL_SECTION_ARABIC:
+        try:
+            data["grade"] = resolve_arabic_class_grade(data)
+        except ValueError:
+            raise HTTPException(status_code=422, detail="arabic_class_grade_required")
     # Prevent duplicate: class with same normalized name (e.g. 5A, 5 A, 5a) already exists
     norm_name = _normalize_class_name_for_uniqueness(payload.name)
     if norm_name:
@@ -5220,17 +5298,28 @@ async def create_class(payload: ClassBase, current_user: Dict[str, Any] = Depend
 
 @api_router.put("/classes/{class_id}", response_model=ClassRecord)
 async def update_class(class_id: str, payload: ClassUpdate):
+    existing = await db.classes.find_one({"id": class_id}, {"_id": 0})
+    if not existing:
+        raise HTTPException(status_code=404, detail="Class not found")
     update_data = {k: v for k, v in payload.model_dump(exclude_unset=True).items() if v is not None}
     if "school_section" in update_data:
         update_data["school_section"] = normalize_school_section(update_data["school_section"])
     if "name" in update_data and ("grade" not in update_data or "section" not in update_data):
         parsed = parse_class_name(update_data["name"])
-        update_data.setdefault("grade", parsed.get("grade"))
-        update_data.setdefault("section", parsed.get("section"))
+        if parsed.get("grade") is not None:
+            update_data.setdefault("grade", parsed["grade"])
+        if parsed.get("section") is not None:
+            update_data.setdefault("section", parsed["section"])
+    if "section" in update_data:
+        update_data["section"] = normalize_class_section(update_data["section"])
+    prospective = {**existing, **update_data}
+    if record_school_section(prospective) == SCHOOL_SECTION_ARABIC:
+        try:
+            update_data["grade"] = resolve_arabic_class_grade(prospective)
+        except ValueError:
+            raise HTTPException(status_code=422, detail="arabic_class_grade_required")
     update_data["updated_at"] = iso_now()
     result = await db.classes.find_one_and_update({"id": class_id}, {"$set": update_data}, return_document=True)
-    if not result:
-        raise HTTPException(status_code=404, detail="Class not found")
     result.pop("_id", None)
     return result
 
@@ -6939,12 +7028,6 @@ async def build_arabic_grading_payload(
         _arabic_scope_class_query(current_user, academic_year, class_id), {"_id": 0}
     ).sort("grade", 1).to_list(500)
     class_map = {item["id"]: item for item in classes}
-    for item in classes:
-        try:
-            item["educational_stage"] = arabic_educational_stage_for_grade(item.get("grade"))
-            item["exam_raw_max"] = arabic_exam_raw_max_for_grade(item.get("grade"))
-        except ValueError as exc:
-            raise HTTPException(status_code=409, detail=f"Class {item.get('name', item['id'])}: {exc}")
     class_ids = [item["id"] for item in classes]
     students = await db.students.find(
         {
@@ -6955,6 +7038,23 @@ async def build_arabic_grading_payload(
         },
         {"_id": 0},
     ).sort([("class_name", 1), ("full_name", 1)]).to_list(10000)
+    student_class_ids = {item.get("class_id") for item in students}
+    configuration_issues: List[Dict[str, Any]] = []
+    for item in classes:
+        try:
+            grade = resolve_arabic_class_grade(item)
+            item["grade"] = grade
+            item["section"] = normalize_class_section(item.get("section")) or parse_class_name(item.get("name") or "").get("section")
+            item["educational_stage"] = arabic_educational_stage_for_grade(grade)
+            item["exam_raw_max"] = arabic_exam_raw_max_for_grade(grade)
+        except ValueError:
+            issue = {"code": "arabic_class_grade_required", "class_id": item["id"], "class_name": item.get("name", item["id"])}
+            configuration_issues.append(issue)
+            item.update(educational_stage=None, exam_raw_max=None, metadata_issue=issue["code"])
+            # An empty legacy class must not break every Arabic dashboard. Once
+            # students exist, however, scoring is impossible without a grade.
+            if item["id"] in student_class_ids:
+                raise HTTPException(status_code=409, detail="arabic_class_grade_required")
     student_ids = [item["id"] for item in students]
     score_docs = await db.arabic_quarter_scores.find(
         {
@@ -7037,6 +7137,7 @@ async def build_arabic_grading_payload(
             "manual_review_count": len(migration_review_rows),
             "manual_review_students": migration_review_rows,
         },
+        "configuration_issues": configuration_issues,
         "performance_thresholds": None,
     }
 
@@ -7082,9 +7183,9 @@ async def save_arabic_grades(
         if not class_doc or record_school_section(class_doc) != SCHOOL_SECTION_ARABIC:
             raise HTTPException(status_code=409, detail="Arabic student's class metadata is missing or mismatched")
         try:
-            exam_raw_max = arabic_exam_raw_max_for_grade(class_doc.get("grade"))
-        except ValueError as exc:
-            raise HTTPException(status_code=409, detail=f"Class {class_doc.get('name', class_doc['id'])}: {exc}")
+            exam_raw_max = arabic_exam_raw_max_for_grade(resolve_arabic_class_grade(class_doc))
+        except ValueError:
+            raise HTTPException(status_code=409, detail="arabic_class_grade_required")
         try:
             validate_arabic_exam_values(values, exam_raw_max)
         except ValueError as exc:
@@ -9873,6 +9974,9 @@ async def seed_defaults():
             {"school_section": {"$exists": False}},
             {"$set": {"school_section": SCHOOL_SECTION_INTERNATIONAL, "academic_year": legacy_year}},
         )
+        arabic_class_migration = await migrate_arabic_class_metadata()
+        if arabic_class_migration["updated"] or arabic_class_migration["unresolved"]:
+            logger.warning("Arabic class-metadata migration audit: %s", arabic_class_migration)
         arabic_migration = await migrate_legacy_arabic_exam_records()
         if arabic_migration["examined"]:
             logger.warning("Arabic exam-model migration audit: %s", arabic_migration)
