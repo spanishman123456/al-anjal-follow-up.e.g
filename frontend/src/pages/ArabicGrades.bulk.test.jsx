@@ -7,7 +7,7 @@ const mockToast = { success: jest.fn(), error: jest.fn() };
 
 jest.mock("react-router-dom", () => ({ useOutletContext: () => mockContext }), { virtual: true });
 jest.mock("../lib/api", () => ({
-  api: { get: jest.fn(), post: jest.fn() },
+  api: { get: jest.fn(), post: jest.fn(), delete: jest.fn() },
   getLocalizedApiErrorMessage: jest.fn(() => "failed"),
 }));
 jest.mock("sonner", () => ({ toast: mockToast }));
@@ -30,6 +30,14 @@ jest.mock("../components/ui/select", () => ({
 }));
 jest.mock("../components/ScoreSheetImportControl", () => ({ ScoreSheetImportControl: () => null }));
 jest.mock("../components/LoadErrorCard", () => ({ LoadErrorCard: () => <div>load error</div> }));
+jest.mock("../components/ui/dialog", () => ({
+  Dialog: ({ open, children }) => open ? <div>{children}</div> : null,
+  DialogContent: ({ children, ...props }) => <div {...props}>{children}</div>,
+  DialogDescription: ({ children }) => <p>{children}</p>,
+  DialogFooter: ({ children }) => <div>{children}</div>,
+  DialogHeader: ({ children }) => <div>{children}</div>,
+  DialogTitle: ({ children }) => <h2>{children}</h2>,
+}));
 
 const ArabicGrades = require("./ArabicGrades").default;
 
@@ -57,6 +65,7 @@ describe("ArabicGrades smart bulk grading", () => {
       },
     });
     api.post.mockResolvedValue({ data: { status: "saved" } });
+    api.delete.mockResolvedValue({ data: { grades_deleted: 1, class_name: "رابع أ" } });
     window.confirm = jest.fn(() => true);
     container = document.createElement("div");
     document.body.appendChild(container);
@@ -90,5 +99,32 @@ describe("ArabicGrades smart bulk grading", () => {
       quarter: 1,
       updates: [expect.objectContaining({ student_id: "s1", performance_tasks: 10 })],
     }));
+  });
+
+  it("deletes only the selected class grades for the displayed Arabic term", async () => {
+    api.get.mockResolvedValue({
+      data: {
+        students: [{
+          id: "s1", full_name: "طالب أول", class_id: "c4a", class_name: "رابع أ",
+          educational_stage: "primary", exam_raw_max: 15,
+          performance_tasks: 10, participation: null, interaction: null, attendance: null,
+          theory_test_1: null, theory_test_2: null, practical_test: null,
+        }],
+        total_students: 1, students_with_grades: 1, students_without_grades: 0,
+        completion_percentage: 0, test_completion: {}, migration: {},
+      },
+    });
+    await act(async () => root.render(<ArabicGrades />));
+    const classSelect = container.querySelector("select");
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value").set.call(classSelect, "c4a");
+      classSelect.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    await act(async () => container.querySelector('[data-testid="arabic-clear-class-grades"]').click());
+    expect(container.textContent).toContain("لن تتأثر الفصول أو الفترات الأخرى");
+    await act(async () => container.querySelector('[data-testid="arabic-clear-class-grades-confirm"]').click());
+    expect(api.delete).toHaveBeenCalledWith("/arabic/grades", { params: {
+      academic_year: "2026-2027", semester: 1, quarter: 1, class_id: "c4a",
+    } });
   });
 });

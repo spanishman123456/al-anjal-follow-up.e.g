@@ -1,5 +1,12 @@
 # 12 — Workflows
 
+## Clear incorrectly recorded scores
+
+- Weekly follow-up, International assessment/final pages and Total Marks: select the intended week and class, then use the existing clear action and confirm the displayed scope.
+- Baseline/diagnostic: optionally restrict to one included class, then clear saved marks after the count/scope confirmation.
+- Arabic quarter grades: select one exact class, ensure there are no unsaved edits, choose **Delete class grades**, verify class and displayed quarter in the confirmation, then confirm. The API deletes only that class's persisted rows for the active academic year/semester/quarter.
+- Never use student deletion to correct grades; score correction preserves enrollment.
+
 ## Bulk-correct pre-test / diagnostic marks
 
 1. Open Pre-test Scores / Diagnostic Test Scores and select the mark-entry record.

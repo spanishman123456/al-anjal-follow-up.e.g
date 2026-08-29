@@ -7253,6 +7253,60 @@ async def save_arabic_grades(
     return {"status": "saved", "updated": len(operations)}
 
 
+@api_router.delete("/arabic/grades")
+async def clear_arabic_class_grades(
+    academic_year: str = Query(...),
+    semester: int = Query(..., ge=1, le=2),
+    quarter: int = Query(..., ge=1, le=2),
+    class_id: str = Query(..., min_length=1),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+):
+    """Delete one Arabic class's saved grade rows for one exact academic term."""
+    class_doc = await db.classes.find_one(
+        {"$and": [school_section_query(SCHOOL_SECTION_ARABIC, academic_year), {"id": class_id}]},
+        {"_id": 0, "id": 1, "name": 1},
+    )
+    if not class_doc:
+        raise HTTPException(status_code=404, detail="arabic_grade_class_not_found")
+    assigned = _teacher_assigned_class_ids(current_user)
+    if assigned is not None and class_id not in assigned:
+        raise HTTPException(status_code=403, detail="arabic_grade_clear_forbidden")
+    students = await db.students.find(
+        {
+            "$and": [
+                school_section_query(SCHOOL_SECTION_ARABIC, academic_year),
+                {"class_id": class_id},
+            ]
+        },
+        {"_id": 0, "id": 1},
+    ).to_list(5000)
+    student_ids = [student["id"] for student in students]
+    deleted = 0
+    if student_ids:
+        result = await db.arabic_quarter_scores.delete_many(
+            {
+                "student_id": {"$in": student_ids},
+                "academic_year": academic_year,
+                "semester": semester,
+                "quarter": quarter,
+            }
+        )
+        deleted = result.deleted_count
+    await log_user_action(
+        current_user,
+        "arabic_grades_clear_class",
+        f"Cleared {deleted} Arabic grade rows for {class_doc.get('name', class_id)} "
+        f"({academic_year} S{semester} Q{quarter})",
+    )
+    return {
+        "status": "cleared",
+        "grades_deleted": deleted,
+        "students_in_scope": len(student_ids),
+        "class_id": class_id,
+        "class_name": class_doc.get("name", class_id),
+    }
+
+
 def generate_arabic_grades_excel(payload: Dict[str, Any], lang: str = "en") -> bytes:
     from openpyxl import Workbook
     from openpyxl.styles import Alignment, Font, PatternFill

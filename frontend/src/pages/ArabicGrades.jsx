@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useOutletContext } from "react-router-dom";
-import { Download, Save, Sparkles, TestTube2 } from "lucide-react";
+import { AlertTriangle, Download, Save, Sparkles, TestTube2, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { api, getLocalizedApiErrorMessage } from "@/lib/api";
 import { displayQuarterNumber } from "@/lib/academicScope";
@@ -22,6 +22,7 @@ import { Progress } from "@/components/ui/progress";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ScoreSheetImportControl } from "@/components/ScoreSheetImportControl";
 import { LoadErrorCard } from "@/components/LoadErrorCard";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 const semesterNumber = (semester) => (semester === "semester2" ? 2 : 1);
 
@@ -33,6 +34,8 @@ export default function ArabicGrades() {
   const [values, setValues] = useState({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [clearing, setClearing] = useState(false);
+  const [clearGradesOpen, setClearGradesOpen] = useState(false);
   const [bulkFillField, setBulkFillField] = useState(ARABIC_SCORE_FIELDS[0].key);
   const [loadError, setLoadError] = useState("");
   const sem = semesterNumber(semester);
@@ -100,6 +103,8 @@ export default function ArabicGrades() {
     ],
     [payload, t],
   );
+  const selectedClass = classes.find((item) => item.id === classId);
+  const savedGradeStudentCount = rows.filter((student) => ARABIC_SCORE_FIELDS.some(({ key }) => student[key] != null)).length;
 
   const updateValue = (studentId, key, raw, max) => {
     const next = raw === "" ? null : Math.max(0, Math.min(max, Number(raw)));
@@ -130,6 +135,33 @@ export default function ArabicGrades() {
         .replace("{count}", String(rows.length))
         .replace("{field}", t(bulkFillField)),
     );
+  };
+
+  const clearSelectedClassGrades = async () => {
+    if (classId === "all" || !selectedClass || hasUnsavedChanges) return;
+    setClearing(true);
+    try {
+      const response = await api.delete("/arabic/grades", {
+        params: {
+          academic_year: academicYear,
+          semester: sem,
+          quarter,
+          class_id: classId,
+        },
+      });
+      toast.success(
+        t("clear_arabic_class_grades_done")
+          .replace("{count}", String(response.data?.grades_deleted || 0))
+          .replace("{class}", response.data?.class_name || selectedClass.name),
+      );
+      setClearGradesOpen(false);
+      window.dispatchEvent(new CustomEvent("students-updated"));
+      await loadGrades();
+    } catch (error) {
+      toast.error(getLocalizedApiErrorMessage(error, t, "clear_arabic_class_grades_failed"));
+    } finally {
+      setClearing(false);
+    }
   };
 
   const save = async () => {
@@ -279,7 +311,16 @@ export default function ArabicGrades() {
             >
               <Sparkles className="me-2 h-4 w-4" />{t("fill_max_for_class")}
             </Button>
+            <Button
+              variant="destructive"
+              onClick={() => setClearGradesOpen(true)}
+              disabled={saving || clearing || loading || !rows.length || classId === "all" || hasUnsavedChanges}
+              data-testid="arabic-clear-class-grades"
+            >
+              <Trash2 className="me-2 h-4 w-4" />{t("clear_arabic_class_grades")}
+            </Button>
           </div>
+          {hasUnsavedChanges && <p className="text-sm font-medium text-amber-600 lg:basis-full" data-testid="arabic-clear-save-first">{t("clear_arabic_class_grades_save_first")}</p>}
         </CardContent>
       </Card>
 
@@ -300,6 +341,25 @@ export default function ArabicGrades() {
           {!loading && !rows.length && <div className="p-10 text-center text-muted-foreground"><TestTube2 className="mx-auto mb-3 h-8 w-8" />{t("no_data")}</div>}
         </CardContent>
       </Card>
+      <Dialog open={clearGradesOpen} onOpenChange={setClearGradesOpen}>
+        <DialogContent data-testid="arabic-clear-class-grades-dialog">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-destructive"><AlertTriangle className="h-5 w-5" />{t("clear_arabic_class_grades")}</DialogTitle>
+            <DialogDescription>
+              {t("clear_arabic_class_grades_confirm")
+                .replace("{count}", String(savedGradeStudentCount))
+                .replace("{class}", selectedClass?.name || "")
+                .replace("{quarter}", String(displayQuarter))}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setClearGradesOpen(false)} disabled={clearing}>{t("cancel")}</Button>
+            <Button variant="destructive" onClick={clearSelectedClassGrades} disabled={clearing} data-testid="arabic-clear-class-grades-confirm">
+              {clearing ? `${t("loading")}…` : t("clear_arabic_class_grades")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       </>}
     </div>
   );

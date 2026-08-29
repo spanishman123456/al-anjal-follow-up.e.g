@@ -1,7 +1,7 @@
 import asyncio
 import io
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from fastapi import HTTPException
@@ -17,6 +17,7 @@ from server import (
     build_arabic_grading_payload,
     ClassBase,
     ClassUpdate,
+    clear_arabic_class_grades,
     classify_legacy_arabic_practical,
     create_class,
     generate_arabic_grades_excel,
@@ -89,6 +90,11 @@ class _Collection:
                 return dict(row)
         return None
 
+    async def delete_many(self, query):
+        before = len(self.rows)
+        self.rows = [row for row in self.rows if not _matches(row, query)]
+        return SimpleNamespace(deleted_count=before - len(self.rows))
+
 
 def test_primary_uses_best_theory_and_weights_each_contribution_to_30():
     result = arabic_score_summary(
@@ -148,6 +154,35 @@ def test_arabic_blank_quarter_stays_no_data():
     assert result["quarter_total"] is None
     assert result["has_grades"] is False
     assert result["test_completion_count"] == 0
+
+
+def test_clear_arabic_grades_is_limited_to_one_class_and_exact_term():
+    fake_db = SimpleNamespace(
+        classes=_Collection([
+            {"id": "c4a", "name": "رابع أ", "school_section": "arabic", "academic_year": "2026-2027"},
+            {"id": "c4b", "name": "رابع ب", "school_section": "arabic", "academic_year": "2026-2027"},
+        ]),
+        students=_Collection([
+            {"id": "s1", "class_id": "c4a", "school_section": "arabic", "academic_year": "2026-2027"},
+            {"id": "s2", "class_id": "c4b", "school_section": "arabic", "academic_year": "2026-2027"},
+        ]),
+        arabic_quarter_scores=_Collection([
+            {"id": "delete", "student_id": "s1", "academic_year": "2026-2027", "semester": 1, "quarter": 1},
+            {"id": "keep-term", "student_id": "s1", "academic_year": "2026-2027", "semester": 1, "quarter": 2},
+            {"id": "keep-class", "student_id": "s2", "academic_year": "2026-2027", "semester": 1, "quarter": 1},
+        ]),
+    )
+    teacher = {"id": "t1", "role_name": "Teacher", "assigned_class_ids": ["c4a"]}
+    with patch.object(server, "db", fake_db), patch.object(server, "log_user_action", AsyncMock()):
+        result = asyncio.run(clear_arabic_class_grades("2026-2027", 1, 1, "c4a", teacher))
+    assert result["grades_deleted"] == 1
+    assert result["students_in_scope"] == 1
+    assert {row["id"] for row in fake_db.arabic_quarter_scores.rows} == {"keep-term", "keep-class"}
+
+    with patch.object(server, "db", fake_db), patch.object(server, "log_user_action", AsyncMock()), pytest.raises(HTTPException) as error:
+        asyncio.run(clear_arabic_class_grades("2026-2027", 1, 1, "c4b", teacher))
+    assert error.value.status_code == 403
+    assert error.value.detail == "arabic_grade_clear_forbidden"
 
 
 def test_stage_is_derived_from_canonical_class_grade():

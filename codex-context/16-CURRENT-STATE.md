@@ -1,5 +1,10 @@
 # 16 — Current State
 
+## Score-entry deletion coverage (2026-08-30)
+
+- All eight score-entry pages have a visible clear/delete control, protected by a source-level coverage test so future page changes cannot silently omit it.
+- Arabic quarter grades now delete persisted records only for one explicitly selected Arabic class and the active year/semester/quarter. Confirmation shows class, displayed quarter and affected scored-student count; unsaved edits block deletion. Teacher class assignment is enforced server-side.
+
 ## Arabic page load recovery (2026-08-29)
 
 - Live read-only diagnosis confirmed that the repeated `load_failed` was not the normal empty-roster state: six Arabic classes had valid names (`رابع أ` through `سادس ب`) but null numeric `grade` metadata, causing `/api/arabic/grades` to fail before reading the empty student roster.

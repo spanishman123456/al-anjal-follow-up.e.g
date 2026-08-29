@@ -1,0 +1,20 @@
+import fs from "fs";
+import path from "path";
+
+describe("score-entry pages expose a score-clear control", () => {
+  const cases = [
+    ["Students.jsx", "clear-scores-button"],
+    ["AssessmentMarks.jsx", "assessment-clear-scores"],
+    ["AssessmentMarksQ2.jsx", "assessment-q2-clear-scores"],
+    ["FinalExamsAssessment.jsx", "final-exams-clear-scores"],
+    ["FinalExamsAssessmentQ2.jsx", "final-exams-q2-clear-scores"],
+    ["TotalMarks.jsx", "total-marks-clear-scores"],
+    ["BaselineAssessments.jsx", "baseline-clear-recorded"],
+    ["ArabicGrades.jsx", "arabic-clear-class-grades"],
+  ];
+
+  it.each(cases)("keeps a visible clear action in %s", (fileName, testId) => {
+    const source = fs.readFileSync(path.join(__dirname, fileName), "utf8");
+    expect(source).toContain(`data-testid=\"${testId}\"`);
+  });
+});

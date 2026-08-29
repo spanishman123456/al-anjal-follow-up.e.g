@@ -1,5 +1,9 @@
 # 10 — Decision History
 
+## Decision: Every score-entry page must expose safe score correction (2026-08-30)
+
+The score-entry UX contract now requires a visible clear/delete control on all eight entry surfaces. Existing International screens retain their week/class-scoped controls; baseline/diagnostic retains revision-guarded clearing; Arabic quarter grading gains a dedicated server DELETE limited to one selected class and exact academic term. Destructive actions show scope before execution and must not silently affect another class or term.
+
 ## Decision: Diagnostic/pre-test bulk correction tools (2026-08-30)
 
 Added two class-scope-aware actions to baseline/diagnostic entry: stage the record maximum for every visible student, and clear all saved visible marks after a destructive confirmation showing scope and affected count. Clearing reuses the existing revision-guarded score patch rather than adding a second persistence path; staged maximums still require the normal Save marks action so teachers can review before committing.
