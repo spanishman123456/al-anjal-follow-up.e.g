@@ -4653,6 +4653,7 @@ class StudentBase(BaseModel):
     full_name: str
     class_id: str
     class_name: str
+    student_number: Optional[str] = None
     school_section: str = SCHOOL_SECTION_INTERNATIONAL
     academic_year: Optional[str] = None
     attendance: Optional[float] = None
@@ -4683,6 +4684,7 @@ class StudentRecord(StudentBase):
 class StudentCreate(BaseModel):
     full_name: str
     class_id: str
+    student_number: Optional[str] = None
     school_section: str = SCHOOL_SECTION_INTERNATIONAL
     academic_year: Optional[str] = None
     attendance: Optional[float] = None
@@ -9201,12 +9203,28 @@ async def import_excel(
     week_id: Optional[str] = Query(default=None),
     school_section: str = Query(default=SCHOOL_SECTION_INTERNATIONAL),
     academic_year: Optional[str] = Query(default=None),
+    class_id: Optional[str] = Query(default=None),
+    dry_run: bool = Query(default=False),
     current_user: Dict[str, Any] = Depends(get_current_user),
 ):
     normalized_section = normalize_school_section(school_section)
     scoped_year = academic_year or current_academic_year()
     if not file.filename:
         raise HTTPException(status_code=400, detail="No file provided")
+    target_class_doc = None
+    if class_id:
+        target_class_doc = await db.classes.find_one(
+            {"$and": [school_section_query(normalized_section, scoped_year), {"id": class_id}]},
+            {"_id": 0},
+        )
+        if not target_class_doc:
+            raise HTTPException(status_code=404, detail="student_import_target_class_not_found")
+        if current_user.get("role_name") == "Teacher" and class_id not in current_user.get("assigned_class_ids", []):
+            raise HTTPException(status_code=403, detail="student_import_target_class_forbidden")
+    elif normalized_section == SCHOOL_SECTION_ARABIC:
+        raise HTTPException(status_code=422, detail="student_import_class_required")
+    if dry_run and not target_class_doc:
+        raise HTTPException(status_code=422, detail="student_import_preview_requires_class")
     content = await file.read()
     alias_map = {
         "student_name": [
@@ -9217,9 +9235,24 @@ async def import_excel(
             "studentfullname",
             "الطالب",
             "اسم",
+            "الاسم",
             "اسمالطالب",
             "اسم_الطالب",
             "اسم الطالب",
+            "الاسمالكامل",
+            "الاسم الكامل",
+        ],
+        "student_number": [
+            "studentid",
+            "studentnumber",
+            "studentno",
+            "idnumber",
+            "nationalid",
+            "رقمالهوية",
+            "رقم الهوية",
+            "الهوية",
+            "رقمالطالب",
+            "رقم الطالب",
         ],
         "class_name": [
             "class",
@@ -9367,12 +9400,14 @@ async def import_excel(
             if alias in normalized_cols:
                 column_lookup[key] = normalized_cols[alias]
                 break
-    if "student_name" not in column_lookup and len(df.columns):
-        column_lookup["student_name"] = df.columns[0]
-    if "class_name" not in column_lookup and len(df.columns) >= 2:
-        if not (column_lookup.get("grade") and column_lookup.get("section")):
-            column_lookup["class_name"] = df.columns[1]
-
+    # Preserve the legacy headerless International import fallback. Arabic
+    # enrollment is fail-closed because its UI supplies an exact target class.
+    if normalized_section == SCHOOL_SECTION_INTERNATIONAL:
+        if "student_name" not in column_lookup and len(df.columns):
+            column_lookup["student_name"] = df.columns[0]
+        if "class_name" not in column_lookup and len(df.columns) >= 2:
+            if not (column_lookup.get("grade") and column_lookup.get("section")):
+                column_lookup["class_name"] = df.columns[1]
     # Detect name vs class by content so column order does not matter (e.g. Class | Name or Name | Class)
     def value_looks_like_class(val: Any) -> bool:
         if pd.isna(val):
@@ -9395,11 +9430,12 @@ async def import_excel(
             column_lookup["class_name"] = best_class_col
             if len(df.columns) == 2:
                 other = next(c for c in df.columns if c != best_class_col)
-                column_lookup["student_name"] = other
+                if other != column_lookup.get("student_number"):
+                    column_lookup["student_name"] = other
             elif "student_name" not in column_lookup:
                 # Multiple columns: use first column that isn't the class column as name
                 for c in df.columns:
-                    if c != best_class_col:
+                    if c != best_class_col and c != column_lookup.get("student_number"):
                         column_lookup["student_name"] = c
                         break
 
@@ -9409,23 +9445,29 @@ async def import_excel(
     classes = await db.classes.find(school_section_query(normalized_section, scoped_year), {"_id": 0}).to_list(200)
 
     def normalize_class_name(value: str) -> str:
-        cleaned = re.sub(r"[^A-Za-z0-9]", "", value.upper())
-        if cleaned.startswith("G"):
+        """Return a Unicode-safe import key; Arabic text must never collapse to an empty key."""
+        parsed = parse_class_name(str(value or ""))
+        if parsed.get("grade") is not None and parsed.get("section"):
+            return f"{parsed['grade']}{parsed['section']}"
+        cleaned = unicodedata.normalize("NFKC", str(value or "")).strip().upper()
+        cleaned = re.sub(r"[^\w\d]+", "", cleaned, flags=re.UNICODE)
+        if cleaned.startswith("G") and cleaned[1:].isdigit():
             cleaned = cleaned[1:]
         return cleaned
 
     class_map = {normalize_class_name(cls["name"]): cls for cls in classes}
     created_classes = 0
     inferred_class_name = None
-    for candidate in [file.filename, best_sheet]:
-        if not candidate:
-            continue
-        match = re.search(r"(\d+)\s*([A-Za-z])", candidate)
-        if match:
-            inferred_class_name = f"{match.group(1)}{match.group(2).upper()}"
-            break
-    default_class_doc = None
-    if inferred_class_name:
+    if not target_class_doc:
+        for candidate in [file.filename, best_sheet]:
+            if not candidate:
+                continue
+            parsed_candidate = parse_class_name(Path(str(candidate)).stem)
+            if parsed_candidate.get("grade") is not None and parsed_candidate.get("section"):
+                inferred_class_name = f"{parsed_candidate['grade']}{parsed_candidate['section']}"
+                break
+    default_class_doc = target_class_doc
+    if inferred_class_name and not default_class_doc:
         default_class_doc = class_map.get(normalize_class_name(inferred_class_name))
         if not default_class_doc:
             parsed = parse_class_name(inferred_class_name)
@@ -9442,19 +9484,97 @@ async def import_excel(
             created_classes += 1
     created_students = 0
     updated_students = 0
+    repaired_students = 0
     existing_students_docs = await db.students.find(
         school_section_query(normalized_section, scoped_year),
-        {"_id": 0, "id": 1, "full_name": 1, "class_id": 1},
+        {"_id": 0, "id": 1, "full_name": 1, "class_id": 1, "student_number": 1},
     ).to_list(20000)
     existing_student_map: Dict[tuple, Dict[str, Any]] = {}
+    existing_number_map: Dict[str, Optional[Dict[str, Any]]] = {}
+    legacy_numeric_name_map: Dict[str, Optional[Dict[str, Any]]] = {}
     for s in existing_students_docs:
         name_key = (s.get("full_name") or "").strip().lower()
         class_key = s.get("class_id")
         if name_key and class_key:
             existing_student_map[(name_key, class_key)] = s
+        stored_number = str(s.get("student_number") or "").strip()
+        if stored_number:
+            existing_number_map[stored_number] = s if stored_number not in existing_number_map else None
+        if re.fullmatch(r"\d{5,}", name_key):
+            legacy_numeric_name_map[name_key] = s if name_key not in legacy_numeric_name_map else None
     if "student_name" not in column_lookup:
-        raise HTTPException(status_code=400, detail="Excel must include at least one column with student names.")
+        raise HTTPException(status_code=400, detail="student_import_name_column_required")
     # Class can come from: class column, grade+section columns, or filename (e.g. 5A.xlsx). No strict requirement here.
+
+    def normalize_student_number(value: Any) -> Optional[str]:
+        if value is None or pd.isna(value):
+            return None
+        if isinstance(value, bool):
+            return None
+        if isinstance(value, (int, float)):
+            numeric = float(value)
+            if numeric != numeric:
+                return None
+            return str(int(numeric)) if numeric.is_integer() else str(value).strip()
+        text = str(value).strip().translate(str.maketrans("٠١٢٣٤٥٦٧٨٩", "0123456789"))
+        return re.sub(r"\.0$", "", text) or None
+
+    def looks_like_student_name(value: str) -> bool:
+        return bool(re.search(r"[^\W\d_]", value, flags=re.UNICODE))
+
+    # A selected target class is authoritative. Validate the complete sheet before
+    # the first write so a bad header or conflicting class cannot partially import.
+    if target_class_doc:
+        validation_errors: List[str] = []
+        seen_student_numbers: set[str] = set()
+        target_class_key = normalize_class_name(target_class_doc.get("name") or "")
+        for excel_index, row in df.iterrows():
+            raw_name = row.get(column_lookup["student_name"])
+            if raw_name is None or pd.isna(raw_name) or not str(raw_name).strip():
+                continue
+            name = str(raw_name).strip()
+            row_number = int(excel_index) + best_header_row + 2
+            if not looks_like_student_name(name):
+                validation_errors.append(f"row {row_number}: student name is numeric or invalid")
+            student_number = normalize_student_number(row.get(column_lookup.get("student_number")))
+            if student_number:
+                if student_number in seen_student_numbers:
+                    validation_errors.append(f"row {row_number}: duplicate student number {student_number}")
+                seen_student_numbers.add(student_number)
+                if student_number in existing_number_map and existing_number_map[student_number] is None:
+                    validation_errors.append(f"row {row_number}: student number matches multiple records")
+                if student_number in legacy_numeric_name_map and legacy_numeric_name_map[student_number] is None:
+                    validation_errors.append(f"row {row_number}: legacy numeric name matches multiple records")
+
+            sheet_class_key = None
+            if column_lookup.get("grade") and column_lookup.get("section"):
+                grade_value = _normalize_excel_grade(row.get(column_lookup["grade"]))
+                section_value = _normalize_excel_section(row.get(column_lookup["section"]))
+                if grade_value is not None or section_value:
+                    if grade_value is None or not section_value:
+                        validation_errors.append(f"row {row_number}: incomplete class information")
+                    else:
+                        sheet_class_key = normalize_class_name(f"{grade_value}{section_value}")
+            elif column_lookup.get("class_name"):
+                raw_class = row.get(column_lookup["class_name"])
+                if raw_class is not None and pd.notna(raw_class) and str(raw_class).strip():
+                    parsed_class = parse_class_name(str(raw_class).strip())
+                    if parsed_class.get("grade") is None or not parsed_class.get("section"):
+                        validation_errors.append(f"row {row_number}: invalid class value")
+                    else:
+                        sheet_class_key = normalize_class_name(str(raw_class).strip())
+            if sheet_class_key and sheet_class_key != target_class_key:
+                validation_errors.append(
+                    f"row {row_number}: class conflicts with selected class {target_class_doc.get('name')}"
+                )
+        if validation_errors:
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "code": "student_import_validation_failed",
+                    "message": "; ".join(validation_errors[:8]),
+                },
+            )
 
     processed_rows = 0
     skipped_rows = 0
@@ -9467,10 +9587,15 @@ async def import_excel(
         if not student_name:
             skipped_rows += 1
             continue
+        if not looks_like_student_name(student_name):
+            skipped_rows += 1
+            continue
 
-        class_doc = None
+        student_number = normalize_student_number(row.get(column_lookup.get("student_number")))
 
-        if column_lookup.get("grade") and column_lookup.get("section"):
+        class_doc = target_class_doc
+
+        if not target_class_doc and column_lookup.get("grade") and column_lookup.get("section"):
             gv = _normalize_excel_grade(row.get(column_lookup["grade"]))
             sv = _normalize_excel_section(row.get(column_lookup["section"]))
             if gv is not None and sv:
@@ -9483,7 +9608,7 @@ async def import_excel(
                     class_map[normalize_class_name(combined)] = class_doc
                     created_classes += 1
 
-        if not class_doc and column_lookup.get("class_name"):
+        if not target_class_doc and not class_doc and column_lookup.get("class_name"):
             raw_class = row.get(column_lookup["class_name"])
             if raw_class is not None and pd.notna(raw_class):
                 cn = str(raw_class).strip().upper()
@@ -9520,6 +9645,8 @@ async def import_excel(
             "school_section": normalized_section,
             "academic_year": scoped_year,
         }
+        if student_number:
+            identity_payload["student_number"] = student_number
         payload = {
             **identity_payload,
             "attendance": normalize_score(row.get(column_lookup.get("attendance"))),
@@ -9546,21 +9673,39 @@ async def import_excel(
         payload["chapter_test1"] = payload.get("chapter_test1_practical")
         payload["chapter_test2"] = payload.get("chapter_test2_practical")
         # Store Quiz 1 and Quiz 2 exactly as in the file. The Assessment Marks total still uses max(quiz1, quiz2) + chapter test for the combined score.
-        existing = existing_student_map.get((student_name.strip().lower(), class_doc["id"]))
+        existing = None
+        repairs_legacy_numeric_name = False
+        if student_number and student_number in existing_number_map:
+            existing = existing_number_map[student_number]
+        elif (
+            student_number
+            and normalized_section == SCHOOL_SECTION_ARABIC
+            and target_class_doc
+            and student_number in legacy_numeric_name_map
+        ):
+            existing = legacy_numeric_name_map[student_number]
+            repairs_legacy_numeric_name = existing is not None
+        if not existing:
+            existing = existing_student_map.get((student_name.strip().lower(), class_doc["id"]))
         if not existing:
             # Enroll new student from Excel row
             source_payload = identity_payload if normalized_section == SCHOOL_SECTION_ARABIC else payload
             create_data = {k: source_payload[k] for k in source_payload if k in StudentRecord.model_fields}
             new_record = StudentRecord(**create_data)
-            await db.students.insert_one(new_record.model_dump())
+            if not dry_run:
+                await db.students.insert_one(new_record.model_dump())
             created_students += 1
             student_id = new_record.id
-            existing_student_map[(student_name.strip().lower(), class_doc["id"])] = {
+            preview_record = {
                 "id": new_record.id,
                 "full_name": student_name,
                 "class_id": class_doc["id"],
+                "student_number": student_number,
             }
-            if normalized_section == SCHOOL_SECTION_INTERNATIONAL and week_id:
+            existing_student_map[(student_name.strip().lower(), class_doc["id"])] = preview_record
+            if student_number:
+                existing_number_map[student_number] = preview_record
+            if not dry_run and normalized_section == SCHOOL_SECTION_INTERNATIONAL and week_id:
                 score_fields = [
                     "attendance", "participation", "behavior", "homework",
                     "quiz1", "quiz2", "quiz3", "quiz4",
@@ -9586,10 +9731,13 @@ async def import_excel(
             continue
         update_payload = identity_payload if normalized_section == SCHOOL_SECTION_ARABIC else payload
         update_payload["updated_at"] = iso_now()
-        await db.students.update_one({"id": existing["id"]}, {"$set": update_payload})
+        if not dry_run:
+            await db.students.update_one({"id": existing["id"]}, {"$set": update_payload})
         updated_students += 1
+        if repairs_legacy_numeric_name:
+            repaired_students += 1
         student_id = existing["id"]
-        if normalized_section == SCHOOL_SECTION_INTERNATIONAL and week_id:
+        if not dry_run and normalized_section == SCHOOL_SECTION_INTERNATIONAL and week_id:
             # Only update score fields that (1) have a column in this file and (2) have a value.
             # This prevents e.g. Students template (with empty quiz columns) from overwriting assessment marks.
             score_fields = [
@@ -9620,22 +9768,28 @@ async def import_excel(
     if processed_rows == 0:
         raise HTTPException(
             status_code=400,
-            detail="No students were imported. Use a column for student names and class info: either one column like 4A / 5B, or separate Level (or Grade) and Section columns (e.g. 4 and A). Column order does not matter.",
+            detail="student_import_validation_failed",
         )
-    await log_user_action(
-        current_user,
-        "import_excel",
-        f"Imported Excel to {normalized_section}/{scoped_year}: {created_students} created, "
-        f"{updated_students} updated, {created_classes} classes created, {skipped_rows} skipped",
-    )
+    if not dry_run:
+        await log_user_action(
+            current_user,
+            "import_excel",
+            f"Imported Excel to {normalized_section}/{scoped_year}: {created_students} created, "
+            f"{updated_students} updated ({repaired_students} repaired), "
+            f"{created_classes} classes created, {skipped_rows} skipped",
+        )
     return {
         "created_students": created_students,
         "updated_students": updated_students,
+        "repaired_students": repaired_students,
         "created_classes": created_classes,
         "processed_rows": processed_rows,
         "skipped_rows": skipped_rows,
         "school_section": normalized_section,
         "academic_year": scoped_year,
+        "target_class_id": target_class_doc.get("id") if target_class_doc else None,
+        "target_class_name": target_class_doc.get("name") if target_class_doc else None,
+        "dry_run": dry_run,
     }
 
 

@@ -173,7 +173,15 @@ Format: Decision → Context → Why → Status → Codex Guidance.
 
 **Context:** Arabic Section needs practical bulk enrollment without passing `/100` grades through the International score mapper.
 **Status:** Active.
-**Codex Guidance:** Reuse `/api/import/excel` and its header/class detection with explicit Arabic section/year scope, but persist only student/class identity. Grade-sheet imports use the separate `/api/score-sheet/import` route and still persist Arabic scores exclusively in `arabic_quarter_scores`.
+**Codex Guidance:** Reuse `/api/import/excel` with explicit Arabic section/year/exact-class scope, but persist only student/class identity. Preview the complete file before apply; the selected class is authoritative and conflicting spreadsheet class values fail before writes. Treat `student_number` as identity data, never as `full_name`; numeric-only names are invalid. Grade-sheet imports use the separate `/api/score-sheet/import` route and still persist Arabic scores exclusively in `arabic_quarter_scores`.
+
+## Decision: Arabic enrollment import fails closed on headers and class scope (2026-08-30)
+
+**Context:** A workbook headed `رقم الهوية | الاسم` was imported after the user selected `رابع أ`, but the UI did not send that selection. The backend did not recognize `الاسم`, fell back to the identity column as `full_name`, and its ASCII-only class key collapsed every Arabic string to an empty key; the last Arabic class (`سادس ب`) was therefore selected.
+
+**Decision:** Require and authorize one exact Arabic target class, recognize Arabic name/identity aliases, use Unicode-safe class keys, preview before apply, and validate the whole target-scoped file before the first write. Store `student_number` separately and repair matching legacy numeric-name records during a confirmed re-import.
+
+**Codex Guidance:** Never restore first-column-as-name or second-column-as-class fallbacks for recognized enrollment files. Never normalize Arabic class text with ASCII-only regexes. Keep the selected class authoritative and preserve the dry-run/apply sequence.
 
 ## Decision: External score sheets import one explicit attempt only (2026-08-29)
 

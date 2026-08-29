@@ -99,13 +99,31 @@ export default function ArabicStudents() {
     const file = event.target.files?.[0];
     event.target.value = "";
     if (!file) return;
+    if (classId === "all") {
+      toast.error(t("student_import_class_required"));
+      return;
+    }
     setImporting(true);
     setImportSummary(null);
-    const formData = new FormData();
-    formData.append("file", file);
+    const makeFormData = () => {
+      const formData = new FormData();
+      formData.append("file", file);
+      return formData;
+    };
+    const params = { school_section: "arabic", academic_year: academicYear, class_id: classId };
     try {
-      const response = await api.post("/import/excel", formData, {
-        params: { school_section: "arabic", academic_year: academicYear },
+      const preview = await api.post("/import/excel", makeFormData(), {
+        params: { ...params, dry_run: true },
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+      const confirmed = window.confirm(
+        t("student_import_confirm")
+          .replace("{count}", String(preview.data.processed_rows || 0))
+          .replace("{class}", preview.data.target_class_name || classMap[classId] || ""),
+      );
+      if (!confirmed) return;
+      const response = await api.post("/import/excel", makeFormData(), {
+        params,
         headers: { "Content-Type": "multipart/form-data" },
       });
       setImportSummary(response.data);
@@ -116,10 +134,15 @@ export default function ArabicStudents() {
           .replace("{classes}", String(response.data.created_classes || 0))
           .replace("{skipped}", String(response.data.skipped_rows || 0)),
       );
+      if (response.data.repaired_students) {
+        toast.success(
+          t("student_import_repaired").replace("{count}", String(response.data.repaired_students)),
+        );
+      }
       await Promise.all([load(), loadClasses?.()]);
       window.dispatchEvent(new CustomEvent("students-updated"));
     } catch (error) {
-      toast.error(error?.response?.data?.detail || t("student_import_failed"));
+      toast.error(getLocalizedApiErrorMessage(error, t) || t("student_import_failed"));
     } finally {
       setImporting(false);
     }
@@ -146,7 +169,13 @@ export default function ArabicStudents() {
               <Download className="me-2 h-4 w-4" />{t("download_template")}
             </Button>
             <Button
-              onClick={() => importInputRef.current?.click()}
+              onClick={() => {
+                if (classId === "all") {
+                  toast.error(t("student_import_class_required"));
+                  return;
+                }
+                importInputRef.current?.click();
+              }}
               disabled={importing}
               className="active-glow"
               data-testid="arabic-students-import"
@@ -169,6 +198,7 @@ export default function ArabicStudents() {
         </div>
       )}
       <Card className="premium-active-card"><CardContent className="flex flex-wrap items-center justify-between gap-4 pt-6"><div><p className="text-sm text-muted-foreground">{t("total_students")}</p><p className="text-3xl font-bold">{students.length}</p></div><Select value={classId} onValueChange={setClassId}><SelectTrigger className="w-64"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">{t("all_classes")}</SelectItem>{classes.map((item) => <SelectItem key={item.id} value={item.id}>{item.name}</SelectItem>)}</SelectContent></Select></CardContent></Card>
+      {classId === "all" && <p className="text-sm text-amber-700 dark:text-amber-300" data-testid="arabic-import-class-required">{t("student_import_class_required")}</p>}
       <Card><CardContent className="p-0"><div className="overflow-x-auto"><table className="w-full text-sm"><thead className="bg-[#10162A] text-white"><tr><th className="p-3 text-start">{t("student")}</th><th className="p-3 text-start">{t("class")}</th><th className="p-3 text-end">{t("actions")}</th></tr></thead><tbody>{students.map((student) => <tr key={student.id} className="border-b hover:bg-cyan-50/50 dark:hover:bg-cyan-950/10"><td className="p-3 font-medium">{student.full_name}</td><td className="p-3">{classMap[student.class_id] || student.class_name}</td><td className="p-3 text-end"><Button size="sm" variant="ghost" onClick={() => remove(student.id)}>{t("delete")}</Button></td></tr>)}</tbody></table></div>{!students.length && <p className="p-8 text-center text-muted-foreground">{t("no_data")}</p>}</CardContent></Card>
       <Dialog open={open} onOpenChange={setOpen}><DialogContent><DialogHeader><DialogTitle>{t("add_student")}</DialogTitle></DialogHeader><div className="grid gap-4"><Input value={fullName} onChange={(event) => setFullName(event.target.value)} placeholder={t("full_name")} autoFocus /><Select value={newClassId} onValueChange={setNewClassId}><SelectTrigger><SelectValue placeholder={t("select_class")} /></SelectTrigger><SelectContent>{classes.map((item) => <SelectItem key={item.id} value={item.id}>{item.name}</SelectItem>)}</SelectContent></Select></div><DialogFooter><Button variant="outline" onClick={() => setOpen(false)}>{t("cancel")}</Button><Button onClick={create}>{t("create")}</Button></DialogFooter></DialogContent></Dialog>
       </>}

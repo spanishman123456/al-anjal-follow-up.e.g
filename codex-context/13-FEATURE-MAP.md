@@ -5,7 +5,7 @@
 - Global International/Arabic switcher in `AppShell`; legacy default is International.
 - Section/year-scoped Classes and Students with Teacher `assigned_class_ids` preserved.
 - International routes retain the `/15 → /30 → /50` pages and calculations.
-- Arabic Section has scoped Excel student/class import, quarter `/100` grade entry (`/40` continuous + best theory `/30` + practical `/30`), Dashboard, Analytics, Reports, three-attempt completion lists, and Arabic-safe PDF/Excel export.
+- Arabic Section has exact-class, preview-before-apply Excel enrollment import with Arabic identity/header safeguards and legacy numeric-name repair; quarter `/100` grade entry (`/40` continuous + best theory `/30` + practical `/30`), Dashboard, Analytics, Reports, three-attempt completion lists, and Arabic-safe PDF/Excel export.
 - International and Arabic Dashboards share one user-owned weekly timetable editor; timetable records are isolated by school section and academic year, with legacy schedules treated as current-year International only.
 - Arabic performance thresholds remain intentionally undefined.
 
@@ -15,7 +15,7 @@
 | Google approval | Login + Settings | pending→approved | `users`, `notification_logs` | `/api/auth/google`, gmail-pending-* | `server.py`, `Settings.jsx` |
 | Dashboard | `Dashboard.jsx` | summary metrics | scores/students | `/analytics/summary`, missed-assessments | `Dashboard.jsx`, `server.py` |
 | Dashboard timetable | Both section Dashboards | Sunday–Thursday, 8 editable periods | `users.timetable_records` + legacy International `schedule` | `/timetables/profile` | `DashboardTimetable.jsx`, `TimetableEditor.jsx`, `server.py` |
-| Students weekly marks | `Students.jsx` | /15 follow-up | `students`, `student_scores`, `weeks` | students CRUD, bulk-scores | `Students.jsx`, `server.py` |
+| Students / enrollment import | `Students.jsx`, `ArabicStudents.jsx` | International /15 follow-up; Arabic exact-class preview/apply import | `students` (`student_number` optional), `student_scores`, `weeks` | students CRUD, `/import/excel`, bulk-scores | pages + `server.py` + import tests |
 | Quizzes/Chapter Q1 | `AssessmentMarks.jsx` | /30; previewed Excel import targets quiz1 or quiz2 only | scores | students/export, `/score-sheet/import`, bulk | page + `ScoreSheetImportControl.jsx` + server |
 | Quizzes/Chapter Q2 | `AssessmentMarksQ2.jsx` | /30; previewed Excel import targets quiz3 or quiz4 only | scores | same | page + shared import control + server |
 | Finals Q1 | `FinalExamsAssessment.jsx` | /50 | scores | same | page + server |

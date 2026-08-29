@@ -3,7 +3,8 @@ import io
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
-from fastapi import UploadFile
+import pytest
+from fastapi import HTTPException, UploadFile
 
 import server
 
@@ -44,8 +45,16 @@ class _Collection:
         rows = [row for row in self.rows if _matches(row, query or {})]
         if projection:
             included = [key for key, value in projection.items() if value and key != "_id"]
-            rows = [{key: row.get(key) for key in included if key in row} for row in rows]
+            if included:
+                rows = [{key: row.get(key) for key in included if key in row} for row in rows]
+            else:
+                excluded = {key for key, value in projection.items() if not value}
+                rows = [{key: value for key, value in row.items() if key not in excluded} for row in rows]
         return _Cursor(rows)
+
+    async def find_one(self, query=None, projection=None):
+        rows = await self.find(query, projection).to_list(1)
+        return rows[0] if rows else None
 
     async def insert_one(self, document):
         self.rows.append(dict(document))
@@ -81,12 +90,20 @@ def test_arabic_excel_import_creates_only_arabic_identity_records():
         "academic_year": "2026-2027",
         "attendance": 2.5,
     }
+    arabic_class = {
+        "id": "arabic-4a",
+        "name": "رابع أ",
+        "grade": 4,
+        "section": "A",
+        "school_section": "arabic",
+        "academic_year": "2026-2027",
+    }
     fake_db = SimpleNamespace(
-        classes=_Collection([international_class]),
+        classes=_Collection([international_class, arabic_class]),
         students=_Collection([international_student]),
         student_scores=_Collection(),
     )
-    csv_bytes = "Student Name,Class,Attendance (2.5)\nطالب تجريبي,4A,2.5\nطالب بلا فصل,,2.5\n".encode("utf-8-sig")
+    csv_bytes = "Student Name,Class,Attendance (2.5)\nطالب تجريبي,4A,2.5\n,,2.5\n".encode("utf-8-sig")
     upload = UploadFile(filename="arabic-students.csv", file=io.BytesIO(csv_bytes))
 
     with patch.object(server, "db", fake_db), patch.object(server, "log_user_action", AsyncMock()):
@@ -96,24 +113,169 @@ def test_arabic_excel_import_creates_only_arabic_identity_records():
                 week_id=None,
                 school_section="arabic",
                 academic_year="2026-2027",
+                class_id="arabic-4a",
+                dry_run=False,
                 current_user={"id": "admin", "role_name": "Admin", "name": "Admin"},
             )
         )
 
     arabic_classes = [row for row in fake_db.classes.rows if row.get("school_section") == "arabic"]
     arabic_students = [row for row in fake_db.students.rows if row.get("school_section") == "arabic"]
-    assert result == {
-        "created_students": 1,
-        "updated_students": 0,
-        "created_classes": 1,
-        "processed_rows": 1,
-        "skipped_rows": 1,
-        "school_section": "arabic",
-        "academic_year": "2026-2027",
-    }
+    assert result["created_students"] == 1
+    assert result["updated_students"] == 0
+    assert result["created_classes"] == 0
+    assert result["processed_rows"] == 1
+    assert result["skipped_rows"] == 1
+    assert result["target_class_id"] == "arabic-4a"
+    assert result["dry_run"] is False
     assert len(arabic_classes) == 1 and arabic_classes[0]["id"] != international_class["id"]
     assert len(arabic_students) == 1
     assert arabic_students[0]["class_id"] == arabic_classes[0]["id"]
     assert arabic_students[0].get("attendance") is None
     assert fake_db.student_scores.rows == []
     assert international_student["attendance"] == 2.5
+
+
+def test_arabic_import_uses_selected_class_and_repairs_numeric_names_from_identity_column():
+    target_class = {
+        "id": "arabic-4a",
+        "name": "رابع أ",
+        "grade": 4,
+        "section": "A",
+        "school_section": "arabic",
+        "academic_year": "2026-2027",
+    }
+    wrong_class = {
+        "id": "arabic-6b",
+        "name": "سادس ب",
+        "grade": 6,
+        "section": "B",
+        "school_section": "arabic",
+        "academic_year": "2026-2027",
+    }
+    corrupted = {
+        "id": "legacy-student",
+        "full_name": "1184142782",
+        "class_id": "arabic-6b",
+        "class_name": "سادس ب",
+        "school_section": "arabic",
+        "academic_year": "2026-2027",
+    }
+    fake_db = SimpleNamespace(
+        classes=_Collection([target_class, wrong_class]),
+        students=_Collection([corrupted]),
+        student_scores=_Collection(),
+    )
+    content = "رقم الهوية,الاسم\n1184142782,علي ايمن الغزال\n1184967345,سعد محمد بوبشيت\n".encode("utf-8-sig")
+
+    async def run(dry_run):
+        return await server.import_excel(
+            file=UploadFile(filename="رابع أ.csv", file=io.BytesIO(content)),
+            week_id=None,
+            school_section="arabic",
+            academic_year="2026-2027",
+            class_id="arabic-4a",
+            dry_run=dry_run,
+            current_user={"id": "admin", "role_name": "Admin", "name": "Admin"},
+        )
+
+    with patch.object(server, "db", fake_db), patch.object(server, "log_user_action", AsyncMock()):
+        preview = asyncio.run(run(True))
+        assert preview["created_students"] == 1
+        assert preview["updated_students"] == 1
+        assert preview["repaired_students"] == 1
+        assert fake_db.students.rows == [corrupted]
+
+        result = asyncio.run(run(False))
+
+    assert result["created_students"] == 1
+    assert result["updated_students"] == 1
+    assert result["repaired_students"] == 1
+    repaired = next(row for row in fake_db.students.rows if row["id"] == "legacy-student")
+    assert repaired["full_name"] == "علي ايمن الغزال"
+    assert repaired["student_number"] == "1184142782"
+    assert repaired["class_id"] == "arabic-4a"
+    added = next(row for row in fake_db.students.rows if row["id"] != "legacy-student")
+    assert added["full_name"] == "سعد محمد بوبشيت"
+    assert added["student_number"] == "1184967345"
+    assert added["class_id"] == "arabic-4a"
+
+
+def test_arabic_import_rejects_numeric_names_and_conflicting_classes_before_writes():
+    target_class = {
+        "id": "arabic-4a",
+        "name": "رابع أ",
+        "grade": 4,
+        "section": "A",
+        "school_section": "arabic",
+        "academic_year": "2026-2027",
+    }
+    fake_db = SimpleNamespace(
+        classes=_Collection([target_class]),
+        students=_Collection(),
+        student_scores=_Collection(),
+    )
+
+    async def import_content(content):
+        return await server.import_excel(
+            file=UploadFile(filename="students.csv", file=io.BytesIO(content.encode("utf-8-sig"))),
+            week_id=None,
+            school_section="arabic",
+            academic_year="2026-2027",
+            class_id="arabic-4a",
+            dry_run=False,
+            current_user={"id": "admin", "role_name": "Admin", "name": "Admin"},
+        )
+
+    with patch.object(server, "db", fake_db), patch.object(server, "log_user_action", AsyncMock()):
+        with pytest.raises(HTTPException) as numeric_error:
+            asyncio.run(import_content("Student Name\n1184142782\n"))
+        assert numeric_error.value.status_code == 400
+        assert numeric_error.value.detail["code"] == "student_import_validation_failed"
+        assert fake_db.students.rows == []
+
+        with pytest.raises(HTTPException) as class_error:
+            asyncio.run(import_content("Student Name,Class\nطالب صحيح,سادس ب\n"))
+        assert class_error.value.status_code == 400
+        assert class_error.value.detail["code"] == "student_import_validation_failed"
+        assert fake_db.students.rows == []
+
+
+def test_arabic_import_rejects_unassigned_teacher_target_class():
+    target_class = {
+        "id": "arabic-4a",
+        "name": "رابع أ",
+        "grade": 4,
+        "section": "A",
+        "school_section": "arabic",
+        "academic_year": "2026-2027",
+    }
+    fake_db = SimpleNamespace(
+        classes=_Collection([target_class]),
+        students=_Collection(),
+        student_scores=_Collection(),
+    )
+    upload = UploadFile(
+        filename="students.csv",
+        file=io.BytesIO("Student Name\nطالب صحيح\n".encode("utf-8-sig")),
+    )
+    with patch.object(server, "db", fake_db), patch.object(server, "log_user_action", AsyncMock()):
+        with pytest.raises(HTTPException) as forbidden:
+            asyncio.run(
+                server.import_excel(
+                    file=upload,
+                    week_id=None,
+                    school_section="arabic",
+                    academic_year="2026-2027",
+                    class_id="arabic-4a",
+                    dry_run=True,
+                    current_user={
+                        "id": "teacher",
+                        "role_name": "Teacher",
+                        "assigned_class_ids": ["arabic-6b"],
+                    },
+                )
+            )
+    assert forbidden.value.status_code == 403
+    assert forbidden.value.detail == "student_import_target_class_forbidden"
+    assert fake_db.students.rows == []

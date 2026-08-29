@@ -56,9 +56,11 @@
 Enrollment import:
 
 1. Dashboard or Students import control.
-2. `POST /api/import/excel` with auto header detection and explicit section/year scope.
-3. Classes/students are upserted per mapping rules; Arabic enrollment import does not map grades.
-4. Refresh lists.
+2. Arabic enrollment requires one exact class selection, then `POST /api/import/excel?dry_run=true` with explicit section/year/class scope.
+3. The server recognizes Arabic/English name and identity headers, validates the full file without writes, and rejects numeric names, duplicate identities, or a class conflicting with the selected class.
+4. User confirms the preview; the same file is applied to the exact selected class. Existing legacy rows whose `full_name` is the uploaded identity number are repaired/moved instead of duplicated.
+5. Classes/students are upserted per mapping rules; Arabic enrollment import does not map grades.
+6. Refresh lists.
 
 Score-sheet import:
 

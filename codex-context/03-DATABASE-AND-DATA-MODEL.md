@@ -41,7 +41,7 @@ Default DB name: `school_db` (`DB_NAME`).
 
 ### Student (CONFIRMED)
 
-- Identity: `id`, `full_name`, `class_id`, optional student number fields used in import.
+- Identity: `id`, `full_name`, `class_id`, optional `student_number` used by enrollment import to match a stable identity without displaying it as the student name.
 - Lifecycle: create, update, transfer (class change), promote (settings-gated), delete.
 - Scores primarily live in `student_scores` keyed by week; some endpoints also surface aggregated fields on student payloads.
 - `school_section` is `international|arabic`; legacy records are migrated/defaulted to `international`.
