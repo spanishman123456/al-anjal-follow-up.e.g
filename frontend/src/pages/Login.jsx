@@ -289,9 +289,9 @@ function LoginPage({
             <CardTitle className="text-xl text-primary dark:text-cyan-400">{t("login_title")}</CardTitle>
           </CardHeader>
           <CardContent className="px-0 pb-0">
-            {logoutReason === "session_replaced" && (
+            {["session_replaced", "idle_timeout"].includes(logoutReason) && (
               <div className="mb-4 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
-                {t("session_replaced_message")}
+                {t(logoutReason === "idle_timeout" ? "session_idle_timeout_message" : "session_replaced_message")}
               </div>
             )}
             <form className="space-y-4" onSubmit={handleLogin}>

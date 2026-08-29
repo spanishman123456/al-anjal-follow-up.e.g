@@ -2,6 +2,13 @@
 
 **Handoff created:** 2026-08-21 (Cursor → Codex knowledge transfer)
 
+## Automatic idle logout (2026-08-29)
+
+- Authenticated users are automatically signed out after 30 minutes without deliberate browser activity. Pointer/touch interaction, keyboard input, scrolling, and the mouse wheel renew the deadline; API/background traffic does not.
+- The last-activity deadline survives refreshes and is synchronized across open tabs. Returning to a suspended or backgrounded tab after the deadline cannot revive the expired browser session.
+- Idle logout clears the stored JWT and activity timestamp, returns to Login, and shows a bilingual EN/AR data-protection explanation. Existing JWT claims, backend expiry, login approval, permissions, score data, and schemas are unchanged.
+- Frontend verification passes: all seven Jest suites / 45 tests, including five focused idle-session cases plus bilingual Login feedback coverage. The optimized production build and SPA fallback step complete successfully; existing Browserslist/deprecation notices remain unchanged.
+
 ## Baseline maximum field precision (2026-08-29)
 
 - Replaced the maximum input's `0.000001` minimum / unrestricted step with `0.01` minimum and step, preventing the spinner from inserting six decimal places.
@@ -31,7 +38,7 @@
 
 ## What works today (CONFIRMED)
 
-- JWT login + Google pending-approval teachers
+- JWT login + Google pending-approval teachers + synchronized 30-minute inactivity logout
 - Class/student CRUD, weeks, weekly scores, assessment/final/total mark pages
 - Global semester/quarter sync (header + AcademicTermSelect)
 - Top navigation + PageHero banners (EN/AR)

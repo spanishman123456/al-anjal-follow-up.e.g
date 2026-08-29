@@ -27,9 +27,9 @@ describe("Login", () => {
   let onLogin;
   let googleCallback;
   const query = (id) => container.querySelector(`[data-testid="${id}"]`);
-  const render = async (language = "en") => {
+  const render = async (language = "en", props = {}) => {
     await act(async () => {
-      root.render(<StrictMode><Login language={language} onLogin={onLogin} /></StrictMode>);
+      root.render(<StrictMode><Login language={language} onLogin={onLogin} {...props} /></StrictMode>);
     });
   };
   const submit = async () => {
@@ -78,6 +78,11 @@ describe("Login", () => {
     expect(apiModule.checkBackendHealth).not.toHaveBeenCalled();
     expect(apiModule.checkBackendLive).not.toHaveBeenCalled();
     expect(apiModule.warmBackendInBackground).toHaveBeenCalledTimes(1);
+  });
+
+  it.each(["en", "ar"])("explains an inactivity logout in %s", async (language) => {
+    await render(language, { logoutReason: "idle_timeout" });
+    expect(container.textContent).toContain(translations[language].session_idle_timeout_message);
   });
 
   it("sends entered credentials and enters immediately without waiting for warm-up", async () => {

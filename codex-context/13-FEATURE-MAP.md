@@ -11,7 +11,7 @@
 
 | Feature | UI | Logic | Database | API (examples) | Main files |
 |---------|----|-------|----------|----------------|------------|
-| Login | `Login.jsx` | Immediate JWT request; background warm-up only; one bounded connection retry | `users` | `/api/auth/login` | `App.js`, `api.js`, `server.py`, `Login.test.jsx` |
+| Login | `Login.jsx` | Immediate JWT request; background warm-up only; one bounded connection retry; browser session expires after 30 minutes of human inactivity across refreshes/tabs | `users` (idle deadline is browser-local) | `/api/auth/login` | `App.js`, `api.js`, `idleSession.js`, `server.py`, login/idle tests |
 | Google approval | Login + Settings | pending→approved | `users`, `notification_logs` | `/api/auth/google`, gmail-pending-* | `server.py`, `Settings.jsx` |
 | Dashboard | `Dashboard.jsx` | summary metrics | scores/students | `/analytics/summary`, missed-assessments | `Dashboard.jsx`, `server.py` |
 | Dashboard timetable | Both section Dashboards | Sunday–Thursday, 8 editable periods | `users.timetable_records` + legacy International `schedule` | `/timetables/profile` | `DashboardTimetable.jsx`, `TimetableEditor.jsx`, `server.py` |

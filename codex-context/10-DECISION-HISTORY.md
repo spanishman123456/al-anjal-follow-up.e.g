@@ -100,6 +100,15 @@ Format: Decision → Context → Why → Status → Codex Guidance.
 
 ---
 
+## Decision: Authenticated browser sessions expire after 30 minutes of human inactivity
+
+**Context:** An unattended signed-in school workstation must not leave student data accessible indefinitely.
+**Why:** Owner-requested protection against unrelated users accessing an already authenticated browser.
+**Status:** Active (`frontend/src/lib/idleSession.js`, integrated by `App.js`).
+**Codex Guidance:** Count deliberate pointer/touch, keyboard, wheel, and scroll activity—not API/background traffic. Preserve the deadline across refreshes and synchronize it across tabs. Idle expiry clears browser auth state and presents bilingual feedback; it does not change JWT claims, backend schema, login approval, or score data.
+
+---
+
 ## Decision: Render-only hosting (remove Vercel config)
 
 **Context:** Commit `d0211b0`.  

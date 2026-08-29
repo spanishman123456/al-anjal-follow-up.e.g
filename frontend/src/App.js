@@ -17,6 +17,12 @@ import Dashboard from "@/pages/DashboardSectionPage";
 import { Toaster } from "@/components/ui/sonner";
 import { toast } from "sonner";
 import {
+  getStoredLogoutReason,
+  markIdleSessionActivity,
+  setStoredLogoutReason,
+  startIdleSessionMonitor,
+} from "@/lib/idleSession";
+import {
   loadAnalyticsPage,
   loadArabicGradesPage,
   loadBaselinePage,
@@ -236,6 +242,12 @@ function App() {
             ? "تم تسجيل خروجك لأن هذا الحساب تم استخدامه لتسجيل الدخول من مكان آخر."
             : "You were signed out because this account was used to log in somewhere else."
         );
+      } else if (reason === "idle_timeout") {
+        toast.error(
+          language === "ar"
+            ? "تم تسجيل خروجك تلقائيًا بعد 30 دقيقة من عدم النشاط لحماية بيانات الموقع."
+            : "You were automatically signed out after 30 minutes of inactivity to protect the site's data."
+        );
       }
     };
     window.addEventListener("auth-logout", handler);
@@ -245,12 +257,31 @@ function App() {
     const onStorage = (event) => {
       if (event.key !== AUTH_TOKEN_KEY) return;
       const nextToken = event.newValue || null;
+      if (!nextToken) {
+        setLogoutReason(getStoredLogoutReason());
+        // localStorage is shared, but sessionStorage is per-tab. Clear this
+        // tab's fallback token too so a refresh cannot restore a remote logout.
+        clearStoredAuthToken();
+      }
       setToken(nextToken);
       setAuthReady(nextToken ? null : true);
     };
     window.addEventListener("storage", onStorage);
     return () => window.removeEventListener("storage", onStorage);
   }, []);
+
+  useEffect(() => {
+    if (!token) return undefined;
+    return startIdleSessionMonitor({
+      onIdle: () => {
+        setStoredLogoutReason("idle_timeout");
+        clearStoredAuthToken();
+        window.dispatchEvent(new CustomEvent("auth-logout", {
+          detail: { reason: "idle_timeout" },
+        }));
+      },
+    });
+  }, [token]);
 
   useEffect(() => {
     // Avoid refetching classes immediately if we already have a fresh session cache.
@@ -287,6 +318,7 @@ function App() {
   const handleLogin = useCallback((newToken) => {
     setLogoutReason(null);
     setStoredAuthToken(newToken);
+    markIdleSessionActivity();
     setToken(newToken);
     // Login API already authenticated the user — skip a second "Checking session…" gate.
     setAuthReady(true);

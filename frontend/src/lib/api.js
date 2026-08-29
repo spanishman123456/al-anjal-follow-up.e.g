@@ -1,4 +1,5 @@
 import axios from "axios";
+import { clearIdleSessionActivity, setStoredLogoutReason } from "@/lib/idleSession";
 
 // Backend must be running (Start_App.bat locally) or deployed (e.g. Render)
 const BACKEND_ROOT = process.env.REACT_APP_BACKEND_URL || "http://localhost:8000";
@@ -28,6 +29,7 @@ export function getStoredAuthToken() {
 }
 
 export function setStoredAuthToken(token) {
+  setStoredLogoutReason(null);
   try {
     localStorage.setItem(AUTH_TOKEN_KEY, token);
   } catch {
@@ -41,6 +43,7 @@ export function setStoredAuthToken(token) {
 }
 
 export function clearStoredAuthToken() {
+  clearIdleSessionActivity();
   try {
     localStorage.removeItem(AUTH_TOKEN_KEY);
   } catch {
