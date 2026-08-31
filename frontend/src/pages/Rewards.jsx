@@ -33,6 +33,7 @@ import { MoreVertical, Award, FileText, MessageCircle, PartyPopper } from "lucid
 function CertificateDialog({ reward, open, onOpenChange }) {
   if (!reward) return null;
   const { language } = useOutletContext();
+  const t = useTranslations(language);
   const isRTL = language === "ar";
 
   return (
@@ -54,23 +55,23 @@ function CertificateDialog({ reward, open, onOpenChange }) {
             </div>
           </div>
           <p className="text-amber-700/80 dark:text-amber-400/80 text-xs uppercase tracking-[0.3em] mt-6 mb-2">
-            Certificate of Achievement
+            {t("certificate_of_achievement")}
           </p>
           <h2 className="text-amber-900 dark:text-amber-100 text-xl font-bold mb-4">
-            This is to certify that
+            {t("this_is_to_certify")}
           </h2>
           <p className="text-2xl font-bold text-foreground mb-2 border-b-2 border-amber-500/50 pb-2 inline-block">
             {reward.student_name}
           </p>
           <p className="text-sm text-muted-foreground mb-4">{reward.class_name}</p>
           <p className="text-amber-800 dark:text-amber-200 font-medium mb-2">
-            has demonstrated outstanding effort and achievement.
+            {t("outstanding_effort")}
           </p>
           <p className="text-sm text-muted-foreground italic">
-            We are proud of your dedication. Keep reaching for the stars!
+            {t("reward_certificate_pride")}
           </p>
           <p className="text-xs text-muted-foreground mt-6">
-            Presented with appreciation
+            {t("presented_with_appreciation")}
           </p>
         </div>
       </DialogContent>
@@ -79,7 +80,7 @@ function CertificateDialog({ reward, open, onOpenChange }) {
 }
 
 export default function Rewards() {
-  const { language } = useOutletContext();
+  const { language, schoolSection, academicYear } = useOutletContext();
   const t = useTranslations(language);
   const [students, setStudents] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -91,7 +92,9 @@ export default function Rewards() {
   const loadData = async () => {
     setLoading(true);
     try {
-      const studentsRes = await api.get("/students");
+      const studentsRes = await api.get("/students", {
+        params: { school_section: schoolSection, academic_year: academicYear },
+      });
       setStudents(studentsRes.data || []);
     } catch (error) {
       toast.error(getApiErrorMessage(error) || "Failed to load students");
@@ -102,7 +105,7 @@ export default function Rewards() {
 
   useEffect(() => {
     loadData();
-  }, []);
+  }, [schoolSection, academicYear]);
 
   useEffect(() => {
     const onVisibility = () => {
@@ -115,7 +118,7 @@ export default function Rewards() {
       document.removeEventListener("visibilitychange", onVisibility);
       window.removeEventListener("students-updated", onStudentsUpdated);
     };
-  }, []);
+  }, [schoolSection, academicYear]);
 
   const rewardedStudents = students.filter(
     (s) =>
@@ -190,7 +193,7 @@ export default function Rewards() {
       <section className="grid gap-4 md:grid-cols-3" data-testid="rewards-metrics">
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm text-muted-foreground">Rewarded Students</CardTitle>
+            <CardTitle className="text-sm text-muted-foreground">{t("rewarded_students")}</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-semibold" data-testid="rewards-total">
@@ -200,7 +203,7 @@ export default function Rewards() {
         </Card>
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm text-muted-foreground">Badges</CardTitle>
+            <CardTitle className="text-sm text-muted-foreground">{t("badges")}</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-semibold" data-testid="rewards-badges">
@@ -210,7 +213,7 @@ export default function Rewards() {
         </Card>
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm text-muted-foreground">Certificates</CardTitle>
+            <CardTitle className="text-sm text-muted-foreground">{t("certificates")}</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-semibold" data-testid="rewards-certificates">
@@ -260,7 +263,7 @@ export default function Rewards() {
                         {commentRewardIds.has(String(student.id)) && (
                           <span className="inline-flex items-center gap-1 rounded-md bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300 px-2 py-0.5 text-sm font-medium">
                             <MessageCircle className="h-3.5 w-3.5" />
-                            Excellent
+                            {t("excellent")}
                           </span>
                         )}
                       </span>

@@ -52,7 +52,7 @@ export function buildNavigationGroups({ t, quarter, schoolSection = "internation
         { to: "/baseline-analytics", label: t(isArabicSection ? "baseline_diagnostic_analytics" : "baseline_pre_analytics"), testId: "nav-baseline-analytics" },
       ],
     },
-    ...(!isArabicSection ? [{
+    {
       id: "programs",
       type: "dropdown",
       label: t("nav_group_programs"),
@@ -62,7 +62,7 @@ export function buildNavigationGroups({ t, quarter, schoolSection = "internation
         { to: "/rewards", label: t("rewards"), testId: "nav-rewards-link" },
         { to: "/lesson-plan-generator", label: t("lesson_plan_generator"), testId: "nav-lesson-plan-generator-link" },
       ],
-    }] : []),
+    },
   ];
 
   if (isAdmin) {

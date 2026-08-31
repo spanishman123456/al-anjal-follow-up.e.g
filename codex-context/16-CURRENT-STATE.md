@@ -75,6 +75,8 @@
 - Top navigation + PageHero banners (EN/AR)
 - Analytics & Reports with Visual Board and premium PDF/Excel paths
 - Remedial plans, rewards/certificates, lesson plan generator
+- Programs now appears in both sections. Remedial reports select a real diagnostic/pre-test, quarter final-test block, quarter total or semester aggregate and list only actual marks strictly below 50%; blanks are excluded and zero remains a real score. Subject/weakness/date/signatories are editable, while names/classes/marks come from a protected snapshot and export to a bilingual school PDF. Rewards load the active section/year roster, and the lesson-plan mapper recognizes common Arabic template labels.
+- Remedial-program verification (2026-09-01): 86 backend tests and 16 frontend suites / 99 tests pass; the optimized production build succeeds. The Arabic two-page QA PDF was rendered at 144 DPI and inspected page by page for logo, RTL line order, repeated table header, marks, names and signatures.
 - Multi-year approved-school-PDF calendar import/history page, notifications log, settings/users
 - Favicon from Al Anjal logo
 - Render deployment blueprint

@@ -20,7 +20,7 @@ function formatFileSize(bytes) {
 }
 
 export default function LessonPlanGenerator() {
-  const { language } = useOutletContext();
+  const { language, schoolSection } = useOutletContext();
   const t = useTranslations(language);
   const wordInputRef = useRef(null);
   const pdfInputRef = useRef(null);
@@ -165,6 +165,9 @@ export default function LessonPlanGenerator() {
             <Badge variant="secondary">{t("lesson_plan_docx_only")}</Badge>
             <Badge variant="secondary">{t("lesson_plan_text_pdf_only")}</Badge>
           </div>
+          <p className="rounded-lg border border-cyan-500/25 bg-cyan-500/10 p-3 text-sm text-foreground" data-testid="lesson-plan-section-note">
+            {schoolSection === "arabic" ? t("lesson_plan_arabic_template_note") : t("lesson_plan_international_template_note")}
+          </p>
         </CardContent>
       </Card>
 

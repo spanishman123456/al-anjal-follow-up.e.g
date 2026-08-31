@@ -21,16 +21,16 @@ RULE_BASED_PROVIDER = "rule-based"
 RULE_BASED_MODEL = "template-mapper-v1"
 MAX_PDF_TEXT_CHARS = 24000
 LABEL_ALIASES = {
-    "lesson title": ["lesson", "title", "lesson title", "chapter", "topic"],
-    "objectives": ["objectives", "lesson objectives", "aims", "learning objectives"],
-    "aids": ["check list", "what you need for this lesson", "hardware", "software", "resources", "aids"],
-    "lesson procedure": ["overview steps to follow", "steps to follow", "overview", "procedure", "lesson procedure"],
-    "time pacing": ["duration", "time pacing", "periods", "timing"],
-    "activities": ["activities", "project", "projects", "flashback", "steps to follow"],
-    "group projects": ["project", "projects", "group projects"],
-    "formative assessment": ["assessment", "formative assessment", "observation", "check", "evaluation"],
-    "observation": ["observation", "assessment", "evaluation"],
-    "warmup": ["warmup questions", "warm up questions", "warm up", "starter", "introduction"],
+    "lesson title": ["lesson", "title", "lesson title", "chapter", "topic", "عنوان الدرس", "موضوع الدرس", "اسم الدرس"],
+    "objectives": ["objectives", "lesson objectives", "aims", "learning objectives", "الأهداف", "أهداف الدرس", "نواتج التعلم"],
+    "aids": ["check list", "what you need for this lesson", "hardware", "software", "resources", "aids", "الوسائل", "مصادر التعلم", "الأدوات", "التقنيات"],
+    "lesson procedure": ["overview steps to follow", "steps to follow", "overview", "procedure", "lesson procedure", "إجراءات الدرس", "خطوات الدرس", "سير الدرس", "استراتيجيات التدريس"],
+    "time pacing": ["duration", "time pacing", "periods", "timing", "الزمن", "مدة الدرس", "التوقيت", "عدد الحصص"],
+    "activities": ["activities", "project", "projects", "flashback", "steps to follow", "الأنشطة", "النشاط", "أنشطة التعلم"],
+    "group projects": ["project", "projects", "group projects", "المشروع", "المشروعات", "العمل الجماعي"],
+    "formative assessment": ["assessment", "formative assessment", "observation", "check", "evaluation", "التقويم", "التقويم البنائي", "أساليب التقويم"],
+    "observation": ["observation", "assessment", "evaluation", "الملاحظة", "التقويم", "التقييم"],
+    "warmup": ["warmup questions", "warm up questions", "warm up", "starter", "introduction", "التهيئة", "التمهيد", "التهيئة الحافزة", "مقدمة الدرس"],
 }
 
 
@@ -909,4 +909,3 @@ def save_generated_docx(user_id: str, filename: str, docx_bytes: bytes) -> Dict[
     metadata_path = LESSON_PLAN_OUTPUT_DIR / f"{document_id}.json"
     metadata_path.write_text(json.dumps({"filename": safe_name}, ensure_ascii=False), encoding="utf-8")
     return {"document_id": document_id, "filename": safe_name, "path": str(output_path)}
-

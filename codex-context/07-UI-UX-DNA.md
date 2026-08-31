@@ -43,6 +43,7 @@ Note: Root `design_guidelines.json` describes an older “EduTrack Pro / Swiss U
 - Priority cards/buttons and active navigation may use subtle cyan illumination, polished hover transitions, and short fade/slide entrances. Respect reduced-motion rules and avoid decorative animation overload.
 - `components/ui/button.jsx` is the shared illuminated interaction language; semantic destructive/success/secondary variants retain their color meaning.
 - `components/ui/table.jsx` plus the `main table` normalization in `index.css` is the visual table baseline for both native and shared-table pages.
+- The Programs group is available in both sections. Rewards use the active section/year roster, Lesson Plan Generator shows a section-specific template note, and Remedial Plans uses an assessment/class selector, evidence cards, manual report fields, a below-50% candidate table and one PDF export action.
 
 ## Bilingual
 

@@ -248,3 +248,11 @@ Format: Decision → Context → Why → Status → Codex Guidance.
 **Decision:** Every first Google identity/link requires explicit Admin approval, including an email already attached to a local account. JWTs are bound to `local` or `google`; a Google JWT re-checks current approval on every request. Provider-less legacy sessions are invalidated once. Rejecting Google linkage preserves local-password access, while pure Google accounts remain inactive. Roles, users, promotion settings, Gmail approvals and Admin notifications require exact Admin on both UI and API. Teacher self-service password changes create an Admin notification containing identity/timestamp context but never the password.
 
 **Codex Guidance:** Never restore email-match Google bypasses, optimistic Admin fallbacks, or non-Admin access to these settings. Keep local-password and Google-link activation independent.
+
+## Decision: remedial reports are assessment-driven and strictly below 50% (2026-09-01)
+
+**Context:** Manual remedial-plan CRUD did not identify students from a selected test and could not reproduce the school's approved diagnostic-analysis report structure.
+
+**Decision:** Both sections share the Programs surface and assessment-driven Remedial page. A server-owned snapshot selects only recorded scores below 50% from a diagnostic/pre-test, quarter total, quarter final-test block or semester aggregate; blanks are never zero and exactly 50% is excluded. Subject/skill weakness, date, department and signatories remain teacher-entered. Export recomputes and validates the snapshot before producing the bilingual Amiri-safe PDF table.
+
+**Codex Guidance:** Do not reuse normal performance thresholds for remedial eligibility, do not mix section formulas, and do not broaden Teacher access beyond assigned classes or teacher-owned baseline records.

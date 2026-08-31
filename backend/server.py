@@ -84,6 +84,7 @@ from lesson_plan_service import (
     sanitize_filename,
     save_generated_docx,
 )
+from remedial_report import build_remedial_snapshot, render_remedial_pdf
 from calendar_pdf_import import CalendarImportError, parse_anjal_calendar_pdf, select_calendar_for_date
 from score_sheet import ScoreSheetError, match_score_rows, read_score_sheet
 from starlette.concurrency import run_in_threadpool
@@ -5458,6 +5459,24 @@ class RemedialPlanUpdate(BaseModel):
     steps: Optional[List[PlanStep]] = None
 
 
+class RemedialReportExportRequest(BaseModel):
+    source_type: Literal["baseline", "quarter_total", "quarter_exams", "semester_total"]
+    source_id: Optional[str] = None
+    school_section: Literal["international", "arabic"]
+    academic_year: str = Field(pattern=r"^\d{4}-\d{4}$")
+    semester: int = Field(ge=1, le=2)
+    quarter: int = Field(ge=1, le=2)
+    class_id: Optional[str] = None
+    lang: Literal["en", "ar"] = "en"
+    snapshot_id: str = Field(min_length=64, max_length=64)
+    subject: str = Field(min_length=1, max_length=200)
+    skill_weakness: str = Field(min_length=1, max_length=700)
+    remedial_plan_date: str = Field(min_length=1, max_length=100)
+    department: Optional[str] = Field(default=None, max_length=200)
+    teacher_name: Optional[str] = Field(default=None, max_length=200)
+    supervisor_name: Optional[str] = Field(default=None, max_length=200)
+
+
 class RewardPlanBase(BaseModel):
     student_id: str
     student_name: str
@@ -7315,6 +7334,386 @@ async def reset_user_password(user_id: str, payload: PasswordUpdate, current_use
 async def delete_remedial_plan(plan_id: str):
     await db.remedial_plans.delete_one({"id": plan_id})
     return {"status": "deleted"}
+
+
+def _remedial_source_label(
+    source_type: str,
+    school_section: str,
+    semester: int,
+    quarter: int,
+    lang: str,
+    baseline_title: Optional[str] = None,
+) -> str:
+    if source_type == "baseline":
+        return baseline_title or (
+            "الاختبار التشخيصي" if school_section == SCHOOL_SECTION_ARABIC and lang == "ar"
+            else "الاختبار القبلي" if lang == "ar"
+            else "Diagnostic Test" if school_section == SCHOOL_SECTION_ARABIC
+            else "Pre-Test"
+        )
+    display_quarter = quarter + 2 if semester == 2 else quarter
+    if lang == "ar":
+        if source_type == "quarter_exams":
+            return f"اختبارات الربع {display_quarter} النهائية"
+        if source_type == "semester_total":
+            return f"إجمالي الفصل الدراسي {semester}"
+        return f"إجمالي درجات الربع {display_quarter}"
+    if source_type == "quarter_exams":
+        return f"Quarter {display_quarter} Final Tests"
+    if source_type == "semester_total":
+        return f"Semester {semester} Total"
+    return f"Quarter {display_quarter} Total"
+
+
+def _remedial_baseline_can_read(record: Dict[str, Any], current_user: Dict[str, Any]) -> bool:
+    if (current_user.get("role_name") or "").strip() == "Admin":
+        return True
+    assigned = set(_teacher_assigned_class_ids(current_user) or [])
+    return (
+        (current_user.get("role_name") or "").strip() == "Teacher"
+        and record.get("teacher_id") == current_user.get("id")
+        and set(record.get("class_ids") or []).issubset(assigned)
+    )
+
+
+async def _build_remedial_baseline_snapshot(
+    *,
+    source_id: str,
+    school_section: str,
+    academic_year: str,
+    semester: int,
+    quarter: int,
+    class_id: Optional[str],
+    lang: str,
+    current_user: Dict[str, Any],
+) -> Dict[str, Any]:
+    record = await db.baseline_assessments.find_one({"_id": source_id})
+    if not record or not _remedial_baseline_can_read(record, current_user):
+        raise HTTPException(status_code=404, detail="remedial_source_not_found")
+    if (
+        record_school_section(record) != school_section
+        or record.get("academic_year") != academic_year
+        or int(record.get("semester") or 0) != semester
+        or int(record.get("quarter") or 0) != quarter
+    ):
+        raise HTTPException(status_code=409, detail="remedial_source_scope_mismatch")
+    if class_id and class_id not in set(record.get("class_ids") or []):
+        raise HTTPException(status_code=404, detail="remedial_class_not_found")
+    scores = record.get("scores") or {}
+    rows = [
+        {
+            **student,
+            "score": scores.get(student.get("id")),
+        }
+        for student in (record.get("roster") or [])
+    ]
+    return build_remedial_snapshot(
+        source_type="baseline",
+        source_id=source_id,
+        source_label=_remedial_source_label(
+            "baseline", school_section, semester, quarter, lang, record.get("title")
+        ),
+        school_section=school_section,
+        academic_year=academic_year,
+        semester=semester,
+        quarter=quarter,
+        maximum=float(record.get("max_score") or 0),
+        rows=rows,
+        classes=record.get("classes") or [],
+        class_id=class_id,
+    )
+
+
+async def _remedial_scoped_classes(
+    school_section: str,
+    academic_year: str,
+    class_id: Optional[str],
+    current_user: Dict[str, Any],
+) -> List[Dict[str, Any]]:
+    filters: List[Dict[str, Any]] = [school_section_query(school_section, academic_year)]
+    assigned = _teacher_assigned_class_ids(current_user)
+    if assigned is not None:
+        if class_id and class_id not in assigned:
+            return []
+        filters.append({"id": {"$in": assigned} if assigned else {"$in": []}})
+    if class_id:
+        filters.append({"id": class_id})
+    return await db.classes.find({"$and": filters}, {"_id": 0}).sort("grade", 1).to_list(500)
+
+
+async def _build_remedial_fixed_snapshot(
+    *,
+    source_type: str,
+    school_section: str,
+    academic_year: str,
+    semester: int,
+    quarter: int,
+    class_id: Optional[str],
+    lang: str,
+    current_user: Dict[str, Any],
+) -> Dict[str, Any]:
+    classes = await _remedial_scoped_classes(
+        school_section, academic_year, class_id, current_user
+    )
+    class_ids = [item["id"] for item in classes]
+    if class_id and not class_ids:
+        raise HTTPException(status_code=404, detail="remedial_class_not_found")
+
+    rows: List[Dict[str, Any]] = []
+    maximum: float
+    if school_section == SCHOOL_SECTION_ARABIC:
+        if source_type == "semester_total":
+            first, second = await asyncio.gather(
+                build_arabic_grading_payload(academic_year, semester, 1, class_id, current_user),
+                build_arabic_grading_payload(academic_year, semester, 2, class_id, current_user),
+            )
+            second_map = {item["id"]: item for item in second.get("students") or []}
+            for item in first.get("students") or []:
+                other = second_map.get(item["id"])
+                q1 = item.get("quarter_total")
+                q2 = other.get("quarter_total") if other else None
+                rows.append({**item, "score": round(float(q1) + float(q2), 2) if q1 is not None and q2 is not None else None})
+            classes = first.get("classes") or classes
+            maximum = 200.0
+        else:
+            payload = await build_arabic_grading_payload(
+                academic_year, semester, quarter, class_id, current_user
+            )
+            classes = payload.get("classes") or classes
+            for item in payload.get("students") or []:
+                if source_type == "quarter_exams":
+                    has_exam = any(item.get(field) is not None for field in ARABIC_EXAM_FIELDS)
+                    score = item.get("tests_total") if has_exam else None
+                else:
+                    score = item.get("quarter_total")
+                rows.append({**item, "score": score})
+            maximum = 60.0 if source_type == "quarter_exams" else 100.0
+    else:
+        students = await db.students.find(
+            {
+                "$and": [
+                    school_section_query(SCHOOL_SECTION_INTERNATIONAL, academic_year),
+                    {"class_id": {"$in": class_ids}},
+                ]
+            },
+            {"_id": 0},
+        ).sort([("class_name", 1), ("full_name", 1)]).to_list(10000)
+        student_ids = [item["id"] for item in students]
+        if source_type == "semester_total":
+            score_maps = await asyncio.gather(
+                build_quarter_score_map_with_q1_spillover(student_ids, semester, 1),
+                build_quarter_score_map_with_q1_spillover(student_ids, semester, 2),
+            )
+            for item in students:
+                q1 = _compute_cumulative_final_quarter(score_maps[0].get(item["id"], {}), 1).get("combined_total")
+                q2 = _compute_cumulative_final_quarter(score_maps[1].get(item["id"], {}), 2).get("combined_total")
+                rows.append({**item, "score": round(float(q1) + float(q2), 2) if q1 is not None and q2 is not None else None})
+            maximum = 100.0
+        else:
+            score_map = await build_quarter_score_map_with_q1_spillover(student_ids, semester, quarter)
+            for item in students:
+                week_scores = score_map.get(item["id"], {})
+                if source_type == "quarter_exams":
+                    effective = _effective_scores_q1(week_scores) if quarter == 1 else _effective_scores_q2(week_scores)
+                    fields = (
+                        ("quarter1_practical", "quarter1_theory")
+                        if quarter == 1
+                        else ("quarter2_practical", "quarter2_theory")
+                    )
+                    has_exam = any(effective.get(field) is not None for field in fields)
+                    score = (
+                        round(min(sum(_safe_float_score(effective.get(field)) for field in fields), 20), 2)
+                        if has_exam
+                        else None
+                    )
+                else:
+                    score = _compute_cumulative_final_quarter(week_scores, quarter).get("combined_total")
+                rows.append({**item, "score": score})
+            maximum = 20.0 if source_type == "quarter_exams" else 50.0
+
+    return build_remedial_snapshot(
+        source_type=source_type,
+        source_id=None,
+        source_label=_remedial_source_label(
+            source_type, school_section, semester, quarter, lang
+        ),
+        school_section=school_section,
+        academic_year=academic_year,
+        semester=semester,
+        quarter=None if source_type == "semester_total" else quarter,
+        maximum=maximum,
+        rows=rows,
+        classes=classes,
+        class_id=class_id,
+    )
+
+
+async def _build_remedial_report_snapshot(
+    *,
+    source_type: str,
+    source_id: Optional[str],
+    school_section: str,
+    academic_year: str,
+    semester: int,
+    quarter: int,
+    class_id: Optional[str],
+    lang: str,
+    current_user: Dict[str, Any],
+) -> Dict[str, Any]:
+    normalized_section = normalize_school_section(school_section)
+    if source_type == "baseline":
+        if not source_id:
+            raise HTTPException(status_code=422, detail="remedial_source_id_required")
+        return await _build_remedial_baseline_snapshot(
+            source_id=source_id,
+            school_section=normalized_section,
+            academic_year=academic_year,
+            semester=semester,
+            quarter=quarter,
+            class_id=class_id,
+            lang=lang,
+            current_user=current_user,
+        )
+    if source_type not in {"quarter_total", "quarter_exams", "semester_total"}:
+        raise HTTPException(status_code=422, detail="remedial_source_invalid")
+    return await _build_remedial_fixed_snapshot(
+        source_type=source_type,
+        school_section=normalized_section,
+        academic_year=academic_year,
+        semester=semester,
+        quarter=quarter,
+        class_id=class_id,
+        lang=lang,
+        current_user=current_user,
+    )
+
+
+@api_router.get("/remedial-reports/sources")
+async def list_remedial_report_sources(
+    school_section: str = Query(...),
+    academic_year: str = Query(..., pattern=r"^\d{4}-\d{4}$"),
+    semester: int = Query(..., ge=1, le=2),
+    quarter: int = Query(..., ge=1, le=2),
+    current_user: Dict[str, Any] = Depends(require_lesson_plan_access),
+):
+    normalized_section = normalize_school_section(school_section)
+    classes = await _remedial_scoped_classes(
+        normalized_section, academic_year, None, current_user
+    )
+    scoped_class_ids = [item["id"] for item in classes]
+    maximums = {
+        "quarter_total": 100 if normalized_section == SCHOOL_SECTION_ARABIC else 50,
+        "quarter_exams": 60 if normalized_section == SCHOOL_SECTION_ARABIC else 20,
+        "semester_total": 200 if normalized_section == SCHOOL_SECTION_ARABIC else 100,
+    }
+    sources = [
+        {
+            "source_type": source_type,
+            "source_id": None,
+            "label_en": _remedial_source_label(source_type, normalized_section, semester, quarter, "en"),
+            "label_ar": _remedial_source_label(source_type, normalized_section, semester, quarter, "ar"),
+            "maximum": maximum,
+            "class_ids": scoped_class_ids,
+        }
+        for source_type, maximum in maximums.items()
+    ]
+    baseline_query: Dict[str, Any] = {
+        "school_section": normalized_section,
+        "academic_year": academic_year,
+        "semester": semester,
+        "quarter": quarter,
+    }
+    if (current_user.get("role_name") or "").strip() == "Teacher":
+        baseline_query["teacher_id"] = current_user.get("id")
+    records = await db.baseline_assessments.find(
+        baseline_query,
+        {"roster": 0, "scores": 0},
+    ).sort("created_at", -1).to_list(1000)
+    for record in records:
+        if not _remedial_baseline_can_read(record, current_user):
+            continue
+        title = record.get("title") or _remedial_source_label(
+            "baseline", normalized_section, semester, quarter, "en"
+        )
+        sources.insert(0, {
+            "source_type": "baseline",
+            "source_id": record.get("id") or record.get("_id"),
+            "label_en": title,
+            "label_ar": title,
+            "maximum": record.get("max_score"),
+            "test_date": record.get("test_date"),
+            "class_ids": record.get("class_ids") or [],
+        })
+    return {"sources": sources, "classes": classes}
+
+
+@api_router.get("/remedial-reports/preview")
+async def preview_remedial_report(
+    source_type: Literal["baseline", "quarter_total", "quarter_exams", "semester_total"],
+    school_section: str = Query(...),
+    academic_year: str = Query(..., pattern=r"^\d{4}-\d{4}$"),
+    semester: int = Query(..., ge=1, le=2),
+    quarter: int = Query(..., ge=1, le=2),
+    source_id: Optional[str] = Query(default=None),
+    class_id: Optional[str] = Query(default=None),
+    lang: Literal["en", "ar"] = Query(default="en"),
+    current_user: Dict[str, Any] = Depends(require_lesson_plan_access),
+):
+    return await _build_remedial_report_snapshot(
+        source_type=source_type,
+        source_id=source_id,
+        school_section=school_section,
+        academic_year=academic_year,
+        semester=semester,
+        quarter=quarter,
+        class_id=class_id,
+        lang=lang,
+        current_user=current_user,
+    )
+
+
+@api_router.post("/remedial-reports/export.pdf")
+async def export_remedial_report_pdf(
+    payload: RemedialReportExportRequest,
+    current_user: Dict[str, Any] = Depends(require_lesson_plan_access),
+):
+    snapshot = await _build_remedial_report_snapshot(
+        source_type=payload.source_type,
+        source_id=payload.source_id,
+        school_section=payload.school_section,
+        academic_year=payload.academic_year,
+        semester=payload.semester,
+        quarter=payload.quarter,
+        class_id=payload.class_id,
+        lang=payload.lang,
+        current_user=current_user,
+    )
+    if snapshot["snapshot_id"] != payload.snapshot_id:
+        raise HTTPException(status_code=409, detail="remedial_snapshot_conflict")
+    if not snapshot.get("students"):
+        raise HTTPException(status_code=409, detail="remedial_no_weak_students")
+    details = payload.model_dump(
+        include={
+            "subject", "skill_weakness", "remedial_plan_date", "department",
+            "teacher_name", "supervisor_name",
+        }
+    )
+    content = await run_in_threadpool(render_remedial_pdf, snapshot, details, payload.lang)
+    await log_user_action(
+        current_user,
+        "remedial_report_export",
+        f"Exported {payload.school_section} {payload.source_type} remedial report for {len(snapshot['students'])} students",
+    )
+    filename = f"remedial-{payload.school_section}-{payload.academic_year}-s{payload.semester}.pdf"
+    return StreamingResponse(
+        io.BytesIO(content),
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "Cache-Control": "no-store",
+            "X-Remedial-Snapshot": snapshot["snapshot_id"],
+        },
+    )
 
 
 @api_router.get("/rewards", response_model=List[RewardPlanRecord])
