@@ -309,6 +309,9 @@ def test_delete_all_students_can_be_scoped_to_one_arabic_class():
         arabic_quarter_scores=_Collection([
             {"student_id": "keep-4a"}, {"student_id": "delete-6b-1"}, {"student_id": "delete-6b-2"},
         ]),
+        arabic_weekly_scores=_Collection([
+            {"student_id": "keep-4a"}, {"student_id": "delete-6b-1"}, {"student_id": "delete-6b-2"},
+        ]),
     )
     with patch.object(server, "db", fake_db), patch.object(server, "log_user_action", AsyncMock()):
         result = asyncio.run(
@@ -323,7 +326,9 @@ def test_delete_all_students_can_be_scoped_to_one_arabic_class():
     assert result["students_deleted"] == 2
     assert result["scores_deleted"] == 2
     assert result["arabic_scores_deleted"] == 2
+    assert result["arabic_weekly_scores_deleted"] == 2
     assert result["target_class_name"] == "سادس ب"
     assert {row["id"] for row in fake_db.students.rows} == {"keep-4a", "keep-international"}
     assert fake_db.student_scores.rows == [{"student_id": "keep-4a"}]
     assert fake_db.arabic_quarter_scores.rows == [{"student_id": "keep-4a"}]
+    assert fake_db.arabic_weekly_scores.rows == [{"student_id": "keep-4a"}]

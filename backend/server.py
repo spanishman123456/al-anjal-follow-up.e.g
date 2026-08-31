@@ -2939,6 +2939,249 @@ def create_reports_enrollment_area_chart(class_breakdown: List[Dict[str, Any]]) 
     return buf
 
 
+def _arabic_report_average(values: List[Any]) -> Optional[float]:
+    valid: List[float] = []
+    for value in values:
+        if value is None:
+            continue
+        try:
+            valid.append(float(value))
+        except (TypeError, ValueError):
+            continue
+    return sum(valid) / len(valid) if valid else None
+
+
+def _arabic_report_chart_labels(lang: str) -> Dict[str, str]:
+    if _normalize_lang(lang) == "ar":
+        return {
+            "continuous": "أعمال السنة /40",
+            "theory": "أفضل نظري /30",
+            "practical": "العملي /30",
+            "theory1": "النظري 1",
+            "theory2": "النظري 2",
+            "practical_raw": "العملي",
+            "recorded": "الدرجة المحققة",
+            "maximum": "الدرجة النهائية",
+            "on_level": "على المستوى",
+            "approach": "قريب من المستوى",
+            "below": "أقل من المستوى",
+            "total": "الإجمالي /100",
+        }
+    return {
+        "continuous": "Continuous /40",
+        "theory": "Best theory /30",
+        "practical": "Practical /30",
+        "theory1": "Theory 1",
+        "theory2": "Theory 2",
+        "practical_raw": "Practical",
+        "recorded": "Recorded score",
+        "maximum": "Maximum",
+        "on_level": "On level",
+        "approach": "Approaching",
+        "below": "Below level",
+        "total": "Total /100",
+    }
+
+
+def create_arabic_performance_donut(distribution: List[Dict[str, Any]], lang: str = "en") -> io.BytesIO:
+    labels = _arabic_report_chart_labels(lang)
+    counts = {
+        level: next((int(item.get("count") or 0) for item in distribution if item.get("level") == level), 0)
+        for level in ("on_level", "approach", "below")
+    }
+    segments = [
+        ("on_level", BOARD_ANALYTICS["donut_on"]),
+        ("approach", BOARD_ANALYTICS["donut_approach"]),
+        ("below", BOARD_ANALYTICS["donut_below"]),
+    ]
+    visible = [(level, color) for level, color in segments if counts[level] > 0]
+    if not visible:
+        return _analytics_empty_chart("No graded students")
+    _chart_prepare_mpl()
+    fig, ax = plt.subplots(figsize=(5.2, 4.0))
+    values = [counts[level] for level, _ in visible]
+    colors_list = [color for _, color in visible]
+    ax.pie(values, colors=colors_list, startangle=90, wedgeprops=dict(width=0.42, edgecolor="white", linewidth=2.5))
+    ax.axis("equal")
+    legend_handles = [
+        Patch(facecolor=color, edgecolor="white", label=f"{_chart_label(labels[level])}: {counts[level]}")
+        for level, color in segments
+    ]
+    ax.legend(handles=legend_handles, loc="center left", fontsize=8, frameon=True, fancybox=True, framealpha=0.92, bbox_to_anchor=(-0.08, 0.5))
+    graded_total = sum(counts.values())
+    on_level_rate = counts["on_level"] * 100 / graded_total if graded_total else 0
+    ax.text(0, 0.03, f"{on_level_rate:.0f}%", ha="center", va="center", fontsize=22, fontweight="bold", color="#0f172a")
+    ax.text(0, -0.14, _chart_label(labels["on_level"]), ha="center", va="center", fontsize=8, color="#64748b")
+    buf = io.BytesIO()
+    fig.subplots_adjust(left=0.25, right=0.98, top=0.92, bottom=0.12)
+    plt.savefig(buf, format="png", dpi=PDF_EXPORT_CHART_DPI, facecolor="white", bbox_inches="tight", pad_inches=0.06)
+    plt.close(fig)
+    buf.seek(0)
+    return buf
+
+
+def create_arabic_component_bar_chart(students: List[Dict[str, Any]], lang: str = "en") -> io.BytesIO:
+    labels = _arabic_report_chart_labels(lang)
+    names = [labels["continuous"], labels["theory"], labels["practical"]]
+    values = [
+        _arabic_report_average([row.get("continuous_total") for row in students]) or 0,
+        _arabic_report_average([row.get("best_theory_weighted") for row in students]) or 0,
+        _arabic_report_average([row.get("practical_weighted") for row in students]) or 0,
+    ]
+    maxima = [40, 30, 30]
+    if not students or not any(value > 0 for value in values):
+        return _analytics_empty_chart("No weighted score data")
+    _chart_prepare_mpl()
+    fig, ax = plt.subplots(figsize=(5.8, 3.8))
+    x = list(range(len(names)))
+    width = 0.34
+    bars = ax.bar([item - width / 2 for item in x], values, width=width, color="#8b5cf6", label=_chart_label(labels["recorded"]))
+    ax.bar([item + width / 2 for item in x], maxima, width=width, color="#22d3ee", alpha=0.3, label=_chart_label(labels["maximum"]))
+    for index, bar in enumerate(bars):
+        ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 0.8, f"{values[index]:.1f}", ha="center", fontsize=8, color="#475569")
+    ax.set_xticks(x)
+    ax.set_xticklabels([_chart_label(name) for name in names], fontsize=8)
+    ax.set_ylim(0, 44)
+    ax.yaxis.grid(True, linestyle="--", color=BOARD_ANALYTICS["grid"], linewidth=0.8)
+    ax.set_axisbelow(True)
+    ax.legend(fontsize=8, frameon=False, loc="upper right")
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+    buf = io.BytesIO()
+    fig.subplots_adjust(left=0.1, right=0.98, top=0.9, bottom=0.22)
+    plt.savefig(buf, format="png", dpi=PDF_EXPORT_CHART_DPI, facecolor="white", bbox_inches="tight", pad_inches=0.08)
+    plt.close(fig)
+    buf.seek(0)
+    return buf
+
+
+def create_arabic_component_donut(students: List[Dict[str, Any]], lang: str = "en") -> io.BytesIO:
+    labels = _arabic_report_chart_labels(lang)
+    rows = [
+        (labels["continuous"], _arabic_report_average([row.get("continuous_total") for row in students]) or 0, "#8b5cf6"),
+        (labels["theory"], _arabic_report_average([row.get("best_theory_weighted") for row in students]) or 0, "#06b6d4"),
+        (labels["practical"], _arabic_report_average([row.get("practical_weighted") for row in students]) or 0, "#22c55e"),
+    ]
+    visible = [row for row in rows if row[1] > 0]
+    if not visible:
+        return _analytics_empty_chart("No component contribution data")
+    _chart_prepare_mpl()
+    fig, ax = plt.subplots(figsize=(5.2, 4.0))
+    ax.pie([row[1] for row in visible], colors=[row[2] for row in visible], startangle=90, wedgeprops=dict(width=0.42, edgecolor="white", linewidth=2.5))
+    ax.axis("equal")
+    ax.legend(
+        handles=[Patch(facecolor=color, edgecolor="white", label=f"{_chart_label(name)}: {value:.1f}") for name, value, color in rows],
+        loc="center left", fontsize=8, frameon=False, bbox_to_anchor=(-0.12, 0.5),
+    )
+    total = sum(row[1] for row in visible)
+    ax.text(0, 0.03, f"{total:.1f}", ha="center", va="center", fontsize=20, fontweight="bold", color="#0f172a")
+    ax.text(0, -0.14, _chart_label(labels["total"]), ha="center", va="center", fontsize=8, color="#64748b")
+    buf = io.BytesIO()
+    fig.subplots_adjust(left=0.27, right=0.98, top=0.92, bottom=0.12)
+    plt.savefig(buf, format="png", dpi=PDF_EXPORT_CHART_DPI, facecolor="white", bbox_inches="tight", pad_inches=0.06)
+    plt.close(fig)
+    buf.seek(0)
+    return buf
+
+
+def create_arabic_raw_tests_chart(students: List[Dict[str, Any]], lang: str = "en") -> io.BytesIO:
+    labels = _arabic_report_chart_labels(lang)
+    fields = [
+        ("theory_test_1", labels["theory1"]),
+        ("theory_test_2", labels["theory2"]),
+        ("practical_test", labels["practical_raw"]),
+    ]
+    values: List[float] = []
+    for field, _ in fields:
+        normalized = [
+            float(row[field]) * 100 / float(row.get("exam_raw_max") or 0)
+            for row in students
+            if row.get(field) is not None and float(row.get("exam_raw_max") or 0) > 0
+        ]
+        values.append(_arabic_report_average(normalized) or 0)
+    if not students or not any(value > 0 for value in values):
+        return _analytics_empty_chart("No raw test data")
+    _chart_prepare_mpl()
+    fig, ax = plt.subplots(figsize=(5.8, 3.8))
+    names = [_chart_label(name) for _, name in fields]
+    bars = ax.bar(range(len(names)), values, color=["#8b5cf6", "#06b6d4", "#f59e0b"], width=0.62)
+    for index, bar in enumerate(bars):
+        ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 2, f"{values[index]:.1f}%", ha="center", fontsize=8, color="#475569")
+    ax.set_xticks(range(len(names)))
+    ax.set_xticklabels(names, fontsize=9)
+    ax.set_ylim(0, 108)
+    ax.yaxis.set_major_formatter(lambda value, _position: f"{value:.0f}%")
+    ax.yaxis.grid(True, linestyle="--", color=BOARD_ANALYTICS["grid"], linewidth=0.8)
+    ax.set_axisbelow(True)
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+    buf = io.BytesIO()
+    fig.subplots_adjust(left=0.12, right=0.98, top=0.9, bottom=0.2)
+    plt.savefig(buf, format="png", dpi=PDF_EXPORT_CHART_DPI, facecolor="white", bbox_inches="tight", pad_inches=0.08)
+    plt.close(fig)
+    buf.seek(0)
+    return buf
+
+
+def create_arabic_class_metric_chart(class_breakdown: List[Dict[str, Any]], field: str, lang: str = "en") -> io.BytesIO:
+    if not class_breakdown:
+        return _analytics_empty_chart("No class data")
+    _chart_prepare_mpl()
+    names = [_chart_label(row.get("class_name") or "?") for row in class_breakdown]
+    values = [float(row.get(field) or 0) for row in class_breakdown]
+    fig, ax = plt.subplots(figsize=(5.8, 3.8))
+    bars = ax.bar(range(len(names)), values, color="#06b6d4" if field == "average_total" else "#22c55e", width=0.62)
+    for index, bar in enumerate(bars):
+        suffix = "%" if field == "completion_percentage" else ""
+        ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 2, f"{values[index]:.1f}{suffix}", ha="center", fontsize=8, color="#475569")
+    ax.set_xticks(range(len(names)))
+    rotation = 28 if len(names) > 4 or any(_has_arabic(name) for name in names) else 0
+    ax.set_xticklabels(names, fontsize=8, rotation=rotation, ha="right" if rotation else "center")
+    ax.set_ylim(0, 108)
+    if field == "completion_percentage":
+        ax.yaxis.set_major_formatter(lambda value, _position: f"{value:.0f}%")
+    ax.yaxis.grid(True, linestyle="--", color=BOARD_ANALYTICS["grid"], linewidth=0.8)
+    ax.set_axisbelow(True)
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+    buf = io.BytesIO()
+    fig.subplots_adjust(left=0.1, right=0.98, top=0.9, bottom=0.28 if rotation else 0.18)
+    plt.savefig(buf, format="png", dpi=PDF_EXPORT_CHART_DPI, facecolor="white", bbox_inches="tight", pad_inches=0.08)
+    plt.close(fig)
+    buf.seek(0)
+    return buf
+
+
+def create_arabic_student_totals_chart(students: List[Dict[str, Any]], lang: str = "en") -> io.BytesIO:
+    scored = sorted(
+        [row for row in students if row.get("quarter_total") is not None],
+        key=lambda row: float(row.get("quarter_total") or 0),
+        reverse=True,
+    )[:12]
+    if not scored:
+        return _analytics_empty_chart("No student totals")
+    _chart_prepare_mpl()
+    names = [_chart_label(row.get("full_name") or "?", max_len=28) for row in reversed(scored)]
+    values = [float(row.get("quarter_total") or 0) for row in reversed(scored)]
+    fig, ax = plt.subplots(figsize=(7.6, 4.8))
+    bars = ax.barh(range(len(names)), values, color="#0ea5e9", height=0.62)
+    for index, bar in enumerate(bars):
+        ax.text(min(bar.get_width() + 1.2, 98), bar.get_y() + bar.get_height() / 2, f"{values[index]:.1f}", va="center", fontsize=8, color="#475569")
+    ax.set_yticks(range(len(names)))
+    ax.set_yticklabels(names, fontsize=8)
+    ax.set_xlim(0, 105)
+    ax.xaxis.grid(True, linestyle="--", color=BOARD_ANALYTICS["grid"], linewidth=0.8)
+    ax.set_axisbelow(True)
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+    buf = io.BytesIO()
+    fig.subplots_adjust(left=0.34, right=0.98, top=0.94, bottom=0.12)
+    plt.savefig(buf, format="png", dpi=PDF_EXPORT_CHART_DPI, facecolor="white", bbox_inches="tight", pad_inches=0.08)
+    plt.close(fig)
+    buf.seek(0)
+    return buf
+
+
 PDF_REPORT_PRIMARY_HEX = "#8B2BEC"
 PDF_REPORT_ORG_NAME = "Al Anjal School Follow-up Record"
 
@@ -7279,21 +7522,25 @@ async def build_arabic_grading_payload(
     quarter: int,
     class_id: Optional[str],
     current_user: Dict[str, Any],
+    student_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     classes = await db.classes.find(
         _arabic_scope_class_query(current_user, academic_year, class_id), {"_id": 0}
     ).sort("grade", 1).to_list(500)
     class_map = {item["id"]: item for item in classes}
     class_ids = [item["id"] for item in classes]
+    student_scope: List[Dict[str, Any]] = [
+        school_section_query(SCHOOL_SECTION_ARABIC, academic_year),
+        {"class_id": {"$in": class_ids}},
+    ]
+    if student_id:
+        student_scope.append({"id": student_id})
     students = await db.students.find(
-        {
-            "$and": [
-                school_section_query(SCHOOL_SECTION_ARABIC, academic_year),
-                {"class_id": {"$in": class_ids}},
-            ]
-        },
+        {"$and": student_scope},
         {"_id": 0},
     ).sort([("class_name", 1), ("full_name", 1)]).to_list(10000)
+    if student_id and not students:
+        raise HTTPException(status_code=404, detail="arabic_report_student_not_found")
     student_class_ids = {item.get("class_id") for item in students}
     configuration_issues: List[Dict[str, Any]] = []
     for item in classes:
@@ -7416,6 +7663,8 @@ async def build_arabic_grading_payload(
         "semester": semester,
         "quarter": quarter,
         "display_quarter": quarter + 2 if semester == 2 else quarter,
+        "selected_student_id": student_id,
+        "selected_student_name": rows[0].get("full_name") if student_id and rows else None,
         "classes": classes,
         "students": rows,
         "total_students": total_students,
@@ -7652,13 +7901,45 @@ def generate_arabic_grades_pdf(payload: Dict[str, Any], lang: str = "en") -> byt
         for class_name in class_names:
             class_students = [row for row in students if str(row.get("class_name") or "-") == class_name]
             class_tests = sum(int(row.get("test_completion_count") or 0) for row in class_students)
+            class_totals = [float(row["quarter_total"]) for row in class_students if row.get("quarter_total") is not None]
             class_breakdown.append({
                 "class_name": class_name,
                 "student_count": len(class_students),
                 "students_with_grades": sum(row.get("quarter_total") is not None for row in class_students),
                 "tests_completed": class_tests,
                 "completion_percentage": round(class_tests * 100 / (len(class_students) * 3), 1) if class_students else 0,
+                "average_total": round(sum(class_totals) / len(class_totals), 2) if class_totals else None,
             })
+
+    distribution = payload.get("distribution") or []
+    if not distribution:
+        performance_counts = {"on_level": 0, "approach": 0, "below": 0, "no_data": 0}
+        for row in students:
+            level = row.get("performance_level")
+            if level not in performance_counts:
+                level = classify_arabic_quarter_total(row.get("quarter_total"))
+            performance_counts[level] += 1
+        distribution = [{"level": level, "count": performance_counts[level]} for level in performance_counts]
+
+    component_averages = {
+        "continuous": _arabic_report_average([row.get("continuous_total") for row in students]),
+        "theory": _arabic_report_average([row.get("best_theory_weighted") for row in students]),
+        "practical": _arabic_report_average([row.get("practical_weighted") for row in students]),
+    }
+    raw_test_averages: Dict[str, Optional[float]] = {}
+    for field in ("theory_test_1", "theory_test_2", "practical_test"):
+        normalized_values = [
+            float(row[field]) * 100 / float(row.get("exam_raw_max") or 0)
+            for row in students
+            if row.get(field) is not None and float(row.get("exam_raw_max") or 0) > 0
+        ]
+        raw_test_averages[field] = _arabic_report_average(normalized_values)
+    support_students = [
+        row for row in students
+        if (row.get("performance_level") or classify_arabic_quarter_total(row.get("quarter_total"))) in {"approach", "below"}
+    ]
+    top_student = max(scored, key=lambda row: float(row.get("quarter_total") or 0), default=None)
+    selected_student_name = payload.get("selected_student_name")
 
     if code == "ar":
         performance_text = (
@@ -7667,6 +7948,30 @@ def generate_arabic_grades_pdf(payload: Dict[str, Any], lang: str = "en") -> byt
         )
         completion_text = f"اكتمل رصد الاختبارات الثلاثة لعدد {len(fully_tested)} من أصل {len(students)} طالبًا."
         action_text = "استكمال الدرجات الناقصة ومراجعة سجلات الاختبارات قبل اعتماد التقرير النهائي."
+        visual_copy = {
+            "visual": "لوحة التحليل البصري",
+            "distribution": "توزيع مستويات الأداء",
+            "distribution_sub": "تصنيف الطلاب وفق حدود أداء القسم العربي.",
+            "class_average": "متوسط الدرجة حسب الفصل",
+            "class_average_sub": "متوسط إجمالي الربع من 100 لكل فصل داخل النطاق.",
+            "components": "توزيع الدرجة الموزونة",
+            "components_sub": "أعمال السنة من 40، وأفضل اختبار نظري من 30، والاختبار العملي من 30.",
+            "raw_tests": "أداء كل اختبار على حدة",
+            "raw_tests_sub": "مقارنة الدرجات الخام كنسب مئوية لمراعاة اختلاف الحد الأعلى حسب المرحلة.",
+            "contribution": "مساهمة مكونات الدرجة النهائية",
+            "completion": "اكتمال الاختبارات حسب الفصل",
+            "completion_sub": "نسبة الاختبارات الثلاثة المرصودة لكل فصل.",
+            "student_totals": "إجمالي الطلاب من 100",
+            "student_totals_sub": "أعلى اثنتي عشرة درجة مسجلة في نطاق التقرير.",
+            "reading": "الشرح التحليلي التفصيلي",
+            "indicator": "المؤشر",
+            "details": "الشرح",
+            "component_profile": "تحليل المكونات الموزونة",
+            "raw_profile": "تحليل الاختبارات الخام",
+            "follow_up": "المتابعة المطلوبة",
+            "top_record": "أعلى درجة مسجلة",
+            "scope_student": "الطالب المختار",
+        }
     else:
         performance_text = (
             f"The recorded average is {format_arabic_score(average_total)}/100 across {len(scored)} students."
@@ -7674,6 +7979,63 @@ def generate_arabic_grades_pdf(payload: Dict[str, Any], lang: str = "en") -> byt
         )
         completion_text = f"All three tests are complete for {len(fully_tested)} of {len(students)} students."
         action_text = "Complete missing entries and review test records before final report approval."
+        visual_copy = {
+            "visual": "Visual analysis board",
+            "distribution": "Performance-level distribution",
+            "distribution_sub": "Students classified using the Arabic-section performance bands.",
+            "class_average": "Average total by class",
+            "class_average_sub": "Average quarter total out of 100 for each class in scope.",
+            "components": "Weighted score distribution",
+            "components_sub": "Continuous /40, best theory /30, and practical /30.",
+            "raw_tests": "Each test performance",
+            "raw_tests_sub": "Raw scores normalized to percentages for fair comparison across stages.",
+            "contribution": "Final-score component contribution",
+            "completion": "Test completion by class",
+            "completion_sub": "Percentage of the three exam scores recorded for each class.",
+            "student_totals": "Student totals out of 100",
+            "student_totals_sub": "Top twelve recorded totals in the report scope.",
+            "reading": "Detailed analytical explanation",
+            "indicator": "Indicator",
+            "details": "Explanation",
+            "component_profile": "Weighted component profile",
+            "raw_profile": "Raw-test profile",
+            "follow_up": "Required follow-up",
+            "top_record": "Highest recorded total",
+            "scope_student": "Selected student",
+        }
+
+    component_text = (
+        f"{visual_copy['components']}: "
+        f"{format_arabic_score(component_averages['continuous'])}/40, "
+        f"{format_arabic_score(component_averages['theory'])}/30, "
+        f"{format_arabic_score(component_averages['practical'])}/30."
+    )
+    raw_names = {
+        "theory_test_1": "النظري 1" if code == "ar" else "Theory 1",
+        "theory_test_2": "النظري 2" if code == "ar" else "Theory 2",
+        "practical_test": "العملي" if code == "ar" else "Practical",
+    }
+    raw_text = ", ".join(
+        f"{raw_names[field]}: {value:.1f}%" if value is not None else f"{raw_names[field]}: -"
+        for field, value in raw_test_averages.items()
+    )
+    support_text = (
+        f"يوجد {len(support_students)} طالبًا يحتاجون متابعة مركزة. {action_text}"
+        if code == "ar"
+        else f"{len(support_students)} students require focused follow-up. {action_text}"
+    )
+    top_text = (
+        f"{top_student.get('full_name')} - {format_arabic_score(top_student.get('quarter_total'))}/100"
+        if top_student else "-"
+    )
+
+    performance_chart = create_arabic_performance_donut(distribution, code)
+    class_average_chart = create_arabic_class_metric_chart(class_breakdown, "average_total", code)
+    component_chart = create_arabic_component_bar_chart(students, code)
+    raw_tests_chart = create_arabic_raw_tests_chart(students, code)
+    contribution_chart = create_arabic_component_donut(students, code)
+    class_completion_chart = create_arabic_class_metric_chart(class_breakdown, "completion_percentage", code)
+    student_totals_chart = create_arabic_student_totals_chart(students, code)
 
     output = io.BytesIO()
     doc = SimpleDocTemplate(output, pagesize=A4, rightMargin=28, leftMargin=28, topMargin=36, bottomMargin=36)
@@ -7693,6 +8055,7 @@ def generate_arabic_grades_pdf(payload: Dict[str, Any], lang: str = "en") -> byt
             (_tr("Academic Year", code), str(payload.get("academic_year") or "-")),
             (_tr("Term", code), term_label),
             (_tr("Classes Included", code), class_scope),
+            *(([(visual_copy["scope_student"], str(selected_student_name))]) if selected_student_name else []),
             (_tr("Generated on", code), generated_on),
         ],
         kpi_cards=[
@@ -7712,6 +8075,43 @@ def generate_arabic_grades_pdf(payload: Dict[str, Any], lang: str = "en") -> byt
         lang=code,
     )
     story.append(PageBreak())
+    story.append(_pdf_engine_section_heading(visual_copy["visual"], code, term_label))
+    story.append(Spacer(1, 8))
+    story.append(_pdf_side_by_side_panels(
+        _pdf_chart_panel(visual_copy["distribution"], visual_copy["distribution_sub"], performance_chart, lang=code),
+        _pdf_chart_panel(visual_copy["class_average"], visual_copy["class_average_sub"], class_average_chart, lang=code),
+    ))
+    story.append(Spacer(1, 10))
+    story.append(_pdf_side_by_side_panels(
+        _pdf_chart_panel(visual_copy["components"], visual_copy["components_sub"], component_chart, lang=code),
+        _pdf_chart_panel(visual_copy["raw_tests"], visual_copy["raw_tests_sub"], raw_tests_chart, lang=code),
+    ))
+    story.append(PageBreak())
+    story.append(_pdf_engine_section_heading(visual_copy["visual"], code, visual_copy["reading"]))
+    story.append(Spacer(1, 8))
+    story.append(_pdf_side_by_side_panels(
+        _pdf_chart_panel(visual_copy["contribution"], visual_copy["components_sub"], contribution_chart, lang=code),
+        _pdf_chart_panel(visual_copy["completion"], visual_copy["completion_sub"], class_completion_chart, lang=code),
+    ))
+    story.append(Spacer(1, 10))
+    story.append(_pdf_chart_panel(
+        visual_copy["student_totals"], visual_copy["student_totals_sub"], student_totals_chart,
+        lang=code, panel_width=530, chart_width=500, chart_height=255,
+    ))
+    story.append(PageBreak())
+    story.append(_pdf_engine_section_heading(visual_copy["reading"], code, term_label))
+    story.append(Spacer(1, 8))
+    analytical_rows = [
+        [visual_copy["indicator"], visual_copy["details"]],
+        [_tr("Executive Summary", code), performance_text],
+        [_tr("Completion Overview", code), completion_text],
+        [visual_copy["component_profile"], component_text],
+        [visual_copy["raw_profile"], raw_text],
+        [visual_copy["top_record"], top_text],
+        [visual_copy["follow_up"], support_text],
+    ]
+    story.append(_pdf_engine_styled_table(analytical_rows, code, [145, 385]))
+    story.append(Spacer(1, 12))
     story.append(_pdf_engine_section_heading(_tr("Performance Overview", code), code, term_label))
     story.append(Spacer(1, 8))
 
@@ -7732,23 +8132,28 @@ def generate_arabic_grades_pdf(payload: Dict[str, Any], lang: str = "en") -> byt
     else:
         story.append(_pdf_engine_empty_state(code, _tr("No meaningful data is available for this section.", code)))
 
-    story.append(Spacer(1, 12))
+    story.append(PageBreak())
     story.append(_pdf_engine_section_heading(_tr("Detailed Analysis", code), code, _tr("Quarter /100", code)))
     story.append(Spacer(1, 8))
     if students:
-        detail_rows = [[
+        detail_header = [
             _tr("Student", code), _tr("Class", code), _tr("Continuous Assessment", code),
-            "T1", "T2", _tr("Practical", code),
-            _tr("Best Theory /30", code), _tr("Practical /30", code),
+            "النظري 1" if code == "ar" else "Theory 1",
+            "النظري 2" if code == "ar" else "Theory 2",
+            "العملي" if code == "ar" else "Practical",
+            "أفضل نظري /30" if code == "ar" else "Best Theory /30",
+            "العملي الموزون /30" if code == "ar" else "Practical /30",
             _tr("Tests /60", code), _tr("Quarter /100", code),
-        ]]
+        ]
+        detail_header[2] = "أعمال السنة /40" if code == "ar" else "Continuous /40"
+        detail_body: List[List[Any]] = []
         for row in students:
             raw_max = f"{float(row.get('exam_raw_max') or 15):g}"
 
             def raw_display(value: Any) -> str:
                 return "—" if value is None else f"{format_arabic_score(value)}/{raw_max}"
 
-            detail_rows.append([
+            detail_body.append([
                 row.get("full_name") or "-",
                 row.get("class_name") or "-",
                 format_arabic_score(row.get("continuous_total")),
@@ -7760,7 +8165,14 @@ def generate_arabic_grades_pdf(payload: Dict[str, Any], lang: str = "en") -> byt
                 format_arabic_score(row.get("tests_total")),
                 format_arabic_score(row.get("quarter_total")),
             ])
-        story.append(_pdf_engine_styled_table(detail_rows, code, [85, 45, 48, 36, 36, 45, 50, 50, 45, 50]))
+        for chunk_index in range(0, len(detail_body), 14):
+            if chunk_index:
+                story.append(PageBreak())
+            story.append(_pdf_engine_styled_table(
+                [detail_header] + detail_body[chunk_index:chunk_index + 14],
+                code,
+                [85, 45, 48, 36, 36, 45, 50, 50, 45, 50],
+            ))
     else:
         story.append(_pdf_engine_empty_state(code, _tr("No Arabic scores have been entered for the selected period.", code)))
 
@@ -7803,16 +8215,20 @@ async def export_arabic_report(
     semester: int = Query(..., ge=1, le=2),
     quarter: int = Query(..., ge=1, le=2),
     class_id: Optional[str] = Query(default=None),
+    student_id: Optional[str] = Query(default=None),
     format: str = Query(default="pdf"),
     lang: str = Query(default="en"),
     current_user: Dict[str, Any] = Depends(get_current_user),
 ):
-    payload = await build_arabic_grading_payload(academic_year, semester, quarter, class_id, current_user)
+    payload = await build_arabic_grading_payload(
+        academic_year, semester, quarter, class_id, current_user, student_id=student_id
+    )
     fmt = format.strip().lower()
     content = generate_arabic_grades_excel(payload, lang) if fmt in {"excel", "xlsx"} else generate_arabic_grades_pdf(payload, lang)
     extension = "xlsx" if fmt in {"excel", "xlsx"} else "pdf"
     media_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" if extension == "xlsx" else "application/pdf"
-    filename = f"arabic-section-{academic_year}-q{payload['display_quarter']}.{extension}"
+    scope_suffix = "-student" if student_id else ""
+    filename = f"arabic-section-{academic_year}-q{payload['display_quarter']}{scope_suffix}.{extension}"
     return StreamingResponse(io.BytesIO(content), media_type=media_type, headers={"Content-Disposition": f'attachment; filename="{filename}"'})
 
 

@@ -72,4 +72,12 @@ describe("Arabic roster and diagnostic lifecycle controls stay available", () =>
     expect(source).toContain('data-testid="arabic-analytics-student"');
     expect(source).toContain('disabled={selectedClassId === "all"}');
   });
+
+  it("reuses the full Arabic analytics board for reports and exports the selected student", () => {
+    const reportsSource = fs.readFileSync(path.join(__dirname, "ArabicReports.jsx"), "utf8");
+    const analyticsSource = fs.readFileSync(path.join(__dirname, "ArabicAnalytics.jsx"), "utf8");
+    expect(reportsSource).toContain('<ArabicAnalytics variant="reports" />');
+    expect(analyticsSource).toContain('student_id: selectedStudentId === "all" ? undefined : selectedStudentId');
+    expect(analyticsSource).toContain('isReports ? "arabic-reports" : "arabic-analytics"');
+  });
 });

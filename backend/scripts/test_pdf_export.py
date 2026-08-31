@@ -111,14 +111,27 @@ def _sample_arabic_payload() -> dict:
         class_name = "الرابع أ" if index <= 28 else "الخامس ب"
         complete = index % 5 != 0
         continuous = 30 + index % 11
-        tests_total = 48 + index % 13 if complete else None
+        theory_1 = 10 + index % 6
+        theory_2 = 9 + index % 7 if complete else None
+        practical = 10 + (index * 2) % 6
+        best_theory = max(theory_1, theory_2 or 0) * 2
+        practical_weighted = practical * 2
+        tests_total = best_theory + practical_weighted
+        quarter_total = min(100, continuous + tests_total)
         students.append({
             "full_name": f"طالب عربي {index:02d}",
             "class_name": class_name,
+            "exam_raw_max": 15,
+            "theory_test_1": theory_1,
+            "theory_test_2": theory_2,
+            "practical_test": practical,
             "continuous_total": continuous,
+            "best_theory_weighted": best_theory,
+            "practical_weighted": practical_weighted,
             "tests_total": tests_total,
-            "quarter_total": continuous + tests_total if tests_total is not None else continuous,
-            "test_completion_count": 4 if complete else 2,
+            "quarter_total": quarter_total,
+            "performance_level": "on_level" if quarter_total >= 92 else "approach" if quarter_total >= 86 else "below",
+            "test_completion_count": 3 if complete else 2,
             "has_grades": True,
         })
     completed = sum(item["test_completion_count"] for item in students)
@@ -129,7 +142,7 @@ def _sample_arabic_payload() -> dict:
         "display_quarter": 1,
         "students": students,
         "tests_completed": completed,
-        "tests_missing": len(students) * 4 - completed,
+        "tests_missing": len(students) * 3 - completed,
     }
 
 

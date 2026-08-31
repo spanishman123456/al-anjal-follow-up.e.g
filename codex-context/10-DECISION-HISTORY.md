@@ -174,6 +174,7 @@ Format: Decision → Context → Why → Status → Codex Guidance.
 
 **Context:** The old sync deleted all events and reinserted a hardcoded 1447H list.
 **Why:** The authoritative source is now the Ministry General Education `rss.aspx / استعلام المحتوى` detailed event listing. The isolated adapter intersects those public events with the Ministry's own structured Hijri/Gregorian date map, validates completeness, and preserves the active verified version when a refresh fails. It never substitutes an older year for an incomplete latest publication.
+**Codex Guidance:** Use the isolated official-source adapter, strict validation, versioned activation, and last-good cache. Never delete active events before a new version succeeds.
 
 ## Superseding decision: Approved school PDF calendars are versioned by academic year
 
@@ -219,7 +220,14 @@ Format: Decision → Context → Why → Status → Codex Guidance.
 
 **UX/Safety:** Arabic student management now provides class/week filters, performance and quarter-average columns, student actions, and the existing promotion workflow. Arabic analytics follows class selection then student selection. Class screens expose only exact-class deletion; section-wide “delete all classes” controls are removed while the exact-class server guards remain authoritative.
 **Status:** Active.
-**Codex Guidance:** Use the isolated official-source adapter, strict validation, versioned activation, and last-good cache. Never delete active events before a new version succeeds.
+
+## Decision: Arabic Reports and Analytics share one analytical surface (2026-08-31)
+
+**Context:** Arabic Reports still showed completion cards and a raw marks table after Arabic Analytics had gained class/student filters, seven chart families and detailed narrative analysis.
+
+**Decision:** `/reports` in the Arabic section renders `ArabicAnalytics` in report mode so both pages stay visually and behaviorally aligned. PDF/Excel exports inherit the selected class and optional student. The Arabic PDF independently reproduces the same chart categories and detailed explanations using the protected `/40 + /30 + /30 = /100` backend payload.
+
+**Codex Guidance:** Extend the shared Arabic analytics surface instead of creating a divergent report dashboard. Any future Arabic chart, formula, filter or narrative change must be checked in the report-mode screen and the PDF export together.
 
 ## Decision: Score clearing is exact-class or one-student only (2026-08-31)
 

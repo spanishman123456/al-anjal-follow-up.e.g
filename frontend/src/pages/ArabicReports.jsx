@@ -1,2 +1,5 @@
-import { ArabicOverview } from "@/components/arabic/ArabicOverview";
-export default function ArabicReports() { return <ArabicOverview variant="reports" />; }
+import ArabicAnalytics from "@/pages/ArabicAnalytics";
+
+export default function ArabicReports() {
+  return <ArabicAnalytics variant="reports" />;
+}

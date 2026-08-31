@@ -6,6 +6,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from fastapi import HTTPException
 from openpyxl import load_workbook
+from pypdf import PdfReader
 
 import server
 from server import (
@@ -231,6 +232,32 @@ def test_empty_arabic_roster_loads_even_when_legacy_class_name_is_unresolved():
     }]
 
 
+def test_arabic_report_payload_can_focus_one_authorized_student():
+    fake_db = SimpleNamespace(
+        classes=_Collection([{
+            "id": "c1", "name": "رابع أ", "grade": 4, "section": "A",
+            "school_section": "arabic", "academic_year": "2026-2027",
+        }]),
+        students=_Collection([
+            {"id": "s1", "full_name": "طالب أول", "class_id": "c1", "class_name": "رابع أ", "school_section": "arabic", "academic_year": "2026-2027"},
+            {"id": "s2", "full_name": "طالب ثان", "class_id": "c1", "class_name": "رابع أ", "school_section": "arabic", "academic_year": "2026-2027"},
+        ]),
+        arabic_quarter_scores=_Collection([{
+            "student_id": "s2", "academic_year": "2026-2027", "semester": 1, "quarter": 1,
+            "school_section": "arabic", "theory_test_1": 12, "theory_test_2": 13, "practical_test": 14,
+        }]),
+        arabic_weekly_scores=_Collection(),
+    )
+    with patch.object(server, "db", fake_db):
+        payload = asyncio.run(build_arabic_grading_payload(
+            "2026-2027", 1, 1, "c1", {"id": "admin", "role_name": "Admin"}, student_id="s2",
+        ))
+    assert payload["total_students"] == 1
+    assert payload["students"][0]["id"] == "s2"
+    assert payload["selected_student_id"] == "s2"
+    assert payload["selected_student_name"] == "طالب ثان"
+
+
 def test_arabic_class_metadata_migration_repairs_only_unambiguous_legacy_names():
     classes = _Collection([
         {"_id": "m1", "id": "c1", "name": "رابع أ", "grade": None, "section": "رابع أ", "school_section": "arabic"},
@@ -364,6 +391,7 @@ def test_arabic_pdf_and_excel_exports_render_new_model_rows():
     pdf_en = generate_arabic_grades_pdf(payload, "en")
     excel = generate_arabic_grades_excel(payload, "ar")
     assert pdf.startswith(b"%PDF") and len(pdf) > 2000
+    assert len(PdfReader(io.BytesIO(pdf)).pages) >= 4
     assert pdf_en.startswith(b"%PDF") and len(pdf_en) > 2000
     assert excel.startswith(b"PK") and len(excel) > 2000
     headers = [cell.value for cell in next(load_workbook(io.BytesIO(excel)).active.iter_rows())]

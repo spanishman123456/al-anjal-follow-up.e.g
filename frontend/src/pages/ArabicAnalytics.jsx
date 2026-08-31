@@ -36,7 +36,7 @@ const numericAverage = (values) => {
 
 const formatPercent = (value) => `${Number(value || 0).toFixed(1).replace(".0", "")}%`;
 
-export default function ArabicAnalytics() {
+export default function ArabicAnalytics({ variant = "analytics" }) {
   const { language, semester, quarter, academicYear, classes = [] } = useOutletContext();
   const t = useTranslations(language);
   const sem = semNumber(semester);
@@ -46,6 +46,8 @@ export default function ArabicAnalytics() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
+  const isReports = variant === "reports";
+  const pageTestId = isReports ? "arabic-reports" : "arabic-analytics";
 
   const copy = language === "ar" ? {
     completionTitle: "اكتمال الرصد والاختبارات",
@@ -224,6 +226,7 @@ export default function ArabicAnalytics() {
           semester: sem,
           quarter,
           class_id: selectedClassId === "all" ? undefined : selectedClassId,
+          student_id: selectedStudentId === "all" ? undefined : selectedStudentId,
           format,
           lang: language,
         },
@@ -232,7 +235,7 @@ export default function ArabicAnalytics() {
       const url = URL.createObjectURL(response.data);
       const anchor = document.createElement("a");
       anchor.href = url;
-      anchor.download = `arabic-analytics-${academicYear}-q${displayQuarter}.${format === "excel" ? "xlsx" : "pdf"}`;
+      anchor.download = `${isReports ? "arabic-report" : "arabic-analytics"}-${academicYear}-q${displayQuarter}.${format === "excel" ? "xlsx" : "pdf"}`;
       anchor.click();
       URL.revokeObjectURL(url);
     } catch {
@@ -242,18 +245,18 @@ export default function ArabicAnalytics() {
 
   const tooltipStyle = { background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 12 };
 
-  return <div className="analytics-dashboard space-y-6" data-testid="arabic-analytics">
+  return <div className="analytics-dashboard space-y-6" data-testid={pageTestId}>
     <DashboardPageHeader
-      title={t("analytics")}
+      title={t(isReports ? "reports" : "analytics")}
       subtitle={`${t("arabic_section")} · ${academicYear} · Q${displayQuarter}`}
-      description={t("arabic_analytics_description")}
+      description={t(isReports ? "arabic_reports_description" : "arabic_analytics_description")}
       metaItems={[t("arabic_weekly_40"), `${t("tests_total")} /60`, t("quarter_total_100")]}
-      actions={<Button variant="secondary" onClick={() => download("pdf")} data-testid="arabic-analytics-hero-pdf"><Download className="me-2 h-4 w-4" />PDF</Button>}
-      testId="arabic-analytics-header"
+      actions={<Button variant="secondary" onClick={() => download("pdf")} data-testid={`${pageTestId}-hero-pdf`}><Download className="me-2 h-4 w-4" />PDF</Button>}
+      testId={`${pageTestId}-header`}
     />
 
     <AnalyticsToolbar
-      testId="arabic-analytics-toolbar"
+      testId={`${pageTestId}-toolbar`}
       filters={<>
         <FilterField label={t("class")}><Select value={selectedClassId} onValueChange={setSelectedClassId}><SelectTrigger data-testid="arabic-analytics-class"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">{t("all_classes")}</SelectItem>{sortByClassOrder(classes).map((item) => <SelectItem key={item.id} value={item.id}>{item.name}</SelectItem>)}</SelectContent></Select></FilterField>
         <FilterField label={t("student")}><Select value={selectedStudentId} onValueChange={setSelectedStudentId} disabled={selectedClassId === "all"}><SelectTrigger data-testid="arabic-analytics-student"><SelectValue placeholder={t("all_students")} /></SelectTrigger><SelectContent><SelectItem value="all">{t("all_students")}</SelectItem>{students.map((student) => <SelectItem key={student.id} value={student.id}>{student.full_name}</SelectItem>)}</SelectContent></Select></FilterField>
