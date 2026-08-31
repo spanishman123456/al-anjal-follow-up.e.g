@@ -86,6 +86,7 @@ export const AppShell = ({
   const [notificationsLoaded, setNotificationsLoaded] = useState(false);
   const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
   const prefetchedRoutesRef = useRef(new Set());
+  const isAdmin = profile?.role_name === "Admin";
 
   const routePreloaders = {
     "/students": loadStudentsPage,
@@ -169,10 +170,21 @@ export const AppShell = ({
   };
 
   useEffect(() => {
-    if (notificationsOpen && !notificationsLoaded) {
+    if (isAdmin && notificationsOpen && !notificationsLoaded) {
       loadNotifications();
     }
-  }, [notificationsOpen, notificationsLoaded]);
+  }, [isAdmin, notificationsOpen, notificationsLoaded]);
+
+  useEffect(() => {
+    if (!isAdmin) {
+      setNotifications([]);
+      setNotificationsLoaded(false);
+      return undefined;
+    }
+    loadNotifications();
+    const intervalId = window.setInterval(loadNotifications, 30000);
+    return () => window.clearInterval(intervalId);
+  }, [isAdmin]);
 
   // Keep backend warm on hosted/free tiers: interval ping + quick wake on tab focus/visibility.
   useEffect(() => {
@@ -222,7 +234,7 @@ export const AppShell = ({
     t,
     quarter,
     schoolSection,
-    roleName: profile?.role_name || "Admin",
+    roleName: profile?.role_name || "User",
   });
 
   const chromeControlsClass =
@@ -291,15 +303,23 @@ export const AppShell = ({
               >
                 {theme === "dark" ? t("theme_light") : t("theme_dark")}
               </Button>
-              <DropdownMenu onOpenChange={setNotificationsOpen}>
+              {isAdmin && <DropdownMenu onOpenChange={setNotificationsOpen}>
                 <DropdownMenuTrigger asChild>
                   <Button
                     variant="ghost"
                     size="icon"
                     data-testid="notifications-button"
-                    className="text-white hover:bg-white/15 hover:text-white"
+                    className="relative text-white hover:bg-white/15 hover:text-white"
                   >
                     <Bell className="h-4 w-4" />
+                    {notifications.length ? (
+                      <span
+                        className="absolute -end-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white"
+                        data-testid="notifications-count"
+                      >
+                        {notifications.length >= 5 ? "5+" : notifications.length}
+                      </span>
+                    ) : null}
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-72" data-testid="notifications-dropdown">
@@ -322,7 +342,7 @@ export const AppShell = ({
                     <Link to="/notifications">{t("notifications")}</Link>
                   </DropdownMenuItem>
                 </DropdownMenuContent>
-              </DropdownMenu>
+              </DropdownMenu>}
               <Button
                 variant="ghost"
                 onClick={handleLogout}
@@ -357,10 +377,10 @@ export const AppShell = ({
                 </div>
                 <div className="hidden text-start sm:block">
                   <p className="text-sm font-semibold text-white" data-testid="user-name">
-                    {profile?.name || "Administrator"}
+                    {profile?.name || t("profile")}
                   </p>
                   <p className="text-xs text-[#A8B0C3]" data-testid="user-role">
-                    {profile?.role_name || "Admin"}
+                    {profile?.role_name || ""}
                   </p>
                 </div>
               </button>

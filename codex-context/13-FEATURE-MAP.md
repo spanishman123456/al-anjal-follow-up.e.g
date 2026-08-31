@@ -12,7 +12,7 @@
 | Feature | UI | Logic | Database | API (examples) | Main files |
 |---------|----|-------|----------|----------------|------------|
 | Login | `Login.jsx` | Immediate JWT request; background warm-up only; one bounded connection retry; browser session expires after 30 minutes of human inactivity across refreshes/tabs | `users` (idle deadline is browser-local) | `/api/auth/login` | `App.js`, `api.js`, `idleSession.js`, `server.py`, login/idle tests |
-| Google approval | Login + Settings | pending→approved | `users`, `notification_logs` | `/api/auth/google`, gmail-pending-* | `server.py`, `Settings.jsx` |
+| Google approval | Login + Admin Settings | Every first Google identity/link is pending→approved; provider-bound JWT re-checks approval; rejection preserves separate local login | `users`, `notification_logs` | `/api/auth/google`, gmail-pending-* | `server.py`, `Settings.jsx`, auth-security tests |
 | Dashboard | `Dashboard.jsx` | summary metrics | scores/students | `/analytics/summary`, missed-assessments | `Dashboard.jsx`, `server.py` |
 | Dashboard timetable | Both section Dashboards | Sunday–Thursday, 8 editable periods | `users.timetable_records` + legacy International `schedule` | `/timetables/profile` | `DashboardTimetable.jsx`, `TimetableEditor.jsx`, `server.py` |
 | Students / enrollment import | `Students.jsx`, `ArabicStudents.jsx` | International /15 follow-up; Arabic exact-class preview/apply import and Admin exact-class roster deletion | `students` (`student_number` optional), `student_scores`, `arabic_quarter_scores`, `weeks` | students CRUD, `/import/excel`, scoped `DELETE /students`, bulk-scores | pages + `server.py` + import/deletion tests |
@@ -33,9 +33,9 @@
 | Rewards | `Rewards.jsx` | badges/certs | `rewards`, `reward_events` | award-badge, certificates | page + server |
 | Lesson plans | `LessonPlanGenerator.jsx` | DOCX fill | files on disk | lesson-plan* | `lesson_plan_service.py` |
 | Teachers | `Teachers.jsx`, `TeacherProfile.jsx` | profiles | `users` | `/teachers*` | pages + server |
-| Notifications | `Notifications.jsx` | logs/SMS templates | `notification_logs`, settings | `/notifications*` | page + server |
+| Notifications | Admin bell + `Notifications.jsx` | Admin-only polling bell; Gmail request and Teacher password-change alerts; logs/SMS templates | `notification_logs`, settings | `/notifications*` | `AppShell.jsx`, page + server |
 | Calendar | `Calendar.jsx` | Admin PDF import, year history/switching, bilingual week/event display | `academic_calendars` + versioned `calendar_events` | `/calendar/years`, `/calendar/events`, `/calendar/status`, `/calendar/import` | page + `calendar_pdf_import.py` + server |
-| Settings | `Settings.jsx` | users/roles/promotion | `users`, `roles`, `app_settings` | various admin | `Settings.jsx` |
+| Settings | `Settings.jsx` | Profile for signed-in user; exact-Admin-only users/roles/promotion/Gmail approvals | `users`, `roles`, `app_settings` | various admin | `Settings.jsx`, `server.py` |
 | Term selection | Header + `AcademicTermSelect` | global state | localStorage | query params | `App.js`, `academicScope.js` |
 | i18n/RTL | all pages | dictionaries | — | — | `i18n.js` |
 | PDF premium | export buttons | ReportLab | — | export endpoints | `pdf_report_engine.py`, `server.py` |

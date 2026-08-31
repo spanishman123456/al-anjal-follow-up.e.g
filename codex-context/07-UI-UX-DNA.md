@@ -33,6 +33,7 @@ Note: Root `design_guidelines.json` describes an older “EduTrack Pro / Swiss U
 ## Interaction patterns
 
 - Login has one decorative contact bubble with a direction-independent `gap-3` before the bilingual label. No idle server/database-status row is shown; a localized waiting message appears only after an actual sign-in has been pending for four seconds.
+- Gmail first use never enters the application immediately: it shows the bilingual pending-Admin message. In Settings, promotion, role management, Gmail approvals and user management render only after the exact Admin profile is loaded; unknown/non-Admin profiles never receive an optimistic Admin UI. The notification bell is likewise Admin-only, polls every 30 seconds and displays a recent-alert count.
 - Confirm dialogs for bulk save / destructive clears.
 - Visibility-change refetch on many pages.
 - Custom events: `students-updated`, `app-refresh-data`, `auth-logout`, `profile-updated`.

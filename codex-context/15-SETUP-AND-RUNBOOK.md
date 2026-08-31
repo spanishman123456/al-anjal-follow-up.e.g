@@ -68,6 +68,13 @@ python -m pip install -r backend/requirements.txt
 
 Copy from `backend/.env.example` / `backend/env.example` / `frontend/.env.example`. **Never commit `.env`.**
 
+### Gmail approval rollout
+
+- `GOOGLE_CLIENT_ID` and `REACT_APP_GOOGLE_CLIENT_ID` must still be the same OAuth Web client.
+- A successful Google popup now creates/updates a **pending** link only; an Admin approves it in Settings before the requester can enter with Gmail.
+- The first deployment of the provider-bound JWT change signs existing browser sessions out once. Users sign in again normally; no user, score or class record is deleted.
+- `ADMIN_EMAIL` is an optional email-notification fallback. In-app Gmail/password-change alerts work through `notification_logs` even when SendGrid is not configured.
+
 ## Run locally
 
 ```bash

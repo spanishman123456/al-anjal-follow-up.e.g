@@ -85,6 +85,7 @@ export default function Settings() {
   const [resetPassword, setResetPassword] = useState("");
   const [pendingGmailUsers, setPendingGmailUsers] = useState([]);
   const latestLoadRequestIdRef = useRef(0);
+  const isAdmin = profile?.role_name === "Admin";
 
   const getPermissionLabel = (key) => {
     const found = PERMISSIONS.find((item) => item.key === key);
@@ -113,7 +114,7 @@ export default function Settings() {
         username: p?.username ?? "",
         password: "",
       });
-      if (p?.role_name === "Teacher") {
+      if (p?.role_name !== "Admin") {
         setRoles([]);
         setUsers([]);
         setPendingGmailUsers([]);
@@ -464,7 +465,7 @@ export default function Settings() {
                 data-testid="profile-phone-input"
               />
               <Input
-                value={profile?.role_name || "Admin"}
+                value={profile?.role_name || ""}
                 readOnly
                 data-testid="profile-role-input"
               />
@@ -472,7 +473,7 @@ export default function Settings() {
           </CardContent>
         </Card>
 
-        {profile?.role_name !== "Teacher" && (
+        {isAdmin && (
         <>
         <Card data-testid="promotion-card">
           <CardHeader className="flex flex-row items-center justify-between">
@@ -530,8 +531,16 @@ export default function Settings() {
         </Card>
 
         <Card>
-          <CardHeader>
-            <CardTitle>{t("gmail_approval_requests")}</CardTitle>
+          <CardHeader className="gap-3">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <CardTitle>{t("gmail_approval_requests")}</CardTitle>
+              <Badge variant={pendingGmailUsers.length ? "destructive" : "secondary"} data-testid="gmail-pending-count">
+                {pendingGmailUsers.length}
+              </Badge>
+            </div>
+            <p className="text-sm font-normal text-muted-foreground">
+              {t("gmail_approval_security_note")}
+            </p>
           </CardHeader>
           <CardContent>
             {pendingGmailUsers.length ? (

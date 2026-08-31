@@ -240,3 +240,11 @@ Format: Decision → Context → Why → Status → Codex Guidance.
 ## Decision: Arabic Analytics has International-level visual depth (2026-08-31)
 
 **Decision:** Keep the Arabic `/100` data source and proportional thresholds, but present it through the same class-first/optional-student analysis pattern and a comparable chart density: completion, distribution donut, class averages, `/40 + /30 + /30`, normalized raw attempts, contribution donut, student totals, class completion, top/support lists and detailed rows.
+
+## Decision: Gmail authentication is fail-closed and Admin-governed (2026-08-31)
+
+**Context:** Existing local Teacher records could sign in through a matching Gmail without producing a pending request, because only newly created Google users passed through the approval state.
+
+**Decision:** Every first Google identity/link requires explicit Admin approval, including an email already attached to a local account. JWTs are bound to `local` or `google`; a Google JWT re-checks current approval on every request. Provider-less legacy sessions are invalidated once. Rejecting Google linkage preserves local-password access, while pure Google accounts remain inactive. Roles, users, promotion settings, Gmail approvals and Admin notifications require exact Admin on both UI and API. Teacher self-service password changes create an Admin notification containing identity/timestamp context but never the password.
+
+**Codex Guidance:** Never restore email-match Google bypasses, optimistic Admin fallbacks, or non-Admin access to these settings. Keep local-password and Google-link activation independent.

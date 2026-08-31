@@ -230,13 +230,26 @@ async def get_current_user(credentials: Optional[HTTPAuthorizationCredentials] =
         payload = jwt.decode(token, secret, algorithms=["HS256"])
         user_id = payload.get("sub")
         token_auth_version = payload.get("av")
+        token_provider = (payload.get("provider") or "").strip().lower()
     except Exception:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
     if not user_id:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
+    if token_provider not in {"local", "google"}:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Session security was updated. Please log in again.",
+        )
     user = await db.users.find_one({"id": user_id}, {"_id": 0})
     if not user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
+    if token_provider == "google":
+        gmail_status = (user.get("gmail_approval_status") or "").strip().lower()
+        if gmail_status != "approved":
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="This Gmail sign-in is not approved. Contact an administrator.",
+            )
     if not user.get("active", True):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="This account is inactive. Contact an administrator.")
     current_auth_version = await _ensure_user_auth_version(user)
@@ -6938,7 +6951,7 @@ async def get_users(current_user: Dict[str, Any] = Depends(require_admin)):
 @api_router.get("/gmail-pending-users", response_model=List[UserRecord])
 async def get_gmail_pending_users(current_user: Dict[str, Any] = Depends(require_admin)):
     users = await db.users.find(
-        {"auth_provider": "google", "gmail_approval_status": "pending"},
+        {"gmail_approval_status": "pending"},
         {"_id": 0},
     ).sort("gmail_requested_at", -1).to_list(200)
     return users
@@ -7001,18 +7014,23 @@ async def approve_gmail_pending_user(
     user = await db.users.find_one({"id": user_id}, {"_id": 0})
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
-    if (user.get("auth_provider") or "").strip().lower() != "google":
-        raise HTTPException(status_code=400, detail="This user was not created by Gmail sign-in")
     if (user.get("gmail_approval_status") or "").strip().lower() != "pending":
         raise HTTPException(status_code=400, detail="This Gmail account is no longer pending approval")
+    if not (user.get("google_sub") or "").strip():
+        raise HTTPException(status_code=400, detail="This Gmail request has no verified Google identity")
     now = iso_now()
+    pure_google_account = (
+        (user.get("auth_provider") or "local").strip().lower() == "google"
+        and not user.get("password_hash")
+    )
     update_data = {
-        "active": True,
         "gmail_approval_status": "approved",
         "gmail_approved_at": now,
         "gmail_approved_by": current_user.get("email") or current_user.get("name") or current_user.get("id"),
         "updated_at": now,
     }
+    if pure_google_account:
+        update_data["active"] = True
     await db.users.update_one({"id": user_id}, {"$set": update_data})
     result = await db.users.find_one({"id": user_id}, {"_id": 0})
     if not result:
@@ -7035,18 +7053,23 @@ async def reject_gmail_pending_user(
     user = await db.users.find_one({"id": user_id}, {"_id": 0})
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
-    if (user.get("auth_provider") or "").strip().lower() != "google":
-        raise HTTPException(status_code=400, detail="This user was not created by Gmail sign-in")
     if (user.get("gmail_approval_status") or "").strip().lower() != "pending":
         raise HTTPException(status_code=400, detail="This Gmail account is no longer pending approval")
+    if not (user.get("google_sub") or "").strip():
+        raise HTTPException(status_code=400, detail="This Gmail request has no verified Google identity")
     now = iso_now()
+    pure_google_account = (
+        (user.get("auth_provider") or "local").strip().lower() == "google"
+        and not user.get("password_hash")
+    )
     update_data = {
-        "active": False,
         "gmail_approval_status": "rejected",
         "gmail_approved_at": now,
         "gmail_approved_by": current_user.get("email") or current_user.get("name") or current_user.get("id"),
         "updated_at": now,
     }
+    if pure_google_account:
+        update_data["active"] = False
     await db.users.update_one({"id": user_id}, {"$set": update_data})
     result = await db.users.find_one({"id": user_id}, {"_id": 0})
     if not result:
@@ -7175,11 +7198,11 @@ async def update_user_profile(
             raise HTTPException(status_code=400, detail="Username already exists")
     if "phone" in update_data:
         update_data["phone"] = (update_data["phone"] or "").strip() or None
-    new_password_plain: Optional[str] = None
+    password_changed = False
     if "password" in update_data:
         pwd = (update_data.pop("password") or "").strip()
         if pwd:
-            new_password_plain = pwd
+            password_changed = True
             update_data["password_hash"] = get_password_hash(pwd)
     if "schedule" in update_data:
         update_data.update(current_international_timetable_fields(update_data.get("schedule")))
@@ -7190,11 +7213,17 @@ async def update_user_profile(
         raise HTTPException(status_code=404, detail="User not found")
     await log_audit("Profile updated", result)
     await log_user_action(current_user, "profile_update", "Updated profile/schedule")
-    if current_user.get("role_name") == "Teacher" and new_password_plain:
-        admin = await db.users.find_one({"role_name": "Admin"}, {"_id": 0})
-        admin_email = (admin.get("email") or admin.get("name") or "Admin") if admin else "Admin"
-        message = f"Teacher {user.get('name', '')} ({user.get('username', '')}) changed their password."
-        await log_notification("password_change", message, admin_email, "info")
+    if current_user.get("role_name") == "Teacher" and password_changed:
+        admin_recipients = await get_admin_notification_recipients()
+        admin_label = ", ".join(admin_recipients) if admin_recipients else "Admin"
+        teacher_identity = result.get("name") or result.get("username") or result.get("email") or result.get("id")
+        message = (
+            f"قام المعلم {teacher_identity} بتغيير كلمة مرور حسابه "
+            f"(اسم المستخدم: {result.get('username') or '—'}، البريد: {result.get('email') or '—'}). / "
+            f"Teacher {teacher_identity} changed their account password "
+            f"(username: {result.get('username') or '—'}, email: {result.get('email') or '—'})."
+        )
+        await log_notification("password_change", message, admin_label, "info")
     return result
 
 
@@ -9264,7 +9293,7 @@ async def get_promotion_settings() -> Dict[str, Any]:
 
 
 @api_router.get("/settings/promotion")
-async def fetch_promotion_settings():
+async def fetch_promotion_settings(current_user: Dict[str, Any] = Depends(require_admin)):
     return await get_promotion_settings()
 
 
@@ -9479,7 +9508,7 @@ async def login(payload: AuthLogin):
                 }
                 await db.users.insert_one(new_user)
                 auth_version = await _bump_user_auth_version(new_user["id"])
-                token = create_access_token({"sub": new_user["id"], "role": new_user["role_name"], "av": auth_version})
+                token = create_access_token({"sub": new_user["id"], "role": new_user["role_name"], "av": auth_version, "provider": "local"})
                 return AuthToken(access_token=token)
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
 
@@ -9516,7 +9545,7 @@ async def login(payload: AuthLogin):
                 detail="This account is inactive. Contact an administrator.",
             )
         auth_version = await _bump_user_auth_version(uid)
-        token = create_access_token({"sub": uid, "role": role_name, "av": auth_version})
+        token = create_access_token({"sub": uid, "role": role_name, "av": auth_version, "provider": "local"})
         return AuthToken(access_token=token)
     except HTTPException:
         raise
@@ -9537,11 +9566,73 @@ async def login(payload: AuthLogin):
         )
 
 
+async def _notify_gmail_approval_request(pending_user: Dict[str, Any]) -> None:
+    admin_recipients = await get_admin_notification_recipients()
+    admin_label = ", ".join(admin_recipients) if admin_recipients else "Admin"
+    website_message = (
+        f"طلب تسجيل دخول جديد عبر Gmail من {pending_user.get('name') or ''} "
+        f"({pending_user.get('email') or ''}). راجعه في الإعدادات قبل السماح بالدخول. / "
+        f"New Gmail sign-in request from {pending_user.get('name') or ''} "
+        f"({pending_user.get('email') or ''}). Review it in Settings before allowing access."
+    )
+    await log_notification("gmail_login_request", website_message, admin_label, "pending")
+    if admin_recipients:
+        try:
+            send_gmail_request_email(admin_recipients, pending_user)
+            await log_notification(
+                "gmail_login_request_email",
+                website_message,
+                ", ".join(admin_recipients),
+                "sent",
+            )
+        except Exception as exc:
+            logger.error("Failed to send Gmail approval email: %s", exc)
+            await log_notification(
+                "gmail_login_request_email",
+                website_message,
+                ", ".join(admin_recipients),
+                "failed",
+            )
+    else:
+        await log_notification("gmail_login_request_email", website_message, "", "skipped")
+
+
+async def _queue_existing_gmail_user(
+    user: Dict[str, Any],
+    google_sub: str,
+    verified_email: str,
+    verified_name: str,
+) -> Dict[str, Any]:
+    """Require first-use/re-linked Gmail approval without disabling local password access."""
+    now = iso_now()
+    auth_provider = (user.get("auth_provider") or "local").strip().lower()
+    pure_google_account = auth_provider == "google" and not user.get("password_hash")
+    update_data: Dict[str, Any] = {
+        "google_sub": google_sub,
+        "gmail_approval_status": "pending",
+        "gmail_requested_at": now,
+        "gmail_approved_at": None,
+        "gmail_approved_by": None,
+        "updated_at": now,
+    }
+    if pure_google_account:
+        update_data["active"] = False
+    await db.users.update_one({"id": user["id"]}, {"$set": update_data})
+    pending_user = {
+        **user,
+        **update_data,
+        "email": verified_email or user.get("email"),
+        "name": verified_name or user.get("name"),
+    }
+    await _notify_gmail_approval_request(pending_user)
+    return pending_user
+
+
 @auth_router.post("/google", response_model=AuthToken)
 async def login_google(payload: AuthGooglePayload):
     """
-    Sign in with Google (Gmail). Teachers can log in using their Gmail account.
-    If the email is not yet in the system, a new user is created with Teacher role and Teacher permissions.
+    Sign in with Google (Gmail) only after explicit Admin approval.
+    New accounts and first-time Gmail links to existing local users are queued and receive no token.
     """
     if not _GOOGLE_AUTH_AVAILABLE:
         raise HTTPException(
@@ -9567,8 +9658,12 @@ async def login_google(payload: AuthGooglePayload):
     email = (idinfo.get("email") or "").strip().lower()
     if not email:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Google account has no email")
+    if idinfo.get("email_verified") not in {True, "true"}:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Google email is not verified")
     name = (idinfo.get("name") or email.split("@")[0] or "Teacher").strip()
     google_sub = idinfo.get("sub") or ""
+    if not google_sub:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Google account identity is incomplete")
 
     user = await db.users.find_one(
         {
@@ -9582,42 +9677,41 @@ async def login_google(payload: AuthGooglePayload):
     )
     if user:
         gmail_status = (user.get("gmail_approval_status") or "").strip().lower()
-        auth_provider = (user.get("auth_provider") or "local").strip().lower()
-        if auth_provider == "google":
-            if gmail_status == "pending":
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail="Your Gmail sign-in is waiting for admin approval. Please wait until the administrator approves your account.",
-                )
-            if gmail_status == "rejected":
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail="Your Gmail sign-in request was rejected by the administrator. Please contact the admin for help.",
-                )
-            if not user.get("active", True):
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail="This Gmail account is inactive. Contact an administrator.",
-                )
-            update_data: Dict[str, Any] = {}
-            if google_sub and user.get("google_sub") != google_sub:
-                update_data["google_sub"] = google_sub
-            if email and (user.get("email") or "").strip().lower() != email:
-                update_data["email"] = email
-            if name and user.get("name") != name:
-                update_data["name"] = name
-            if update_data:
-                update_data["updated_at"] = iso_now()
-                await db.users.update_one({"id": user["id"]}, {"$set": update_data})
-                user.update(update_data)
-        else:
-            if not user.get("active", True):
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail="This account is inactive. Contact an administrator.",
-                )
+        if gmail_status == "pending":
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Your Gmail sign-in is waiting for admin approval. Please wait until the administrator approves your account.",
+            )
+        if gmail_status == "rejected":
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Your Gmail sign-in request was rejected by the administrator. Please contact the admin for help.",
+            )
+        linked_sub = (user.get("google_sub") or "").strip()
+        if gmail_status != "approved" or (linked_sub and linked_sub != google_sub):
+            await _queue_existing_gmail_user(user, google_sub, email, name)
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Your Gmail sign-in request was sent to the administrator. Please wait for approval before logging in.",
+            )
+        if not user.get("active", True):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="This Gmail account is inactive. Contact an administrator.",
+            )
+        update_data: Dict[str, Any] = {}
+        if not linked_sub:
+            update_data["google_sub"] = google_sub
+        if email and (user.get("email") or "").strip().lower() != email:
+            update_data["email"] = email
+        if name and user.get("name") != name:
+            update_data["name"] = name
+        if update_data:
+            update_data["updated_at"] = iso_now()
+            await db.users.update_one({"id": user["id"]}, {"$set": update_data})
+            user.update(update_data)
         auth_version = await _bump_user_auth_version(user["id"])
-        token = create_access_token({"sub": user["id"], "role": user["role_name"], "av": auth_version})
+        token = create_access_token({"sub": user["id"], "role": user["role_name"], "av": auth_version, "provider": "google"})
         return AuthToken(access_token=token)
     teacher_role = await db.roles.find_one({"name": "Teacher"}, {"_id": 0})
     if not teacher_role:
@@ -9660,22 +9754,7 @@ async def login_google(payload: AuthGooglePayload):
         "schedule": default_schedule(),
     }
     await db.users.insert_one(new_user)
-    admin_recipients = await get_admin_notification_recipients()
-    admin_label = ", ".join(admin_recipients) if admin_recipients else "Admin"
-    website_message = (
-        f"New Gmail sign-in request from {new_user['name']} ({new_user['email']}). "
-        "Review it in Settings before allowing access."
-    )
-    await log_notification("gmail_login_request", website_message, admin_label, "pending")
-    if admin_recipients:
-        try:
-            send_gmail_request_email(admin_recipients, new_user)
-            await log_notification("gmail_login_request_email", website_message, ", ".join(admin_recipients), "sent")
-        except Exception as exc:
-            logger.error("Failed to send Gmail approval email: %s", exc)
-            await log_notification("gmail_login_request_email", website_message, ", ".join(admin_recipients), "failed")
-    else:
-        await log_notification("gmail_login_request_email", website_message, "", "skipped")
+    await _notify_gmail_approval_request(new_user)
     raise HTTPException(
         status_code=status.HTTP_403_FORBIDDEN,
         detail="Your Gmail sign-in request was sent to the administrator. Please wait for approval before logging in.",

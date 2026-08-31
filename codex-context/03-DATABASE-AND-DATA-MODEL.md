@@ -100,7 +100,8 @@ Typical numeric fields (maxima in UI/comments):
 
 - `role_name`, `active`, `password_hash`, `auth_version`, `assigned_class_ids`, schedule, subjects, avatar_base64.
 - `timetable_records.<school_section>__<academic_year>` stores each user's Sunday–Thursday, 8-period timetable by school section and academic year. The existing `schedule` field remains the current-year International fallback/mirror for backward compatibility; Arabic never reads or writes it.
-- Google: `google_sub` / email linkage + `gmail_approval_status` ∈ pending|approved|rejected (exact enum strings as implemented in server).
+- Google: `google_sub` / email linkage + `gmail_approval_status` ∈ pending|approved|rejected (exact enum strings as implemented in server). First-use Google linkage is pending even when the email already belongs to a local-password user. Approval enables Google sign-in; rejection does not deactivate that separate local account. Pure Google-created pending/rejected users remain inactive.
+- JWTs carry a non-persisted `provider` claim (`local|google`). Google requests re-check the persisted approval status on every authenticated API request. `notification_logs` records Gmail approval requests and Teacher password-change events; password text/hashes are never copied into notification messages.
 
 ## Indexes (CONFIRMED on startup)
 

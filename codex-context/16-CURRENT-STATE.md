@@ -69,6 +69,7 @@
 ## What works today (CONFIRMED)
 
 - JWT login + Google pending-approval teachers + synchronized 30-minute inactivity logout
+- Authentication security hardening (2026-08-31): matching an existing Teacher email no longer bypasses Gmail approval. First-use/new Google identities are queued for exact Admin approval; provider-bound JWTs re-check Google approval, and old provider-less sessions sign out once after rollout. Roles, users, promotion, Gmail approvals and the notification bell are hidden from non-Admins and server-guarded. Admins receive polled in-app alerts for Gmail requests and Teacher password changes without passwords in logs. Verification: 83 backend tests and 15 frontend suites / 97 tests pass; optimized production build and SPA fallback generation pass.
 - Class/student CRUD, weeks, weekly scores, assessment/final/total mark pages
 - Global semester/quarter sync (header + AcademicTermSelect)
 - Top navigation + PageHero banners (EN/AR)

@@ -48,11 +48,13 @@ MongoDB (collections: users, students, student_scores, …)
 ```
 Login or Google ID token
   → user record (active + approval status)
-  → JWT (sub, role, auth_version)
+  → JWT (sub, role, auth_version, provider)
   → Authorization: Bearer on /api/*
 ```
 
-New Google users: Teacher, inactive, `gmail_approval_status=pending` until Admin approves.
+Every first-time Google identity, including a Gmail link to an existing local user, is fail-closed with `gmail_approval_status=pending` until an Admin explicitly approves it. Pending/rejected Google sessions receive no usable token. Rejecting a link preserves an existing local password account; a pure Google-created account remains inactive. Provider-less legacy JWTs are invalidated once after this security rollout so old sessions cannot bypass provider-specific checks.
+
+Admin surfaces are protected twice: exact `role_name == Admin` controls frontend visibility for roles/users/promotion/Gmail approvals/notification bell, while `require_admin` remains authoritative on their APIs. Admin notifications poll while an Admin session is open; Gmail requests and Teacher self-service password changes write notification records without storing or exposing passwords.
 
 ## Academic term model
 

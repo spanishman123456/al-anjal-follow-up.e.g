@@ -2,7 +2,7 @@
  * Grouped top navigation — maps all former sidebar routes into logical tabs.
  * Quarter-dependent assessment paths stay in sync with AppShell semester/quarter state.
  */
-export function buildNavigationGroups({ t, quarter, schoolSection = "international", roleName = "Admin" }) {
+export function buildNavigationGroups({ t, quarter, schoolSection = "international", roleName = "User" }) {
   const assessmentMarksPath = quarter === 2 ? "/assessment-marks-q2" : "/assessment-marks";
   const finalExamsPath = quarter === 2 ? "/final-exams-assessment-q2" : "/final-exams-assessment";
   const isAdmin = roleName === "Admin";

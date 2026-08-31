@@ -78,7 +78,9 @@ If you test login locally with the backend on your machine:
 - [ ] **Authorized JavaScript origins** include your live **frontend Render URL** (e.g. `https://your-frontend.onrender.com`) and, for local, `http://localhost:3000`.
 - [ ] **Render (backend):** `GOOGLE_CLIENT_ID` set → backend redeployed.
 - [ ] **Render (frontend):** `REACT_APP_GOOGLE_CLIENT_ID` set → frontend **redeployed**.
-- [ ] After redeploy, open the login page and click **Sign in with Gmail** — it should open the Google sign-in flow.
+- [ ] After redeploy, open the login page and click **Sign in with Gmail** — it should open Google, then show that Admin approval is pending.
+- [ ] Sign in as Admin → Settings → **Pending Gmail Approval Requests** → approve the requester.
+- [ ] The approved person can now click **Sign in with Gmail** again and enter the site.
 
 ---
 
@@ -165,5 +167,7 @@ Use this section when you already have your **Google Client ID** and need to kno
 1. Open your **frontend Render URL** in the browser (the same URL you added in Google as “Authorized JavaScript origin”).
 2. Go to the **login page**.
 3. Click **Sign in with Gmail**.
-   - If configured correctly: a Google sign-in window or popup appears; after you sign in, you should be logged into the app (as a teacher if it’s a new Gmail).
+   - If configured correctly: a Google sign-in window appears and the first attempt is added to the Admin's pending-approval queue. It does **not** enter the app yet.
+   - Sign in with the Admin account, open **Settings → Pending Gmail Approval Requests**, and approve or reject the exact Gmail identity.
+   - After approval, the requester clicks **Sign in with Gmail** again and can enter. Rejecting a Gmail link for an existing local user does not disable that user's separate username/password login.
    - If you still see “Gmail sign-in is not configured”: wait 2–3 minutes after the frontend redeploy, hard-refresh the page (Ctrl+F5 or Cmd+Shift+R), and try again. If it still fails, double-check the variable name is exactly `REACT_APP_GOOGLE_CLIENT_ID` and that you redeployed **after** saving it.
