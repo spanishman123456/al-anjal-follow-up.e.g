@@ -82,6 +82,15 @@ Typical numeric fields (maxima in UI/comments):
 - Number ranges differ by quarter (1–9 vs 10–18).
 - Deleting weeks can cascade score cleanup (Admin operations — high risk).
 
+### ArabicWeeklyScore (CONFIRMED — 2026-08-31)
+
+- Collection: `arabic_weekly_scores`.
+- One row is scoped by `student_id + academic_year + semester + quarter + week_number` and stores `performance_tasks`, `participation`, `interaction`, and `attendance`, each `/10`.
+- Valid week ranges are 1–9 for internal quarter 1 and 10–18 for internal quarter 2 in each semester. Semester 2 still displays Q3/Q4 while retaining internal quarter 1/2.
+- `null` means unentered; numeric `0` is a real entered score. A week with all four fields `null` is excluded from the quarter average.
+- The quarter continuous mark is the arithmetic mean of entered weekly totals, producing one `/40` mark. Existing `arabic_quarter_scores` continuous fields remain a backward-compatible fallback only when no weekly rows exist.
+- Student/class deletion cleans the matching weekly rows; promotion preserves them as historical records.
+
 ### Class (CONFIRMED)
 
 - Seeded 4A–8B if empty.
@@ -105,7 +114,7 @@ Typical numeric fields (maxima in UI/comments):
 - Teachers can read/update only their own records while **all** included classes remain assigned; Admin can read/update all. Lists, details and PDF exports use the same guard. Revoking one included class hides the whole record from that teacher rather than leaking the remaining roster.
 - No destructive baseline endpoint is supplied. Partial score updates preserve all untouched students; clearing a mark uses explicit `null` and the UI confirms clearing previously saved totals.
 
-Startup creates indexes on students, student_scores, weeks, classes, users (ids and common query fields).
+Startup creates indexes on students, student_scores, `arabic_weekly_scores`, weeks, classes, users (ids and common query fields).
 
 ## Secrets
 

@@ -130,7 +130,7 @@
 4. Visually review manual-review calendar cells and replace them only from an approved corrected school document
 5. Further PDF/report polish only if owner requests
 6. Bring reward certificates into the Amiri + Arabic shaping pipeline when explicitly requested
-7. Define Arabic Section performance thresholds only after an explicit owner decision
+7. Keep the explicitly adopted Arabic proportional performance thresholds aligned across weekly entry, quarter grading, analytics and exports
 8. Plan dependency-security review separately before changing the existing lockfile or package versions
 
 ## Owner expectation at handoff

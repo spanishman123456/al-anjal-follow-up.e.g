@@ -25,8 +25,14 @@ jest.mock("../components/ui/select", () => ({
 jest.mock("../components/ui/dialog", () => ({
   Dialog: ({ children }) => <>{children}</>, DialogContent: ({ children }) => <>{children}</>,
   DialogFooter: ({ children }) => <>{children}</>, DialogHeader: ({ children }) => <>{children}</>,
-  DialogTitle: ({ children }) => <>{children}</>,
+  DialogTitle: ({ children }) => <>{children}</>, DialogDescription: ({ children }) => <>{children}</>,
 }));
+jest.mock("../components/ui/dropdown-menu", () => ({
+  DropdownMenu: ({ children }) => <>{children}</>, DropdownMenuTrigger: ({ children }) => <>{children}</>,
+  DropdownMenuContent: ({ children }) => <>{children}</>, DropdownMenuItem: ({ children, ...props }) => <button {...props}>{children}</button>,
+  DropdownMenuSeparator: () => <hr />,
+}));
+jest.mock("../components/PerformanceLevelBadge", () => ({ PerformanceLevelBadge: ({ label }) => <span>{label}</span> }));
 jest.mock("../components/LoadErrorCard", () => ({ LoadErrorCard: () => <div>load error</div> }));
 
 const ArabicStudents = require("./ArabicStudents").default;
@@ -44,8 +50,10 @@ describe("Arabic student import safeguards", () => {
       classes: [{ id: "c4a", name: "رابع أ" }, { id: "c6b", name: "سادس ب" }],
       loadClasses: jest.fn(),
       profile: { role_name: "Admin" },
+      semester: "semester1",
+      quarter: 1,
     };
-    api.get.mockResolvedValue({ data: [] });
+    api.get.mockImplementation((url) => Promise.resolve({ data: url === "/settings/promotion" ? { enabled: true } : { students: [] } }));
     window.confirm = jest.fn(() => true);
     container = document.createElement("div");
     document.body.appendChild(container);
@@ -69,7 +77,7 @@ describe("Arabic student import safeguards", () => {
     expect(mockToast.error).toHaveBeenCalled();
     expect(api.post).not.toHaveBeenCalled();
 
-    const classSelect = container.querySelector("select");
+    const classSelect = container.querySelectorAll("select")[1];
     await act(async () => {
       Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value").set.call(classSelect, "c4a");
       classSelect.dispatchEvent(new Event("change", { bubbles: true }));
@@ -86,20 +94,20 @@ describe("Arabic student import safeguards", () => {
   });
 
   it("uses Arabic table labels and deletes only the selected class roster", async () => {
-    api.get.mockResolvedValue({
-      data: [
+    api.get.mockImplementation((url) => Promise.resolve({
+      data: url === "/settings/promotion" ? { enabled: true } : { students: [
         { id: "s1", full_name: "طالب أول", class_id: "c6b", class_name: "سادس ب" },
         { id: "s2", full_name: "طالب ثان", class_id: "c6b", class_name: "سادس ب" },
-      ],
-    });
+      ] },
+    }));
     api.delete.mockResolvedValue({ data: { students_deleted: 2, target_class_name: "سادس ب" } });
     await act(async () => root.render(<ArabicStudents />));
 
     expect(container.querySelector("thead").textContent).toContain("اسم الطالب");
     expect(container.querySelector("thead").textContent).toContain("الصف");
-    expect(container.querySelector("tbody").textContent).toContain("حذف");
+    expect(container.querySelector("thead").textContent).toContain("مستوى الأداء");
 
-    const classSelect = container.querySelector("select");
+    const classSelect = container.querySelectorAll("select")[1];
     await act(async () => {
       Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value").set.call(classSelect, "c6b");
       classSelect.dispatchEvent(new Event("change", { bubbles: true }));
@@ -109,6 +117,37 @@ describe("Arabic student import safeguards", () => {
 
     expect(api.delete).toHaveBeenCalledWith("/students", {
       params: { school_section: "arabic", academic_year: "2026-2027", class_id: "c6b" },
+    });
+  });
+
+  it("saves one Arabic week independently and preserves an entered zero", async () => {
+    const weeklyResponse = { students: [{
+      id: "s1", full_name: "طالب أول", class_id: "c4a", class_name: "رابع أ",
+      performance_tasks: null, participation: null, interaction: null, attendance: null,
+      quarter_continuous_average: null, weeks_with_scores: 0,
+    }] };
+    api.get.mockImplementation((url) => Promise.resolve({
+      data: url === "/settings/promotion" ? { enabled: true } : weeklyResponse,
+    }));
+    api.post.mockResolvedValue({ data: { updated: 1 } });
+    await act(async () => root.render(<ArabicStudents />));
+
+    const firstScore = container.querySelector('[data-testid="arabic-student-row-s1"] input[type="number"]');
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set.call(firstScore, "0");
+      firstScore.dispatchEvent(new Event("input", { bubbles: true }));
+      firstScore.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    await act(async () => container.querySelector('[data-testid="arabic-weekly-save"]').click());
+
+    expect(api.post).toHaveBeenCalledWith("/arabic/weekly-scores/bulk", {
+      academic_year: "2026-2027",
+      semester: 1,
+      quarter: 1,
+      week_number: 1,
+      updates: [{
+        student_id: "s1", performance_tasks: 0, participation: null, interaction: null, attendance: null,
+      }],
     });
   });
 });

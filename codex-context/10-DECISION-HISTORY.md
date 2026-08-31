@@ -210,5 +210,13 @@ Format: Decision → Context → Why → Status → Codex Guidance.
 **Decision:** Preview and apply are separate requests. Only `اسم الطالب` and `درجة التسليم` are trusted for score persistence; shaded metadata never changes local records. A file targets exactly one permitted attempt: International short quiz 1/2 for the active quarter or Arabic theory 1/2. Practical scores remain manual. Baseline imports additionally require the current optimistic-concurrency revision. Blank, invalid, duplicate, ambiguous and unmatched rows do not clear or overwrite marks.
 
 **Codex Guidance:** Never route score-page uploads back through the generic `/api/import/excel` enrollment upsert. Preserve the explicit target allowlist, academic scope, teacher class restrictions and preview warning before apply.
+
+## Decision: Arabic continuous assessment is weekly and averaged per quarter (2026-08-31)
+
+**Context:** The four Arabic continuous components were being entered once in the quarter-grade matrix, which could not preserve nine distinct weekly observations or match the International student-management workflow.
+
+**Decision:** Store Arabic continuous scores in `arabic_weekly_scores`, with four `/10` fields per student/week. Internal Q1 averages entered weeks 1–9 and internal Q2 averages entered weeks 10–18; the resulting single `/40` feeds the isolated Arabic `/100` calculation beside the three exam attempts. Exam-only saves do not clear legacy continuous data. Arabic performance bands proportionally mirror the International bands (`34.6667/26.6667` on `/40`, `92/86` on `/100`).
+
+**UX/Safety:** Arabic student management now provides class/week filters, performance and quarter-average columns, student actions, and the existing promotion workflow. Arabic analytics follows class selection then student selection. Class screens expose only exact-class deletion; section-wide “delete all classes” controls are removed while the exact-class server guards remain authoritative.
 **Status:** Active.
 **Codex Guidance:** Use the isolated official-source adapter, strict validation, versioned activation, and last-good cache. Never delete active events before a new version succeeds.

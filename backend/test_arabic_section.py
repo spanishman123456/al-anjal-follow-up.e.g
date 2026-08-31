@@ -14,6 +14,9 @@ from server import (
     arabic_educational_stage_for_grade,
     arabic_exam_raw_max_for_grade,
     arabic_score_summary,
+    arabic_weekly_continuous_summary,
+    classify_arabic_quarter_total,
+    classify_arabic_weekly_total,
     build_arabic_grading_payload,
     ClassBase,
     ClassUpdate,
@@ -215,6 +218,7 @@ def test_empty_arabic_roster_loads_even_when_legacy_class_name_is_unresolved():
         }]),
         students=_Collection(),
         arabic_quarter_scores=_Collection(),
+        arabic_weekly_scores=_Collection(),
     )
     with patch.object(server, "db", fake_db):
         payload = asyncio.run(build_arabic_grading_payload(
@@ -271,6 +275,7 @@ def test_unresolved_arabic_class_with_students_returns_stable_configuration_erro
             "school_section": "arabic", "academic_year": "2026-2027",
         }]),
         arabic_quarter_scores=_Collection(),
+        arabic_weekly_scores=_Collection(),
     )
     with patch.object(server, "db", fake_db), pytest.raises(HTTPException) as error:
         asyncio.run(build_arabic_grading_payload(
@@ -324,6 +329,26 @@ def test_quarters_remain_independent_inputs():
     assert q2["tests_total"] == 20
 
 
+def test_arabic_weekly_average_uses_entered_weeks_and_keeps_zero_as_data():
+    summary = arabic_weekly_continuous_summary([
+        {"week_number": 1, "performance_tasks": 10, "participation": 10, "interaction": 10, "attendance": 10},
+        {"week_number": 2, "performance_tasks": 0, "participation": 0, "interaction": 0, "attendance": 0},
+        {"week_number": 3, "performance_tasks": None, "participation": None, "interaction": None, "attendance": None},
+    ])
+    assert summary["continuous_total"] == 20
+    assert summary["weeks_with_scores"] == 2
+
+
+def test_arabic_performance_bands_scale_international_thresholds():
+    assert classify_arabic_weekly_total(40) == "on_level"
+    assert classify_arabic_weekly_total(30) == "approach"
+    assert classify_arabic_weekly_total(20) == "below"
+    assert classify_arabic_weekly_total(None) == "no_data"
+    assert classify_arabic_quarter_total(92) == "on_level"
+    assert classify_arabic_quarter_total(86) == "approach"
+    assert classify_arabic_quarter_total(85.99) == "below"
+
+
 def test_arabic_pdf_and_excel_exports_render_new_model_rows():
     payload = {
         "academic_year": "2026-2027", "semester": 1, "quarter": 1, "display_quarter": 1,
@@ -342,5 +367,6 @@ def test_arabic_pdf_and_excel_exports_render_new_model_rows():
     assert pdf_en.startswith(b"%PDF") and len(pdf_en) > 2000
     assert excel.startswith(b"PK") and len(excel) > 2000
     headers = [cell.value for cell in next(load_workbook(io.BytesIO(excel)).active.iter_rows())]
+    assert "متوسط أعمال السنة /40" in headers
     assert "الاختبار العملي (خام)" in headers
     assert all("العملي 1" not in str(header) and "العملي 2" not in str(header) for header in headers)

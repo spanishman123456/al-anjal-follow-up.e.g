@@ -3,7 +3,7 @@
   "project_type": "Bilingual school academic follow-up / assessment web app",
   "purpose": "Track weekly follow-up marks, quizzes, chapter tests, quarter exams, performance levels, analytics, and admin reports for Al Anjal National Schools",
   "handoff_date": "2026-08-21",
-  "baseline_verified_date": "2026-08-29",
+  "baseline_verified_date": "2026-08-31",
   "tech_stack": {
     "frontend": ["React CRA", "Craco", "Tailwind CSS", "shadcn/Radix", "Recharts", "Axios", "HashRouter"],
     "backend": ["FastAPI", "Uvicorn", "Motor", "PyMongo", "Pydantic v2", "PyJWT", "Passlib/bcrypt", "ReportLab", "Matplotlib", "pandas", "APScheduler"],
@@ -21,6 +21,7 @@
     "weeks",
     "student_scores",
     "arabic_quarter_scores",
+    "arabic_weekly_scores",
     "baseline_assessments",
     "remedial_plans",
     "rewards",
@@ -46,7 +47,8 @@
     "Global semester/quarter sync",
     "EN/AR RTL UI with PageHero banners",
     "International/Arabic Section switching with isolated records",
-    "Arabic quarter grading out of 100: continuous /40 plus best theory /30 and one practical /30, with stage-aware raw maxima and three-test completion analytics",
+    "Arabic quarter grading out of 100: entered-week average /40 plus best theory /30 and one practical /30, with stage-aware raw maxima and three-test completion analytics",
+    "Arabic weekly continuous entry in student management: four /10 components, weeks 1-9 and 10-18, promotion, student actions, and class-first analytics",
     "Multi-year approved school PDF calendar import with preserved history and automatic current-year resolution",
     "Section/year-isolated weekly timetable inside both section Dashboards"
   ],
@@ -148,8 +150,8 @@
     "Amiri-embedded Arabic text in Analytics/Reports PDFs (reward certificates are a known exception)",
     "Gmail users remain inactive until admin approval",
     "attendance field is weekly score max 2.5 not roll-call",
-    "Arabic attendance is a quarter grading component max 10, not roll-call",
-    "Arabic performance thresholds remain unset until explicitly defined",
+    "Arabic attendance is a weekly grading component max 10, not roll-call",
+    "Arabic performance thresholds proportionally mirror International bands: weekly /40 at 34.6667/26.6667 and quarter /100 at 92/86",
     "Legacy user schedules remain current-year International; Arabic timetables use scoped records only",
     "Score-sheet imports preview before apply, write one explicitly allowed attempt only, and never import practical scores or create enrollment records"
   ],
@@ -191,7 +193,10 @@
     "arabic_primary_exam_raw_max": 15,
     "arabic_middle_secondary_exam_raw_max": 20,
     "arabic_exam_model": "best of theory_test_1/theory_test_2 weighted to 30 plus practical_test weighted to 30",
-    "arabic_performance_thresholds": null
+    "arabic_weekly_on_level_min": 34.6667,
+    "arabic_weekly_approach_min": 26.6667,
+    "arabic_quarter_on_level_min": 92,
+    "arabic_quarter_approach_min": 86
   },
   "agents_entry": "AGENTS.md",
   "codex_start": "codex-context/17-CODEX-START-HERE.md"

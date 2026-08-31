@@ -31,13 +31,14 @@ Exact aggregation lives in `backend/server.py` (`compute_cumulative_*` / follow-
 
 ### Arabic Section distinction
 
-The Arabic Section also has a field named `attendance`, but it is an unchanged **continuous quarter grading component `/10`** inside `arabic_quarter_scores`. It contributes to Arabic Continuous Assessment `/40`; it is not daily roll-call and does not use the International weekly `/2.5` aggregation.
+The Arabic Section also has a field named `attendance`, but it is a **weekly scored criterion `/10`** inside `arabic_weekly_scores`. Together with performance tasks, participation, and interaction it forms each week's `/40`; the arithmetic mean of entered weeks becomes the quarter Continuous Assessment `/40`. It is not daily roll-call and does not use the International weekly `/2.5` aggregation. Legacy quarter-level values in `arabic_quarter_scores` are read only as a fallback when the quarter has no weekly Arabic records.
 
 ## Codex guidance
 
 1. **Do not build** a full attendance product unless the owner explicitly requests it and accepts schema/UI scope.
 2. When the owner says “attendance”, first confirm whether they mean:
-   - the **2.5-point weekly mark**, or
+   - the International **2.5-point weekly mark**,
+   - the Arabic **10-point weekly mark**, or
    - a **new** daily presence feature (does not exist today).
 3. Renaming the field is **high risk** (Excel aliases, UI labels, exports, bilingual keys).
 4. Empty vs zero scores affect `no_data` vs `below` guards — preserve that logic.

@@ -53,7 +53,7 @@ Note: Root `design_guidelines.json` describes an older “EduTrack Pro / Swiss U
 
 - Recharts on web; Matplotlib in PDF.
 - VisualBoard shared palette for Analytics/Reports consistency.
-- Arabic Dashboard and Analytics share the International product's polished card/chart language while aggregating only the selected Arabic quarter `/100`. Their distribution uses neutral 10-point score ranges, not performance classifications; support remains an explicit unconfigured state until Arabic thresholds are approved.
+- Arabic Dashboard and Analytics share the International product's polished card/chart language while aggregating only the selected Arabic quarter `/100`. Arabic Analytics follows the same class-first, then optional-student selection workflow and uses the adopted proportional performance bands rather than neutral score buckets.
 - Analytics/Reports PDFs share `pdf_report_engine.py` cover, KPI, insight, section-heading, table, compact empty-state, and footer components. Charts are emitted only when their dataset is meaningful; long tables repeat headers and Arabic reports embed Amiri with RTL shaping.
 
 ## Reuse before inventing

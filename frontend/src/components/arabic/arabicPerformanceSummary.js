@@ -50,5 +50,6 @@ export function buildArabicPerformanceSummary(payload) {
     topStudents,
     studentsPerClass,
     thresholdsConfigured: Boolean(payload?.performance_thresholds),
+    studentsNeedingSupport: studentsWithData.filter((student) => ["approach", "below"].includes(student.performance_level)),
   };
 }

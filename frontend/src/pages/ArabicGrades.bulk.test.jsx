@@ -59,6 +59,7 @@ describe("ArabicGrades smart bulk grading", () => {
           educational_stage: "primary", exam_raw_max: 15,
           performance_tasks: null, participation: null, interaction: null, attendance: null,
           theory_test_1: null, theory_test_2: null, practical_test: null,
+          continuous_total: 34, weeks_with_scores: 3,
         }],
         total_students: 1, students_with_grades: 0, students_without_grades: 1,
         completion_percentage: 0, test_completion: {}, migration: {},
@@ -87,8 +88,8 @@ describe("ArabicGrades smart bulk grading", () => {
     });
     await act(async () => container.querySelector('[data-testid="arabic-fill-max-column"]').click());
 
-    const performanceInput = container.querySelector('input[aria-label="طالب أول المهام الأدائية"]');
-    expect(performanceInput.value).toBe("10");
+    const theoryInput = container.querySelector('input[aria-label="طالب أول الاختبار النظري 1"]');
+    expect(theoryInput.value).toBe("15");
     expect(mockToast.success).toHaveBeenCalledWith(expect.stringContaining("طالبًا"));
 
     const saveButton = [...container.querySelectorAll("button")].find((button) => button.textContent.includes("حفظ الدرجات"));
@@ -97,7 +98,7 @@ describe("ArabicGrades smart bulk grading", () => {
       academic_year: "2026-2027",
       semester: 1,
       quarter: 1,
-      updates: [expect.objectContaining({ student_id: "s1", performance_tasks: 10 })],
+      updates: [expect.objectContaining({ student_id: "s1", theory_test_1: 15 })],
     }));
   });
 
@@ -107,8 +108,9 @@ describe("ArabicGrades smart bulk grading", () => {
         students: [{
           id: "s1", full_name: "طالب أول", class_id: "c4a", class_name: "رابع أ",
           educational_stage: "primary", exam_raw_max: 15,
-          performance_tasks: 10, participation: null, interaction: null, attendance: null,
-          theory_test_1: null, theory_test_2: null, practical_test: null,
+          performance_tasks: null, participation: null, interaction: null, attendance: null,
+          theory_test_1: 10, theory_test_2: null, practical_test: null,
+          continuous_total: 30, weeks_with_scores: 2,
         }],
         total_students: 1, students_with_grades: 1, students_without_grades: 0,
         completion_percentage: 0, test_completion: {}, migration: {},

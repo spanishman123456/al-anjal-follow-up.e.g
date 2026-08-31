@@ -30,4 +30,18 @@ describe("Arabic roster and diagnostic lifecycle controls stay available", () =>
     const source = fs.readFileSync(path.join(__dirname, fileName), "utf8");
     expect(source).toContain(`data-testid="${testId}"`);
   });
+
+  it("removes section-wide class deletion while retaining exact-class deletion", () => {
+    const source = fs.readFileSync(path.join(__dirname, "Classes.jsx"), "utf8");
+    expect(source).toContain('data-testid="delete-class-confirm"');
+    expect(source).not.toContain('data-testid="delete-all-classes-button"');
+    expect(source).not.toContain('data-testid="delete-all-classes-confirm"');
+  });
+
+  it("keeps Arabic analytics class-first then student selection", () => {
+    const source = fs.readFileSync(path.join(__dirname, "ArabicAnalytics.jsx"), "utf8");
+    expect(source).toContain('data-testid="arabic-analytics-class"');
+    expect(source).toContain('data-testid="arabic-analytics-student"');
+    expect(source).toContain('disabled={selectedClassId === "all"}');
+  });
 });

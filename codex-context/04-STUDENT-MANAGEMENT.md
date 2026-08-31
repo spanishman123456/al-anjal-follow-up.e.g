@@ -6,7 +6,8 @@ Manage enrollment, class placement, weekly mark entry, transfers, promotion, imp
 
 ## Primary UI
 
-- `frontend/src/pages/Students.jsx` — main weekly follow-up entry (/15).
+- `frontend/src/pages/Students.jsx` — International weekly follow-up entry (/15).
+- `frontend/src/pages/ArabicStudents.jsx` — Arabic weekly continuous entry (/40), quarter average, performance, promotion, and per-student actions.
 - `Classes.jsx` — class CRUD and summaries.
 - Assessment / Final / Total Marks pages — broader score matrices.
 - `Settings.jsx` — promotion rules, users.
@@ -35,8 +36,9 @@ See `12-WORKFLOWS.md` (enroll, edit weekly scores, import, transfer).
 5. Arabic enrollment import requires one exact selected class, recognizes `الاسم` and `رقم الهوية`, rejects numeric-only names/duplicate identities/class conflicts before any write, and can repair the legacy failure mode where an identity number was stored as `full_name` in the wrong Arabic class.
 6. Destructive “clear all scores” / delete-all operations are Admin-grade. Class-roster deletion requires an exact selected class and a destructive confirmation; never connect a class button to the unscoped section-wide delete.
 7. The global `school_section` scope defaults to International for existing users/data. Class/student create, transfer, promotion, import, bulk delete, and grade writes must not cross sections.
-8. Arabic students use the dedicated quarter `/100` editor and `arabic_quarter_scores`; never send them through weekly International bulk-score endpoints.
-9. A baseline/diagnostic record is not a class. Deleting the record removes only its frozen roster/marks snapshot; deleting an enrollment class remains an Admin action on `Classes.jsx` with its separate confirmation.
+8. Arabic students use `/arabic/weekly-scores` for the four weekly `/10` components and the dedicated quarter editor for the three exam attempts. Never send them through International bulk-score endpoints.
+9. Arabic promotion reuses the existing section-scoped promotion API. Transfer/promotion changes current enrollment only and must preserve historical weekly and quarter records.
+10. A baseline/diagnostic record is not a class. Deleting the record removes only its frozen roster/marks snapshot; deleting an enrollment class remains an Admin action on `Classes.jsx` with its separate confirmation.
 
 ## Related
 

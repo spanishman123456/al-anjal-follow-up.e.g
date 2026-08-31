@@ -67,9 +67,8 @@ function ArabicPerformanceCards({ data, t }) {
           <Card className="card-hover border-violet-200/80 bg-gradient-to-br from-white to-violet-50/70 dark:from-slate-950 dark:to-violet-950/20" data-testid="arabic-support-list">
             <CardHeader><CardTitle className="flex items-center gap-2 text-base"><ShieldAlert className="h-5 w-5 text-violet-600" />{t("students_needing_support")}</CardTitle></CardHeader>
             <CardContent>
-              <p className="text-3xl font-bold text-violet-700 dark:text-violet-300">—</p>
-              <p className="mt-3 text-sm font-medium text-foreground">{t("no_performance_thresholds")}</p>
-              <p className="mt-2 text-xs leading-5 text-muted-foreground">{t("support_threshold_not_configured")}</p>
+              <p className="text-3xl font-bold text-violet-700 dark:text-violet-300">{summary.studentsNeedingSupport.length}</p>
+              <p className="mt-3 text-sm font-medium text-foreground">{t("arabic_performance_threshold_hint")}</p>
             </CardContent>
           </Card>
         </div>

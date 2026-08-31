@@ -5,9 +5,7 @@ import { toast } from "sonner";
 import { api, getLocalizedApiErrorMessage } from "@/lib/api";
 import { displayQuarterNumber } from "@/lib/academicScope";
 import {
-  ARABIC_CONTINUOUS_FIELDS,
   ARABIC_EXAM_FIELDS,
-  ARABIC_SCORE_FIELDS,
   calculateArabicQuarter,
   fillArabicScoreColumnWithMaximum,
   formatArabicScore,
@@ -36,7 +34,7 @@ export default function ArabicGrades() {
   const [saving, setSaving] = useState(false);
   const [clearing, setClearing] = useState(false);
   const [clearGradesOpen, setClearGradesOpen] = useState(false);
-  const [bulkFillField, setBulkFillField] = useState(ARABIC_SCORE_FIELDS[0].key);
+  const [bulkFillField, setBulkFillField] = useState(ARABIC_EXAM_FIELDS[0]);
   const [loadError, setLoadError] = useState("");
   const sem = semesterNumber(semester);
   const displayQuarter = displayQuarterNumber(semester, quarter);
@@ -60,7 +58,7 @@ export default function ArabicGrades() {
         Object.fromEntries(
           (next.students || []).map((student) => [
             student.id,
-            Object.fromEntries(ARABIC_SCORE_FIELDS.map(({ key }) => [key, student[key] ?? null])),
+            Object.fromEntries(ARABIC_EXAM_FIELDS.map((key) => [key, student[key] ?? null])),
           ]),
         ),
       );
@@ -87,7 +85,7 @@ export default function ArabicGrades() {
 
   const rows = payload?.students || [];
   const hasUnsavedChanges = useMemo(
-    () => rows.some((student) => ARABIC_SCORE_FIELDS.some(({ key }) => {
+    () => rows.some((student) => ARABIC_EXAM_FIELDS.some((key) => {
       const saved = student[key] === undefined ? null : student[key];
       const edited = values[student.id]?.[key] === undefined ? null : values[student.id][key];
       return saved !== edited;
@@ -104,7 +102,7 @@ export default function ArabicGrades() {
     [payload, t],
   );
   const selectedClass = classes.find((item) => item.id === classId);
-  const savedGradeStudentCount = rows.filter((student) => ARABIC_SCORE_FIELDS.some(({ key }) => student[key] != null)).length;
+  const savedGradeStudentCount = rows.filter((student) => ARABIC_EXAM_FIELDS.some((key) => student[key] != null)).length;
 
   const updateValue = (studentId, key, raw, max) => {
     const next = raw === "" ? null : Math.max(0, Math.min(max, Number(raw)));
@@ -236,7 +234,7 @@ export default function ArabicGrades() {
 
       <Card>
         <CardHeader className="gap-4 md:flex-row md:items-center md:justify-between">
-          <div><CardTitle>{t("test_completion")}</CardTitle><p className="mt-1 text-sm text-muted-foreground">{t("no_performance_thresholds")}</p></div>
+          <div><CardTitle>{t("test_completion")}</CardTitle><p className="mt-1 text-sm text-muted-foreground">{t("arabic_continuous_managed_weekly")}</p></div>
           <Select value={classId} onValueChange={setClassId}>
             <SelectTrigger className="w-full md:w-64" data-testid="arabic-grades-class-filter"><SelectValue /></SelectTrigger>
             <SelectContent><SelectItem value="all">{t("all_classes")}</SelectItem>{classes.map((item) => <SelectItem key={item.id} value={item.id}>{item.name}</SelectItem>)}</SelectContent>
@@ -300,7 +298,7 @@ export default function ArabicGrades() {
             <Select value={bulkFillField} onValueChange={setBulkFillField}>
               <SelectTrigger className="w-full sm:w-64" data-testid="arabic-bulk-grade-field"><SelectValue placeholder={t("bulk_grade_select_field")} /></SelectTrigger>
               <SelectContent>
-                {ARABIC_SCORE_FIELDS.map(({ key }) => <SelectItem key={key} value={key}>{t(key)}</SelectItem>)}
+                {ARABIC_EXAM_FIELDS.map((key) => <SelectItem key={key} value={key}>{t(key)}</SelectItem>)}
               </SelectContent>
             </Select>
             <Button
@@ -327,13 +325,13 @@ export default function ArabicGrades() {
       <Card>
         <CardContent className="p-0">
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[1540px] text-sm">
-              <thead className="bg-[#10162A] text-white"><tr><th className="sticky start-0 z-10 bg-[#10162A] p-3 text-start">{t("student")}</th><th className="p-3 text-start">{t("class")}</th>{ARABIC_CONTINUOUS_FIELDS.map(({ key, max }) => <th key={key} className="p-3 text-center">{t(key)} /{max}</th>)}{ARABIC_EXAM_FIELDS.map((key) => <th key={key} className="p-3 text-center">{t(key)} ({t("raw_score")})</th>)}<th className="p-3 text-center">{t("best_theory")} /30</th><th className="p-3 text-center">{t("practical_weighted")} /30</th><th className="p-3 text-center">/40</th><th className="p-3 text-center">/60</th><th className="p-3 text-center">/100</th></tr></thead>
+            <table className="w-full min-w-[1220px] text-sm">
+              <thead className="bg-[#10162A] text-white"><tr><th className="sticky start-0 z-10 bg-[#10162A] p-3 text-start">{t("student")}</th><th className="p-3 text-start">{t("class")}</th><th className="p-3 text-center">{t("continuous_assessment")} /40</th>{ARABIC_EXAM_FIELDS.map((key) => <th key={key} className="p-3 text-center">{t(key)} ({t("raw_score")})</th>)}<th className="p-3 text-center">{t("best_theory")} /30</th><th className="p-3 text-center">{t("practical_weighted")} /30</th><th className="p-3 text-center">/60</th><th className="p-3 text-center">/100</th></tr></thead>
               <tbody>
                 {rows.map((student) => {
                   const current = values[student.id] || {};
-                  const calculated = calculateArabicQuarter(current, student.exam_raw_max);
-                  return <tr key={student.id} className="border-b transition-colors hover:bg-cyan-50/50 dark:hover:bg-cyan-950/10"><td className="sticky start-0 bg-background p-3 font-semibold">{student.full_name}</td><td className="p-3"><p>{student.class_name}</p><p className="text-xs text-muted-foreground">{t(student.educational_stage)} · /{student.exam_raw_max}</p></td>{ARABIC_CONTINUOUS_FIELDS.map(({ key, max }) => <td key={key} className="p-2"><Input type="number" min="0" max={max} step="0.5" value={current[key] ?? ""} onChange={(event) => updateValue(student.id, key, event.target.value, max)} aria-label={`${student.full_name} ${t(key)}`} /></td>)}{ARABIC_EXAM_FIELDS.map((key) => <td key={key} className="p-2"><div className="flex items-center gap-1"><Input type="number" min="0" max={student.exam_raw_max} step="0.5" value={current[key] ?? ""} onChange={(event) => updateValue(student.id, key, event.target.value, student.exam_raw_max)} className={current[key] !== null && current[key] !== undefined ? "border-emerald-400/60 shadow-[0_0_12px_rgba(16,185,129,0.12)]" : ""} aria-label={`${student.full_name} ${t(key)}`} /><span className="text-xs text-muted-foreground">/{student.exam_raw_max}</span></div></td>)}<td className="p-3 text-center font-semibold">{formatArabicScore(calculated.bestTheoryWeighted)}</td><td className="p-3 text-center font-semibold">{formatArabicScore(calculated.practicalWeighted)}</td><td className="p-3 text-center font-semibold">{formatArabicScore(calculated.continuousTotal)}</td><td className="p-3 text-center font-semibold">{formatArabicScore(calculated.testsTotal)}</td><td className="p-3 text-center text-lg font-bold text-cyan-700 dark:text-cyan-300">{formatArabicScore(calculated.quarterTotal)}</td></tr>;
+                  const calculated = calculateArabicQuarter(current, student.exam_raw_max, student.continuous_total);
+                  return <tr key={student.id} className="border-b transition-colors hover:bg-cyan-50/50 dark:hover:bg-cyan-950/10"><td className="sticky start-0 bg-background p-3 font-semibold">{student.full_name}</td><td className="p-3"><p>{student.class_name}</p><p className="text-xs text-muted-foreground">{t(student.educational_stage)} · /{student.exam_raw_max}</p></td><td className="p-3 text-center"><p className="text-lg font-bold text-violet-700 dark:text-violet-300">{formatArabicScore(student.continuous_total)}</p><p className="text-xs text-muted-foreground">{t("arabic_weekly_average_hint").replace("{count}", String(student.weeks_with_scores || 0))}</p></td>{ARABIC_EXAM_FIELDS.map((key) => <td key={key} className="p-2"><div className="flex items-center gap-1"><Input type="number" min="0" max={student.exam_raw_max} step="0.5" value={current[key] ?? ""} onChange={(event) => updateValue(student.id, key, event.target.value, student.exam_raw_max)} className={current[key] !== null && current[key] !== undefined ? "border-emerald-400/60 shadow-[0_0_12px_rgba(16,185,129,0.12)]" : ""} aria-label={`${student.full_name} ${t(key)}`} /><span className="text-xs text-muted-foreground">/{student.exam_raw_max}</span></div></td>)}<td className="p-3 text-center font-semibold">{formatArabicScore(calculated.bestTheoryWeighted)}</td><td className="p-3 text-center font-semibold">{formatArabicScore(calculated.practicalWeighted)}</td><td className="p-3 text-center font-semibold">{formatArabicScore(calculated.testsTotal)}</td><td className="p-3 text-center text-lg font-bold text-cyan-700 dark:text-cyan-300">{formatArabicScore(calculated.quarterTotal)}</td></tr>;
                 })}
               </tbody>
             </table>

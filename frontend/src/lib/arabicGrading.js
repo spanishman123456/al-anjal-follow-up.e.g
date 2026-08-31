@@ -30,12 +30,15 @@ export function fillArabicScoreColumnWithMaximum(values, students, fieldKey) {
 
 const entered = (value) => value !== null && value !== undefined && value !== "";
 
-export function calculateArabicQuarter(values, examRawMax) {
+export function calculateArabicQuarter(values, examRawMax, derivedContinuousTotal = undefined) {
   const source = values || {};
-  const continuousTotal = ARABIC_CONTINUOUS_FIELDS.reduce(
-    (sum, field) => sum + (entered(source[field.key]) ? Number(source[field.key]) : 0),
-    0,
-  );
+  const hasDerivedContinuous = entered(derivedContinuousTotal);
+  const continuousTotal = hasDerivedContinuous
+    ? Number(derivedContinuousTotal)
+    : ARABIC_CONTINUOUS_FIELDS.reduce(
+        (sum, field) => sum + (entered(source[field.key]) ? Number(source[field.key]) : 0),
+        0,
+      );
   const theories = [source.theory_test_1, source.theory_test_2]
     .filter(entered)
     .map(Number);
@@ -44,7 +47,7 @@ export function calculateArabicQuarter(values, examRawMax) {
   const bestTheoryWeighted = bestTheoryRaw === null ? null : (bestTheoryRaw / examRawMax) * 30;
   const practicalWeighted = practicalRaw === null ? null : (practicalRaw / examRawMax) * 30;
   const testsTotal = (bestTheoryWeighted ?? 0) + (practicalWeighted ?? 0);
-  const hasGrades = ARABIC_SCORE_FIELDS.some(({ key }) => entered(source[key]));
+  const hasGrades = hasDerivedContinuous || ARABIC_SCORE_FIELDS.some(({ key }) => entered(source[key]));
   return {
     continuousTotal: hasGrades ? continuousTotal : null,
     bestTheoryRaw,

@@ -4861,13 +4861,93 @@ class ArabicQuarterScoresPayload(BaseModel):
     updates: List[ArabicQuarterScoreInput]
 
 
-def arabic_score_summary(score: Optional[Dict[str, Any]], exam_raw_max: float = 15.0) -> Dict[str, Any]:
-    """Calculate an Arabic-section quarter without inventing performance bands."""
+class ArabicWeeklyScoreInput(BaseModel):
+    student_id: str
+    performance_tasks: Optional[float] = Field(default=None, ge=0, le=10)
+    participation: Optional[float] = Field(default=None, ge=0, le=10)
+    interaction: Optional[float] = Field(default=None, ge=0, le=10)
+    attendance: Optional[float] = Field(default=None, ge=0, le=10)
+
+
+class ArabicWeeklyScoresPayload(BaseModel):
+    academic_year: str
+    semester: int = Field(ge=1, le=2)
+    quarter: int = Field(ge=1, le=2)
+    week_number: int = Field(ge=1, le=18)
+    updates: List[ArabicWeeklyScoreInput]
+
+
+def arabic_week_numbers_for_quarter(quarter: int) -> List[int]:
+    if quarter == 1:
+        return list(range(1, 10))
+    if quarter == 2:
+        return list(range(10, 19))
+    raise ValueError("Arabic quarter must be 1 or 2")
+
+
+def validate_arabic_week_number(quarter: int, week_number: int) -> None:
+    if week_number not in arabic_week_numbers_for_quarter(quarter):
+        expected = "1-9" if quarter == 1 else "10-18"
+        raise ValueError(f"Week {week_number} is outside the Arabic quarter range {expected}")
+
+
+def arabic_weekly_continuous_summary(score_docs: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """Average entered Arabic weekly /40 totals, matching International entered-week averaging."""
+    week_totals: List[float] = []
+    for score in score_docs:
+        if not any(score.get(field) is not None for field in ARABIC_CONTINUOUS_LIMITS):
+            continue
+        total = sum(float(score.get(field) or 0) for field in ARABIC_CONTINUOUS_LIMITS)
+        week_totals.append(round(min(max(total, 0), 40), 2))
+    average = round(sum(week_totals) / len(week_totals), 2) if week_totals else None
+    return {
+        "continuous_total": average,
+        "weeks_with_scores": len(week_totals),
+        "week_totals": week_totals,
+    }
+
+
+def classify_arabic_weekly_total(total: Optional[float]) -> str:
+    """Scale the International weekly /15 bands (13 and 10) to Arabic /40."""
+    if total is None:
+        return "no_data"
+    if float(total) >= (13 / 15) * 40:
+        return "on_level"
+    if float(total) >= (10 / 15) * 40:
+        return "approach"
+    return "below"
+
+
+def classify_arabic_quarter_total(total: Optional[float]) -> str:
+    """Scale the International /50 quarter bands (46 and 43) to Arabic /100."""
+    if total is None:
+        return "no_data"
+    if float(total) >= 92:
+        return "on_level"
+    if float(total) >= 86:
+        return "approach"
+    return "below"
+
+
+def arabic_score_summary(
+    score: Optional[Dict[str, Any]],
+    exam_raw_max: float = 15.0,
+    continuous_total_override: Optional[float] = None,
+    continuous_has_data: Optional[bool] = None,
+) -> Dict[str, Any]:
+    """Calculate the isolated Arabic /100 quarter, including the derived weekly /40 average."""
     source = score or {}
     if exam_raw_max not in (15, 20, 15.0, 20.0):
         raise ValueError("Arabic exam raw maximum must be 15 or 20")
     entered_fields = [key for key in ARABIC_SCORE_FIELDS if source.get(key) is not None]
-    continuous_total = sum(float(source.get(key) or 0) for key in ARABIC_CONTINUOUS_LIMITS)
+    legacy_continuous_total = sum(float(source.get(key) or 0) for key in ARABIC_CONTINUOUS_LIMITS)
+    if continuous_has_data is None:
+        continuous_has_data = any(source.get(key) is not None for key in ARABIC_CONTINUOUS_LIMITS)
+    continuous_total = (
+        float(continuous_total_override)
+        if continuous_has_data and continuous_total_override is not None
+        else legacy_continuous_total
+    )
     theory_values = [
         float(source[key]) for key in ("theory_test_1", "theory_test_2") if source.get(key) is not None
     ]
@@ -4876,17 +4956,19 @@ def arabic_score_summary(score: Optional[Dict[str, Any]], exam_raw_max: float = 
     best_theory_weighted = best_theory_raw / exam_raw_max * 30 if best_theory_raw is not None else None
     practical_weighted = practical_raw / exam_raw_max * 30 if practical_raw is not None else None
     tests_total = (best_theory_weighted or 0) + (practical_weighted or 0)
-    total = continuous_total + tests_total if entered_fields else None
+    has_grades = bool(entered_fields or continuous_has_data)
+    total = continuous_total + tests_total if has_grades else None
     completion = {key: source.get(key) is not None for key in ARABIC_EXAM_FIELDS}
     return {
-        "continuous_total": continuous_total if entered_fields else None,
-        "tests_total": tests_total if entered_fields else None,
+        "continuous_total": continuous_total if has_grades else None,
+        "tests_total": tests_total if has_grades else None,
         "quarter_total": total,
+        "performance_level": classify_arabic_quarter_total(total),
         "exam_raw_max": exam_raw_max,
         "best_theory_raw": best_theory_raw,
         "best_theory_weighted": best_theory_weighted,
         "practical_weighted": practical_weighted,
-        "has_grades": bool(entered_fields),
+        "has_grades": has_grades,
         "all_tests_completed": all(completion.values()),
         "test_completion": completion,
         "test_completion_count": sum(1 for value in completion.values() if value),
@@ -5336,6 +5418,7 @@ async def delete_class(class_id: str, current_user: Dict[str, Any] = Depends(get
     if student_ids:
         await db.student_scores.delete_many({"student_id": {"$in": student_ids}})
         await db.arabic_quarter_scores.delete_many({"student_id": {"$in": student_ids}})
+        await db.arabic_weekly_scores.delete_many({"student_id": {"$in": student_ids}})
     await db.students.delete_many({"class_id": class_id})
     await db.users.update_many({}, {"$pull": {"assigned_class_ids": class_id}})
     await db.classes.delete_one({"id": class_id})
@@ -5362,6 +5445,7 @@ async def delete_all_classes(
         scores_deleted = scores_result.deleted_count
     students_result = await db.students.delete_many({"class_id": {"$in": class_ids}})
     await db.arabic_quarter_scores.delete_many({"student_id": {"$in": student_ids}})
+    await db.arabic_weekly_scores.delete_many({"student_id": {"$in": student_ids}})
     await db.users.update_many({}, {"$pull": {"assigned_class_ids": {"$in": class_ids}}})
     classes_result = await db.classes.delete_many({"id": {"$in": class_ids}})
     await log_user_action(
@@ -6525,6 +6609,7 @@ async def delete_all_students(
             "students_deleted": 0,
             "scores_deleted": 0,
             "arabic_scores_deleted": 0,
+            "arabic_weekly_scores_deleted": 0,
             "target_class_id": class_id,
             "target_class_name": (target_class or {}).get("name"),
             "message": "No students to delete",
@@ -6532,18 +6617,21 @@ async def delete_all_students(
     scores_result = await db.student_scores.delete_many({"student_id": {"$in": student_ids}})
     students_result = await db.students.delete_many({"id": {"$in": student_ids}})
     arabic_scores_result = await db.arabic_quarter_scores.delete_many({"student_id": {"$in": student_ids}})
+    arabic_weekly_scores_result = await db.arabic_weekly_scores.delete_many({"student_id": {"$in": student_ids}})
     target_label = (target_class or {}).get("name") or f"{normalize_school_section(school_section)}/{academic_year or 'all years'}"
     await log_user_action(
         current_user,
         "students_delete_class" if class_id else "students_delete_all",
         f"Deleted {students_result.deleted_count} students from {target_label}: "
-        f"{scores_result.deleted_count} weekly and {arabic_scores_result.deleted_count} Arabic score records",
+        f"{scores_result.deleted_count} International weekly, {arabic_weekly_scores_result.deleted_count} Arabic weekly, "
+        f"and {arabic_scores_result.deleted_count} Arabic quarter score records",
     )
     return {
         "status": "deleted",
         "students_deleted": students_result.deleted_count,
         "scores_deleted": scores_result.deleted_count,
         "arabic_scores_deleted": arabic_scores_result.deleted_count,
+        "arabic_weekly_scores_deleted": arabic_weekly_scores_result.deleted_count,
         "target_class_id": class_id,
         "target_class_name": (target_class or {}).get("name"),
     }
@@ -6554,6 +6642,8 @@ async def delete_student(student_id: str, current_user: Dict[str, Any] = Depends
     student = await db.students.find_one({"id": student_id}, {"_id": 0})
     await db.students.delete_one({"id": student_id})
     await db.student_scores.delete_many({"student_id": student_id})
+    await db.arabic_weekly_scores.delete_many({"student_id": student_id})
+    await db.arabic_quarter_scores.delete_many({"student_id": student_id})
     if student:
         await send_sms_notification(
             "student_delete",
@@ -7050,6 +7140,139 @@ def _arabic_scope_class_query(
     return {"$and": filters}
 
 
+@api_router.get("/arabic/weekly-scores")
+async def get_arabic_weekly_scores(
+    academic_year: str = Query(...),
+    semester: int = Query(..., ge=1, le=2),
+    quarter: int = Query(..., ge=1, le=2),
+    week_number: int = Query(..., ge=1, le=18),
+    class_id: Optional[str] = Query(default=None),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+):
+    try:
+        validate_arabic_week_number(quarter, week_number)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    classes = await db.classes.find(
+        _arabic_scope_class_query(current_user, academic_year, class_id), {"_id": 0}
+    ).sort("grade", 1).to_list(500)
+    class_ids = [item["id"] for item in classes]
+    students = await db.students.find(
+        {
+            "$and": [
+                school_section_query(SCHOOL_SECTION_ARABIC, academic_year),
+                {"class_id": {"$in": class_ids}},
+            ]
+        },
+        {"_id": 0},
+    ).sort([("class_name", 1), ("full_name", 1)]).to_list(10000)
+    student_ids = [item["id"] for item in students]
+    score_docs = await db.arabic_weekly_scores.find(
+        {
+            "student_id": {"$in": student_ids},
+            "academic_year": academic_year,
+            "semester": semester,
+            "quarter": quarter,
+        },
+        {"_id": 0},
+    ).to_list(100000)
+    scores_by_student: Dict[str, List[Dict[str, Any]]] = {}
+    for score in score_docs:
+        scores_by_student.setdefault(score["student_id"], []).append(score)
+    current_scores = {
+        score["student_id"]: score for score in score_docs if int(score.get("week_number") or 0) == week_number
+    }
+    rows = []
+    for student in students:
+        current = current_scores.get(student["id"], {})
+        weekly_summary = arabic_weekly_continuous_summary(scores_by_student.get(student["id"], []))
+        current_total = (
+            round(sum(float(current.get(field) or 0) for field in ARABIC_CONTINUOUS_LIMITS), 2)
+            if any(current.get(field) is not None for field in ARABIC_CONTINUOUS_LIMITS)
+            else None
+        )
+        rows.append({
+            **student,
+            **{field: current.get(field) for field in ARABIC_CONTINUOUS_LIMITS},
+            "week_number": week_number,
+            "week_total": current_total,
+            "performance_level": classify_arabic_weekly_total(current_total),
+            "quarter_continuous_average": weekly_summary["continuous_total"],
+            "weeks_with_scores": weekly_summary["weeks_with_scores"],
+        })
+    return {
+        "school_section": SCHOOL_SECTION_ARABIC,
+        "academic_year": academic_year,
+        "semester": semester,
+        "quarter": quarter,
+        "display_quarter": quarter + 2 if semester == 2 else quarter,
+        "week_number": week_number,
+        "week_numbers": arabic_week_numbers_for_quarter(quarter),
+        "classes": classes,
+        "students": rows,
+        "total_students": len(rows),
+    }
+
+
+@api_router.post("/arabic/weekly-scores/bulk")
+async def save_arabic_weekly_scores(
+    payload: ArabicWeeklyScoresPayload,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+):
+    try:
+        validate_arabic_week_number(payload.quarter, payload.week_number)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    student_ids = [item.student_id for item in payload.updates]
+    students = await db.students.find(
+        {"id": {"$in": student_ids}},
+        {"_id": 0, "id": 1, "class_id": 1, "school_section": 1, "academic_year": 1},
+    ).to_list(10000)
+    student_map = {item["id"]: item for item in students}
+    assigned = _teacher_assigned_class_ids(current_user)
+    operations: List[UpdateOne] = []
+    for update in payload.updates:
+        student = student_map.get(update.student_id)
+        if not student or record_school_section(student) != SCHOOL_SECTION_ARABIC:
+            raise HTTPException(status_code=409, detail="Arabic weekly scores require Arabic-section students")
+        if student.get("academic_year") not in (None, payload.academic_year):
+            raise HTTPException(status_code=409, detail="Student academic year does not match the weekly score scope")
+        if assigned is not None and student.get("class_id") not in assigned:
+            raise HTTPException(status_code=403, detail="Not allowed to edit this student's class")
+        values = update.model_dump(exclude={"student_id"}, exclude_unset=True)
+        operations.append(UpdateOne(
+            {
+                "student_id": update.student_id,
+                "academic_year": payload.academic_year,
+                "semester": payload.semester,
+                "quarter": payload.quarter,
+                "week_number": payload.week_number,
+            },
+            {
+                "$set": {
+                    **values,
+                    "school_section": SCHOOL_SECTION_ARABIC,
+                    "class_id": student.get("class_id"),
+                    "academic_year": payload.academic_year,
+                    "semester": payload.semester,
+                    "quarter": payload.quarter,
+                    "week_number": payload.week_number,
+                    "updated_at": iso_now(),
+                },
+                "$setOnInsert": {"id": str(uuid.uuid4()), "student_id": update.student_id, "created_at": iso_now()},
+            },
+            upsert=True,
+        ))
+    if operations:
+        await db.arabic_weekly_scores.bulk_write(operations, ordered=False)
+    await log_user_action(
+        current_user,
+        "arabic_weekly_scores_save",
+        f"Saved {len(operations)} Arabic weekly score rows ({payload.academic_year} S{payload.semester} Q{payload.quarter} W{payload.week_number})",
+    )
+    return {"status": "saved", "updated": len(operations)}
+
+
 async def build_arabic_grading_payload(
     academic_year: str,
     semester: int,
@@ -7100,6 +7323,19 @@ async def build_arabic_grading_payload(
         {"_id": 0},
     ).to_list(10000)
     score_map = {item["student_id"]: item for item in score_docs}
+    weekly_docs = await db.arabic_weekly_scores.find(
+        {
+            "student_id": {"$in": student_ids},
+            "academic_year": academic_year,
+            "semester": semester,
+            "quarter": quarter,
+            "school_section": SCHOOL_SECTION_ARABIC,
+        },
+        {"_id": 0},
+    ).to_list(100000)
+    weekly_by_student: Dict[str, List[Dict[str, Any]]] = {}
+    for weekly_score in weekly_docs:
+        weekly_by_student.setdefault(weekly_score["student_id"], []).append(weekly_score)
     test_fields = list(ARABIC_EXAM_FIELDS)
     completion = {key: {"completed": 0, "missing": 0, "percentage": 0.0} for key in test_fields}
     rows: List[Dict[str, Any]] = []
@@ -7112,6 +7348,9 @@ async def build_arabic_grading_payload(
             "students_without_grades": 0,
             "tests_completed": 0,
             "tests_possible": 0,
+            "quarter_total_sum": 0.0,
+            "quarter_total_count": 0,
+            "performance_distribution": {"on_level": 0, "approach": 0, "below": 0, "no_data": 0},
         }
         for item in classes
     }
@@ -7119,13 +7358,23 @@ async def build_arabic_grading_payload(
         score = score_map.get(student["id"], {})
         class_doc = class_map[student["class_id"]]
         exam_raw_max = class_doc["exam_raw_max"]
-        calculated = arabic_score_summary(score, exam_raw_max)
+        weekly_summary = arabic_weekly_continuous_summary(weekly_by_student.get(student["id"], []))
+        weekly_has_data = weekly_summary["continuous_total"] is not None
+        calculated = arabic_score_summary(
+            score,
+            exam_raw_max,
+            continuous_total_override=weekly_summary["continuous_total"],
+            continuous_has_data=weekly_has_data,
+        )
         row = {
             **student,
             "educational_stage": class_doc["educational_stage"],
             **{key: score.get(key) for key in ARABIC_SCORE_FIELDS},
             "legacy_migration_status": score.get("legacy_migration_status"),
             "legacy_exam_backup": score.get("legacy_exam_backup"),
+            "continuous_source": "weekly_average" if weekly_has_data else "legacy_quarter",
+            "weeks_with_scores": weekly_summary["weeks_with_scores"],
+            "week_totals": weekly_summary["week_totals"],
             **calculated,
         }
         rows.append(row)
@@ -7134,6 +7383,10 @@ async def build_arabic_grading_payload(
         rollup["students_with_grades" if calculated["has_grades"] else "students_without_grades"] += 1
         rollup["tests_completed"] += calculated["test_completion_count"]
         rollup["tests_possible"] += 3
+        rollup["performance_distribution"][calculated["performance_level"]] += 1
+        if calculated["quarter_total"] is not None:
+            rollup["quarter_total_sum"] += float(calculated["quarter_total"])
+            rollup["quarter_total_count"] += 1
         for key in test_fields:
             bucket = completion[key]
             bucket["completed" if calculated["test_completion"][key] else "missing"] += 1
@@ -7143,7 +7396,14 @@ async def build_arabic_grading_payload(
     for item in class_rollup.values():
         possible = item.pop("tests_possible")
         item["completion_percentage"] = round(item["tests_completed"] * 100 / possible, 1) if possible else 0.0
+        total_sum = item.pop("quarter_total_sum")
+        total_count = item.pop("quarter_total_count")
+        item["average_total"] = round(total_sum / total_count, 2) if total_count else None
     with_grades = sum(1 for row in rows if row["has_grades"])
+    performance_counts = {"on_level": 0, "approach": 0, "below": 0, "no_data": 0}
+    for row in rows:
+        performance_counts[row["performance_level"]] += 1
+    scored_totals = [float(row["quarter_total"]) for row in rows if row["quarter_total"] is not None]
     all_tests = sum(row["test_completion_count"] for row in rows)
     migration_review_rows = [
         {"student_id": row["id"], "full_name": row.get("full_name"), "class_name": row.get("class_name")}
@@ -7166,12 +7426,26 @@ async def build_arabic_grading_payload(
         "tests_missing": total_students * 3 - all_tests,
         "completion_percentage": round(all_tests * 100 / (total_students * 3), 1) if total_students else 0.0,
         "class_breakdown": list(class_rollup.values()),
+        "average_total": round(sum(scored_totals) / len(scored_totals), 2) if scored_totals else None,
+        "distribution": [
+            {"level": "on_level", "count": performance_counts["on_level"]},
+            {"level": "approach", "count": performance_counts["approach"]},
+            {"level": "below", "count": performance_counts["below"]},
+            {"level": "no_data", "count": performance_counts["no_data"]},
+        ],
+        "on_level_rate": round(performance_counts["on_level"] * 100 / total_students, 1) if total_students else 0.0,
+        "students_needing_support": [row for row in rows if row["performance_level"] in {"approach", "below"}],
+        "top_performers": sorted(
+            [row for row in rows if row["quarter_total"] is not None],
+            key=lambda row: float(row["quarter_total"]),
+            reverse=True,
+        )[:5],
         "migration": {
             "manual_review_count": len(migration_review_rows),
             "manual_review_students": migration_review_rows,
         },
         "configuration_issues": configuration_issues,
-        "performance_thresholds": None,
+        "performance_thresholds": {"on_level": 92, "approach": 86, "below": 0},
     }
 
 
@@ -7211,7 +7485,7 @@ async def save_arabic_grades(
             raise HTTPException(status_code=409, detail="Student academic year does not match the grading scope")
         if assigned is not None and student.get("class_id") not in assigned:
             raise HTTPException(status_code=403, detail="Not allowed to edit this student's class")
-        values = update.model_dump(exclude={"student_id"})
+        values = update.model_dump(exclude={"student_id"}, exclude_unset=True)
         class_doc = class_map.get(student.get("class_id"))
         if not class_doc or record_school_section(class_doc) != SCHOOL_SECTION_ARABIC:
             raise HTTPException(status_code=409, detail="Arabic student's class metadata is missing or mismatched")
@@ -7315,10 +7589,8 @@ def generate_arabic_grades_excel(payload: Dict[str, Any], lang: str = "en") -> b
     labels = {
         "student": "الطالب" if is_ar else "Student",
         "class": "الفصل" if is_ar else "Class",
-        "performance_tasks": "المهام الأدائية /10" if is_ar else "Performance Tasks /10",
-        "participation": "المشاركة /10" if is_ar else "Participation /10",
-        "interaction": "التفاعل /10" if is_ar else "Interaction /10",
-        "attendance": "الحضور /10" if is_ar else "Attendance /10",
+        "continuous_total": "متوسط أعمال السنة /40" if is_ar else "Continuous Average /40",
+        "weeks_with_scores": "الأسابيع المرصودة" if is_ar else "Weeks Recorded",
         "exam_raw_max": "الحد الأعلى للاختبار الخام" if is_ar else "Raw Exam Maximum",
         "theory_test_1": "الاختبار النظري 1 (خام)" if is_ar else "Theory Test 1 (Raw)",
         "theory_test_2": "الاختبار النظري 2 (خام)" if is_ar else "Theory Test 2 (Raw)",
@@ -7465,7 +7737,8 @@ def generate_arabic_grades_pdf(payload: Dict[str, Any], lang: str = "en") -> byt
     story.append(Spacer(1, 8))
     if students:
         detail_rows = [[
-            _tr("Student", code), _tr("Class", code), "T1", "T2", _tr("Practical", code),
+            _tr("Student", code), _tr("Class", code), _tr("Continuous Assessment", code),
+            "T1", "T2", _tr("Practical", code),
             _tr("Best Theory /30", code), _tr("Practical /30", code),
             _tr("Tests /60", code), _tr("Quarter /100", code),
         ]]
@@ -7478,6 +7751,7 @@ def generate_arabic_grades_pdf(payload: Dict[str, Any], lang: str = "en") -> byt
             detail_rows.append([
                 row.get("full_name") or "-",
                 row.get("class_name") or "-",
+                format_arabic_score(row.get("continuous_total")),
                 raw_display(row.get("theory_test_1")),
                 raw_display(row.get("theory_test_2")),
                 raw_display(row.get("practical_test")),
@@ -7486,7 +7760,7 @@ def generate_arabic_grades_pdf(payload: Dict[str, Any], lang: str = "en") -> byt
                 format_arabic_score(row.get("tests_total")),
                 format_arabic_score(row.get("quarter_total")),
             ])
-        story.append(_pdf_engine_styled_table(detail_rows, code, [110, 55, 42, 42, 50, 58, 58, 55, 60]))
+        story.append(_pdf_engine_styled_table(detail_rows, code, [85, 45, 48, 36, 36, 45, 50, 50, 45, 50]))
     else:
         story.append(_pdf_engine_empty_state(code, _tr("No Arabic scores have been entered for the selected period.", code)))
 
@@ -10191,6 +10465,13 @@ async def seed_defaults():
         await db.classes.create_index([("school_section", 1), ("academic_year", 1), ("grade", 1)])
         await db.arabic_quarter_scores.create_index(
             [("student_id", 1), ("academic_year", 1), ("semester", 1), ("quarter", 1)], unique=True
+        )
+        await db.arabic_weekly_scores.create_index(
+            [("student_id", 1), ("academic_year", 1), ("semester", 1), ("quarter", 1), ("week_number", 1)],
+            unique=True,
+        )
+        await db.arabic_weekly_scores.create_index(
+            [("school_section", 1), ("academic_year", 1), ("semester", 1), ("quarter", 1), ("class_id", 1)]
         )
         await db.academic_calendars.create_index([("academic_year", 1)], unique=True)
         await db.academic_calendars.create_index([("academic_year_start", -1)])

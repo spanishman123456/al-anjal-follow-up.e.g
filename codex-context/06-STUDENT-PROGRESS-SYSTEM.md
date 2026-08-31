@@ -86,16 +86,19 @@ Per-week documents in `student_scores` provide history within the academic term 
 Arabic grading is dispatched separately from the protected International pipeline:
 
 ```
-Continuous /40 = performance tasks 10 + participation 10 + interaction 10 + attendance 10
+Weekly continuous /40 = performance tasks 10 + participation 10 + interaction 10 + attendance 10
+Quarter continuous /40 = arithmetic mean of entered weekly totals
 Best Theory /30 = max(valid Theory 1 raw, valid Theory 2 raw) / stage raw maximum × 30
 Practical /30 = Practical Test raw / stage raw maximum × 30
 Tests /60 = Best Theory 30 + Practical 30
 Quarter /100 = continuous 40 + tests 60
 ```
 
-Primary (grades 1–6) raw exams are `/15`; Middle (grades 7–9) and Secondary (grade 10+) raw exams are `/20`. Stage is derived only from canonical `classes.grade`. All three attempts—Theory 1, Theory 2, and Practical—must be entered for full completion, while available valid entries may produce a provisional total. Semester 1 displays Q1/Q2; Semester 2 displays Q3/Q4. Each quarter is independent. A score of `0` counts as entered/tested; `null` is missing. Arabic performance thresholds are intentionally **not configured** yet, so Arabic analytics report totals and completion rather than applying International bands.
+Primary (grades 1–6) raw exams are `/15`; Middle (grades 7–9) and Secondary (grade 10+) raw exams are `/20`. Stage is derived only from canonical `classes.grade`. All three attempts—Theory 1, Theory 2, and Practical—must be entered for full completion, while available valid entries may produce a provisional total. Semester 1 displays Q1/Q2; Semester 2 displays Q3/Q4. Each quarter is independent. Internal quarter 1 uses weeks 1–9 and internal quarter 2 uses weeks 10–18 in both semesters. A score of `0` counts as entered/tested; `null` is missing. Only weeks containing at least one entered component participate in the continuous average.
 
-The Arabic grade editor includes class-scoped smart bulk grading. An Admin/Teacher selects one exact class and one of the seven editable fields, then can stage the correct maximum for every visible student (`/10` continuous fields; per-student `/15` or `/20` exam raw maximum). Existing different marks require overwrite confirmation, and no database write occurs until the normal Save Grades action. Calculations and completion rules are unchanged.
+Arabic performance bands now mirror the International mechanism proportionally to their different maxima: weekly continuous `/40` uses on-level `>=34.6667`, approach `>=26.6667`; quarter `/100` uses on-level `>=92`, approach `>=86`; lower scored totals are `below`, and wholly empty records remain `no_data`. Analytics, class summaries, student rows, PDF and Excel must use the same backend result.
+
+The Arabic student-management page owns weekly continuous entry and the student-level actions. The Arabic grade editor shows the derived `/40` as one read-only column beside the three exam attempts and edits only those exam attempts. Legacy quarter-level continuous fields are not overwritten by exam-only saves.
 
 Every score-entry surface exposes a clear/delete action: weekly follow-up, Q1/Q2 quiz and chapter marks, Q1/Q2 final exams, Total Marks editing, baseline/diagnostic entry, and Arabic quarter grades. The Arabic action deletes persisted `arabic_quarter_scores` rows only for one explicitly selected Arabic class, academic year, semester and quarter; teacher assignment is enforced, and other classes/terms are preserved. Unsaved Arabic edits must be saved or reloaded before deletion.
 
