@@ -36,6 +36,7 @@ import { buildAcademicExportFilename } from "@/lib/exportFilenames";
 import { sortByClassOrder } from "@/lib/utils";
 import { PerformanceLevelBadge } from "@/components/PerformanceLevelBadge";
 import { ScoreSheetImportControl } from "@/components/ScoreSheetImportControl";
+import { StudentScoreClearButton } from "@/components/StudentScoreClearButton";
 
 const formatScore = (value, suffix = "") => {
   if (value === null || value === undefined) {
@@ -131,7 +132,6 @@ export default function AssessmentMarksQ2() {
   const [bulkScores, setBulkScores] = useState({});
   const [bulkConfirmOpen, setBulkConfirmOpen] = useState(false);
   const [clearScoresOpen, setClearScoresOpen] = useState(false);
-  const [clearAllScoresOpen, setClearAllScoresOpen] = useState(false);
   const [fillValues, setFillValues] = useState({ quiz3: "", quiz4: "", chapter_test2_practical: "" });
   const latestLoadRequestIdRef = useRef(0);
 
@@ -293,17 +293,18 @@ export default function AssessmentMarksQ2() {
   };
 
   const handleFillColumn = (field, max) => {
-    const raw = fillValues[field];
-    if (raw === "" || raw === null || raw === undefined) {
-      toast.error(t("enter_value_to_fill") || "Enter a value to fill");
+    if (filterClass === "all") {
+      toast.error(t("select_class_to_clear_scores"));
       return;
     }
-    const num = Number(raw);
+    const raw = fillValues[field];
+    const resolvedRaw = raw === "" || raw === null || raw === undefined ? String(max) : raw;
+    const num = Number(resolvedRaw);
     if (Number.isNaN(num) || num < 0) {
       toast.error(t("enter_valid_value") || "Enter a valid number");
       return;
     }
-    const value = num > max ? String(max) : raw;
+    const value = num > max ? String(max) : resolvedRaw;
     if (num > max) toast.warning(t("marks_exceeded").replace(/{max}/g, String(max)));
     setBulkEditMode(true);
     setBulkScores((prev) => {
@@ -390,27 +391,26 @@ export default function AssessmentMarksQ2() {
     }
   };
 
-  const handleClearAllScores = async () => {
-    setClearAllScoresOpen(false);
+  const handleClearStudentScores = async (student) => {
     if (!activeWeekId) {
       toast.error(t("select_week_before_import") || "Please select a week first.");
       return;
     }
-    const updates = students.map((student) => ({
+    if (!window.confirm(t("clear_student_scores_confirm").replace("{student}", student.full_name || ""))) return;
+    const updates = [{
       id: student.id,
       quiz3: null,
       quiz4: null,
       chapter_test2_practical: null,
-    }));
-    if (!updates.length) {
-      toast.error(t("no_data"));
-      return;
-    }
+    }];
     try {
       await api.post("/students/bulk-scores", { updates, week_id: activeWeekId }, { timeout: BULK_SAVE_TIMEOUT_MS });
-      setBulkEditMode(false);
-      setBulkScores({});
-      toast.success(t("scores_cleared_all_classes") || "Scores cleared for all classes in the selected week.");
+      setBulkScores((prev) => {
+        const next = { ...prev };
+        delete next[student.id];
+        return next;
+      });
+      toast.success(t("student_scores_cleared"));
       window.dispatchEvent(new CustomEvent("students-updated"));
       loadData(activeWeekId);
     } catch (error) {
@@ -485,11 +485,8 @@ export default function AssessmentMarksQ2() {
                 <Button variant="outline" onClick={startBulkEdit} data-testid="assessment-q2-edit-scores">
                   {t("edit_scores")}
                 </Button>
-                <Button variant="outline" onClick={() => setClearScoresOpen(true)} data-testid="assessment-q2-clear-scores">
-                  {t("clear_scores")}
-                </Button>
-                <Button variant="destructive" onClick={() => setClearAllScoresOpen(true)} data-testid="assessment-q2-clear-all-scores">
-                  {t("clear_scores_all_classes") || "Clear All Classes"}
+                <Button variant="outline" onClick={() => setClearScoresOpen(true)} disabled={filterClass === "all"} data-testid="assessment-q2-clear-scores">
+                  {t("clear_selected_class_scores")}
                 </Button>
               </>
             )}
@@ -590,6 +587,7 @@ export default function AssessmentMarksQ2() {
                   {t("total_score")}
                 </TableHead>
                 <TableHead className="text-center">{t("performance_level")}</TableHead>
+                <TableHead className="text-center">{t("actions")}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -672,7 +670,7 @@ export default function AssessmentMarksQ2() {
                     </Button>
                   </div>
                 </TableCell>
-                <TableCell colSpan={2} />
+                <TableCell colSpan={3} />
               </TableRow>
               {filteredStudents.length ? (
                 filteredStudents.map((student) => {
@@ -768,12 +766,20 @@ export default function AssessmentMarksQ2() {
                           data-testid={`assessment-perf-${student.id}`}
                         />
                       </TableCell>
+                      <TableCell className="text-center">
+                        <StudentScoreClearButton
+                          t={t}
+                          studentName={student.full_name}
+                          onClear={() => handleClearStudentScores(student)}
+                          testId={`assessment-q2-clear-student-${student.id}`}
+                        />
+                      </TableCell>
                     </TableRow>
                   );
                 })
               ) : (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center text-muted-foreground">
+                  <TableCell colSpan={8} className="text-center text-muted-foreground">
                     {t("no_data")}
                   </TableCell>
                 </TableRow>
@@ -803,33 +809,15 @@ export default function AssessmentMarksQ2() {
       <Dialog open={clearScoresOpen} onOpenChange={setClearScoresOpen}>
         <DialogContent data-testid="assessment-q2-clear-dialog">
           <DialogHeader>
-            <DialogTitle>{t("clear_scores")}</DialogTitle>
-            <DialogDescription>{t("clear_scores_confirm")}</DialogDescription>
+            <DialogTitle>{t("clear_selected_class_scores")}</DialogTitle>
+            <DialogDescription>{t("clear_selected_class_scores_confirm")}</DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <Button variant="outline" onClick={() => setClearScoresOpen(false)}>
               {t("cancel")}
             </Button>
             <Button variant="destructive" onClick={handleClearScores} data-testid="assessment-q2-clear-confirm">
-              {t("clear_scores")}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-      <Dialog open={clearAllScoresOpen} onOpenChange={setClearAllScoresOpen}>
-        <DialogContent data-testid="assessment-q2-clear-all-dialog">
-          <DialogHeader>
-            <DialogTitle>{t("clear_scores_all_classes") || "Clear Scores for All Classes"}</DialogTitle>
-            <DialogDescription>
-              {t("clear_scores_all_classes_confirm") || "This will clear assessment scores for every class in the selected week. This action cannot be undone."}
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setClearAllScoresOpen(false)}>
-              {t("cancel")}
-            </Button>
-            <Button variant="destructive" onClick={handleClearAllScores} data-testid="assessment-q2-clear-all-confirm">
-              {t("clear_scores")}
+              {t("clear_selected_class_scores")}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useOutletContext } from "react-router-dom";
 import {
   AlertTriangle, Award, Download, FileText, MessageCircle, MoreHorizontal,
-  Save, Trash2, Upload, UserRoundCog,
+  Save, Sparkles, Trash2, Upload, UserRoundCog,
 } from "lucide-react";
 import { toast } from "sonner";
 import { api, BACKEND_ROOT_URL, getApiErrorMessage, getLocalizedApiErrorMessage } from "@/lib/api";
@@ -20,6 +20,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { LoadErrorCard } from "@/components/LoadErrorCard";
 import { importStudentsWithPreview } from "@/lib/studentEnrollmentImport";
+import { StudentScoreClearButton } from "@/components/StudentScoreClearButton";
 
 const CONTINUOUS_FIELDS = [
   { key: "performance_tasks", max: 10 },
@@ -60,6 +61,7 @@ export default function ArabicStudents() {
   const [classId, setClassId] = useState("all");
   const [search, setSearch] = useState("");
   const [performanceFilter, setPerformanceFilter] = useState("all");
+  const [fillField, setFillField] = useState(CONTINUOUS_FIELDS[0].key);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [open, setOpen] = useState(false);
@@ -155,6 +157,77 @@ export default function ArabicStudents() {
       toast.error(getLocalizedApiErrorMessage(error, t, "grades_save_failed"));
     } finally {
       setSaving(false);
+    }
+  };
+
+  const fillSelectedClassMaximum = () => {
+    if (classId === "all") {
+      toast.error(t("select_class_to_clear_scores"));
+      return;
+    }
+    if (!students.length) {
+      toast.error(t("no_data"));
+      return;
+    }
+    setValues((previous) => {
+      const next = { ...previous };
+      students.forEach((student) => {
+        next[student.id] = { ...next[student.id], [fillField]: 10 };
+      });
+      return next;
+    });
+    toast.success(t("fill_max_completed"));
+  };
+
+  const clearSelectedClassScores = async () => {
+    if (classId === "all") {
+      toast.error(t("select_class_to_clear_scores"));
+      return;
+    }
+    if (!students.length || !window.confirm(t("clear_selected_class_scores_confirm"))) return;
+    try {
+      await api.post("/arabic/weekly-scores/bulk", {
+        academic_year: academicYear,
+        semester: sem,
+        quarter,
+        week_number: weekNumber,
+        updates: students.map((student) => ({
+          student_id: student.id,
+          performance_tasks: null,
+          participation: null,
+          interaction: null,
+          attendance: null,
+        })),
+      });
+      toast.success(t("scores_cleared"));
+      await load();
+      window.dispatchEvent(new CustomEvent("students-updated"));
+    } catch (error) {
+      toast.error(getLocalizedApiErrorMessage(error, t, "grades_save_failed"));
+    }
+  };
+
+  const clearStudentScores = async (student) => {
+    if (!window.confirm(t("clear_student_scores_confirm").replace("{student}", student.full_name || ""))) return;
+    try {
+      await api.post("/arabic/weekly-scores/bulk", {
+        academic_year: academicYear,
+        semester: sem,
+        quarter,
+        week_number: weekNumber,
+        updates: [{
+          student_id: student.id,
+          performance_tasks: null,
+          participation: null,
+          interaction: null,
+          attendance: null,
+        }],
+      });
+      toast.success(t("student_scores_cleared"));
+      await load();
+      window.dispatchEvent(new CustomEvent("students-updated"));
+    } catch (error) {
+      toast.error(getLocalizedApiErrorMessage(error, t, "grades_save_failed"));
     }
   };
 
@@ -319,12 +392,19 @@ export default function ArabicStudents() {
           <Button onClick={saveScores} disabled={saving || loading || !students.length} className="active-glow" data-testid="arabic-weekly-save"><Save className="me-2 h-4 w-4" />{saving ? `${t("loading")}…` : t("save_all_scores")}</Button>
         </CardContent></Card>
 
+        <Card data-testid="arabic-weekly-smart-tools"><CardContent className="flex flex-wrap items-center gap-3 pt-6">
+          <Select value={fillField} onValueChange={setFillField}><SelectTrigger className="w-full sm:w-[260px]" data-testid="arabic-weekly-fill-field"><SelectValue /></SelectTrigger><SelectContent>{CONTINUOUS_FIELDS.map(({ key }) => <SelectItem key={key} value={key}>{t(key)} /10</SelectItem>)}</SelectContent></Select>
+          <Button type="button" variant="secondary" onClick={fillSelectedClassMaximum} disabled={classId === "all" || loading || !students.length} data-testid="arabic-weekly-fill-max"><Sparkles className="me-2 h-4 w-4" />{t("fill_max_selected_class")}</Button>
+          <Button type="button" variant="destructive" onClick={clearSelectedClassScores} disabled={classId === "all" || loading || !students.length} data-testid="arabic-weekly-clear-class"><Trash2 className="me-2 h-4 w-4" />{t("clear_selected_class_scores")}</Button>
+          <p className="basis-full text-xs text-muted-foreground">{t("fill_max_selected_class_hint")}</p>
+        </CardContent></Card>
+
         <Card><CardContent className="p-0"><div className="overflow-x-auto"><table className="w-full min-w-[1220px] text-sm"><thead className="bg-[#10162A] text-white"><tr><th className="sticky start-0 z-10 bg-[#10162A] p-3 text-start">{t("student")}</th><th className="p-3 text-start">{t("class")}</th>{CONTINUOUS_FIELDS.map(({ key }) => <th key={key} className="p-3 text-center">{t(key)} /10</th>)}<th className="p-3 text-center">{t("weekly_total")} /40</th><th className="p-3 text-center">{t("quarter_average")} /40</th><th className="p-3 text-center">{t("performance_level")}</th><th className="p-3 text-center">{t("actions")}</th></tr></thead><tbody>{filteredStudents.map((student) => {
           const current = values[student.id] || {};
           const total = weeklyTotal(current);
           const level = weeklyLevel(current);
           const rewards = getStudentRewards(student.id);
-          return <tr key={student.id} className="border-b hover:bg-cyan-50/50 dark:hover:bg-cyan-950/10" data-testid={`arabic-student-row-${student.id}`}><td className="sticky start-0 bg-background p-3 font-semibold"><span>{student.full_name}</span>{(rewards.badge || rewards.certificate || rewards.comment) && <div className="mt-1 flex flex-wrap gap-1 text-xs text-muted-foreground">{rewards.badge && <span>{t("badge")}</span>}{rewards.certificate && <span>{t("certificate")}</span>}{rewards.comment && <span>{t("comment")}</span>}</div>}</td><td className="p-3">{classMap[student.class_id] || student.class_name}</td>{CONTINUOUS_FIELDS.map(({ key, max }) => <td key={key} className="p-2"><Input type="number" min="0" max={max} step="0.5" value={current[key] ?? ""} onChange={(event) => updateScore(student.id, key, event.target.value, max)} placeholder="0-10" aria-label={`${student.full_name} ${t(key)}`} /></td>)}<td className="p-3 text-center font-bold">{total === null ? "—" : `${Number(total.toFixed(1))}/40`}</td><td className="p-3 text-center"><p className="font-bold text-violet-700 dark:text-violet-300">{student.quarter_continuous_average == null ? "—" : `${student.quarter_continuous_average}/40`}</p><p className="text-xs text-muted-foreground">{t("weeks_recorded").replace("{count}", String(student.weeks_with_scores || 0))}</p></td><td className="p-3 text-center"><PerformanceLevelBadge level={level} label={t(level)} /></td><td className="p-3 text-center"><DropdownMenu><DropdownMenuTrigger asChild><Button variant="outline" size="icon" data-testid={`arabic-student-actions-${student.id}`}><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger><DropdownMenuContent align="end"><DropdownMenuItem disabled={rewardBusy} onClick={() => toggleReward(student, "badge")}><Award className="me-2 h-4 w-4" />{t("badge")}</DropdownMenuItem><DropdownMenuItem onClick={() => toggleReward(student, "certificate")}><FileText className="me-2 h-4 w-4" />{t("certificate")}</DropdownMenuItem><DropdownMenuItem onClick={() => toggleReward(student, "comment")}><MessageCircle className="me-2 h-4 w-4" />{t("comment")}</DropdownMenuItem>{isAdmin && <><DropdownMenuSeparator /><DropdownMenuItem onClick={() => { setTransferStudent(student); setTransferClassId(""); }}><UserRoundCog className="me-2 h-4 w-4" />{t("transfer_student")}</DropdownMenuItem><DropdownMenuItem className="text-destructive" onClick={() => remove(student)}><Trash2 className="me-2 h-4 w-4" />{t("delete_student")}</DropdownMenuItem></>}</DropdownMenuContent></DropdownMenu></td></tr>;
+          return <tr key={student.id} className="border-b hover:bg-cyan-50/50 dark:hover:bg-cyan-950/10" data-testid={`arabic-student-row-${student.id}`}><td className="sticky start-0 bg-background p-3 font-semibold"><span>{student.full_name}</span>{(rewards.badge || rewards.certificate || rewards.comment) && <div className="mt-1 flex flex-wrap gap-1 text-xs text-muted-foreground">{rewards.badge && <span>{t("badge")}</span>}{rewards.certificate && <span>{t("certificate")}</span>}{rewards.comment && <span>{t("comment")}</span>}</div>}</td><td className="p-3">{classMap[student.class_id] || student.class_name}</td>{CONTINUOUS_FIELDS.map(({ key, max }) => <td key={key} className="p-2"><Input type="number" min="0" max={max} step="0.5" value={current[key] ?? ""} onChange={(event) => updateScore(student.id, key, event.target.value, max)} placeholder="0-10" aria-label={`${student.full_name} ${t(key)}`} /></td>)}<td className="p-3 text-center font-bold">{total === null ? "—" : `${Number(total.toFixed(1))}/40`}</td><td className="p-3 text-center"><p className="font-bold text-violet-700 dark:text-violet-300">{student.quarter_continuous_average == null ? "—" : `${student.quarter_continuous_average}/40`}</p><p className="text-xs text-muted-foreground">{t("weeks_recorded").replace("{count}", String(student.weeks_with_scores || 0))}</p></td><td className="p-3 text-center"><PerformanceLevelBadge level={level} label={t(level)} /></td><td className="p-3 text-center"><div className="flex items-center justify-center gap-2"><StudentScoreClearButton t={t} studentName={student.full_name} onClear={() => clearStudentScores(student)} testId={`arabic-weekly-clear-student-${student.id}`} /><DropdownMenu><DropdownMenuTrigger asChild><Button variant="outline" size="icon" data-testid={`arabic-student-actions-${student.id}`}><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger><DropdownMenuContent align="end"><DropdownMenuItem disabled={rewardBusy} onClick={() => toggleReward(student, "badge")}><Award className="me-2 h-4 w-4" />{t("badge")}</DropdownMenuItem><DropdownMenuItem onClick={() => toggleReward(student, "certificate")}><FileText className="me-2 h-4 w-4" />{t("certificate")}</DropdownMenuItem><DropdownMenuItem onClick={() => toggleReward(student, "comment")}><MessageCircle className="me-2 h-4 w-4" />{t("comment")}</DropdownMenuItem>{isAdmin && <><DropdownMenuSeparator /><DropdownMenuItem onClick={() => { setTransferStudent(student); setTransferClassId(""); }}><UserRoundCog className="me-2 h-4 w-4" />{t("transfer_student")}</DropdownMenuItem><DropdownMenuItem className="text-destructive" onClick={() => remove(student)}><Trash2 className="me-2 h-4 w-4" />{t("delete_student")}</DropdownMenuItem></>}</DropdownMenuContent></DropdownMenu></div></td></tr>;
         })}</tbody></table></div>{!loading && !filteredStudents.length && <p className="p-8 text-center text-muted-foreground">{t("no_data")}</p>}</CardContent></Card>
 
         <Dialog open={open} onOpenChange={setOpen}><DialogContent><DialogHeader><DialogTitle>{t("add_student")}</DialogTitle></DialogHeader><div className="grid gap-4"><Input value={fullName} onChange={(event) => setFullName(event.target.value)} placeholder={t("full_name")} autoFocus /><Select value={newClassId} onValueChange={setNewClassId}><SelectTrigger><SelectValue placeholder={t("select_class")} /></SelectTrigger><SelectContent>{sortedClasses.map((item) => <SelectItem key={item.id} value={item.id}>{item.name}</SelectItem>)}</SelectContent></Select></div><DialogFooter><Button variant="outline" onClick={() => setOpen(false)}>{t("cancel")}</Button><Button onClick={create}>{t("create")}</Button></DialogFooter></DialogContent></Dialog>

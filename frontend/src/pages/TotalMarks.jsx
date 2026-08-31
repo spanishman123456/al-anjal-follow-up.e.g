@@ -25,6 +25,7 @@ import { Button } from "@/components/ui/button";
 import { sortByClassOrder } from "@/lib/utils";
 import { quarterExamColumnLabels } from "@/lib/academicScope";
 import { buildAcademicExportFilename } from "@/lib/exportFilenames";
+import { StudentScoreClearButton } from "@/components/StudentScoreClearButton";
 
 const toNumberOrNull = (value) => {
   if (value === null || value === undefined || value === "") return null;
@@ -326,12 +327,13 @@ export default function TotalMarks() {
   };
 
   const applyFillColumn = (field, fillField, max) => {
-    const raw = fillValues[fillField];
-    if (raw === "" || raw === null || raw === undefined) {
-      toast.error(t("enter_value_to_fill") || "Enter a value to fill");
+    if (filterClass === "all") {
+      toast.error(t("select_class_to_clear_scores"));
       return;
     }
-    const num = Number(raw);
+    const raw = fillValues[fillField];
+    const resolvedRaw = raw === "" || raw === null || raw === undefined ? String(max) : raw;
+    const num = Number(resolvedRaw);
     if (Number.isNaN(num) || num < 0) {
       toast.error(t("enter_valid_value") || "Enter a valid number");
       return;
@@ -344,7 +346,7 @@ export default function TotalMarks() {
     setBulkScores((prev) => {
       const next = { ...prev };
       rows.forEach((student) => {
-        next[student.id] = { ...next[student.id], [field]: raw };
+        next[student.id] = { ...next[student.id], [field]: resolvedRaw };
       });
       return next;
     });
@@ -393,18 +395,16 @@ export default function TotalMarks() {
     }
   };
 
-  const clearScores = async (allClasses) => {
+  const clearScores = async () => {
     if (!activeWeekId) {
       toast.error(t("select_week_before_import") || "Please select a week first.");
       return;
     }
-    if (!allClasses && filterClass === "all") {
+    if (filterClass === "all") {
       toast.error(t("select_class_to_clear_scores") || "Please select a class first.");
       return;
     }
-    const targetStudents = allClasses
-      ? students
-      : students.filter((student) => student.class_id === filterClass);
+    const targetStudents = students.filter((student) => student.class_id === filterClass);
     if (!targetStudents.length) {
       toast.error(t("no_data"));
       return;
@@ -425,7 +425,40 @@ export default function TotalMarks() {
       await api.post("/students/bulk-scores", { updates, week_id: activeWeekId }, { timeout: BULK_SAVE_TIMEOUT_MS });
       setBulkScores({});
       setBulkEditMode(false);
-      toast.success(allClasses ? t("scores_cleared_all_classes") : t("scores_cleared"));
+      toast.success(t("scores_cleared"));
+      window.dispatchEvent(new CustomEvent("students-updated"));
+      loadData(activeWeekId);
+    } catch (error) {
+      toast.error(getApiErrorMessage(error) || t("student_update_failed"));
+    }
+  };
+
+  const clearStudentScores = async (student) => {
+    if (!activeWeekId) {
+      toast.error(t("select_week_before_import"));
+      return;
+    }
+    if (!window.confirm(t("clear_student_scores_confirm").replace("{student}", student.full_name || ""))) return;
+    const updates = [{
+      id: student.id,
+      attendance: null,
+      participation: null,
+      behavior: null,
+      homework: null,
+      [quarterConfig.quizPrimaryField]: null,
+      [quarterConfig.quizSecondaryField]: null,
+      [quarterConfig.chapterField]: null,
+      [quarterConfig.examPracticalField]: null,
+      [quarterConfig.examTheoryField]: null,
+    }];
+    try {
+      await api.post("/students/bulk-scores", { updates, week_id: activeWeekId }, { timeout: BULK_SAVE_TIMEOUT_MS });
+      setBulkScores((prev) => {
+        const next = { ...prev };
+        delete next[student.id];
+        return next;
+      });
+      toast.success(t("student_scores_cleared"));
       window.dispatchEvent(new CustomEvent("students-updated"));
       loadData(activeWeekId);
     } catch (error) {
@@ -592,20 +625,12 @@ export default function TotalMarks() {
             <Button
               variant="outline"
               onClick={() => {
-                if (window.confirm(t("clear_scores_confirm"))) clearScores(false);
+                if (window.confirm(t("clear_selected_class_scores_confirm"))) clearScores();
               }}
+              disabled={filterClass === "all"}
               data-testid="total-marks-clear-scores"
             >
-              {t("clear_scores")}
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={() => {
-                if (window.confirm(t("clear_scores_all_classes_confirm"))) clearScores(true);
-              }}
-              data-testid="total-marks-clear-all"
-            >
-              {t("clear_scores_all_classes")}
+              {t("clear_selected_class_scores")}
             </Button>
           </div>
         }
@@ -690,11 +715,11 @@ export default function TotalMarks() {
                 <TableHead className="text-center">{examColumnLabels.practical} (10)</TableHead>
                 <TableHead className="text-center">{examColumnLabels.theoretical} (10)</TableHead>
                 <TableHead className="text-center">{t("total_marks_overall")} (50)</TableHead>
+                <TableHead className="text-center">{t("actions")}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {bulkEditMode && (
-                <TableRow className="bg-muted/50">
+              <TableRow className="bg-muted/50" data-testid="total-marks-fill-row">
                   <TableCell colSpan={2} className="text-muted-foreground text-sm py-2">
                     {t("fill_column")}:
                   </TableCell>
@@ -819,9 +844,8 @@ export default function TotalMarks() {
                       </Button>
                     </div>
                   </TableCell>
-                  <TableCell />
+                  <TableCell colSpan={2} />
                 </TableRow>
-              )}
               {rows.length ? (
                 rows.map((student) => (
                   <TableRow key={student.id} data-testid={`total-marks-row-${student.id}`}>
@@ -930,11 +954,14 @@ export default function TotalMarks() {
                       </p>
                     </TableCell>
                     <TableCell className="text-center font-semibold">{formatScore(student.total)}</TableCell>
+                    <TableCell className="text-center">
+                      <StudentScoreClearButton t={t} studentName={student.full_name} onClear={() => clearStudentScores(student)} testId={`total-marks-clear-student-${student.id}`} />
+                    </TableCell>
                   </TableRow>
                 ))
               ) : (
                 <TableRow>
-                  <TableCell colSpan={10} className="text-center text-muted-foreground">
+                  <TableCell colSpan={11} className="text-center text-muted-foreground">
                     {t("no_data")}
                   </TableCell>
                 </TableRow>

@@ -21,6 +21,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { ScoreSheetImportControl } from "@/components/ScoreSheetImportControl";
 import { LoadErrorCard } from "@/components/LoadErrorCard";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { StudentScoreClearButton } from "@/components/StudentScoreClearButton";
 
 const semesterNumber = (semester) => (semester === "semester2" ? 2 : 1);
 
@@ -181,6 +182,31 @@ export default function ArabicGrades() {
     }
   };
 
+  const clearStudentGrades = async (student) => {
+    if (!window.confirm(t("clear_student_scores_confirm").replace("{student}", student.full_name || ""))) return;
+    try {
+      await api.post("/arabic/grades/bulk", {
+        academic_year: academicYear,
+        semester: sem,
+        quarter,
+        updates: [{
+          student_id: student.id,
+          theory_test_1: null,
+          theory_test_2: null,
+          practical_test: null,
+        }],
+      });
+      setValues((previous) => ({
+        ...previous,
+        [student.id]: { theory_test_1: null, theory_test_2: null, practical_test: null },
+      }));
+      toast.success(t("student_scores_cleared"));
+      window.dispatchEvent(new CustomEvent("students-updated"));
+    } catch (error) {
+      toast.error(getLocalizedApiErrorMessage(error, t, "grades_save_failed"));
+    }
+  };
+
   const download = async (format) => {
     try {
       const response = await api.get("/arabic/reports/export", {
@@ -326,12 +352,12 @@ export default function ArabicGrades() {
         <CardContent className="p-0">
           <div className="overflow-x-auto">
             <table className="w-full min-w-[1220px] text-sm">
-              <thead className="bg-[#10162A] text-white"><tr><th className="sticky start-0 z-10 bg-[#10162A] p-3 text-start">{t("student")}</th><th className="p-3 text-start">{t("class")}</th><th className="p-3 text-center">{t("continuous_assessment")} /40</th>{ARABIC_EXAM_FIELDS.map((key) => <th key={key} className="p-3 text-center">{t(key)} ({t("raw_score")})</th>)}<th className="p-3 text-center">{t("best_theory")} /30</th><th className="p-3 text-center">{t("practical_weighted")} /30</th><th className="p-3 text-center">/60</th><th className="p-3 text-center">/100</th></tr></thead>
+              <thead className="bg-[#10162A] text-white"><tr><th className="sticky start-0 z-10 bg-[#10162A] p-3 text-start">{t("student")}</th><th className="p-3 text-start">{t("class")}</th><th className="p-3 text-center">{t("continuous_assessment")} /40</th>{ARABIC_EXAM_FIELDS.map((key) => <th key={key} className="p-3 text-center">{t(key)} ({t("raw_score")})</th>)}<th className="p-3 text-center">{t("best_theory")} /30</th><th className="p-3 text-center">{t("practical_weighted")} /30</th><th className="p-3 text-center">/60</th><th className="p-3 text-center">/100</th><th className="p-3 text-center">{t("actions")}</th></tr></thead>
               <tbody>
                 {rows.map((student) => {
                   const current = values[student.id] || {};
                   const calculated = calculateArabicQuarter(current, student.exam_raw_max, student.continuous_total);
-                  return <tr key={student.id} className="border-b transition-colors hover:bg-cyan-50/50 dark:hover:bg-cyan-950/10"><td className="sticky start-0 bg-background p-3 font-semibold">{student.full_name}</td><td className="p-3"><p>{student.class_name}</p><p className="text-xs text-muted-foreground">{t(student.educational_stage)} · /{student.exam_raw_max}</p></td><td className="p-3 text-center"><p className="text-lg font-bold text-violet-700 dark:text-violet-300">{formatArabicScore(student.continuous_total)}</p><p className="text-xs text-muted-foreground">{t("arabic_weekly_average_hint").replace("{count}", String(student.weeks_with_scores || 0))}</p></td>{ARABIC_EXAM_FIELDS.map((key) => <td key={key} className="p-2"><div className="flex items-center gap-1"><Input type="number" min="0" max={student.exam_raw_max} step="0.5" value={current[key] ?? ""} onChange={(event) => updateValue(student.id, key, event.target.value, student.exam_raw_max)} className={current[key] !== null && current[key] !== undefined ? "border-emerald-400/60 shadow-[0_0_12px_rgba(16,185,129,0.12)]" : ""} aria-label={`${student.full_name} ${t(key)}`} /><span className="text-xs text-muted-foreground">/{student.exam_raw_max}</span></div></td>)}<td className="p-3 text-center font-semibold">{formatArabicScore(calculated.bestTheoryWeighted)}</td><td className="p-3 text-center font-semibold">{formatArabicScore(calculated.practicalWeighted)}</td><td className="p-3 text-center font-semibold">{formatArabicScore(calculated.testsTotal)}</td><td className="p-3 text-center text-lg font-bold text-cyan-700 dark:text-cyan-300">{formatArabicScore(calculated.quarterTotal)}</td></tr>;
+                  return <tr key={student.id} className="border-b transition-colors hover:bg-cyan-50/50 dark:hover:bg-cyan-950/10"><td className="sticky start-0 bg-background p-3 font-semibold">{student.full_name}</td><td className="p-3"><p>{student.class_name}</p><p className="text-xs text-muted-foreground">{t(student.educational_stage)} · /{student.exam_raw_max}</p></td><td className="p-3 text-center"><p className="text-lg font-bold text-violet-700 dark:text-violet-300">{formatArabicScore(student.continuous_total)}</p><p className="text-xs text-muted-foreground">{t("arabic_weekly_average_hint").replace("{count}", String(student.weeks_with_scores || 0))}</p></td>{ARABIC_EXAM_FIELDS.map((key) => <td key={key} className="p-2"><div className="flex items-center gap-1"><Input type="number" min="0" max={student.exam_raw_max} step="0.5" value={current[key] ?? ""} onChange={(event) => updateValue(student.id, key, event.target.value, student.exam_raw_max)} className={current[key] !== null && current[key] !== undefined ? "border-emerald-400/60 shadow-[0_0_12px_rgba(16,185,129,0.12)]" : ""} aria-label={`${student.full_name} ${t(key)}`} /><span className="text-xs text-muted-foreground">/{student.exam_raw_max}</span></div></td>)}<td className="p-3 text-center font-semibold">{formatArabicScore(calculated.bestTheoryWeighted)}</td><td className="p-3 text-center font-semibold">{formatArabicScore(calculated.practicalWeighted)}</td><td className="p-3 text-center font-semibold">{formatArabicScore(calculated.testsTotal)}</td><td className="p-3 text-center text-lg font-bold text-cyan-700 dark:text-cyan-300">{formatArabicScore(calculated.quarterTotal)}</td><td className="p-3 text-center"><StudentScoreClearButton t={t} studentName={student.full_name} onClear={() => clearStudentGrades(student)} testId={`arabic-grades-clear-student-${student.id}`} /></td></tr>;
                 })}
               </tbody>
             </table>

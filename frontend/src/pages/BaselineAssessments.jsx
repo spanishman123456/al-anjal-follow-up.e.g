@@ -14,6 +14,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { ScoreSheetImportControl } from "@/components/ScoreSheetImportControl";
 import { importStudentsWithPreview } from "@/lib/studentEnrollmentImport";
+import { StudentScoreClearButton } from "@/components/StudentScoreClearButton";
 
 const selectStyle = "h-11 w-full min-w-0 rounded-xl border border-input bg-background px-3 text-sm text-foreground";
 const draftKey = (user, record) => `baseline-draft:${user}:${record}`;
@@ -145,6 +146,7 @@ function BaselinePage({ context, view }) {
   }
   async function clearVisibleSavedMarks() {
     if (busyRef.current || !snapshot || dirty || invalid || conflict) return;
+    if (!classId) { toast.error(t("select_class_to_clear_scores")); return; }
     const changes = recordedBaselineMarksToClear(visibleRows);
     const count = Object.keys(changes).length;
     if (!count) { toast.error(t("baseline_no_recorded_marks")); return; }
@@ -155,6 +157,18 @@ function BaselinePage({ context, view }) {
     try {
       await api.patch(`/baseline-assessments/${recordId}/scores`, { revision: snapshot.record.revision, scores: changes });
       removeDraft(storageKey); toast.success(`${t("baseline_clear_all_done")}: ${count}`); setTick((value) => value + 1); setListTick((value) => value + 1);
+    } catch (e) {
+      if (e?.response?.status === 409) setConflict(true);
+      toast.error(errorMessage(e, "baseline_save_failed"));
+    } finally { busyRef.current = false; setBusy(false); }
+  }
+  async function clearStudentSavedMark(student) {
+    if (busyRef.current || !snapshot || dirty || invalid || conflict || student.score == null) return;
+    if (!window.confirm(t("clear_student_scores_confirm").replace("{student}", student.full_name || ""))) return;
+    busyRef.current = true; setBusy(true);
+    try {
+      await api.patch(`/baseline-assessments/${recordId}/scores`, { revision: snapshot.record.revision, scores: { [student.id]: null } });
+      removeDraft(storageKey); toast.success(t("student_scores_cleared")); setTick((value) => value + 1); setListTick((value) => value + 1);
     } catch (e) {
       if (e?.response?.status === 409) setConflict(true);
       toast.error(errorMessage(e, "baseline_save_failed"));
@@ -308,7 +322,7 @@ function BaselinePage({ context, view }) {
     </div><p className="text-sm text-muted-foreground">{t("score_sheet_columns_hint")}</p>{dirty && <p className="text-sm font-medium text-amber-600">{t("score_sheet_save_first")}</p>}</CardContent></Card>}
     {!analytics && snapshot && !loading && <Card data-testid="baseline-smart-tools"><CardHeader className="pb-3"><CardTitle className="flex items-center gap-2"><Sparkles className="h-5 w-5 text-primary" />{t("baseline_smart_tools")}</CardTitle><p className="text-sm leading-7 text-muted-foreground">{t("baseline_smart_tools_hint")}</p></CardHeader><CardContent className="flex flex-wrap gap-3">
       <Button type="button" variant="secondary" onClick={fillVisibleMaximum} disabled={busy || !visibleRows.length || conflict} data-testid="baseline-fill-maximum"><Sparkles className="me-2 h-4 w-4" />{t("baseline_fill_max")}</Button>
-      <Button type="button" variant="destructive" onClick={clearVisibleSavedMarks} disabled={busy || dirty || invalid || conflict || !visibleRows.some((student) => student.score != null)} data-testid="baseline-clear-recorded"><Eraser className="me-2 h-4 w-4" />{t("baseline_clear_all")}</Button>
+      <Button type="button" variant="destructive" onClick={clearVisibleSavedMarks} disabled={busy || dirty || invalid || conflict || !classId || !visibleRows.some((student) => student.score != null)} data-testid="baseline-clear-recorded"><Eraser className="me-2 h-4 w-4" />{t("clear_selected_class_scores")}</Button>
       {dirty && <p className="basis-full text-sm font-medium text-amber-600">{t("baseline_clear_save_first")}</p>}
     </CardContent></Card>}
     {error && <div role="alert" className="rounded-xl border border-rose-300 p-4 text-rose-600">{error}<Button variant="outline" className="ms-3" onClick={reload}>{t("baseline_reload")}</Button></div>}
@@ -317,9 +331,9 @@ function BaselinePage({ context, view }) {
     {records?.length === 0 && <Card><CardContent className="py-12 text-center text-muted-foreground">{t("baseline_empty")}</CardContent></Card>}
     {snapshot && !loading && <>
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4"><MetricCard className="bg-card text-card-foreground" icon={Users} label={labels.total} value={snapshot.stats.total} /><MetricCard className="bg-card text-card-foreground" icon={CheckCircle2} label={labels.graded} value={<bdi dir="ltr">{snapshot.stats.graded} / {snapshot.stats.total}</bdi>} /><MetricCard className="bg-card text-card-foreground" icon={Percent} accent="primary" label={labels.mean} value={baselinePercent(snapshot.stats.mean)} /><MetricCard className="bg-card text-card-foreground" icon={BarChart3} accent="success" label={labels.completion} value={baselinePercent(snapshot.stats.completion)} /></div>
-      {!analytics ? <Card><CardHeader className="gap-3"><div className="flex flex-wrap items-center justify-between gap-3"><CardTitle>{t("baseline_entry")} · {t("baseline_max")}: {snapshot.record.max_score}</CardTitle><Button onClick={save} disabled={busy || !dirty || invalid || conflict}><Save className="me-2 h-4 w-4" />{t(busy ? "baseline_saving" : "baseline_save")}</Button></div><p className="text-sm text-muted-foreground">{labels.rules}</p><p className="text-xs text-muted-foreground">{t("baseline_roster_hint")}</p>{dirty && <p role="status" className="text-sm font-bold text-amber-600">{t("baseline_dirty")}</p>}{invalid && <p role="alert" className="text-sm text-rose-600">{t("baseline_invalid_score")}</p>}</CardHeader><CardContent><div className="overflow-x-auto"><table className="w-full text-start text-sm"><thead><tr>{[labels.student, labels.class, labels.score, labels.percent, labels.level].map((l) => <th key={l} className="p-3 text-start">{l}</th>)}</tr></thead><tbody>{visibleRows.map((s) => {
+      {!analytics ? <Card><CardHeader className="gap-3"><div className="flex flex-wrap items-center justify-between gap-3"><CardTitle>{t("baseline_entry")} · {t("baseline_max")}: {snapshot.record.max_score}</CardTitle><Button onClick={save} disabled={busy || !dirty || invalid || conflict}><Save className="me-2 h-4 w-4" />{t(busy ? "baseline_saving" : "baseline_save")}</Button></div><p className="text-sm text-muted-foreground">{labels.rules}</p><p className="text-xs text-muted-foreground">{t("baseline_roster_hint")}</p>{dirty && <p role="status" className="text-sm font-bold text-amber-600">{t("baseline_dirty")}</p>}{invalid && <p role="alert" className="text-sm text-rose-600">{t("baseline_invalid_score")}</p>}</CardHeader><CardContent><div className="overflow-x-auto"><table className="w-full text-start text-sm"><thead><tr>{[labels.student, labels.class, labels.score, labels.percent, labels.level, t("actions")].map((l) => <th key={l} className="p-3 text-start">{l}</th>)}</tr></thead><tbody>{visibleRows.map((s) => {
         let isInvalid = false; try { parseBaselineMark(values[s.id], snapshot.record.max_score); } catch { isInvalid = true; }
-        return <tr key={s.id} className="border-b"><td className="p-3">{s.full_name}</td><td className="p-3">{s.class_name}</td><td className="p-3"><Input type="text" inputMode="decimal" aria-label={`${labels.score}: ${s.full_name}`} aria-invalid={isInvalid} disabled={busy || conflict} className="w-28" value={values[s.id] ?? ""} onChange={(e) => changeMark(s.id, e.target.value)} /></td><td className="p-3 tabular-nums">{baselinePercent(s.percentage)}</td><td className="p-3 font-bold" style={{ color: BASELINE_COLORS[s.level] }}>{s.level_label}</td></tr>;
+        return <tr key={s.id} className="border-b"><td className="p-3">{s.full_name}</td><td className="p-3">{s.class_name}</td><td className="p-3"><Input type="text" inputMode="decimal" aria-label={`${labels.score}: ${s.full_name}`} aria-invalid={isInvalid} disabled={busy || conflict} className="w-28" value={values[s.id] ?? ""} onChange={(e) => changeMark(s.id, e.target.value)} /></td><td className="p-3 tabular-nums">{baselinePercent(s.percentage)}</td><td className="p-3 font-bold" style={{ color: BASELINE_COLORS[s.level] }}>{s.level_label}</td><td className="p-3"><StudentScoreClearButton t={t} studentName={s.full_name} onClear={() => clearStudentSavedMark(s)} disabled={busy || dirty || conflict || s.score == null} testId={`baseline-clear-student-${s.id}`} /></td></tr>;
       })}</tbody></table></div></CardContent></Card> : <>
         <div className="flex flex-wrap gap-2" role="tablist" aria-label={t("baseline_analysis")}>{["overview", "individual", "report"].map((item) => <Button key={item} role="tab" aria-selected={tab === item} variant={tab === item ? "default" : "outline"} onClick={() => setTab(item)}>{t(`baseline_${item}`)}</Button>)}</div>
         <label className="block max-w-xl space-y-2 rounded-2xl border bg-card p-4 text-sm text-card-foreground">{t("baseline_student")}<select className={selectStyle} value={selected?.id || ""} disabled={!rows.length} onChange={(e) => setStudentId(e.target.value)}>{rows.map((s) => <option key={s.id} value={s.id}>{s.full_name} · {s.class_name}</option>)}</select></label>

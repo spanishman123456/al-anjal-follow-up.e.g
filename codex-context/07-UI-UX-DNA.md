@@ -54,6 +54,8 @@ Note: Root `design_guidelines.json` describes an older “EduTrack Pro / Swiss U
 - Recharts on web; Matplotlib in PDF.
 - VisualBoard shared palette for Analytics/Reports consistency.
 - Arabic Dashboard and Analytics share the International product's polished card/chart language while aggregating only the selected Arabic quarter `/100`. Arabic Analytics follows the same class-first, then optional-student selection workflow and uses the adopted proportional performance bands rather than neutral score buckets.
+- Arabic Analytics now carries the same dense decision-support structure as International Analytics: completion cards, donut distributions, class and student bars, normalized per-test comparison, weighted component contribution, top/support lists, narrative insight rows, and a detailed student table. Student selection remains disabled until one class is selected.
+- Score-entry tables use a compact red eraser icon in the Actions column for one-student clearing. Bulk destructive wording always names the selected class; all-classes score-clear buttons are intentionally absent. Blank fill inputs act as a shortcut to the column maximum only after an exact class is selected.
 - Analytics/Reports PDFs share `pdf_report_engine.py` cover, KPI, insight, section-heading, table, compact empty-state, and footer components. Charts are emitted only when their dataset is meaningful; long tables repeat headers and Arabic reports embed Amiri with RTL shaping.
 
 ## Reuse before inventing

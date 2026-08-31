@@ -146,8 +146,13 @@ describe("baseline page", () => {
     await act(async () => button("Save marks").click());
     expect(api.patch).toHaveBeenCalledWith("/baseline-assessments/r1/scores", { revision: 1, scores: { s1: 20, s2: 20, s3: 20 } });
   });
-  it("clears all saved marks in the visible scope with one confirmed action", async () => {
+  it("clears saved marks only after selecting an exact class", async () => {
     await render();
+    const classSelect = container.querySelectorAll("select")[1];
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value").set.call(classSelect, "c1");
+      classSelect.dispatchEvent(new Event("change", { bubbles: true }));
+    });
     await act(async () => container.querySelector('[data-testid="baseline-clear-recorded"]').click());
     expect(window.confirm).toHaveBeenCalledWith(expect.stringContaining("Students affected: 2"));
     expect(api.patch).toHaveBeenCalledWith("/baseline-assessments/r1/scores", { revision: 1, scores: { s1: null, s3: null } });

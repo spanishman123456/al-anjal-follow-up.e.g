@@ -220,3 +220,15 @@ Format: Decision → Context → Why → Status → Codex Guidance.
 **UX/Safety:** Arabic student management now provides class/week filters, performance and quarter-average columns, student actions, and the existing promotion workflow. Arabic analytics follows class selection then student selection. Class screens expose only exact-class deletion; section-wide “delete all classes” controls are removed while the exact-class server guards remain authoritative.
 **Status:** Active.
 **Codex Guidance:** Use the isolated official-source adapter, strict validation, versioned activation, and last-good cache. Never delete active events before a new version succeeds.
+
+## Decision: Score clearing is exact-class or one-student only (2026-08-31)
+
+**Context:** The score-entry heroes exposed an all-classes clear action, making a single mistaken confirmation capable of removing every class's marks in the active scope. Teachers also lacked a direct way to correct one student's recorded scores.
+
+**Decision:** Remove all all-classes score-clear controls from International weekly, assessment, final and total matrices. Require an exact selected class for every bulk clear and maximum-fill action. Add one-student erasers to every International matrix, Arabic weekly entry, Arabic quarter exams and baseline/diagnostic entry. Roster deletion remains separate and unchanged.
+
+**Safety:** A recorded zero remains a score; clearing writes explicit `null`. Scope always includes the active week or academic year/semester/quarter/record revision. Arabic exam clearing never deletes weekly `/40` history. Backend compatibility routes may remain, but the product UI must not expose an unscoped all-classes trigger.
+
+## Decision: Arabic Analytics has International-level visual depth (2026-08-31)
+
+**Decision:** Keep the Arabic `/100` data source and proportional thresholds, but present it through the same class-first/optional-student analysis pattern and a comparable chart density: completion, distribution donut, class averages, `/40 + /30 + /30`, normalized raw attempts, contribution donut, student totals, class completion, top/support lists and detailed rows.

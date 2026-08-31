@@ -34,7 +34,7 @@ See `12-WORKFLOWS.md` (enroll, edit weekly scores, import, transfer).
 3. Bulk save and blur-save paths must not race (pages use request id guards).
 4. Import must tolerate Arabic/English header aliases (CONFIRMED intent in PRD + import code).
 5. Arabic enrollment import requires one exact selected class, recognizes `الاسم` and `رقم الهوية`, rejects numeric-only names/duplicate identities/class conflicts before any write, and can repair the legacy failure mode where an identity number was stored as `full_name` in the wrong Arabic class.
-6. Destructive “clear all scores” / delete-all operations are Admin-grade. Class-roster deletion requires an exact selected class and a destructive confirmation; never connect a class button to the unscoped section-wide delete.
+6. Score-entry pages never expose a “clear every class” action. Bulk score clearing requires one exact selected class, while every supported matrix also exposes a per-student score eraser for the current assessment scope. Class-roster deletion remains a separate Admin-only, exact-class, destructive-confirmed action; never connect a score-clear button to roster deletion or an unscoped section-wide delete.
 7. The global `school_section` scope defaults to International for existing users/data. Class/student create, transfer, promotion, import, bulk delete, and grade writes must not cross sections.
 8. Arabic students use `/arabic/weekly-scores` for the four weekly `/10` components and the dedicated quarter editor for the three exam attempts. Never send them through International bulk-score endpoints.
 9. Arabic promotion reuses the existing section-scoped promotion API. Transfer/promotion changes current enrollment only and must preserve historical weekly and quarter records.

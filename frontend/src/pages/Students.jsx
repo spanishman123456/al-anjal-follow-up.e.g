@@ -45,6 +45,7 @@ import { AssessmentPageFooter } from "@/components/AssessmentPageFooter";
 import { buildAcademicExportFilename } from "@/lib/exportFilenames";
 import "@/reward-modal.css";
 import { PerformanceLevelBadge } from "@/components/PerformanceLevelBadge";
+import { StudentScoreClearButton } from "@/components/StudentScoreClearButton";
 
 const normalizeRewardPerformance = (value) => {
   const compact = String(value || "")
@@ -235,7 +236,6 @@ export default function Students() {
   const [bulkScores, setBulkScores] = useState({});
   const [bulkConfirmOpen, setBulkConfirmOpen] = useState(false);
   const [clearScoresOpen, setClearScoresOpen] = useState(false);
-  const [clearAllScoresOpen, setClearAllScoresOpen] = useState(false);
   const [deleteWeekOpen, setDeleteWeekOpen] = useState(false);
   const [addWeekDialogOpen, setAddWeekDialogOpen] = useState(false);
   const [addWeekLabel, setAddWeekLabel] = useState("");
@@ -942,11 +942,11 @@ export default function Students() {
 
   const handleFillColumn = (field) => {
     const max = MARKS_MAX[field];
-    const raw = fillValues[field];
-    if (raw === "" || raw === null || raw === undefined) {
-      toast.error(t("enter_value_to_fill") || "Enter a value to fill");
+    if (filterClass === "all") {
+      toast.error(t("select_class_to_clear_scores"));
       return;
     }
+    const raw = fillValues[field] === "" || fillValues[field] == null ? String(max) : fillValues[field];
     const num = Number(raw);
     if (Number.isNaN(num) || num < 0) {
       toast.error(t("enter_valid_value") || "Enter a valid number");
@@ -1035,31 +1035,30 @@ export default function Students() {
     }
   };
 
-  const handleClearAllScores = async () => {
-    setClearAllScoresOpen(false);
+  const handleClearStudentScores = async (student) => {
     if (!activeWeekId || !weeks.some((w) => w.id === activeWeekId)) {
       toast.error(t("select_week_from_current_semester") || "Please select a week from the current semester.");
       return;
     }
-    const updates = students.map((student) => ({
+    if (!window.confirm(t("clear_student_scores_confirm").replace("{student}", student.full_name))) return;
+    const updates = [{
       id: student.id,
       attendance: null,
       participation: null,
       behavior: null,
       homework: null,
-    }));
-    if (!updates.length) {
-      toast.error(t("no_data"));
-      return;
-    }
+    }];
     try {
       await api.post("/students/bulk-scores", {
         updates,
         week_id: activeWeekId || undefined,
       }, { timeout: BULK_SAVE_TIMEOUT_MS });
-      setBulkEditMode(false);
-      setBulkScores({});
-      toast.success(t("scores_cleared_all_classes"));
+      setBulkScores((previous) => {
+        const next = { ...previous };
+        delete next[student.id];
+        return next;
+      });
+      toast.success(t("student_scores_cleared").replace("{student}", student.full_name));
       window.dispatchEvent(new CustomEvent("students-updated"));
       loadData(activeWeekId);
     } catch (error) {
@@ -1109,16 +1108,10 @@ export default function Students() {
                   <Button
                     variant="outline"
                     onClick={() => setClearScoresOpen(true)}
+                    disabled={filterClass === "all"}
                     data-testid="clear-scores-button"
                   >
-                    {t("clear_scores")}
-                  </Button>
-                  <Button
-                    variant="destructive"
-                    onClick={() => setClearAllScoresOpen(true)}
-                    data-testid="clear-all-scores-button"
-                  >
-                    {t("clear_scores_all_classes")}
+                    {t("clear_selected_class_scores")}
                   </Button>
                 </>
               )}
@@ -1153,16 +1146,10 @@ export default function Students() {
                   <Button
                     variant="outline"
                     onClick={() => setClearScoresOpen(true)}
+                    disabled={filterClass === "all"}
                     data-testid="clear-scores-button"
                   >
-                    {t("clear_scores")}
-                  </Button>
-                  <Button
-                    variant="destructive"
-                    onClick={() => setClearAllScoresOpen(true)}
-                    data-testid="clear-all-scores-button"
-                  >
-                    {t("clear_scores_all_classes")}
+                    {t("clear_selected_class_scores")}
                   </Button>
                   <Button
                     onClick={() => setIsAddOpen(true)}
@@ -1599,6 +1586,14 @@ export default function Students() {
                         />
                       </TableCell>
                       <TableCell>
+                        <div className="flex items-center gap-2">
+                        <StudentScoreClearButton
+                          t={t}
+                          studentName={student.full_name}
+                          onClear={() => handleClearStudentScores(student)}
+                          disabled={!activeWeekId}
+                          testId={`student-clear-scores-${student.id}`}
+                        />
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
                             <Button
@@ -1690,6 +1685,7 @@ export default function Students() {
                             )}
                           </DropdownMenuContent>
                         </DropdownMenu>
+                        </div>
                       </TableCell>
                     </TableRow>
                   );
@@ -2043,32 +2039,15 @@ export default function Students() {
       <Dialog open={clearScoresOpen} onOpenChange={setClearScoresOpen}>
         <DialogContent data-testid="clear-scores-dialog">
           <DialogHeader>
-            <DialogTitle>{t("clear_scores")}</DialogTitle>
-            <DialogDescription>{t("clear_scores_confirm")}</DialogDescription>
+            <DialogTitle>{t("clear_selected_class_scores")}</DialogTitle>
+            <DialogDescription>{t("clear_selected_class_scores_confirm")}</DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <Button variant="outline" onClick={() => setClearScoresOpen(false)} data-testid="clear-scores-cancel">
               {t("cancel")}
             </Button>
             <Button variant="destructive" onClick={handleClearScores} data-testid="clear-scores-confirm">
-              {t("clear_scores")}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={clearAllScoresOpen} onOpenChange={setClearAllScoresOpen}>
-        <DialogContent data-testid="clear-all-scores-dialog">
-          <DialogHeader>
-            <DialogTitle>{t("clear_scores_all_classes")}</DialogTitle>
-            <DialogDescription>{t("clear_scores_all_classes_confirm")}</DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setClearAllScoresOpen(false)} data-testid="clear-all-scores-cancel">
-              {t("cancel")}
-            </Button>
-            <Button variant="destructive" onClick={handleClearAllScores} data-testid="clear-all-scores-confirm">
-              {t("clear_scores")}
+              {t("clear_selected_class_scores")}
             </Button>
           </DialogFooter>
         </DialogContent>

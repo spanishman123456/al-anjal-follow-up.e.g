@@ -42,6 +42,7 @@ The Arabic Section also has a field named `attendance`, but it is a **weekly sco
    - a **new** daily presence feature (does not exist today).
 3. Renaming the field is **high risk** (Excel aliases, UI labels, exports, bilingual keys).
 4. Empty vs zero scores affect `no_data` vs `below` guards — preserve that logic.
+5. The per-student score eraser sends explicit `null` for the active scope only. On International weekly/total pages that includes the weekly `attendance /2.5`; on Arabic Student Management it includes the selected week's `attendance /10`. It must not clear another week, quarter, student, or class.
 
 ## If a true attendance system is requested later
 

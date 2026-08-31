@@ -17,6 +17,34 @@ describe("score-entry pages expose a score-clear control", () => {
     const source = fs.readFileSync(path.join(__dirname, fileName), "utf8");
     expect(source).toContain(`data-testid=\"${testId}\"`);
   });
+
+  it.each([
+    "Students.jsx",
+    "AssessmentMarks.jsx",
+    "AssessmentMarksQ2.jsx",
+    "FinalExamsAssessment.jsx",
+    "FinalExamsAssessmentQ2.jsx",
+    "TotalMarks.jsx",
+  ])("removes the all-classes score-clear path from %s", (fileName) => {
+    const source = fs.readFileSync(path.join(__dirname, fileName), "utf8");
+    expect(source).not.toContain("clear-all-scores");
+    expect(source).not.toContain("clear_scores_all_classes");
+  });
+
+  it.each([
+    "Students.jsx",
+    "AssessmentMarks.jsx",
+    "AssessmentMarksQ2.jsx",
+    "FinalExamsAssessment.jsx",
+    "FinalExamsAssessmentQ2.jsx",
+    "TotalMarks.jsx",
+    "ArabicStudents.jsx",
+    "ArabicGrades.jsx",
+    "BaselineAssessments.jsx",
+  ])("keeps per-student score clearing in %s", (fileName) => {
+    const source = fs.readFileSync(path.join(__dirname, fileName), "utf8");
+    expect(source).toContain("StudentScoreClearButton");
+  });
 });
 
 describe("Arabic roster and diagnostic lifecycle controls stay available", () => {
