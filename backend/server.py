@@ -757,6 +757,7 @@ def build_branded_certificate_pdf(
     student_name: str,
     performance: str,
     award: str = "Badge Award",
+    lang: Literal["en", "ar"] = "en",
 ) -> str:
     safe_name = re.sub(r"[^A-Za-z0-9\-_.]+", "-", (student_name or "student")).strip("-") or "student"
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")
@@ -820,51 +821,84 @@ def build_branded_certificate_pdf(
             mask="auto",
         )
 
-    # Typography and layout.
-    normalized_perf = normalize_reward_performance(performance).replace("_", " ").title()
+    # Typography and layout. Arabic-section certificates deliberately stay
+    # Arabic even if the application's global display language is English.
+    is_arabic = lang == "ar"
+    if is_arabic or _has_arabic(student_name):
+        _ensure_pdf_arabic_fonts()
+    normalized_key = normalize_reward_performance(performance)
+    normalized_perf = (
+        {"advanced": "متقدم", "on_level": "على المستوى", "needs_support": "يحتاج إلى دعم"}.get(
+            normalized_key, "على المستوى"
+        )
+        if is_arabic
+        else normalized_key.replace("_", " ").title()
+    )
     issue_date = datetime.now(REPORT_TIMEZONE).strftime("%Y-%m-%d")
 
+    def certificate_font(text: str, bold: bool = False) -> str:
+        if is_arabic or _has_arabic(text):
+            return PDF_ARABIC_FONT_BOLD if bold else PDF_ARABIC_FONT
+        return "Helvetica-Bold" if bold else "Helvetica"
+
+    def certificate_text(text: str) -> str:
+        return _shape_arabic(text) if _has_arabic(text) else text
+
+    def draw_centered(text: str, y: float, size: float, bold: bool = False) -> None:
+        c.setFont(certificate_font(text, bold), size)
+        c.drawCentredString(width / 2, y, certificate_text(text))
+
+    title = "شهادة تقدير" if is_arabic else "Certificate of Achievement"
+    presented_to = "تتقدم مدارس الأنجال بهذه الشهادة إلى" if is_arabic else "This certificate is proudly presented to"
+    performance_line = f"مستوى الأداء: {normalized_perf}" if is_arabic else f"Performance Level: {normalized_perf}"
+    award_line = f"الشارة: {award}" if is_arabic else f"Award / Badge: {award}"
+    date_line = f"التاريخ: {issue_date}" if is_arabic else f"Date: {issue_date}"
+    achievement_line = (
+        "تقديرًا لجهوده المتميزة ومشاركته الفعالة والتزامه بالتعلّم."
+        if is_arabic
+        else "has demonstrated outstanding effort, consistency, and commitment to learning."
+    )
+
     c.setFillColor(colors.HexColor("#0f766e"))
-    c.setFont("Helvetica-Bold", 30)
-    c.drawCentredString(width / 2, height - 180, "Certificate of Achievement")
+    draw_centered(title, height - 180, 30, bold=True)
 
     c.setFillColor(colors.HexColor("#1f2937"))
-    c.setFont("Helvetica", 15)
-    c.drawCentredString(width / 2, height - 218, "This certificate is proudly presented to")
+    draw_centered(presented_to, height - 218, 15)
 
     # Keep the name prominent but balanced; auto-shrink long names.
     name_font_size = 24
     max_name_width = width - 120
-    while name_font_size > 18 and c.stringWidth(student_name, "Helvetica-Bold", name_font_size) > max_name_width:
+    display_student_name = certificate_text(student_name)
+    name_font = certificate_font(student_name, bold=True)
+    while name_font_size > 18 and c.stringWidth(display_student_name, name_font, name_font_size) > max_name_width:
         name_font_size -= 1
-    c.setFont("Helvetica-Bold", name_font_size)
-    c.drawCentredString(width / 2, height - 276, student_name)
+    c.setFont(name_font, name_font_size)
+    c.drawCentredString(width / 2, height - 276, display_student_name)
 
     c.setStrokeColor(colors.HexColor("#9ca3af"))
     c.setLineWidth(1)
     c.line(width / 2 - 220, height - 286, width / 2 + 220, height - 286)
 
     c.setFillColor(colors.HexColor("#374151"))
-    c.setFont("Helvetica", 14)
-    c.drawCentredString(width / 2, height - 328, f"Performance Level: {normalized_perf}")
-    c.drawCentredString(width / 2, height - 356, f"Award / Badge: {award}")
-    c.drawCentredString(width / 2, height - 384, f"Date: {issue_date}")
+    draw_centered(performance_line, height - 328, 14)
+    draw_centered(award_line, height - 356, 14)
+    draw_centered(date_line, height - 384, 14)
 
     c.setFillColor(colors.HexColor("#4b5563"))
-    c.setFont("Helvetica-Oblique", 12)
-    c.drawCentredString(
-        width / 2,
-        height - 430,
-        "has demonstrated outstanding effort, consistency, and commitment to learning.",
-    )
+    if is_arabic:
+        draw_centered(achievement_line, height - 430, 12)
+    else:
+        c.setFont("Helvetica-Oblique", 12)
+        c.drawCentredString(width / 2, height - 430, achievement_line)
 
     # Signature line.
     sig_y = 118
     c.setStrokeColor(colors.HexColor("#6b7280"))
     c.line(width - 250, sig_y, width - 70, sig_y)
     c.setFillColor(colors.HexColor("#6b7280"))
-    c.setFont("Helvetica", 10)
-    c.drawString(width - 242, sig_y - 16, "Signature")
+    signature = "التوقيع" if is_arabic else "Signature"
+    c.setFont(certificate_font(signature), 10)
+    c.drawCentredString(width - 160, sig_y - 16, certificate_text(signature))
 
     c.showPage()
     c.save()
@@ -5505,6 +5539,8 @@ class RewardBadgeRequest(BaseModel):
     student_id: str
     student_name: Optional[str] = None
     performance: Optional[str] = None
+    school_section: Literal["international", "arabic"] = "international"
+    lang: Optional[Literal["en", "ar"]] = None
 
 
 class RewardBadgeRemoveRequest(BaseModel):
@@ -5890,6 +5926,7 @@ async def clear_class_quarter_scores(
 async def get_students(
     class_id: Optional[str] = Query(default=None),
     week_id: Optional[str] = Query(default=None),
+    weekly_only: bool = False,
     school_section: str = SCHOOL_SECTION_INTERNATIONAL,
     academic_year: Optional[str] = None,
     current_user: Dict[str, Any] = Depends(get_current_user),
@@ -5940,6 +5977,8 @@ async def get_students(
                 student["quarter1_theory"] = score.get("quarter1_theory")
                 student["quarter2_practical"] = score.get("quarter2_practical")
                 student["quarter2_theory"] = score.get("quarter2_theory")
+        if weekly_only:
+            return [enrich_student(student) for student in students]
         week_doc = await db.weeks.find_one({"id": week_id}, {"_id": 0})
         if week_doc:
             sem = week_doc.get("semester", 1)
@@ -7766,7 +7805,12 @@ async def reward_award_badge(payload: RewardBadgeRequest):
     certificate_filename = build_branded_certificate_pdf(
         student_name=payload.student_name or "Student",
         performance=normalized_perf,
-        award="Excellence Badge" if normalized_perf == "advanced" else "Achievement Badge",
+        award=(
+            "شارة التميز" if normalized_perf == "advanced" else "شارة الإنجاز"
+        ) if payload.school_section == SCHOOL_SECTION_ARABIC else (
+            "Excellence Badge" if normalized_perf == "advanced" else "Achievement Badge"
+        ),
+        lang="ar" if payload.school_section == SCHOOL_SECTION_ARABIC else (payload.lang or "en"),
     )
     return RewardBadgeResponse(
         ok=True,
@@ -7838,25 +7882,62 @@ async def get_arabic_weekly_scores(
         {"_id": 0},
     ).sort([("class_name", 1), ("full_name", 1)]).to_list(10000)
     student_ids = [item["id"] for item in students]
-    score_docs = await db.arabic_weekly_scores.find(
-        {
-            "student_id": {"$in": student_ids},
-            "academic_year": academic_year,
-            "semester": semester,
-            "quarter": quarter,
-        },
-        {"_id": 0},
-    ).to_list(100000)
-    scores_by_student: Dict[str, List[Dict[str, Any]]] = {}
-    for score in score_docs:
-        scores_by_student.setdefault(score["student_id"], []).append(score)
-    current_scores = {
-        score["student_id"]: score for score in score_docs if int(score.get("week_number") or 0) == week_number
+    score_scope = {
+        "student_id": {"$in": student_ids},
+        "academic_year": academic_year,
+        "semester": semester,
+        "quarter": quarter,
+    }
+    current_score_docs = await db.arabic_weekly_scores.find(
+        {**score_scope, "week_number": week_number},
+        {"_id": 0, "student_id": 1, **{field: 1 for field in ARABIC_CONTINUOUS_LIMITS}},
+    ).to_list(10000)
+    current_scores = {score["student_id"]: score for score in current_score_docs}
+
+    # Calculate quarter averages inside MongoDB so this screen does not transfer and
+    # loop through every historical weekly document whenever a class is selected.
+    entered_expression = {
+        "$or": [
+            {"$ne": [{"$ifNull": [f"${field}", None]}, None]}
+            for field in ARABIC_CONTINUOUS_LIMITS
+        ]
+    }
+    total_expression = {
+        "$add": [
+            {"$ifNull": [f"${field}", 0]}
+            for field in ARABIC_CONTINUOUS_LIMITS
+        ]
+    }
+    summary_docs = await db.arabic_weekly_scores.aggregate([
+        {"$match": score_scope},
+        {"$project": {
+            "student_id": 1,
+            "entered_total": {"$cond": [entered_expression, total_expression, None]},
+            "entered": {"$cond": [entered_expression, 1, 0]},
+        }},
+        {"$group": {
+            "_id": "$student_id",
+            "continuous_total": {"$avg": "$entered_total"},
+            "weeks_with_scores": {"$sum": "$entered"},
+        }},
+    ]).to_list(10000)
+    summaries_by_student = {
+        item["_id"]: {
+            "continuous_total": (
+                round(float(item["continuous_total"]), 2)
+                if item.get("continuous_total") is not None
+                else None
+            ),
+            "weeks_with_scores": int(item.get("weeks_with_scores") or 0),
+        }
+        for item in summary_docs
     }
     rows = []
     for student in students:
         current = current_scores.get(student["id"], {})
-        weekly_summary = arabic_weekly_continuous_summary(scores_by_student.get(student["id"], []))
+        weekly_summary = summaries_by_student.get(
+            student["id"], {"continuous_total": None, "weeks_with_scores": 0}
+        )
         current_total = (
             round(sum(float(current.get(field) or 0) for field in ARABIC_CONTINUOUS_LIMITS), 2)
             if any(current.get(field) is not None for field in ARABIC_CONTINUOUS_LIMITS)

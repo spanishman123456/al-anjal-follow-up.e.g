@@ -76,6 +76,9 @@
 - Top navigation + PageHero banners (EN/AR)
 - Analytics & Reports with Visual Board and premium PDF/Excel paths
 - Remedial plans, rewards/certificates, lesson plan generator
+- Student reward feedback is now active on both weekly-entry surfaces: eligible badge awards trigger a strong local confetti/ribbon/star celebration, glow the new premium badge beside the student name, and no longer depend on the external canvas-confetti CDN. Arabic badge certificates and the Arabic certificate dialog are fully Arabic/RTL with Amiri PDF embedding.
+- Weekly-entry responsiveness is hardened without score changes: International one-cell autosave no longer reloads quarter-wide calculations or emits a success toast/global refresh after every field; Arabic class switching aborts stale requests, reuses a small response cache, avoids per-row localStorage parsing, and aggregates historical `/40` averages in MongoDB.
+- Verification for this reward/performance pass: 31 focused Arabic backend tests and all 16 frontend suites / 101 tests pass; the optimized production build succeeds. The generated A4 Arabic reward certificate was rendered at 150 DPI and visually inspected for Amiri shaping, RTL order, logos, name line, score/badge labels, date, and signature with no clipping or broken glyphs.
 - Programs now appears in both sections. Remedial reports select a real diagnostic/pre-test, quarter final-test block, quarter total or semester aggregate and list only actual marks strictly below 50%; blanks are excluded and zero remains a real score. Subject/weakness/date/signatories are editable, while names/classes/marks come from a protected snapshot and export to a bilingual school PDF. Rewards load the active section/year roster, and the lesson-plan mapper recognizes common Arabic template labels.
 - Current verification (2026-09-01): 87 backend tests and 16 frontend suites / 101 tests pass, including bilingual baseline metadata editing and its preservation/permission guards; the optimized production build succeeds. The Arabic remedial two-page QA PDF was rendered at 144 DPI and inspected page by page for logo, RTL line order, repeated table header, marks, names and signatures.
 - Multi-year approved-school-PDF calendar import/history page, notifications log, settings/users
@@ -120,7 +123,7 @@
 - The 1448H source PDF visibly contains three anomalies: Semester 1 Week 17 prints two Gregorian dates in 2020, Semester 1 Week 19 prints malformed Hijri cells, and Semester 2 Week 19 includes a stray `96`; imported rows are flagged rather than silently corrected.
 - Local reward storage vs server rewards (verify when editing Rewards)
 - Weekly report configuration lives in the separate `report_settings` collection, not `app_settings`
-- Reward certificates still use Helvetica/direct canvas text and do not yet support the protected Amiri Arabic rendering pipeline
+- Reward certificates now support Arabic-section Amiri embedding, shaping, and RTL copy; the visually inspected Arabic sample is the current regression reference.
 - Normal `npm run build` remains non-portable on Windows because its script uses POSIX inline environment-variable syntax; the documented PowerShell-equivalent build succeeds
 - `npm ci` reports 58 dependency vulnerabilities; do not apply automatic audit fixes or upgrades without explicit approval
 - Live MongoDB/login/integration tests are not part of the safe offline baseline because they require external credentials and may touch live services
@@ -137,7 +140,7 @@
 3. Strengthen automated tests around thresholds and imports
 4. Visually review manual-review calendar cells and replace them only from an approved corrected school document
 5. Further PDF/report polish only if owner requests
-6. Bring reward certificates into the Amiri + Arabic shaping pipeline when explicitly requested
+6. Persist reward badge display from server events across browsers if a future request replaces the current local reward-display storage model
 7. Keep the explicitly adopted Arabic proportional performance thresholds aligned across weekly entry, quarter grading, analytics and exports
 8. Plan dependency-security review separately before changing the existing lockfile or package versions
 

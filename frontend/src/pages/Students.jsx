@@ -46,6 +46,7 @@ import { buildAcademicExportFilename } from "@/lib/exportFilenames";
 import "@/reward-modal.css";
 import { PerformanceLevelBadge } from "@/components/PerformanceLevelBadge";
 import { StudentScoreClearButton } from "@/components/StudentScoreClearButton";
+import { RewardCelebration } from "@/components/RewardCelebration";
 
 const normalizeRewardPerformance = (value) => {
   const compact = String(value || "")
@@ -257,34 +258,18 @@ export default function Students() {
   const [rewardStudent, setRewardStudent] = useState(null);
   const [isRewardSubmitting, setIsRewardSubmitting] = useState(false);
   const [badgeGlowStudentIds, setBadgeGlowStudentIds] = useState(new Set());
+  const [celebration, setCelebration] = useState(null);
   const rewardOriginRef = useRef(null);
   const latestLoadRequestIdRef = useRef(0);
 
-  const triggerRewardCelebration = () => {
-    const confettiFn = window?.confetti;
-    if (typeof confettiFn === "function") {
-      const durationMs = 1300;
-      const endAt = Date.now() + durationMs;
-      const defaults = {
-        origin: { x: 0.5, y: 0.5 },
-        spread: 360,
-        startVelocity: 52,
-        ticks: 96,
-        scalar: 1.05,
-      };
-
-      const frame = () => {
-        const timeLeft = endAt - Date.now();
-        if (timeLeft <= 0) return;
-        const intensity = Math.max(0.35, timeLeft / durationMs);
-        confettiFn({
-          ...defaults,
-          particleCount: Math.floor(26 * intensity),
-        });
-        requestAnimationFrame(frame);
-      };
-      frame();
-    }
+  const triggerRewardCelebration = (studentName) => {
+    setCelebration({
+      id: `${Date.now()}-${studentName}`,
+      studentName,
+      origin: rewardOriginRef.current || { x: 0.5, y: 0.38 },
+      dir: language === "ar" ? "rtl" : "ltr",
+    });
+    window.setTimeout(() => setCelebration(null), 3400);
     const audioEl = document.getElementById("reward-sound");
     if (audioEl?.play) {
       audioEl.currentTime = 0;
@@ -328,7 +313,7 @@ export default function Students() {
         student_name: rewardStudent.name,
         performance: rewardStudent.performance,
       });
-      triggerRewardCelebration();
+      triggerRewardCelebration(rewardStudent.name);
       setStudentReward(rewardStudent.id, "badge", true);
       setBadgeStudentIds((prev) => new Set([...prev, rewardStudent.id]));
       setBadgeGlowStudentIds((prev) => new Set([...prev, rewardStudent.id]));
@@ -380,7 +365,9 @@ export default function Students() {
   const loadData = async (weekId = activeWeekId) => {
     const requestId = ++latestLoadRequestIdRef.current;
     try {
-      const studentRes = await api.get("/students", { params: weekId ? { week_id: weekId } : {} });
+      const studentRes = await api.get("/students", {
+        params: weekId ? { week_id: weekId, weekly_only: true } : {},
+      });
       if (latestLoadRequestIdRef.current !== requestId) return;
       setStudents(studentRes.data || []);
 
@@ -904,13 +891,18 @@ export default function Students() {
         week_id: activeWeekId,
       }, { timeout: BULK_SAVE_TIMEOUT_MS });
       setBulkScores((prev) => {
+        const draft = prev[student.id];
+        if (!draft || parseScore(draft[field]) !== newVal) return prev;
+        const nextDraft = { ...draft };
+        delete nextDraft[field];
         const next = { ...prev };
-        delete next[student.id];
+        if (Object.keys(nextDraft).length) next[student.id] = nextDraft;
+        else delete next[student.id];
         return next;
       });
-      window.dispatchEvent(new CustomEvent("students-updated"));
-      loadData(activeWeekId);
-      toast.success(t("student_updated"));
+      setStudents((previous) => previous.map((item) => (
+        item.id === student.id ? { ...item, [field]: newVal } : item
+      )));
     } catch (error) {
       toast.error(getApiErrorMessage(error) || t("student_update_failed"));
     }
@@ -2176,6 +2168,11 @@ export default function Students() {
         reward={certificateFor}
         open={!!certificateFor}
         onOpenChange={(open) => !open && setCertificateFor(null)}
+      />
+      <RewardCelebration
+        celebration={celebration}
+        title={t("reward_celebration_title")}
+        subtitle={t("reward_celebration_subtitle")}
       />
       <AssessmentPageFooter language={language} />
     </div>

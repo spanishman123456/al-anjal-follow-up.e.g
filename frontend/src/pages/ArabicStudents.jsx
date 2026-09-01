@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useOutletContext } from "react-router-dom";
 import {
-  AlertTriangle, Award, Download, FileText, MessageCircle, MoreHorizontal,
+  AlertTriangle, Award, Download, FileText, MessageCircle, MoreHorizontal, PartyPopper,
   Save, Sparkles, Trash2, Upload, UserRoundCog,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -9,7 +9,7 @@ import { api, BACKEND_ROOT_URL, getApiErrorMessage, getLocalizedApiErrorMessage 
 import { useTranslations } from "@/lib/i18n";
 import { displayQuarterNumber } from "@/lib/academicScope";
 import { sortByClassOrder } from "@/lib/utils";
-import { getStudentRewards, setStudentReward } from "@/lib/studentRewardsStorage";
+import { getRewardSetsFromStorage, setStudentReward } from "@/lib/studentRewardsStorage";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { PerformanceLevelBadge } from "@/components/PerformanceLevelBadge";
 import { Button } from "@/components/ui/button";
@@ -21,6 +21,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSepara
 import { LoadErrorCard } from "@/components/LoadErrorCard";
 import { importStudentsWithPreview } from "@/lib/studentEnrollmentImport";
 import { StudentScoreClearButton } from "@/components/StudentScoreClearButton";
+import { RewardCelebration } from "@/components/RewardCelebration";
 
 const CONTINUOUS_FIELDS = [
   { key: "performance_tasks", max: 10 },
@@ -52,13 +53,14 @@ export default function ArabicStudents() {
     classes = [], loadClasses, profile,
   } = useOutletContext();
   const t = useTranslations(language);
+  const certificateT = useTranslations("ar");
   const sem = semesterNumber(semester);
   const displayQuarter = displayQuarterNumber(semester, quarter);
   const weekNumbers = useMemo(() => weeksForQuarter(quarter), [quarter]);
   const [weekNumber, setWeekNumber] = useState(weekNumbers[0]);
   const [students, setStudents] = useState([]);
   const [values, setValues] = useState({});
-  const [classId, setClassId] = useState("all");
+  const [classId, setClassId] = useState(() => sessionStorage.getItem("arabic_students_class_id") || "all");
   const [search, setSearch] = useState("");
   const [performanceFilter, setPerformanceFilter] = useState("all");
   const [fillField, setFillField] = useState(CONTINUOUS_FIELDS[0].key);
@@ -81,12 +83,34 @@ export default function ArabicStudents() {
   const [transferClassId, setTransferClassId] = useState("");
   const [certificateFor, setCertificateFor] = useState(null);
   const [rewardBusy, setRewardBusy] = useState(false);
-  const [, setRewardRevision] = useState(0);
+  const [rewardSets, setRewardSets] = useState(() => getRewardSetsFromStorage());
+  const [badgeGlowStudentIds, setBadgeGlowStudentIds] = useState(new Set());
+  const [celebration, setCelebration] = useState(null);
+  const [, startTransition] = useTransition();
   const importInputRef = useRef(null);
+  const latestLoadRequestRef = useRef(0);
+  const loadAbortRef = useRef(null);
+  const responseCacheRef = useRef(new Map());
 
   useEffect(() => { setWeekNumber(weekNumbers[0]); }, [weekNumbers]);
 
   const load = useCallback(async () => {
+    const requestId = ++latestLoadRequestRef.current;
+    loadAbortRef.current?.abort();
+    const controller = new AbortController();
+    loadAbortRef.current = controller;
+    const cacheKey = `${academicYear}|${sem}|${quarter}|${weekNumber}|${classId}`;
+    const cachedRows = responseCacheRef.current.get(cacheKey);
+    if (cachedRows) {
+      startTransition(() => {
+        setStudents(cachedRows);
+        setValues(Object.fromEntries(cachedRows.map((student) => [
+          student.id,
+          Object.fromEntries(CONTINUOUS_FIELDS.map(({ key }) => [key, student[key] ?? null])),
+        ])));
+        setLoadedClassId(classId);
+      });
+    }
     setLoading(true);
     setLoadError("");
     try {
@@ -98,15 +122,22 @@ export default function ArabicStudents() {
           week_number: weekNumber,
           class_id: classId === "all" ? undefined : classId,
         },
+        signal: controller.signal,
       });
+      if (latestLoadRequestRef.current !== requestId) return;
       const rows = response.data?.students || [];
-      setStudents(rows);
-      setValues(Object.fromEntries(rows.map((student) => [
-        student.id,
-        Object.fromEntries(CONTINUOUS_FIELDS.map(({ key }) => [key, student[key] ?? null])),
-      ])));
-      setLoadedClassId(classId);
+      if (responseCacheRef.current.size > 12) responseCacheRef.current.clear();
+      responseCacheRef.current.set(cacheKey, rows);
+      startTransition(() => {
+        setStudents(rows);
+        setValues(Object.fromEntries(rows.map((student) => [
+          student.id,
+          Object.fromEntries(CONTINUOUS_FIELDS.map(({ key }) => [key, student[key] ?? null])),
+        ])));
+        setLoadedClassId(classId);
+      });
     } catch (error) {
+      if (controller.signal.aborted || latestLoadRequestRef.current !== requestId) return;
       const message = getLocalizedApiErrorMessage(error, t);
       setStudents([]);
       setValues({});
@@ -114,11 +145,17 @@ export default function ArabicStudents() {
       setLoadError(message);
       toast.error(message);
     } finally {
-      setLoading(false);
+      if (latestLoadRequestRef.current === requestId) setLoading(false);
     }
-  }, [academicYear, classId, quarter, sem, t, weekNumber]);
+  }, [academicYear, classId, quarter, sem, startTransition, t, weekNumber]);
 
   useEffect(() => { load(); }, [load]);
+  useEffect(() => () => loadAbortRef.current?.abort(), []);
+  useEffect(() => {
+    if (classId === "all" || classes.some((item) => item.id === classId)) return;
+    setClassId("all");
+    sessionStorage.setItem("arabic_students_class_id", "all");
+  }, [classId, classes]);
   useEffect(() => {
     api.get("/settings/promotion")
       .then((response) => setPromotionEnabled(Boolean(response.data?.enabled)))
@@ -277,7 +314,8 @@ export default function ArabicStudents() {
   };
 
   const toggleReward = async (student, type) => {
-    const current = getStudentRewards(student.id)[type];
+    const key = String(student.id);
+    const current = rewardSets[type].has(key);
     if (type === "badge") {
       const level = weeklyLevel(values[student.id]);
       if (!current && level !== "on_level") {
@@ -288,8 +326,41 @@ export default function ArabicStudents() {
       try {
         const response = await api.post(current ? "/rewards/remove-badge" : "/rewards/award-badge", current
           ? { student_id: student.id }
-          : { student_id: student.id, student_name: student.full_name, performance: "on_level" });
+          : {
+            student_id: student.id,
+            student_name: student.full_name,
+            performance: "on_level",
+            school_section: "arabic",
+            lang: "ar",
+          });
         setStudentReward(student.id, type, !current);
+        setRewardSets((previous) => {
+          const next = { ...previous, [type]: new Set(previous[type]) };
+          if (current) next[type].delete(key);
+          else next[type].add(key);
+          return next;
+        });
+        if (!current) {
+          setBadgeGlowStudentIds((previous) => new Set([...previous, key]));
+          setCelebration({
+            id: `${Date.now()}-${key}`,
+            studentName: student.full_name,
+            origin: { x: 0.5, y: 0.42 },
+            dir: "rtl",
+          });
+          window.setTimeout(() => setCelebration(null), 3400);
+          window.setTimeout(() => setBadgeGlowStudentIds((previous) => {
+            const next = new Set(previous);
+            next.delete(key);
+            return next;
+          }), 2600);
+          const audioEl = document.getElementById("reward-sound");
+          if (audioEl?.play) {
+            audioEl.currentTime = 0;
+            audioEl.play().catch(() => null);
+          }
+          if (navigator?.vibrate) navigator.vibrate([80, 40, 120]);
+        }
         const certificateUrl = response?.data?.certificate_url;
         if (!current && certificateUrl) {
           window.open(certificateUrl.startsWith("http") ? certificateUrl : `${BACKEND_ROOT_URL}${certificateUrl}`, "_blank", "noopener,noreferrer");
@@ -300,11 +371,16 @@ export default function ArabicStudents() {
       } finally { setRewardBusy(false); }
     } else {
       setStudentReward(student.id, type, !current);
+      setRewardSets((previous) => {
+        const next = { ...previous, [type]: new Set(previous[type]) };
+        if (current) next[type].delete(key);
+        else next[type].add(key);
+        return next;
+      });
       if (type === "certificate" && !current) {
         setCertificateFor({ student_name: student.full_name, class_name: classMap[student.class_id] || student.class_name || "" });
       }
     }
-    setRewardRevision((value) => value + 1);
     toast.success(t(current ? "student_action_removed" : "student_action_added"));
   };
 
@@ -385,11 +461,11 @@ export default function ArabicStudents() {
 
         <Card className="premium-active-card"><CardContent className="grid gap-4 pt-6 md:grid-cols-2 xl:grid-cols-6">
           <Select value={String(weekNumber)} onValueChange={(value) => setWeekNumber(Number(value))}><SelectTrigger data-testid="arabic-week-filter"><SelectValue /></SelectTrigger><SelectContent>{weekNumbers.map((week) => <SelectItem key={week} value={String(week)}>{t("week")} {week}</SelectItem>)}</SelectContent></Select>
-          <Select value={classId} onValueChange={setClassId}><SelectTrigger data-testid="arabic-class-filter"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">{t("all_classes")}</SelectItem>{sortedClasses.map((item) => <SelectItem key={item.id} value={item.id}>{item.name}</SelectItem>)}</SelectContent></Select>
+          <Select value={classId} onValueChange={(value) => { sessionStorage.setItem("arabic_students_class_id", value); setClassId(value); }}><SelectTrigger data-testid="arabic-class-filter"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">{t("all_classes")}</SelectItem>{sortedClasses.map((item) => <SelectItem key={item.id} value={item.id}>{item.name}</SelectItem>)}</SelectContent></Select>
           <Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder={t("search_students")} />
           <Select value={performanceFilter} onValueChange={setPerformanceFilter}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">{t("performance_filter")}</SelectItem><SelectItem value="on_level">{t("on_level")}</SelectItem><SelectItem value="approach">{t("approach")}</SelectItem><SelectItem value="below">{t("below")}</SelectItem><SelectItem value="no_data">{t("no_data")}</SelectItem></SelectContent></Select>
           {isAdmin && <Button variant="secondary" onClick={() => setPromoteOpen(true)} disabled={!promotionEnabled} data-testid="arabic-promote-button"><UserRoundCog className="me-2 h-4 w-4" />{t("promote_students")}</Button>}
-          <Button onClick={saveScores} disabled={saving || loading || !students.length} className="active-glow" data-testid="arabic-weekly-save"><Save className="me-2 h-4 w-4" />{saving ? `${t("loading")}…` : t("save_all_scores")}</Button>
+          <Button onClick={saveScores} disabled={saving || loading || !students.length} className="active-glow" data-testid="arabic-weekly-save"><Save className="me-2 h-4 w-4" />{saving ? `${t("loading")}…` : loading ? `${t("loading")}…` : t("save_all_scores")}</Button>
         </CardContent></Card>
 
         <Card data-testid="arabic-weekly-smart-tools"><CardContent className="flex flex-wrap items-center gap-3 pt-6">
@@ -403,8 +479,13 @@ export default function ArabicStudents() {
           const current = values[student.id] || {};
           const total = weeklyTotal(current);
           const level = weeklyLevel(current);
-          const rewards = getStudentRewards(student.id);
-          return <tr key={student.id} className="border-b hover:bg-cyan-50/50 dark:hover:bg-cyan-950/10" data-testid={`arabic-student-row-${student.id}`}><td className="sticky start-0 bg-background p-3 font-semibold"><span>{student.full_name}</span>{(rewards.badge || rewards.certificate || rewards.comment) && <div className="mt-1 flex flex-wrap gap-1 text-xs text-muted-foreground">{rewards.badge && <span>{t("badge")}</span>}{rewards.certificate && <span>{t("certificate")}</span>}{rewards.comment && <span>{t("comment")}</span>}</div>}</td><td className="p-3">{classMap[student.class_id] || student.class_name}</td>{CONTINUOUS_FIELDS.map(({ key, max }) => <td key={key} className="p-2"><Input type="number" min="0" max={max} step="0.5" value={current[key] ?? ""} onChange={(event) => updateScore(student.id, key, event.target.value, max)} placeholder="0-10" aria-label={`${student.full_name} ${t(key)}`} /></td>)}<td className="p-3 text-center font-bold">{total === null ? "—" : `${Number(total.toFixed(1))}/40`}</td><td className="p-3 text-center"><p className="font-bold text-violet-700 dark:text-violet-300">{student.quarter_continuous_average == null ? "—" : `${student.quarter_continuous_average}/40`}</p><p className="text-xs text-muted-foreground">{t("weeks_recorded").replace("{count}", String(student.weeks_with_scores || 0))}</p></td><td className="p-3 text-center"><PerformanceLevelBadge level={level} label={t(level)} /></td><td className="p-3 text-center"><div className="flex items-center justify-center gap-2"><StudentScoreClearButton t={t} studentName={student.full_name} onClear={() => clearStudentScores(student)} testId={`arabic-weekly-clear-student-${student.id}`} /><DropdownMenu><DropdownMenuTrigger asChild><Button variant="outline" size="icon" data-testid={`arabic-student-actions-${student.id}`}><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger><DropdownMenuContent align="end"><DropdownMenuItem disabled={rewardBusy} onClick={() => toggleReward(student, "badge")}><Award className="me-2 h-4 w-4" />{t("badge")}</DropdownMenuItem><DropdownMenuItem onClick={() => toggleReward(student, "certificate")}><FileText className="me-2 h-4 w-4" />{t("certificate")}</DropdownMenuItem><DropdownMenuItem onClick={() => toggleReward(student, "comment")}><MessageCircle className="me-2 h-4 w-4" />{t("comment")}</DropdownMenuItem>{isAdmin && <><DropdownMenuSeparator /><DropdownMenuItem onClick={() => { setTransferStudent(student); setTransferClassId(""); }}><UserRoundCog className="me-2 h-4 w-4" />{t("transfer_student")}</DropdownMenuItem><DropdownMenuItem className="text-destructive" onClick={() => remove(student)}><Trash2 className="me-2 h-4 w-4" />{t("delete_student")}</DropdownMenuItem></>}</DropdownMenuContent></DropdownMenu></div></td></tr>;
+          const studentKey = String(student.id);
+          const rewards = {
+            badge: rewardSets.badge.has(studentKey),
+            certificate: rewardSets.certificate.has(studentKey),
+            comment: rewardSets.comment.has(studentKey),
+          };
+          return <tr key={student.id} className="border-b hover:bg-cyan-50/50 dark:hover:bg-cyan-950/10" data-testid={`arabic-student-row-${student.id}`}><td className="sticky start-0 bg-background p-3 font-semibold"><span className="inline-flex flex-wrap items-center gap-2">{student.full_name}{rewards.badge && <span className={`badge-party-popper reward-badge-btn group inline-flex items-center gap-1.5 rounded-full border-2 border-amber-400/60 bg-gradient-to-r from-amber-200 via-amber-100 to-rose-200 px-2.5 py-1 text-xs font-semibold text-amber-900 shadow-sm transition-all duration-200 hover:scale-105 dark:border-amber-500/50 dark:from-amber-700/40 dark:via-amber-600/30 dark:to-rose-700/40 dark:text-amber-100 ${badgeGlowStudentIds.has(studentKey) ? "reward-glow" : ""}`} data-testid={`arabic-student-badge-${student.id}`}><PartyPopper className="h-4 w-4 shrink-0" /><span>{certificateT("badge")}</span></span>}{rewards.certificate && <span className="inline-flex items-center gap-1 rounded-full bg-sky-100 px-2 py-1 text-xs font-medium text-sky-700 dark:bg-sky-900/50 dark:text-sky-300"><FileText className="h-3.5 w-3.5" />{certificateT("certificate")}</span>}{rewards.comment && <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-1 text-xs font-medium text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-300"><MessageCircle className="h-3.5 w-3.5" />{certificateT("comment")}</span>}</span></td><td className="p-3">{classMap[student.class_id] || student.class_name}</td>{CONTINUOUS_FIELDS.map(({ key, max }) => <td key={key} className="p-2"><Input type="number" min="0" max={max} step="0.5" value={current[key] ?? ""} disabled={loading} onChange={(event) => updateScore(student.id, key, event.target.value, max)} placeholder="0-10" aria-label={`${student.full_name} ${t(key)}`} /></td>)}<td className="p-3 text-center font-bold">{total === null ? "—" : `${Number(total.toFixed(1))}/40`}</td><td className="p-3 text-center"><p className="font-bold text-violet-700 dark:text-violet-300">{student.quarter_continuous_average == null ? "—" : `${student.quarter_continuous_average}/40`}</p><p className="text-xs text-muted-foreground">{t("weeks_recorded").replace("{count}", String(student.weeks_with_scores || 0))}</p></td><td className="p-3 text-center"><PerformanceLevelBadge level={level} label={t(level)} /></td><td className="p-3 text-center"><div className="flex items-center justify-center gap-2"><StudentScoreClearButton t={t} studentName={student.full_name} onClear={() => clearStudentScores(student)} testId={`arabic-weekly-clear-student-${student.id}`} /><DropdownMenu><DropdownMenuTrigger asChild><Button variant="outline" size="icon" data-testid={`arabic-student-actions-${student.id}`}><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger><DropdownMenuContent align="end"><DropdownMenuItem disabled={rewardBusy} onClick={() => toggleReward(student, "badge")}><Award className="me-2 h-4 w-4" />{rewards.badge ? t("remove_badge") : t("badge")}</DropdownMenuItem><DropdownMenuItem onClick={() => toggleReward(student, "certificate")}><FileText className="me-2 h-4 w-4" />{t("certificate")}</DropdownMenuItem><DropdownMenuItem onClick={() => toggleReward(student, "comment")}><MessageCircle className="me-2 h-4 w-4" />{t("comment")}</DropdownMenuItem>{isAdmin && <><DropdownMenuSeparator /><DropdownMenuItem onClick={() => { setTransferStudent(student); setTransferClassId(""); }}><UserRoundCog className="me-2 h-4 w-4" />{t("transfer_student")}</DropdownMenuItem><DropdownMenuItem className="text-destructive" onClick={() => remove(student)}><Trash2 className="me-2 h-4 w-4" />{t("delete_student")}</DropdownMenuItem></>}</DropdownMenuContent></DropdownMenu></div></td></tr>;
         })}</tbody></table></div>{!loading && !filteredStudents.length && <p className="p-8 text-center text-muted-foreground">{t("no_data")}</p>}</CardContent></Card>
 
         <Dialog open={open} onOpenChange={setOpen}><DialogContent><DialogHeader><DialogTitle>{t("add_student")}</DialogTitle></DialogHeader><div className="grid gap-4"><Input value={fullName} onChange={(event) => setFullName(event.target.value)} placeholder={t("full_name")} autoFocus /><Select value={newClassId} onValueChange={setNewClassId}><SelectTrigger><SelectValue placeholder={t("select_class")} /></SelectTrigger><SelectContent>{sortedClasses.map((item) => <SelectItem key={item.id} value={item.id}>{item.name}</SelectItem>)}</SelectContent></Select></div><DialogFooter><Button variant="outline" onClick={() => setOpen(false)}>{t("cancel")}</Button><Button onClick={create}>{t("create")}</Button></DialogFooter></DialogContent></Dialog>
@@ -413,10 +494,15 @@ export default function ArabicStudents() {
 
         <Dialog open={Boolean(transferStudent)} onOpenChange={() => setTransferStudent(null)}><DialogContent><DialogHeader><DialogTitle>{t("transfer_student")}</DialogTitle><DialogDescription>{transferStudent?.full_name}</DialogDescription></DialogHeader><Select value={transferClassId} onValueChange={setTransferClassId}><SelectTrigger><SelectValue placeholder={t("select_class")} /></SelectTrigger><SelectContent>{sortedClasses.filter((item) => item.id !== transferStudent?.class_id).map((item) => <SelectItem key={item.id} value={item.id}>{item.name}</SelectItem>)}</SelectContent></Select><DialogFooter><Button variant="outline" onClick={() => setTransferStudent(null)}>{t("cancel")}</Button><Button onClick={transfer} disabled={!transferClassId}>{t("confirm")}</Button></DialogFooter></DialogContent></Dialog>
 
-        <Dialog open={Boolean(certificateFor)} onOpenChange={(nextOpen) => !nextOpen && setCertificateFor(null)}><DialogContent className="max-w-lg overflow-hidden p-0" data-testid="arabic-certificate-dialog"><div className="rounded-lg border-2 border-amber-400/60 bg-gradient-to-b from-amber-50 to-amber-100/50 p-8 text-center dark:from-amber-950/30 dark:to-amber-900/20"><Award className="mx-auto mb-4 h-12 w-12 text-amber-600" /><p className="text-xs uppercase tracking-[0.25em] text-amber-700 dark:text-amber-300">{t("certificate_of_achievement")}</p><h2 className="mt-3 text-xl font-bold">{t("this_is_to_certify")}</h2><p className="mx-auto mt-4 inline-block border-b-2 border-amber-500/50 pb-2 text-2xl font-bold">{certificateFor?.student_name}</p><p className="mt-2 text-sm text-muted-foreground">{certificateFor?.class_name}</p><p className="mt-5 font-medium text-amber-800 dark:text-amber-200">{t("outstanding_effort")}</p><p className="mt-6 text-xs text-muted-foreground">{t("presented_with_appreciation")}</p></div></DialogContent></Dialog>
+        <Dialog open={Boolean(certificateFor)} onOpenChange={(nextOpen) => !nextOpen && setCertificateFor(null)}><DialogContent className="max-w-lg overflow-hidden p-0" data-testid="arabic-certificate-dialog"><div dir="rtl" lang="ar" className="rounded-lg border-2 border-amber-400/60 bg-gradient-to-b from-amber-50 to-amber-100/50 p-8 text-center dark:from-amber-950/30 dark:to-amber-900/20"><Award className="mx-auto mb-4 h-12 w-12 text-amber-600" /><p className="text-xs tracking-[0.18em] text-amber-700 dark:text-amber-300">{certificateT("certificate_of_achievement")}</p><h2 className="mt-3 text-xl font-bold">{certificateT("this_is_to_certify")}</h2><p className="mx-auto mt-4 inline-block border-b-2 border-amber-500/50 pb-2 text-2xl font-bold">{certificateFor?.student_name}</p><p className="mt-2 text-sm text-muted-foreground">{certificateFor?.class_name}</p><p className="mt-5 font-medium text-amber-800 dark:text-amber-200">{certificateT("outstanding_effort")}</p><p className="mt-6 text-xs text-muted-foreground">{certificateT("presented_with_appreciation")}</p></div></DialogContent></Dialog>
 
         <Dialog open={deleteClassOpen} onOpenChange={setDeleteClassOpen}><DialogContent data-testid="delete-class-students-dialog"><DialogHeader><DialogTitle className="flex items-center gap-2 text-destructive"><AlertTriangle className="h-5 w-5" />{t("delete_class_students")}</DialogTitle></DialogHeader><p className="text-sm text-muted-foreground">{t("delete_class_students_confirm").replace("{count}", String(students.length)).replace("{class}", classMap[classId] || "")}</p><DialogFooter><Button variant="outline" onClick={() => setDeleteClassOpen(false)} disabled={deletingClass}>{t("cancel")}</Button><Button variant="destructive" onClick={deleteSelectedClassStudents} disabled={deletingClass} data-testid="delete-class-students-confirm">{deletingClass ? `${t("loading")}…` : t("delete_class_students")}</Button></DialogFooter></DialogContent></Dialog>
       </>}
+      <RewardCelebration
+        celebration={celebration}
+        title={certificateT("reward_celebration_title")}
+        subtitle={certificateT("reward_celebration_subtitle")}
+      />
     </div>
   );
 }
