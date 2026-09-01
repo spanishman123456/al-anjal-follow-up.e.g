@@ -269,7 +269,7 @@ export default function Students() {
       origin: rewardOriginRef.current || { x: 0.5, y: 0.38 },
       dir: language === "ar" ? "rtl" : "ltr",
     });
-    window.setTimeout(() => setCelebration(null), 3400);
+    window.setTimeout(() => setCelebration(null), 5200);
     const audioEl = document.getElementById("reward-sound");
     if (audioEl?.play) {
       audioEl.currentTime = 0;
@@ -329,7 +329,15 @@ export default function Students() {
         const absolute = certificateUrl.startsWith("http")
           ? certificateUrl
           : `${BACKEND_ROOT_URL}${certificateUrl}`;
-        window.open(absolute, "_blank", "noopener,noreferrer");
+        window.setTimeout(() => {
+          toast.success(t("reward_certificate_ready"), {
+            duration: 12000,
+            action: {
+              label: t("open_certificate"),
+              onClick: () => window.open(absolute, "_blank", "noopener,noreferrer"),
+            },
+          });
+        }, 5000);
       }
       toast.success(`${rewardStudent.name} badge awarded`);
       setRewardModalOpen(false);

@@ -348,7 +348,7 @@ export default function ArabicStudents() {
             origin: { x: 0.5, y: 0.42 },
             dir: "rtl",
           });
-          window.setTimeout(() => setCelebration(null), 3400);
+          window.setTimeout(() => setCelebration(null), 5200);
           window.setTimeout(() => setBadgeGlowStudentIds((previous) => {
             const next = new Set(previous);
             next.delete(key);
@@ -363,7 +363,16 @@ export default function ArabicStudents() {
         }
         const certificateUrl = response?.data?.certificate_url;
         if (!current && certificateUrl) {
-          window.open(certificateUrl.startsWith("http") ? certificateUrl : `${BACKEND_ROOT_URL}${certificateUrl}`, "_blank", "noopener,noreferrer");
+          const absolute = certificateUrl.startsWith("http") ? certificateUrl : `${BACKEND_ROOT_URL}${certificateUrl}`;
+          window.setTimeout(() => {
+            toast.success(certificateT("reward_certificate_ready"), {
+              duration: 12000,
+              action: {
+                label: certificateT("open_certificate"),
+                onClick: () => window.open(absolute, "_blank", "noopener,noreferrer"),
+              },
+            });
+          }, 5000);
         }
       } catch (error) {
         toast.error(getApiErrorMessage(error) || t("student_action_failed"));

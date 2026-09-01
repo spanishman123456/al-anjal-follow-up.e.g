@@ -5,19 +5,24 @@ import "@/reward-celebration.css";
 const COLORS = ["#facc15", "#fb7185", "#a855f7", "#22d3ee", "#34d399", "#f97316", "#60a5fa"];
 
 function createParticle(width, height, origin, burstIndex, index) {
-  const sideBurst = burstIndex > 0;
+  const sideBurst = burstIndex === 1 || burstIndex === 2;
   const fromLeft = burstIndex === 1;
-  const x = sideBurst ? (fromLeft ? width * 0.04 : width * 0.96) : origin.x * width;
-  const y = sideBurst ? height * 0.78 : origin.y * height;
-  const angle = sideBurst
+  const topRain = burstIndex === 3;
+  const x = topRain
+    ? Math.random() * width
+    : sideBurst ? (fromLeft ? width * 0.04 : width * 0.96) : origin.x * width;
+  const y = topRain ? -20 - Math.random() * height * 0.12 : sideBurst ? height * 0.78 : origin.y * height;
+  const angle = topRain
+    ? Math.PI * (0.36 + Math.random() * 0.28)
+    : sideBurst
     ? (fromLeft ? -Math.PI * (0.18 + Math.random() * 0.42) : -Math.PI * (0.4 + Math.random() * 0.42))
     : Math.random() * Math.PI * 2;
-  const speed = sideBurst ? 11 + Math.random() * 12 : 8 + Math.random() * 14;
+  const speed = topRain ? 2 + Math.random() * 4 : sideBurst ? 12 + Math.random() * 13 : 9 + Math.random() * 15;
   return {
     x,
     y,
     vx: Math.cos(angle) * speed,
-    vy: Math.sin(angle) * speed - (sideBurst ? 5 : 2),
+    vy: topRain ? speed : Math.sin(angle) * speed - (sideBurst ? 6 : 2),
     gravity: 0.19 + Math.random() * 0.12,
     drag: 0.982 + Math.random() * 0.009,
     rotation: Math.random() * Math.PI,
@@ -27,7 +32,7 @@ function createParticle(width, height, origin, burstIndex, index) {
     shape: index % 11 === 0 ? "ribbon" : index % 9 === 0 ? "star" : index % 5 === 0 ? "circle" : "strip",
     wobble: Math.random() * Math.PI * 2,
     life: 0,
-    maxLife: 125 + Math.random() * 65,
+    maxLife: 175 + Math.random() * 80,
   };
 }
 
@@ -129,13 +134,16 @@ export function RewardCelebration({ celebration, title, subtitle }) {
 
     resize();
     window.addEventListener("resize", resize);
-    addBurst(0, reducedMotion ? 36 : 110);
+    addBurst(0, reducedMotion ? 42 : 150);
     if (!reducedMotion) {
-      addBurst(1, 58);
-      addBurst(2, 58);
-      timers.push(window.setTimeout(() => addBurst(0, 76), 360));
-      timers.push(window.setTimeout(() => addBurst(1, 45), 720));
-      timers.push(window.setTimeout(() => addBurst(2, 45), 780));
+      addBurst(1, 82);
+      addBurst(2, 82);
+      timers.push(window.setTimeout(() => addBurst(3, 125), 120));
+      timers.push(window.setTimeout(() => addBurst(0, 105), 430));
+      timers.push(window.setTimeout(() => addBurst(1, 62), 900));
+      timers.push(window.setTimeout(() => addBurst(2, 62), 980));
+      timers.push(window.setTimeout(() => addBurst(3, 90), 1350));
+      timers.push(window.setTimeout(() => addBurst(0, 80), 1700));
     }
     animate();
 
