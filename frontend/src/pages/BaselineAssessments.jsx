@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useOutletContext, useSearchParams } from "react-router-dom";
-import { BarChart3, BookOpenCheck, Download, Eraser, Save, Sparkles, Trash2, Upload, Users, Percent, CheckCircle2 } from "lucide-react";
+import { BarChart3, BookOpenCheck, Download, Eraser, Pencil, Save, Sparkles, Trash2, Upload, Users, Percent, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
 import { api, getLocalizedApiErrorMessage } from "@/lib/api";
 import { useTranslations } from "@/lib/i18n";
@@ -61,6 +61,8 @@ function BaselinePage({ context, view }) {
   const [studentId, setStudentId] = useState("");
   const [tab, setTab] = useState("overview");
   const [setupOpen, setSetupOpen] = useState(false);
+  const [metadataOpen, setMetadataOpen] = useState(false);
+  const [metadataForm, setMetadataForm] = useState({ title: "", class_names: {} });
   const today = new Date();
   const [form, setForm] = useState({ title: "", max_score: "", test_date: `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,"0")}-${String(today.getDate()).padStart(2,"0")}`, class_ids: [] });
   const [busy, setBusy] = useState(false);
@@ -178,6 +180,39 @@ function BaselinePage({ context, view }) {
     if (dirty && !window.confirm(t("baseline_leave"))) return;
     removeDraft(storageKey); setTick((v) => v + 1); setListTick((v) => v + 1);
   }
+  function openMetadataEditor() {
+    if (!snapshot || dirty || conflict) return;
+    const current = records?.find((record) => record.id === recordId);
+    const includedClasses = current?.classes || snapshot.classes || [];
+    setMetadataForm({
+      title: current?.title || snapshot.record.title || "",
+      class_names: Object.fromEntries(includedClasses.map((item) => [item.id, item.name || ""])),
+    });
+    setMetadataOpen(true);
+  }
+  async function updateMetadata(event) {
+    event.preventDefault();
+    if (busyRef.current || !snapshot || dirty || conflict) return;
+    const title = metadataForm.title.trim();
+    const classNames = Object.fromEntries(recordClasses.map((item) => [item.id, (metadataForm.class_names[item.id] || "").trim()]));
+    if (!title || title.length > 120 || !recordClasses.length || Object.values(classNames).some((name) => !name || name.length > 120)) {
+      toast.error(t("baseline_invalid_metadata"));
+      return;
+    }
+    busyRef.current = true; setBusy(true);
+    try {
+      const { data } = await api.patch(`/baseline-assessments/${recordId}/metadata`, {
+        revision: snapshot.record.revision,
+        title,
+        class_names: classNames,
+      });
+      setRecords((previous) => previous?.map((record) => record.id === recordId ? { ...record, ...data } : record));
+      setMetadataOpen(false); toast.success(t("baseline_record_updated")); setTick((value) => value + 1);
+    } catch (error) {
+      if (error?.response?.status === 409) setConflict(true);
+      toast.error(errorMessage(error, "baseline_metadata_failed"));
+    } finally { busyRef.current = false; setBusy(false); }
+  }
   async function setup(event) {
     event.preventDefault();
     if (busyRef.current) return;
@@ -274,12 +309,18 @@ function BaselinePage({ context, view }) {
   }
 
   const recordClasses = records?.find((r) => r.id === recordId)?.classes || [];
+  const currentRecord = records?.find((record) => record.id === recordId);
+  const metadataChanged = Boolean(metadataOpen && currentRecord && (
+    metadataForm.title.trim() !== (currentRecord.title || "")
+    || recordClasses.some((item) => (metadataForm.class_names[item.id] || "").trim() !== item.name)
+  ));
   const visibleRows = !analytics && classId ? rows.filter((s) => s.class_id === classId) : rows;
   const labels = snapshot?.labels;
   const navQuery = recordId ? `?record=${recordId}` : "";
   return <div dir={language === "ar" ? "rtl" : "ltr"} className="space-y-6" data-testid="baseline-page">
     <PageHeader title={t(analytics ? `${titleKey}_analytics` : titleKey)} description={t("baseline_description")} eyebrow={`${academicYear} · Q${displayQuarterNumber(semester, quarter)}`} badges={["75%+ · 50%+"]} action={<div className="flex flex-wrap gap-2">
       {!analytics && <Button onClick={() => setSetupOpen(!setupOpen)} disabled={busy}><BookOpenCheck className="me-2 h-4 w-4" />{t("baseline_setup")}</Button>}
+      {!analytics && snapshot && <Button variant="outline" onClick={openMetadataEditor} disabled={busy || loading || dirty || conflict} data-testid="baseline-edit-record"><Pencil className="me-2 h-4 w-4" />{t("baseline_edit_record")}</Button>}
       {!analytics && snapshot && <Button variant="destructive" onClick={deleteRecord} disabled={busy || loading || dirty || conflict} data-testid="baseline-delete-record"><Trash2 className="me-2 h-4 w-4" />{t("baseline_delete_record")}</Button>}
       {analytics && <Button onClick={() => download("pdf", true)} disabled={!snapshot || busy || loading || conflict}><Download className="me-2 h-4 w-4" />{t(busy ? "baseline_exporting" : "baseline_export")}</Button>}
     </div>} />
@@ -287,6 +328,15 @@ function BaselinePage({ context, view }) {
       <Button asChild variant={!analytics ? "default" : "outline"}><Link to={`/baseline-scores${navQuery}`}>{t("baseline_entry")}</Link></Button>
       <Button asChild variant={analytics ? "default" : "outline"}><Link to={`/baseline-analytics${navQuery}`} onClick={(e) => { if (dirty && !window.confirm(t("baseline_leave"))) e.preventDefault(); }}><BarChart3 className="me-2 h-4 w-4" />{t("baseline_analysis")}</Link></Button>
     </nav>
+    {metadataOpen && !analytics && snapshot && <Card data-testid="baseline-metadata-editor"><CardHeader><CardTitle>{t("baseline_edit_record")}</CardTitle><p className="text-sm leading-7 text-muted-foreground">{t("baseline_edit_record_hint")}</p></CardHeader><CardContent>
+      <form onSubmit={updateMetadata} className="space-y-5">
+        <fieldset disabled={busy} className="grid gap-4 md:grid-cols-2">
+          <label className="space-y-2 text-sm">{t("baseline_title")}<Input required maxLength={120} value={metadataForm.title} onChange={(event) => setMetadataForm((previous) => ({ ...previous, title: event.target.value }))} data-testid="baseline-edit-title" /></label>
+          {recordClasses.map((item) => <label key={item.id} className="space-y-2 text-sm">{t("baseline_class_display_name")}<Input required maxLength={120} value={metadataForm.class_names[item.id] || ""} onChange={(event) => setMetadataForm((previous) => ({ ...previous, class_names: { ...previous.class_names, [item.id]: event.target.value } }))} data-testid={`baseline-edit-class-${item.id}`} /></label>)}
+        </fieldset>
+        <div className="flex flex-wrap gap-3"><Button type="submit" disabled={busy || dirty || conflict || !metadataChanged}><Save className="me-2 h-4 w-4" />{t("baseline_update_record")}</Button><Button type="button" variant="outline" onClick={() => setMetadataOpen(false)} disabled={busy}>{t("baseline_cancel_edit")}</Button></div>
+      </form>
+    </CardContent></Card>}
     {setupOpen && !analytics && <Card><CardHeader><CardTitle>{t("baseline_setup")}</CardTitle><p className="text-sm leading-7 text-muted-foreground">{t("baseline_setup_hint")}</p></CardHeader><CardContent>
       <form onSubmit={setup} className="space-y-5"><fieldset disabled={busy} className="grid gap-4 md:grid-cols-3">
         <label className="space-y-2 text-sm">{t("baseline_title")}<Input required maxLength={120} value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} /></label>
@@ -303,7 +353,7 @@ function BaselinePage({ context, view }) {
       {schoolSection === "arabic" && <div className="rounded-2xl border border-primary/20 bg-primary/[0.03] p-4"><div className="flex flex-wrap items-center justify-between gap-3"><div><p className="font-semibold">{t("baseline_import_roster")}</p><p className="mt-1 max-w-3xl text-sm leading-7 text-muted-foreground">{t("baseline_import_roster_hint")}</p></div><input ref={rosterImportInputRef} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={importRoster} data-testid="baseline-roster-import-input" /><Button type="button" variant="secondary" onClick={() => rosterImportInputRef.current?.click()} disabled={busy || importingRoster || form.class_ids.length !== 1} data-testid="baseline-roster-import"><Upload className="me-2 h-4 w-4" />{importingRoster ? `${t("loading")}…` : t("baseline_import_roster")}</Button></div>{form.class_ids.length !== 1 && <p className="mt-2 text-sm font-medium text-amber-600">{t("baseline_import_roster_one_class")}</p>}{rosterImportSummary && <p className="mt-2 text-sm font-medium text-emerald-600" data-testid="baseline-roster-import-ready">{t("baseline_import_roster_ready")}</p>}</div>}
       <Button type="submit" disabled={busy || importingRoster || !classes.length}>{t("baseline_create")}</Button></form>
     </CardContent></Card>}
-    <Card><CardContent className="grid gap-4 pt-6 md:grid-cols-3"><label className="space-y-2 text-sm"><span>{t("baseline_select")}</span><select aria-label={t("baseline_select")} className={selectStyle} value={recordId} disabled={busy || !records?.length} onChange={(e) => { setRecordId(e.target.value); setClassId(""); setSearch({ record: e.target.value }, { replace: true }); }}><option value="" disabled>—</option>{records?.map((r) => <option key={r.id} value={r.id}>{r.title} · {r.teacher_name} · /{r.max_score}</option>)}</select></label>
+    <Card><CardContent className="grid gap-4 pt-6 md:grid-cols-3"><label className="space-y-2 text-sm"><span>{t("baseline_select")}</span><select aria-label={t("baseline_select")} className={selectStyle} value={recordId} disabled={busy || !records?.length} onChange={(e) => { setRecordId(e.target.value); setClassId(""); setMetadataOpen(false); setSearch({ record: e.target.value }, { replace: true }); }}><option value="" disabled>—</option>{records?.map((r) => <option key={r.id} value={r.id}>{r.title} · {r.teacher_name} · /{r.max_score}</option>)}</select></label>
       <label className="space-y-2 text-sm"><span>{t("baseline_classes")}</span><select aria-label={t("baseline_classes")} className={selectStyle} value={classId} disabled={!recordId || busy} onChange={(e) => setClassId(e.target.value)}><option value="">{t("baseline_all")}</option>{recordClasses.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></label>
       <div className="flex items-end"><AcademicTermSelect disabled={busy} testIdPrefix="baseline-term" triggerClassName="w-full sm:w-full" /></div>
     </CardContent></Card>

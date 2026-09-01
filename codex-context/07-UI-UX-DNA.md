@@ -22,6 +22,7 @@ Note: Root `design_guidelines.json` describes an older “EduTrack Pro / Swiss U
 - Teachers set up **mark entry**, not a test builder. A title/date/maximum and selected classes define a fixed historical roster. Input accepts Western, Arabic and Persian digits, preserving blank vs zero. Saved results remain visible until edits are saved; transient drafts are in sessionStorage keyed by account and record, and revision conflicts require an explicit reload.
 - Baseline maximum input (2026-08-29) uses a `0.00` placeholder, `0.01` minimum/step and two-place formatting on blur (`30` -> `30.00`). New setup rejects excess fractional precision instead of silently rounding the denominator; zero remains invalid. Existing records and all scoring/PDF calculations are unchanged.
 - Baseline donut is prominent in overview, individual view and report preview. Horizontal percentage bars, level distribution and class comparisons use server values. PDF uses the same snapshot with vector charts and Amiri; print pagination differs from the responsive screen layout, but results, narratives and chart quantities do not.
+- Baseline entry in both sections includes an Edit test details card for the selected record. It edits only the title and snapshot class labels, clearly states that enrollment/marks/maximum/scope are preserved, and uses the same bilingual RTL surface and revision-conflict behavior as mark entry.
 
 - Top horizontal grouped navigation (not left colorful sidebar — removed).
 - Academic context bar: year + semester/quarter select + refresh.

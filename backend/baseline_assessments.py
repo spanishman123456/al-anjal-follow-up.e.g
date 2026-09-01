@@ -1,7 +1,8 @@
 """Isolated, score-only baseline records. Never contributes to quarter grades.
 
-Roster and maximum are fixed at setup; totals can be corrected with a revision
-check. The same immutable analytics snapshot drives the screen and PDF.
+Roster membership and maximum are fixed at setup. Totals and the record's
+display metadata can be corrected with a revision check. The same analytics
+snapshot drives the screen and PDF.
 """
 import hashlib
 import io
@@ -88,6 +89,39 @@ class ScoreUpdate(BaseModel):
             if score is not None and (isinstance(score, bool) or not isinstance(score, (int, float)) or not math.isfinite(score)):
                 raise ValueError("Scores must be finite numbers or null")
         return values
+
+
+class MetadataUpdate(BaseModel):
+    """Rename a record and its snapshot class labels without changing scope."""
+
+    model_config = ConfigDict(extra="forbid")
+    revision: int = Field(ge=1)
+    title: str = Field(min_length=1, max_length=120)
+    class_names: Dict[str, str] = Field(min_length=1, max_length=200)
+
+    @field_validator("title")
+    @classmethod
+    def clean_title(cls, value):
+        return clean_display_text(value, "Enter a record title")
+
+    @field_validator("class_names")
+    @classmethod
+    def clean_class_names(cls, values):
+        if not isinstance(values, dict):
+            raise ValueError("Expected class name map")
+        return {
+            class_id: clean_display_text(name, "Enter a class name")
+            for class_id, name in values.items()
+        }
+
+
+def clean_display_text(value, error_message):
+    if not isinstance(value, str):
+        raise ValueError(error_message)
+    value = value.strip()
+    if not value or len(value) > 120 or any(ord(c) < 32 for c in value):
+        raise ValueError(error_message)
+    return value
 
 
 def number(value):
@@ -289,6 +323,45 @@ def make_router(db, get_current_user, section_query):
             "record_id": record_id,
             "title": record.get("title") or record_id,
             "students_in_snapshot": len(record.get("roster", [])),
+        }
+
+    @router.patch("/{record_id}/metadata")
+    async def update_metadata(record_id: str, payload: MetadataUpdate, user=Depends(get_current_user)):
+        record = await record_for(record_id, user)
+        if record["revision"] != payload.revision:
+            fail("baseline_conflict", 409)
+        class_ids = list(record.get("class_ids") or [])
+        if set(payload.class_names) != set(class_ids):
+            fail("baseline_invalid_classes")
+        classes = [
+            {"id": class_id, "name": payload.class_names[class_id]}
+            for class_id in class_ids
+        ]
+        roster = [
+            {**student, "class_name": payload.class_names[student["class_id"]]}
+            for student in record.get("roster", [])
+        ]
+        now = datetime.now(timezone.utc).isoformat()
+        result = await db.baseline_assessments.update_one(
+            {"_id": record_id, "revision": payload.revision},
+            {
+                "$set": {
+                    "title": payload.title,
+                    "classes": classes,
+                    "roster": roster,
+                    "updated_at": now,
+                    "updated_by": user["id"],
+                },
+                "$inc": {"revision": 1},
+            },
+        )
+        if not result.matched_count:
+            fail("baseline_conflict", 409)
+        return {
+            "id": record_id,
+            "title": payload.title,
+            "classes": classes,
+            "revision": payload.revision + 1,
         }
 
     @router.patch("/{record_id}/scores")

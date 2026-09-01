@@ -5,6 +5,7 @@
 - Diagnostic dropdown items are now explicitly deletable mark-entry records. Revision-guarded deletion removes only the selected frozen roster and its diagnostic marks; it leaves enrollment, classes and every other record unchanged, and tolerates legacy records with no title.
 - Arabic diagnostic setup now imports one exact class roster from Excel through the same preview/apply guard used by Arabic Student Management. The selected class remains authoritative, Arabic `الاسم` / `رقم الهوية` headers and legacy numeric-name repair are preserved, and the subsequently created record snapshots real student and class names.
 - A source-level lifecycle test protects Arabic enrollment import/deletion, actual class deletion, diagnostic roster import and diagnostic record deletion from silently disappearing.
+- International pre-test and Arabic diagnostic entry now share a revision-safe Edit test details action. It corrects the selected test title and snapshot class display names while preserving class IDs, student membership, marks, maximum and academic scope; the corrected labels flow through lists, analytics and exports.
 - Verification: all 74 backend tests and all 14 frontend suites / 75 tests pass; Python compilation, optimized CRACO build and SPA fallback generation also pass. No live MongoDB writes were used.
 
 ## Score-entry deletion coverage (2026-08-30)
@@ -76,7 +77,7 @@
 - Analytics & Reports with Visual Board and premium PDF/Excel paths
 - Remedial plans, rewards/certificates, lesson plan generator
 - Programs now appears in both sections. Remedial reports select a real diagnostic/pre-test, quarter final-test block, quarter total or semester aggregate and list only actual marks strictly below 50%; blanks are excluded and zero remains a real score. Subject/weakness/date/signatories are editable, while names/classes/marks come from a protected snapshot and export to a bilingual school PDF. Rewards load the active section/year roster, and the lesson-plan mapper recognizes common Arabic template labels.
-- Remedial-program verification (2026-09-01): 86 backend tests and 16 frontend suites / 99 tests pass; the optimized production build succeeds. The Arabic two-page QA PDF was rendered at 144 DPI and inspected page by page for logo, RTL line order, repeated table header, marks, names and signatures.
+- Current verification (2026-09-01): 87 backend tests and 16 frontend suites / 101 tests pass, including bilingual baseline metadata editing and its preservation/permission guards; the optimized production build succeeds. The Arabic remedial two-page QA PDF was rendered at 144 DPI and inspected page by page for logo, RTL line order, repeated table header, marks, names and signatures.
 - Multi-year approved-school-PDF calendar import/history page, notifications log, settings/users
 - Favicon from Al Anjal logo
 - Render deployment blueprint

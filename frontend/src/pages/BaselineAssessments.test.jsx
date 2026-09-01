@@ -134,6 +134,29 @@ describe("baseline page", () => {
     expect(container.querySelector('[data-testid="baseline-export-excel"]')).not.toBeNull();
     expect(container.querySelector('[data-testid="baseline-export-pdf"]')).not.toBeNull();
   });
+  it.each([
+    ["en", "international", "Updated pre-test", "Grade 4 A"],
+    ["ar", "arabic", "اختبار تشخيصي محدث", "الصف الرابع أ"],
+  ])("renames the saved test and its snapshot class label in %s", async (lang, section, title, className) => {
+    mockContext.language = lang;
+    mockContext.schoolSection = section;
+    await render();
+    await act(async () => container.querySelector('[data-testid="baseline-edit-record"]').click());
+    const titleInput = container.querySelector('[data-testid="baseline-edit-title"]');
+    const classInput = container.querySelector('[data-testid="baseline-edit-class-c1"]');
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set.call(titleInput, title);
+      titleInput.dispatchEvent(new Event("input", { bubbles: true }));
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set.call(classInput, className);
+      classInput.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await act(async () => button(getTranslation(lang, "baseline_update_record")).click());
+    expect(api.patch).toHaveBeenCalledWith("/baseline-assessments/r1/metadata", {
+      revision: 1,
+      title,
+      class_names: { c1: className },
+    });
+  });
   it("saves only changed totals with the displayed revision", async () => {
     await render(); await changeInput(1, "10");
     await act(async () => button("Save marks").click());

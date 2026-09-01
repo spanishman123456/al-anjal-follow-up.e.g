@@ -193,6 +193,42 @@ def test_atomic_save_validation_and_concurrency(api_fixture):
     assert client.patch(url, json={"revision": 2, "scores": {"s0": 10}}).status_code == 409
 
 
+def test_metadata_rename_preserves_scope_roster_and_scores(api_fixture):
+    client, db, state = api_fixture
+    base = "/api/baseline-assessments/sample"
+    original = copy.deepcopy(db.baseline_assessments.rows[0])
+    payload = {
+        "revision": 1,
+        "title": "  اختبار تشخيصي محدث  ",
+        "class_names": {"c1": "الصف الرابع أ", "c2": "الصف الرابع ب"},
+    }
+    response = client.patch(base + "/metadata", json=payload)
+    assert response.status_code == 200, response.text
+    assert response.json() == {
+        "id": "sample",
+        "title": "اختبار تشخيصي محدث",
+        "classes": [
+            {"id": "c1", "name": "الصف الرابع أ"},
+            {"id": "c2", "name": "الصف الرابع ب"},
+        ],
+        "revision": 2,
+    }
+    saved = db.baseline_assessments.rows[0]
+    assert saved["title"] == "اختبار تشخيصي محدث"
+    assert saved["class_ids"] == original["class_ids"]
+    assert saved["max_score"] == original["max_score"]
+    assert saved["scores"] == original["scores"]
+    assert [(row["id"], row["class_id"]) for row in saved["roster"]] == [
+        (row["id"], row["class_id"]) for row in original["roster"]
+    ]
+    assert {row["class_name"] for row in saved["roster"] if row["class_id"] == "c1"} == {"الصف الرابع أ"}
+    assert client.patch(base + "/metadata", json=payload).status_code == 409
+    invalid = {"revision": 2, "title": "Updated", "class_names": {"c1": "4A"}}
+    assert client.patch(base + "/metadata", json=invalid).status_code == 422
+    state["user"].update(id="another-teacher", assigned_class_ids=["c1", "c2"])
+    assert client.patch(base + "/metadata", json={**invalid, "class_names": {"c1": "4A", "c2": "4B"}}).status_code == 404
+
+
 def test_list_scope_and_export_snapshot_guard(api_fixture):
     client, _, state = api_fixture
     base = "/api/baseline-assessments"

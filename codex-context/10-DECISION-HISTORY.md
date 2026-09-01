@@ -1,5 +1,11 @@
 # 10 — Decision History
 
+## 2026-09-01 — Baseline titles and snapshot class labels are correctable metadata
+
+**Decision:** International pre-test and Arabic diagnostic records expose one shared Edit test details action. The owning Teacher or Admin may update the selected record title and its stored class display labels with the current revision. The update deliberately preserves canonical classes, class IDs, roster membership, scores, maximum and academic scope, while mirroring corrected labels into the frozen roster so analytics and exports remain internally consistent.
+
+**Codex Guidance:** Do not turn this metadata correction into class transfer, canonical class rename, maximum editing or roster replacement. Those operations have separate workflows and different data-integrity consequences.
+
 ## Decision: Diagnostic records have an explicit safe lifecycle (2026-08-30)
 
 A diagnostic dropdown item is a frozen mark-entry record, not an enrollment class. Admin/owning Teacher may delete the selected record only at its displayed revision; the operation removes its embedded roster and diagnostic marks but never deletes students, classes or unrelated records. Arabic setup reuses the exact-class enrollment Excel preview/apply flow, including numeric-name repair, before creating a fresh snapshot with real student and class names.
