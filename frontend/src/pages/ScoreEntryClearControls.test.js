@@ -81,3 +81,19 @@ describe("Arabic roster and diagnostic lifecycle controls stay available", () =>
     expect(analyticsSource).toContain('isReports ? "arabic-reports" : "arabic-analytics"');
   });
 });
+
+describe("International student rewards match the Arabic direct toggle", () => {
+  const source = fs.readFileSync(path.join(__dirname, "Students.jsx"), "utf8");
+
+  it("awards or removes the badge directly from the student menu", () => {
+    expect(source).toContain("if (hasBadge)");
+    expect(source).toContain("handleRemoveBadge(student)");
+    expect(source).toContain("handleAwardBadge(student, computePerformanceLevel(currentScores))");
+    expect(source).toContain('{hasBadge ? t("remove_badge") : t("badge")}');
+  });
+
+  it("does not restore the obsolete badge reward modal", () => {
+    expect(source).not.toContain("RewardBadgeModal");
+    expect(source).not.toContain("rewardModalOpen");
+  });
+});

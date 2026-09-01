@@ -40,7 +40,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { MoreHorizontal, Award, FileText, MessageCircle, PartyPopper, X } from "lucide-react";
+import { MoreHorizontal, Award, FileText, MessageCircle, PartyPopper } from "lucide-react";
 import { AssessmentPageFooter } from "@/components/AssessmentPageFooter";
 import { buildAcademicExportFilename } from "@/lib/exportFilenames";
 import "@/reward-modal.css";
@@ -159,63 +159,6 @@ function CertificateDialog({ reward, open, onOpenChange }) {
   );
 }
 
-function RewardBadgeModal({
-  open,
-  onOpenChange,
-  student,
-  isSubmitting,
-  onAward,
-  onRemove,
-}) {
-  const canAward = student?.performance === "advanced" || student?.performance === "on_level";
-  const hasBadge = Boolean(student?.hasBadge);
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="reward-modal-panel reward-modal-overlay max-w-xl p-0 overflow-hidden">
-        <div className="p-5 md:p-7 space-y-5">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <p className="text-xs uppercase tracking-[0.2em] text-primary/80">Student Reward</p>
-              <h3 className="text-xl font-semibold">Badge Reward</h3>
-              <p className="text-sm text-muted-foreground">
-                {student?.name || "Student"} - {student?.performanceLabel || "Performance"}
-              </p>
-            </div>
-            <Button type="button" size="icon" variant="ghost" onClick={() => onOpenChange(false)}>
-              <X className="h-4 w-4" />
-            </Button>
-          </div>
-
-          <div className="rounded-xl border border-border/70 bg-card/40 p-3">
-            {canAward ? (
-              <p className="text-sm text-muted-foreground">
-                This student is performing well and can receive a badge reward.
-              </p>
-            ) : (
-              <p className="text-sm text-muted-foreground">
-                This student is currently below level / needs support. You can remove badge if needed.
-              </p>
-            )}
-          </div>
-
-          <div className="flex flex-wrap justify-end gap-2">
-            <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isSubmitting}>
-              Close
-            </Button>
-            <Button variant="destructive" onClick={onRemove} disabled={isSubmitting || !hasBadge}>
-              {isSubmitting ? "Please wait..." : "Remove Badge"}
-            </Button>
-            <Button onClick={onAward} disabled={isSubmitting || !canAward}>
-              {isSubmitting ? "Please wait..." : "Award Badge"}
-            </Button>
-          </div>
-        </div>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
 export default function Students() {
   const { language, semester, quarter, academicYear, profile, classes: contextClasses, classesLoaded } = useOutletContext();
   const t = useTranslations(language);
@@ -254,8 +197,6 @@ export default function Students() {
   const [badgeStudentIds, setBadgeStudentIds] = useState(() => getRewardSetsFromStorage().badge);
   const [certificateStudentIds, setCertificateStudentIds] = useState(() => getRewardSetsFromStorage().certificate);
   const [commentStudentIds, setCommentStudentIds] = useState(() => getRewardSetsFromStorage().comment);
-  const [rewardModalOpen, setRewardModalOpen] = useState(false);
-  const [rewardStudent, setRewardStudent] = useState(null);
   const [isRewardSubmitting, setIsRewardSubmitting] = useState(false);
   const [badgeGlowStudentIds, setBadgeGlowStudentIds] = useState(new Set());
   const [celebration, setCelebration] = useState(null);
@@ -280,19 +221,7 @@ export default function Students() {
     }
   };
 
-  const openRewardModal = (student, performanceKey, performanceLabel, buttonElement) => {
-    const normalized = normalizeRewardPerformance(performanceKey || performanceLabel);
-    setRewardStudent({
-      id: String(student.id),
-      name: student.full_name,
-      performance: normalized,
-      performanceLabel,
-      hasBadge: badgeStudentIds.has(String(student.id)),
-    });
-    setRewardModalOpen(true);
-    const targetElement =
-      buttonElement ||
-      document.querySelector(`[data-testid="student-actions-${String(student.id)}"]`);
+  const rememberRewardOrigin = (targetElement) => {
     if (targetElement?.getBoundingClientRect) {
       const rect = targetElement.getBoundingClientRect();
       rewardOriginRef.current = {
@@ -304,23 +233,30 @@ export default function Students() {
     }
   };
 
-  const handleAwardBadge = async () => {
-    if (!rewardStudent || isRewardSubmitting) return;
+  const handleAwardBadge = async (student, performance) => {
+    if (!student || isRewardSubmitting) return;
+    const normalizedPerformance = normalizeRewardPerformance(performance);
+    if (normalizedPerformance !== "advanced" && normalizedPerformance !== "on_level") {
+      toast.error(t("badge_requires_on_level"));
+      return;
+    }
+    const studentId = String(student.id);
+    const studentName = student.full_name;
     try {
       setIsRewardSubmitting(true);
       const response = await api.post("/rewards/award-badge", {
-        student_id: rewardStudent.id,
-        student_name: rewardStudent.name,
-        performance: rewardStudent.performance,
+        student_id: studentId,
+        student_name: studentName,
+        performance: normalizedPerformance,
       });
-      triggerRewardCelebration(rewardStudent.name);
-      setStudentReward(rewardStudent.id, "badge", true);
-      setBadgeStudentIds((prev) => new Set([...prev, rewardStudent.id]));
-      setBadgeGlowStudentIds((prev) => new Set([...prev, rewardStudent.id]));
+      triggerRewardCelebration(studentName);
+      setStudentReward(studentId, "badge", true);
+      setBadgeStudentIds((prev) => new Set([...prev, studentId]));
+      setBadgeGlowStudentIds((prev) => new Set([...prev, studentId]));
       window.setTimeout(() => {
         setBadgeGlowStudentIds((prev) => {
           const next = new Set(prev);
-          next.delete(rewardStudent.id);
+          next.delete(studentId);
           return next;
         });
       }, 2200);
@@ -339,32 +275,31 @@ export default function Students() {
           });
         }, 5000);
       }
-      toast.success(`${rewardStudent.name} badge awarded`);
-      setRewardModalOpen(false);
+      toast.success(t("student_action_added"));
     } catch (error) {
-      toast.error(getApiErrorMessage(error) || "Failed to award badge");
+      toast.error(getApiErrorMessage(error) || t("student_action_failed"));
     } finally {
       setIsRewardSubmitting(false);
     }
   };
 
-  const handleRemoveBadge = async () => {
-    if (!rewardStudent || isRewardSubmitting) return;
+  const handleRemoveBadge = async (student) => {
+    if (!student || isRewardSubmitting) return;
+    const studentId = String(student.id);
     try {
       setIsRewardSubmitting(true);
       await api.post("/rewards/remove-badge", {
-        student_id: rewardStudent.id,
+        student_id: studentId,
       });
-      setStudentReward(rewardStudent.id, "badge", false);
+      setStudentReward(studentId, "badge", false);
       setBadgeStudentIds((prev) => {
         const next = new Set(prev);
-        next.delete(rewardStudent.id);
+        next.delete(studentId);
         return next;
       });
-      toast.success(`${rewardStudent.name} badge removed`);
-      setRewardModalOpen(false);
+      toast.success(t("student_action_removed"));
     } catch (error) {
-      toast.error(getApiErrorMessage(error) || "Failed to remove badge");
+      toast.error(getApiErrorMessage(error) || t("student_action_failed"));
     } finally {
       setIsRewardSubmitting(false);
     }
@@ -1488,12 +1423,13 @@ export default function Students() {
               {filteredStudents.length ? (
                 filteredStudents.map((student) => {
                   const currentScores = bulkScores[student.id] || student;
+                  const hasBadge = badgeStudentIds.has(String(student.id));
                   return (
                     <TableRow key={student.id} data-testid={`student-row-${student.id}`}>
                       <TableCell data-testid={`student-name-${student.id}`}>
                         <span className="inline-flex flex-wrap items-center gap-2">
                           {student.full_name}
-                          {badgeStudentIds.has(String(student.id)) && (
+                          {hasBadge && (
                             <span
                               className={`badge-party-popper reward-badge-btn group inline-flex items-center gap-1.5 rounded-full border-2 border-amber-400/60 bg-gradient-to-r from-amber-200 via-amber-100 to-rose-200 px-2.5 py-1 text-xs font-semibold text-amber-900 shadow-sm transition-all duration-200 hover:scale-105 hover:shadow-md hover:border-amber-500/80 dark:from-amber-700/40 dark:via-amber-600/30 dark:to-rose-700/40 dark:text-amber-100 dark:border-amber-500/50 ${badgeGlowStudentIds.has(String(student.id)) ? "reward-glow" : ""}`}
                               title={t("badge") || "Badge"}
@@ -1606,18 +1542,19 @@ export default function Students() {
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
                             <DropdownMenuItem
+                              disabled={isRewardSubmitting}
                               onClick={(event) => {
-                                openRewardModal(
-                                  student,
-                                  computePerformanceLevel(bulkScores[student.id] || student),
-                                  t(computePerformanceLevel(bulkScores[student.id] || student)),
-                                  event.currentTarget,
-                                );
+                                rememberRewardOrigin(event.currentTarget);
+                                if (hasBadge) {
+                                  handleRemoveBadge(student);
+                                } else {
+                                  handleAwardBadge(student, computePerformanceLevel(currentScores));
+                                }
                               }}
                               data-testid={`student-action-badge-${student.id}`}
                             >
                               <Award className="mr-2 h-4 w-4" />
-                              {t("badge") || "Badge"}
+                              {hasBadge ? t("remove_badge") : t("badge")}
                             </DropdownMenuItem>
                             <DropdownMenuItem
                               onClick={() => {
@@ -2162,15 +2099,6 @@ export default function Students() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
-      <RewardBadgeModal
-        open={rewardModalOpen}
-        onOpenChange={setRewardModalOpen}
-        student={rewardStudent}
-        isSubmitting={isRewardSubmitting}
-        onAward={handleAwardBadge}
-        onRemove={handleRemoveBadge}
-      />
 
       <CertificateDialog
         reward={certificateFor}
