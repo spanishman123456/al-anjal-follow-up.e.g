@@ -37,6 +37,7 @@ import { PerformanceLevelBadge } from "@/components/PerformanceLevelBadge";
 import { quarterExamColumnLabels } from "@/lib/academicScope";
 import { buildAcademicExportFilename } from "@/lib/exportFilenames";
 import { StudentScoreClearButton } from "@/components/StudentScoreClearButton";
+import { Loader2 } from "lucide-react";
 
 const formatScore = (value, suffix = "") => {
   if (value === null || value === undefined) return "—";
@@ -145,9 +146,11 @@ export default function FinalExamsAssessment() {
   const [fillValues, setFillValues] = useState({ quarter1_practical: "", quarter1_theory: "" });
   const bulkFileInputRef = useRef(null);
   const latestLoadRequestIdRef = useRef(0);
+  const [isLoadingStudents, setIsLoadingStudents] = useState(true);
 
   const loadData = async (weekId = activeWeekId) => {
     const requestId = ++latestLoadRequestIdRef.current;
+    setIsLoadingStudents(true);
     try {
       const needClassesFromApi = !(classesLoaded && contextClasses?.length);
       const [studentRes, classRes] = await Promise.all([
@@ -158,6 +161,7 @@ export default function FinalExamsAssessment() {
       ]);
       if (latestLoadRequestIdRef.current !== requestId) return;
       setStudents(studentRes.data || []);
+      setIsLoadingStudents(false);
       if (needClassesFromApi) {
         const classesFromApi = classRes?.data;
         if (classesFromApi?.length) setClasses(classesFromApi);
@@ -167,6 +171,7 @@ export default function FinalExamsAssessment() {
       }
     } catch (error) {
       if (latestLoadRequestIdRef.current !== requestId) return;
+      setIsLoadingStudents(false);
       toast.error(getApiErrorMessage(error) || "Failed to load data");
     }
   };
@@ -760,7 +765,16 @@ export default function FinalExamsAssessment() {
                 })
               ) : (
                 <TableRow>
-                  <TableCell colSpan={8} className="text-center text-muted-foreground">{t("no_data")}</TableCell>
+                  <TableCell colSpan={8} className="text-center text-muted-foreground">
+                    {isLoadingStudents ? (
+                      <span className="inline-flex items-center gap-2">
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        {t("loading") || "Loading..."}
+                      </span>
+                    ) : (
+                      t("no_data")
+                    )}
+                  </TableCell>
                 </TableRow>
               )}
             </TableBody>

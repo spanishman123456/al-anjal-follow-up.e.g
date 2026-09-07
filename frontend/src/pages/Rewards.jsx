@@ -109,8 +109,13 @@ export default function Rewards() {
 
   useEffect(() => {
     // Badge state used to live only in this browser's localStorage, so a badge
-    // awarded on one device/browser was invisible everywhere else. Reconcile
-    // against the server's event log (the real source of truth) on load.
+    // awarded on one device/browser was invisible everywhere else. Pull in the
+    // server's event log (the real source of truth for badges awarded via the
+    // Students page). This merge is additive-only: unlike Students.jsx, this
+    // page's own Badge toggle (handleBadge below) is local-only and never
+    // reaches the server, so replacing local state with the server set would
+    // wipe out badges a teacher just toggled here. Once handleBadge also calls
+    // the award/remove-badge API, this can switch to full replace like Students.jsx.
     let cancelled = false;
     api
       .get("/rewards/badge-status")
@@ -119,10 +124,7 @@ export default function Rewards() {
         const ids = res.data?.student_ids;
         if (!Array.isArray(ids)) return;
         const serverSet = new Set(ids.map(String));
-        setBadgeRewardIds(serverSet);
-        getRewardSetsFromStorage().badge.forEach((id) => {
-          if (!serverSet.has(id)) setStudentReward(id, "badge", false);
-        });
+        setBadgeRewardIds((prev) => new Set([...prev, ...serverSet]));
         serverSet.forEach((id) => setStudentReward(id, "badge", true));
       })
       .catch(() => null);

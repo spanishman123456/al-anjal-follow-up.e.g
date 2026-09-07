@@ -3,6 +3,7 @@ import { useOutletContext } from "react-router-dom";
 import { toast } from "sonner";
 import { api, getApiErrorMessage, BULK_SAVE_TIMEOUT_MS } from "@/lib/api";
 import { useTranslations } from "@/lib/i18n";
+import { Loader2 } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -137,10 +138,12 @@ export default function AssessmentMarks() {
   const [bulkConfirmOpen, setBulkConfirmOpen] = useState(false);
   const [clearScoresOpen, setClearScoresOpen] = useState(false);
   const [fillValues, setFillValues] = useState({ quiz1: "", quiz2: "", chapter_test1_practical: "" });
+  const [isLoadingStudents, setIsLoadingStudents] = useState(true);
   const latestLoadRequestIdRef = useRef(0);
 
   const loadData = async (weekId = activeWeekId) => {
     const requestId = ++latestLoadRequestIdRef.current;
+    setIsLoadingStudents(true);
     try {
       const needClassesFromApi = !(classesLoaded && contextClasses?.length);
       const [studentRes, classRes] = await Promise.all([
@@ -151,6 +154,7 @@ export default function AssessmentMarks() {
       ]);
       if (latestLoadRequestIdRef.current !== requestId) return;
       setStudents(studentRes.data || []);
+      setIsLoadingStudents(false);
       if (needClassesFromApi) {
         const classesFromApi = classRes?.data;
         if (classesFromApi?.length) setClasses(classesFromApi);
@@ -160,6 +164,7 @@ export default function AssessmentMarks() {
       }
     } catch (error) {
       if (latestLoadRequestIdRef.current !== requestId) return;
+      setIsLoadingStudents(false);
       toast.error(getApiErrorMessage(error) || "Failed to load data");
     }
   };
@@ -785,7 +790,14 @@ export default function AssessmentMarks() {
               ) : (
                 <TableRow>
                   <TableCell colSpan={8} className="text-center text-muted-foreground">
-                    {t("no_data")}
+                    {isLoadingStudents ? (
+                      <span className="inline-flex items-center gap-2">
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        {t("loading") || "Loading..."}
+                      </span>
+                    ) : (
+                      t("no_data")
+                    )}
                   </TableCell>
                 </TableRow>
               )}

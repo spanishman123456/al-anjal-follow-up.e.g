@@ -17,7 +17,7 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { Trash2 } from "lucide-react";
+import { Trash2, Loader2 } from "lucide-react";
 import { performanceStatCellClasses } from "@/lib/performanceBadges";
 
 export default function Classes() {
@@ -34,6 +34,7 @@ export default function Classes() {
   const [selectedClass, setSelectedClass] = useState(null);
   const [clearScoresDialogOpen, setClearScoresDialogOpen] = useState(false);
   const [classToClear, setClassToClear] = useState(null);
+  const [isLoadingClasses, setIsLoadingClasses] = useState(true);
   const latestLoadRequestIdRef = useRef(0);
 
   const selectedTermLabel =
@@ -54,9 +55,11 @@ export default function Classes() {
 
   const loadClasses = async () => {
     const requestId = ++latestLoadRequestIdRef.current;
+    setIsLoadingClasses(true);
     try {
       const baseClassesRes = await api.get("/classes", { params: { school_section: schoolSection, academic_year: academicYear } });
       if (latestLoadRequestIdRef.current !== requestId) return;
+      setIsLoadingClasses(false);
       const baseClasses = (baseClassesRes.data || []).map((cls) => ({
         class_id: cls.id,
         class_name: cls.name,
@@ -94,6 +97,7 @@ export default function Classes() {
         .catch(() => null);
     } catch (error) {
       if (latestLoadRequestIdRef.current !== requestId) return;
+      setIsLoadingClasses(false);
       try {
         const response = await api.get(schoolSection === "arabic" ? "/arabic/grades" : "/classes/summary", {
           params: schoolSection === "arabic" ? { academic_year: academicYear, semester: semesterNumber, quarter } : { semester: semesterNumber, quarter },
@@ -276,6 +280,12 @@ export default function Classes() {
       </Card>
 
       <section className="section-bg-alt-1 grid gap-6 rounded-xl border border-border/50 p-4 md:grid-cols-2 xl:grid-cols-3 animate-stagger" data-testid="classes-grid">
+        {isLoadingClasses && !classes.length && (
+          <p className="inline-flex items-center gap-2 text-sm text-muted-foreground" data-testid="classes-loading">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            {t("loading") || "Loading..."}
+          </p>
+        )}
         {classes.map((cls) => (
           <Card key={cls.class_id} className="card-hover" data-testid={`class-card-${cls.class_id}`}>
             <CardHeader className="flex flex-row items-start justify-between">

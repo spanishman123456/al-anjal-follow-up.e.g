@@ -209,7 +209,10 @@ export default function Students() {
       id: `${Date.now()}-${studentName}`,
       studentName,
       origin: rewardOriginRef.current || { x: 0.5, y: 0.38 },
-      dir: language === "ar" ? "rtl" : "ltr",
+      // This page is International-department only, and its celebration copy is
+      // always English (see title/subtitle below), so keep the banner LTR
+      // regardless of the current UI language toggle.
+      dir: "ltr",
     });
     window.setTimeout(() => setCelebration(null), 5200);
     const audioEl = document.getElementById("reward-sound");
@@ -238,7 +241,7 @@ export default function Students() {
     if (!student || isRewardSubmitting) return;
     const normalizedPerformance = normalizeRewardPerformance(performance);
     if (normalizedPerformance !== "advanced" && normalizedPerformance !== "on_level") {
-      toast.error(t("badge_requires_on_level"));
+      toast.error("Badges can be awarded only when the selected week's performance is On Level.");
       return;
     }
     const studentId = String(student.id);
@@ -267,18 +270,18 @@ export default function Students() {
           ? certificateUrl
           : `${BACKEND_ROOT_URL}${certificateUrl}`;
         window.setTimeout(() => {
-          toast.success(t("reward_certificate_ready"), {
+          toast.success("The celebration is complete — the certificate is ready.", {
             duration: 12000,
             action: {
-              label: t("open_certificate"),
+              label: "Open certificate",
               onClick: () => window.open(absolute, "_blank", "noopener,noreferrer"),
             },
           });
         }, 5000);
       }
-      toast.success(t("student_action_added"));
+      toast.success("Student action added");
     } catch (error) {
-      toast.error(getApiErrorMessage(error) || t("student_action_failed"));
+      toast.error(getApiErrorMessage(error) || "Student action failed");
     } finally {
       setIsRewardSubmitting(false);
     }
@@ -298,9 +301,9 @@ export default function Students() {
         next.delete(studentId);
         return next;
       });
-      toast.success(t("student_action_removed"));
+      toast.success("Student action removed");
     } catch (error) {
-      toast.error(getApiErrorMessage(error) || t("student_action_failed"));
+      toast.error(getApiErrorMessage(error) || "Student action failed");
     } finally {
       setIsRewardSubmitting(false);
     }
@@ -1478,7 +1481,7 @@ export default function Students() {
                           {certificateStudentIds.has(String(student.id)) && (
                             <span className="inline-flex items-center gap-1 rounded bg-sky-100 px-2 py-0.5 text-xs font-medium text-sky-700 dark:bg-sky-900/50 dark:text-sky-300">
                               <FileText className="h-3.5 w-3.5" />
-                              {t("certificate") || "Certificate"}
+                              Certificate
                             </span>
                           )}
                           {commentStudentIds.has(String(student.id)) && (
@@ -1618,8 +1621,8 @@ export default function Students() {
                             >
                               <FileText className="mr-2 h-4 w-4" />
                               {certificateStudentIds.has(String(student.id))
-                                ? (t("remove_certificate") || "Remove certificate")
-                                : (t("certificate") || "Certificate")}
+                                ? "Remove certificate"
+                                : "Certificate"}
                             </DropdownMenuItem>
                             <DropdownMenuItem
                               onClick={() => {
@@ -1637,8 +1640,8 @@ export default function Students() {
                             >
                               <MessageCircle className="mr-2 h-4 w-4" />
                               {commentStudentIds.has(String(student.id))
-                                ? (t("remove_comment") || "Remove comment")
-                                : (t("comment") || "Comment")}
+                                ? "Remove comment"
+                                : "Comment"}
                             </DropdownMenuItem>
                             {!isTeacher && (
                               <>
@@ -2152,8 +2155,8 @@ export default function Students() {
       />
       <RewardCelebration
         celebration={celebration}
-        title={t("reward_celebration_title")}
-        subtitle={t("reward_celebration_subtitle")}
+        title="Brilliant! You earned this"
+        subtitle="Celebrating your outstanding effort and participation"
       />
       <AssessmentPageFooter language={language} />
     </div>

@@ -26,6 +26,7 @@ import { sortByClassOrder } from "@/lib/utils";
 import { quarterExamColumnLabels } from "@/lib/academicScope";
 import { buildAcademicExportFilename } from "@/lib/exportFilenames";
 import { StudentScoreClearButton } from "@/components/StudentScoreClearButton";
+import { Loader2 } from "lucide-react";
 
 const toNumberOrNull = (value) => {
   if (value === null || value === undefined || value === "") return null;
@@ -89,6 +90,7 @@ export default function TotalMarks() {
   });
   const bulkFileInputRef = useRef(null);
   const latestLoadRequestIdRef = useRef(0);
+  const [isLoadingStudents, setIsLoadingStudents] = useState(true);
 
   const quarterConfig = useMemo(
     () =>
@@ -120,6 +122,7 @@ export default function TotalMarks() {
 
   const loadData = async (weekId = activeWeekId) => {
     const requestId = ++latestLoadRequestIdRef.current;
+    setIsLoadingStudents(true);
     try {
       const needClassesFromApi = !(classesLoaded && contextClasses?.length);
       const [studentRes, classRes] = await Promise.all([
@@ -130,6 +133,7 @@ export default function TotalMarks() {
       ]);
       if (latestLoadRequestIdRef.current !== requestId) return;
       setStudents(studentRes.data || []);
+      setIsLoadingStudents(false);
       if (needClassesFromApi) {
         const classesFromApi = classRes?.data;
         if (classesFromApi?.length) setClasses(classesFromApi);
@@ -139,6 +143,7 @@ export default function TotalMarks() {
       }
     } catch (error) {
       if (latestLoadRequestIdRef.current !== requestId) return;
+      setIsLoadingStudents(false);
       toast.error(getApiErrorMessage(error) || "Failed to load data");
     }
   };
@@ -962,7 +967,14 @@ export default function TotalMarks() {
               ) : (
                 <TableRow>
                   <TableCell colSpan={11} className="text-center text-muted-foreground">
-                    {t("no_data")}
+                    {isLoadingStudents ? (
+                      <span className="inline-flex items-center gap-2">
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        {t("loading") || "Loading..."}
+                      </span>
+                    ) : (
+                      t("no_data")
+                    )}
                   </TableCell>
                 </TableRow>
               )}

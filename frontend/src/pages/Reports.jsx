@@ -14,7 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
-import { Sparkles, TrendingUp, AlertTriangle } from "lucide-react";
+import { Sparkles, TrendingUp, AlertTriangle, Loader2 } from "lucide-react";
 import {
   Select,
   SelectContent,
@@ -74,6 +74,7 @@ export default function Reports() {
   const [analysisRecommendations, setAnalysisRecommendations] = useState("");
   const [isExportingPdf, setIsExportingPdf] = useState(false);
   const [isExportingExcel, setIsExportingExcel] = useState(false);
+  const [isGenerating, setIsGenerating] = useState(false);
   const fetchReportRef = useRef(() => {});
   const hasReportRef = useRef(false);
   const availableGrades = Array.from(
@@ -128,12 +129,17 @@ export default function Reports() {
 
   const handleGenerate = async () => {
     if (!grade) return;
-    const response = await api.get("/reports/grade", {
-      params: { grade, semester: apiSemester, quarter: apiQuarter },
-    });
-    const reportData = response.data;
-    setReport(reportData);
-    applyGeneratedInsights(buildAutoInsightsFromReport(reportData, language));
+    setIsGenerating(true);
+    try {
+      const response = await api.get("/reports/grade", {
+        params: { grade, semester: apiSemester, quarter: apiQuarter },
+      });
+      const reportData = response.data;
+      setReport(reportData);
+      applyGeneratedInsights(buildAutoInsightsFromReport(reportData, language));
+    } finally {
+      setIsGenerating(false);
+    }
   };
 
   useEffect(() => {
@@ -317,9 +323,16 @@ export default function Reports() {
               className="page-hero-btn-secondary"
               onClick={handleGenerate}
               data-testid="reports-hero-generate"
-              disabled={isTeacher && !availableGrades.length}
+              disabled={(isTeacher && !availableGrades.length) || isGenerating}
             >
-              {t("generate_report")}
+              {isGenerating ? (
+                <span className="inline-flex items-center gap-2">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  {t("loading") || "Loading..."}
+                </span>
+              ) : (
+                t("generate_report")
+              )}
             </Button>
             <Button
               variant="secondary"
@@ -376,8 +389,15 @@ export default function Reports() {
         }
         actions={
           <>
-            <Button onClick={handleGenerate} data-testid="reports-generate-button" disabled={isTeacher && !availableGrades.length}>
-              {t("generate_report")}
+            <Button onClick={handleGenerate} data-testid="reports-generate-button" disabled={(isTeacher && !availableGrades.length) || isGenerating}>
+              {isGenerating ? (
+                <span className="inline-flex items-center gap-2">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  {t("loading") || "Loading..."}
+                </span>
+              ) : (
+                t("generate_report")
+              )}
             </Button>
             <Button variant="outline" onClick={() => autoFillInsights()} data-testid="reports-autofill-insights-button" disabled={!report}>
               Auto-fill AI comments

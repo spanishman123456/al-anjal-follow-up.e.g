@@ -32,6 +32,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { Loader2 } from "lucide-react";
 
 const emptyRoleForm = { name: "", description: "", permissions: "" };
 const emptyUserForm = { name: "", email: "", role_id: "", username: "", password: "" };
@@ -85,6 +86,7 @@ export default function Settings() {
   const [resetPassword, setResetPassword] = useState("");
   const [pendingGmailUsers, setPendingGmailUsers] = useState([]);
   const latestLoadRequestIdRef = useRef(0);
+  const [isLoadingSettings, setIsLoadingSettings] = useState(true);
   const isAdmin = profile?.role_name === "Admin";
 
   const getPermissionLabel = (key) => {
@@ -101,9 +103,11 @@ export default function Settings() {
 
   const loadData = async () => {
     const requestId = ++latestLoadRequestIdRef.current;
+    setIsLoadingSettings(true);
     try {
       const profileRes = await api.get("/users/profile");
       if (latestLoadRequestIdRef.current !== requestId) return;
+      setIsLoadingSettings(false);
       const p = profileRes.data;
       setProfile(p);
       setProfileForm({
@@ -155,6 +159,7 @@ export default function Settings() {
         .catch(() => null);
     } catch (error) {
       if (latestLoadRequestIdRef.current !== requestId) return;
+      setIsLoadingSettings(false);
       toast.error(getApiErrorMessage(error) || "Failed to load settings. Check that the backend is running.");
     }
   };
@@ -367,6 +372,12 @@ export default function Settings() {
   return (
     <div className="space-y-8" data-testid="settings-page">
       <PageHeader pageKey="settings" testIdPrefix="settings" />
+      {isLoadingSettings && (
+        <p className="inline-flex items-center gap-2 text-sm text-muted-foreground" data-testid="settings-loading">
+          <Loader2 className="h-4 w-4 animate-spin" />
+          {t("loading") || "Loading..."}
+        </p>
+      )}
 
       <section className="grid gap-6" data-testid="settings-sections">
         <Card data-testid="profile-card" ref={profileRef}>

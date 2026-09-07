@@ -6,19 +6,24 @@ import { PageHeader } from "@/components/layout/PageHeader";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
+import { Loader2 } from "lucide-react";
 
 export default function Teachers() {
   const { language } = useOutletContext();
   const t = useTranslations(language);
   const navigate = useNavigate();
   const [teachers, setTeachers] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
 
   const loadTeachers = async () => {
+    setIsLoading(true);
     try {
       const response = await api.get("/teachers");
       setTeachers(response.data);
     } catch (error) {
       toast.error(t("teachers_failed"));
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -38,7 +43,12 @@ export default function Teachers() {
     <div className="space-y-6" data-testid="teachers-page">
       <PageHeader pageKey="teachers" testIdPrefix="teachers" />
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3" data-testid="teachers-grid">
-        {teachers.length ? (
+        {isLoading ? (
+          <p className="inline-flex items-center gap-2 text-sm text-muted-foreground" data-testid="teachers-loading">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            {t("loading") || "Loading..."}
+          </p>
+        ) : teachers.length ? (
           teachers.map((teacher) => (
             <Card key={teacher.id} data-testid={`teacher-card-${teacher.id}`}>
               <CardContent className="space-y-3 pt-6">
