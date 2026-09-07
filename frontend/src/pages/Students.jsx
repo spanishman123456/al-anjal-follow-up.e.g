@@ -40,7 +40,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { MoreHorizontal, Award, FileText, MessageCircle, PartyPopper } from "lucide-react";
+import { MoreHorizontal, Award, FileText, MessageCircle, PartyPopper, Loader2 } from "lucide-react";
 import { AssessmentPageFooter } from "@/components/AssessmentPageFooter";
 import { buildAcademicExportFilename } from "@/lib/exportFilenames";
 import "@/reward-modal.css";
@@ -165,6 +165,7 @@ export default function Students() {
   const isTeacher = profile?.role_name === "Teacher";
   const semesterNumber = semester === "semester2" ? 2 : 1;
   const [students, setStudents] = useState([]);
+  const [isLoadingStudents, setIsLoadingStudents] = useState(true);
   const [classes, setClasses] = useState([]);
   const [weeks, setWeeks] = useState([]);
   const [activeWeekId, setActiveWeekId] = useState("");
@@ -307,12 +308,14 @@ export default function Students() {
 
   const loadData = async (weekId = activeWeekId) => {
     const requestId = ++latestLoadRequestIdRef.current;
+    setIsLoadingStudents(true);
     try {
       const studentRes = await api.get("/students", {
         params: weekId ? { week_id: weekId, weekly_only: true } : {},
       });
       if (latestLoadRequestIdRef.current !== requestId) return;
       setStudents(studentRes.data || []);
+      setIsLoadingStudents(false);
 
       if (classesLoaded && contextClasses?.length) {
         setClasses(contextClasses || []);
@@ -340,6 +343,7 @@ export default function Students() {
       }
     } catch (error) {
       if (latestLoadRequestIdRef.current !== requestId) return;
+      setIsLoadingStudents(false);
       toast.error(getApiErrorMessage(error) || "Failed to load students");
     }
   };
@@ -465,6 +469,30 @@ export default function Students() {
     setBulkScores({});
     loadData(activeWeekId);
   }, [activeWeekId, weeks]);
+
+  useEffect(() => {
+    // Badge state used to live only in this browser's localStorage, so a badge
+    // awarded on one device/browser was invisible everywhere else. Reconcile
+    // against the server's event log (the real source of truth) on load.
+    let cancelled = false;
+    api
+      .get("/rewards/badge-status")
+      .then((res) => {
+        if (cancelled) return;
+        const ids = res.data?.student_ids;
+        if (!Array.isArray(ids)) return;
+        const serverSet = new Set(ids.map(String));
+        setBadgeStudentIds(serverSet);
+        getRewardSetsFromStorage().badge.forEach((id) => {
+          if (!serverSet.has(id)) setStudentReward(id, "badge", false);
+        });
+        serverSet.forEach((id) => setStudentReward(id, "badge", true));
+      })
+      .catch(() => null);
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const filteredStudents = useMemo(() => {
     const minValue = scoreMin ? Number(scoreMin) : null;
@@ -1126,6 +1154,15 @@ export default function Students() {
                 ))}
               </SelectContent>
             </Select>
+            {isLoadingStudents && (
+              <span
+                className="inline-flex items-center gap-1.5 text-sm text-muted-foreground"
+                data-testid="students-loading-indicator"
+              >
+                <Loader2 className="h-4 w-4 animate-spin" />
+                {t("loading") || "Loading..."}
+              </span>
+            )}
           </div>
           {!isTeacher && (
             <div className="flex flex-wrap gap-2">
@@ -1432,10 +1469,10 @@ export default function Students() {
                           {hasBadge && (
                             <span
                               className={`badge-party-popper reward-badge-btn group inline-flex items-center gap-1.5 rounded-full border-2 border-amber-400/60 bg-gradient-to-r from-amber-200 via-amber-100 to-rose-200 px-2.5 py-1 text-xs font-semibold text-amber-900 shadow-sm transition-all duration-200 hover:scale-105 hover:shadow-md hover:border-amber-500/80 dark:from-amber-700/40 dark:via-amber-600/30 dark:to-rose-700/40 dark:text-amber-100 dark:border-amber-500/50 ${badgeGlowStudentIds.has(String(student.id)) ? "reward-glow" : ""}`}
-                              title={t("badge") || "Badge"}
+                              title="Badge"
                             >
                               <PartyPopper className="h-4 w-4 shrink-0 transition-transform duration-200 group-hover:animate-wiggle" />
-                              <span>{t("badge") || "Badge"}</span>
+                              <span>Badge</span>
                             </span>
                           )}
                           {certificateStudentIds.has(String(student.id)) && (
@@ -1554,7 +1591,7 @@ export default function Students() {
                               data-testid={`student-action-badge-${student.id}`}
                             >
                               <Award className="mr-2 h-4 w-4" />
-                              {hasBadge ? t("remove_badge") : t("badge")}
+                              {hasBadge ? "Remove Badge" : "Badge"}
                             </DropdownMenuItem>
                             <DropdownMenuItem
                               onClick={() => {
@@ -1632,8 +1669,16 @@ export default function Students() {
                   <TableCell
                     colSpan={9}
                     data-testid="students-empty"
+                    className={isLoadingStudents ? "text-muted-foreground" : undefined}
                   >
-                    {t("no_data")}
+                    {isLoadingStudents ? (
+                      <span className="inline-flex items-center gap-2">
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        {t("loading") || "Loading..."}
+                      </span>
+                    ) : (
+                      t("no_data")
+                    )}
                   </TableCell>
                 </TableRow>
               )}

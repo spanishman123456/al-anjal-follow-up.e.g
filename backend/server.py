@@ -7830,6 +7830,23 @@ async def reward_remove_badge(payload: RewardBadgeRemoveRequest):
     return RewardBadgeResponse(ok=True)
 
 
+@api_router.get("/rewards/badge-status")
+async def get_badge_status():
+    """Current badge holders, derived from each student's latest award/remove event.
+
+    The frontend previously tracked badge state only in browser localStorage, so a
+    badge awarded on one device/browser was invisible everywhere else. This makes
+    the reward_events log the single source of truth.
+    """
+    pipeline = [
+        {"$sort": {"created_at": 1}},
+        {"$group": {"_id": "$student_id", "last_action": {"$last": "$action"}}},
+        {"$match": {"last_action": "award_badge"}},
+    ]
+    docs = await db.reward_events.aggregate(pipeline).to_list(5000)
+    return {"student_ids": [doc["_id"] for doc in docs]}
+
+
 @app.get("/api/certificates/{filename}")
 async def get_certificate_file(filename: str):
     safe_name = os.path.basename(filename)
@@ -11453,6 +11470,7 @@ async def seed_defaults():
         await db.calendar_events.create_index([("calendar_version", 1), ("semester", 1), ("gregorian_start", 1)])
         await db.users.create_index([("id", 1)])
         await db.users.create_index([("role_name", 1)])
+        await db.reward_events.create_index([("student_id", 1), ("created_at", 1)])
         # Isolated baseline records: Mongo _id is the unique record identifier.
         await db.baseline_assessments.create_index([
             ("school_section", 1), ("academic_year", 1), ("semester", 1),

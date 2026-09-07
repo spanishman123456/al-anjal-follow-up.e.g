@@ -108,6 +108,30 @@ export default function Rewards() {
   }, [schoolSection, academicYear]);
 
   useEffect(() => {
+    // Badge state used to live only in this browser's localStorage, so a badge
+    // awarded on one device/browser was invisible everywhere else. Reconcile
+    // against the server's event log (the real source of truth) on load.
+    let cancelled = false;
+    api
+      .get("/rewards/badge-status")
+      .then((res) => {
+        if (cancelled) return;
+        const ids = res.data?.student_ids;
+        if (!Array.isArray(ids)) return;
+        const serverSet = new Set(ids.map(String));
+        setBadgeRewardIds(serverSet);
+        getRewardSetsFromStorage().badge.forEach((id) => {
+          if (!serverSet.has(id)) setStudentReward(id, "badge", false);
+        });
+        serverSet.forEach((id) => setStudentReward(id, "badge", true));
+      })
+      .catch(() => null);
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
     const onVisibility = () => {
       if (document.visibilityState === "visible") loadData();
     };
