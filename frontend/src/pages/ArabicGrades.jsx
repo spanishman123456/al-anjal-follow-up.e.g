@@ -29,6 +29,7 @@ export default function ArabicGrades() {
   const { language, semester, quarter, academicYear, classes = [], schoolSection } = useOutletContext();
   const t = useTranslations(language);
   const [classId, setClassId] = useState("all");
+  const [searchTerm, setSearchTerm] = useState("");
   const [payload, setPayload] = useState(null);
   const [values, setValues] = useState({});
   const [loading, setLoading] = useState(true);
@@ -85,6 +86,11 @@ export default function ArabicGrades() {
   }, [loadGrades]);
 
   const rows = payload?.students || [];
+  const filteredRows = useMemo(() => {
+    const q = searchTerm.trim().toLowerCase();
+    if (!q) return rows;
+    return rows.filter((student) => (student.full_name || "").toLowerCase().includes(q));
+  }, [rows, searchTerm]);
   const hasUnsavedChanges = useMemo(
     () => rows.some((student) => ARABIC_EXAM_FIELDS.some((key) => {
       const saved = student[key] === undefined ? null : student[key];
@@ -118,8 +124,8 @@ export default function ArabicGrades() {
       toast.error(t("bulk_grade_class_required"));
       return;
     }
-    if (!rows.length) return;
-    const overwritesEnteredScore = rows.some((student) => {
+    if (!filteredRows.length) return;
+    const overwritesEnteredScore = filteredRows.some((student) => {
       const current = values[student.id]?.[bulkFillField];
       if (current === null || current === undefined || current === "") return false;
       return Number(current) !== getArabicFieldMaximum(bulkFillField, student);
@@ -128,10 +134,10 @@ export default function ArabicGrades() {
       overwritesEnteredScore
       && !window.confirm(t("fill_max_overwrite_confirm").replace("{field}", t(bulkFillField)))
     ) return;
-    setValues((previous) => fillArabicScoreColumnWithMaximum(previous, rows, bulkFillField));
+    setValues((previous) => fillArabicScoreColumnWithMaximum(previous, filteredRows, bulkFillField));
     toast.success(
       t("fill_max_completed")
-        .replace("{count}", String(rows.length))
+        .replace("{count}", String(filteredRows.length))
         .replace("{field}", t(bulkFillField)),
     );
   };
@@ -261,10 +267,19 @@ export default function ArabicGrades() {
       <Card>
         <CardHeader className="gap-4 md:flex-row md:items-center md:justify-between">
           <div><CardTitle>{t("test_completion")}</CardTitle><p className="mt-1 text-sm text-muted-foreground">{t("arabic_continuous_managed_weekly")}</p></div>
-          <Select value={classId} onValueChange={setClassId}>
-            <SelectTrigger className="w-full md:w-64" data-testid="arabic-grades-class-filter"><SelectValue /></SelectTrigger>
-            <SelectContent><SelectItem value="all">{t("all_classes")}</SelectItem>{classes.map((item) => <SelectItem key={item.id} value={item.id}>{item.name}</SelectItem>)}</SelectContent>
-          </Select>
+          <div className="flex w-full flex-col gap-2 sm:flex-row md:w-auto">
+            <Input
+              placeholder={t("search_students")}
+              value={searchTerm}
+              onChange={(event) => setSearchTerm(event.target.value)}
+              className="w-full md:w-56"
+              data-testid="arabic-grades-search"
+            />
+            <Select value={classId} onValueChange={setClassId}>
+              <SelectTrigger className="w-full md:w-64" data-testid="arabic-grades-class-filter"><SelectValue /></SelectTrigger>
+              <SelectContent><SelectItem value="all">{t("all_classes")}</SelectItem>{classes.map((item) => <SelectItem key={item.id} value={item.id}>{item.name}</SelectItem>)}</SelectContent>
+            </Select>
+          </div>
         </CardHeader>
         <CardContent>
           <Progress value={payload?.completion_percentage || 0} className="h-3" />
@@ -354,7 +369,7 @@ export default function ArabicGrades() {
             <table className="w-full min-w-[1220px] text-sm">
               <thead className="bg-[#10162A] text-white"><tr><th className="sticky start-0 z-10 bg-[#10162A] p-3 text-start">{t("student")}</th><th className="p-3 text-start">{t("class")}</th><th className="p-3 text-center">{t("continuous_assessment")} /40</th>{ARABIC_EXAM_FIELDS.map((key) => <th key={key} className="p-3 text-center">{t(key)} ({t("raw_score")})</th>)}<th className="p-3 text-center">{t("best_theory")} /30</th><th className="p-3 text-center">{t("practical_weighted")} /30</th><th className="p-3 text-center">/60</th><th className="p-3 text-center">/100</th><th className="p-3 text-center">{t("actions")}</th></tr></thead>
               <tbody>
-                {rows.map((student) => {
+                {filteredRows.map((student) => {
                   const current = values[student.id] || {};
                   const calculated = calculateArabicQuarter(current, student.exam_raw_max, student.continuous_total);
                   return <tr key={student.id} className="border-b transition-colors hover:bg-cyan-50/50 dark:hover:bg-cyan-950/10"><td className="sticky start-0 bg-background p-3 font-semibold">{student.full_name}</td><td className="p-3"><p>{student.class_name}</p><p className="text-xs text-muted-foreground">{t(student.educational_stage)} · /{student.exam_raw_max}</p></td><td className="p-3 text-center"><p className="text-lg font-bold text-violet-700 dark:text-violet-300">{formatArabicScore(student.continuous_total)}</p><p className="text-xs text-muted-foreground">{t("arabic_weekly_average_hint").replace("{count}", String(student.weeks_with_scores || 0))}</p></td>{ARABIC_EXAM_FIELDS.map((key) => <td key={key} className="p-2"><div className="flex items-center gap-1"><Input type="number" min="0" max={student.exam_raw_max} step="0.5" value={current[key] ?? ""} onChange={(event) => updateValue(student.id, key, event.target.value, student.exam_raw_max)} className={current[key] !== null && current[key] !== undefined ? "border-emerald-400/60 shadow-[0_0_12px_rgba(16,185,129,0.12)]" : ""} aria-label={`${student.full_name} ${t(key)}`} /><span className="text-xs text-muted-foreground">/{student.exam_raw_max}</span></div></td>)}<td className="p-3 text-center font-semibold">{formatArabicScore(calculated.bestTheoryWeighted)}</td><td className="p-3 text-center font-semibold">{formatArabicScore(calculated.practicalWeighted)}</td><td className="p-3 text-center font-semibold">{formatArabicScore(calculated.testsTotal)}</td><td className="p-3 text-center text-lg font-bold text-cyan-700 dark:text-cyan-300">{formatArabicScore(calculated.quarterTotal)}</td><td className="p-3 text-center"><StudentScoreClearButton t={t} studentName={student.full_name} onClear={() => clearStudentGrades(student)} testId={`arabic-grades-clear-student-${student.id}`} /></td></tr>;
@@ -362,7 +377,7 @@ export default function ArabicGrades() {
               </tbody>
             </table>
           </div>
-          {!loading && !rows.length && <div className="p-10 text-center text-muted-foreground"><TestTube2 className="mx-auto mb-3 h-8 w-8" />{t("no_data")}</div>}
+          {!loading && !filteredRows.length && <div className="p-10 text-center text-muted-foreground"><TestTube2 className="mx-auto mb-3 h-8 w-8" />{t("no_data")}</div>}
         </CardContent>
       </Card>
       <Dialog open={clearGradesOpen} onOpenChange={setClearGradesOpen}>

@@ -58,6 +58,7 @@ function BaselinePage({ context, view }) {
   const [snapshot, setSnapshot] = useState(null);
   const [values, setValues] = useState({});
   const [classId, setClassId] = useState("");
+  const [searchTerm, setSearchTerm] = useState("");
   const [studentId, setStudentId] = useState("");
   const [tab, setTab] = useState("overview");
   const [setupOpen, setSetupOpen] = useState(false);
@@ -314,7 +315,12 @@ function BaselinePage({ context, view }) {
     metadataForm.title.trim() !== (currentRecord.title || "")
     || recordClasses.some((item) => (metadataForm.class_names[item.id] || "").trim() !== item.name)
   ));
-  const visibleRows = !analytics && classId ? rows.filter((s) => s.class_id === classId) : rows;
+  const visibleRows = useMemo(() => {
+    let list = !analytics && classId ? rows.filter((s) => s.class_id === classId) : rows;
+    const q = searchTerm.trim().toLowerCase();
+    if (q) list = list.filter((s) => (s.full_name || "").toLowerCase().includes(q));
+    return list;
+  }, [rows, analytics, classId, searchTerm]);
   const labels = snapshot?.labels;
   const navQuery = recordId ? `?record=${recordId}` : "";
   return <div dir={language === "ar" ? "rtl" : "ltr"} className="space-y-6" data-testid="baseline-page">
@@ -381,7 +387,7 @@ function BaselinePage({ context, view }) {
     {records?.length === 0 && <Card><CardContent className="py-12 text-center text-muted-foreground">{t("baseline_empty")}</CardContent></Card>}
     {snapshot && !loading && <>
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4"><MetricCard className="bg-card text-card-foreground" icon={Users} label={labels.total} value={snapshot.stats.total} /><MetricCard className="bg-card text-card-foreground" icon={CheckCircle2} label={labels.graded} value={<bdi dir="ltr">{snapshot.stats.graded} / {snapshot.stats.total}</bdi>} /><MetricCard className="bg-card text-card-foreground" icon={Percent} accent="primary" label={labels.mean} value={baselinePercent(snapshot.stats.mean)} /><MetricCard className="bg-card text-card-foreground" icon={BarChart3} accent="success" label={labels.completion} value={baselinePercent(snapshot.stats.completion)} /></div>
-      {!analytics ? <Card><CardHeader className="gap-3"><div className="flex flex-wrap items-center justify-between gap-3"><CardTitle>{t("baseline_entry")} · {t("baseline_max")}: {snapshot.record.max_score}</CardTitle><Button onClick={save} disabled={busy || !dirty || invalid || conflict}><Save className="me-2 h-4 w-4" />{t(busy ? "baseline_saving" : "baseline_save")}</Button></div><p className="text-sm text-muted-foreground">{labels.rules}</p><p className="text-xs text-muted-foreground">{t("baseline_roster_hint")}</p>{dirty && <p role="status" className="text-sm font-bold text-amber-600">{t("baseline_dirty")}</p>}{invalid && <p role="alert" className="text-sm text-rose-600">{t("baseline_invalid_score")}</p>}</CardHeader><CardContent><div className="overflow-x-auto"><table className="w-full text-start text-sm"><thead><tr>{[labels.student, labels.class, labels.score, labels.percent, labels.level, t("actions")].map((l) => <th key={l} className="p-3 text-start">{l}</th>)}</tr></thead><tbody>{visibleRows.map((s) => {
+      {!analytics ? <Card><CardHeader className="gap-3"><div className="flex flex-wrap items-center justify-between gap-3"><CardTitle>{t("baseline_entry")} · {t("baseline_max")}: {snapshot.record.max_score}</CardTitle><Button onClick={save} disabled={busy || !dirty || invalid || conflict}><Save className="me-2 h-4 w-4" />{t(busy ? "baseline_saving" : "baseline_save")}</Button></div><Input placeholder={t("search_students")} value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="max-w-xs" data-testid="baseline-search" /><p className="text-sm text-muted-foreground">{labels.rules}</p><p className="text-xs text-muted-foreground">{t("baseline_roster_hint")}</p>{dirty && <p role="status" className="text-sm font-bold text-amber-600">{t("baseline_dirty")}</p>}{invalid && <p role="alert" className="text-sm text-rose-600">{t("baseline_invalid_score")}</p>}</CardHeader><CardContent><div className="overflow-x-auto"><table className="w-full text-start text-sm"><thead><tr>{[labels.student, labels.class, labels.score, labels.percent, labels.level, t("actions")].map((l) => <th key={l} className="p-3 text-start">{l}</th>)}</tr></thead><tbody>{visibleRows.map((s) => {
         let isInvalid = false; try { parseBaselineMark(values[s.id], snapshot.record.max_score); } catch { isInvalid = true; }
         return <tr key={s.id} className="border-b"><td className="p-3">{s.full_name}</td><td className="p-3">{s.class_name}</td><td className="p-3"><Input type="text" inputMode="decimal" aria-label={`${labels.score}: ${s.full_name}`} aria-invalid={isInvalid} disabled={busy || conflict} className="w-28" value={values[s.id] ?? ""} onChange={(e) => changeMark(s.id, e.target.value)} /></td><td className="p-3 tabular-nums">{baselinePercent(s.percentage)}</td><td className="p-3 font-bold" style={{ color: BASELINE_COLORS[s.level] }}>{s.level_label}</td><td className="p-3"><StudentScoreClearButton t={t} studentName={s.full_name} onClear={() => clearStudentSavedMark(s)} disabled={busy || dirty || conflict || s.score == null} testId={`baseline-clear-student-${s.id}`} /></td></tr>;
       })}</tbody></table></div></CardContent></Card> : <>
