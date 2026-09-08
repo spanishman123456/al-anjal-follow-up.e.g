@@ -3,7 +3,7 @@ import { useOutletContext } from "react-router-dom";
 import { toast } from "sonner";
 import { api, getApiErrorMessage, BULK_SAVE_TIMEOUT_MS } from "@/lib/api";
 import { useTranslations } from "@/lib/i18n";
-import { Loader2 } from "lucide-react";
+import { Loader2, Sparkles } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -137,7 +137,7 @@ export default function AssessmentMarks() {
   const [bulkScores, setBulkScores] = useState({});
   const [bulkConfirmOpen, setBulkConfirmOpen] = useState(false);
   const [clearScoresOpen, setClearScoresOpen] = useState(false);
-  const [fillValues, setFillValues] = useState({ quiz1: "", quiz2: "", chapter_test1_practical: "" });
+  const [fillField, setFillField] = useState("quiz1");
   const [isLoadingStudents, setIsLoadingStudents] = useState(true);
   const latestLoadRequestIdRef = useRef(0);
 
@@ -274,12 +274,19 @@ export default function AssessmentMarks() {
         week_id: activeWeekId,
       }, { timeout: BULK_SAVE_TIMEOUT_MS });
       setBulkScores((prev) => {
+        const draft = prev[student.id];
+        if (!draft || parseScore(draft[field]) !== newVal) return prev;
+        const nextDraft = { ...draft };
+        delete nextDraft[field];
         const next = { ...prev };
-        delete next[student.id];
+        if (Object.keys(nextDraft).length) next[student.id] = nextDraft;
+        else delete next[student.id];
         return next;
       });
+      setStudents((previous) => previous.map((item) => (
+        item.id === student.id ? { ...item, [field]: newVal } : item
+      )));
       window.dispatchEvent(new CustomEvent("students-updated"));
-      loadData(activeWeekId);
       toast.success(t("student_updated"));
     } catch (error) {
       toast.error(getApiErrorMessage(error) || t("student_update_failed"));
@@ -287,42 +294,45 @@ export default function AssessmentMarks() {
   };
 
   const handleChapterTest1Blur = async (student) => {
-    const current = bulkScores[student.id] || student;
+    const current = { ...student, ...bulkScores[student.id] };
     await saveScoreOnBlur(student, "chapter_test1_practical", parseScore(current.chapter_test1_practical));
   };
 
   const handleQuiz1Blur = async (student) => {
-    const current = bulkScores[student.id] || student;
+    const current = { ...student, ...bulkScores[student.id] };
     await saveScoreOnBlur(student, "quiz1", parseScore(current.quiz1));
   };
 
   const handleQuiz2Blur = async (student) => {
-    const current = bulkScores[student.id] || student;
+    const current = { ...student, ...bulkScores[student.id] };
     await saveScoreOnBlur(student, "quiz2", parseScore(current.quiz2));
   };
 
-  const handleFillColumn = (field, max) => {
+  const FILL_FIELDS = [
+    { key: "quiz1", label: t("quiz1"), max: 5 },
+    { key: "quiz2", label: t("quiz2"), max: 5 },
+    { key: "chapter_test1_practical", label: t("assessment_chapter_test"), max: 10 },
+  ];
+
+  const handleFillMaxSelectedClass = () => {
     if (filterClass === "all") {
       toast.error(t("select_class_to_clear_scores"));
       return;
     }
-    const raw = fillValues[field] === "" || fillValues[field] == null ? String(max) : fillValues[field];
-    const num = Number(raw);
-    if (Number.isNaN(num) || num < 0) {
-      toast.error(t("enter_valid_value") || "Enter a valid number");
+    if (!filteredStudents.length) {
+      toast.error(t("no_data"));
       return;
     }
-    const value = num > max ? String(max) : raw;
-    if (num > max) toast.warning(t("marks_exceeded").replace(/{max}/g, String(max)));
+    const field = FILL_FIELDS.find((f) => f.key === fillField) || FILL_FIELDS[0];
     setBulkEditMode(true);
     setBulkScores((prev) => {
       const next = { ...prev };
       filteredStudents.forEach((s) => {
-        next[s.id] = { ...next[s.id], [field]: value };
+        next[s.id] = { ...next[s.id], [field.key]: String(field.max) };
       });
       return next;
     });
-    toast.success(t("fill_applied") || "Value applied to all students in this column");
+    toast.success(t("fill_max_completed").replace(/\{count\}/g, String(filteredStudents.length)).replace(/\{field\}/g, field.label));
   };
 
   const openBulkSaveConfirm = () => {
@@ -493,6 +503,22 @@ export default function AssessmentMarks() {
                 <Button variant="outline" onClick={startBulkEdit} data-testid="assessment-edit-scores">
                   {t("edit_scores")}
                 </Button>
+                <Select value={fillField} onValueChange={setFillField}>
+                  <SelectTrigger className="w-full sm:w-[220px]" data-testid="assessment-fill-field">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {FILL_FIELDS.map(({ key, label, max }) => (
+                      <SelectItem key={key} value={key}>
+                        {label} ({max})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Button type="button" variant="secondary" onClick={handleFillMaxSelectedClass} disabled={filterClass === "all"} data-testid="assessment-fill-max">
+                  <Sparkles className="me-2 h-4 w-4" />
+                  {t("fill_max_selected_class")}
+                </Button>
                 <Button variant="outline" onClick={() => setClearScoresOpen(true)} disabled={filterClass === "all"} data-testid="assessment-clear-scores">
                   {t("clear_selected_class_scores")}
                 </Button>
@@ -599,90 +625,9 @@ export default function AssessmentMarks() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              <TableRow className="bg-muted/50" data-testid="assessment-fill-row">
-                <TableCell colSpan={2} className="text-muted-foreground text-sm py-2">
-                  {t("fill_column")}:
-                </TableCell>
-                <TableCell className="text-center py-2">
-                  <div className="flex items-center justify-center gap-1">
-                    <Input
-                      type="number"
-                      min={0}
-                      max={5}
-                      step={0.5}
-                      className="score-table-input-5-fill"
-                      aria-label={t("quiz1")}
-                      value={fillValues.quiz1}
-                      onChange={(e) => setFillValues((prev) => ({ ...prev, quiz1: e.target.value }))}
-                      data-testid="assessment-fill-quiz1"
-                    />
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="h-8 shrink-0"
-                      onClick={() => handleFillColumn("quiz1", 5)}
-                      data-testid="assessment-fill-quiz1-btn"
-                    >
-                      {t("fill_column")}
-                    </Button>
-                  </div>
-                </TableCell>
-                <TableCell className="text-center py-2">
-                  <div className="flex items-center justify-center gap-1">
-                    <Input
-                      type="number"
-                      min={0}
-                      max={5}
-                      step={0.5}
-                      className="score-table-input-5-fill"
-                      aria-label={t("quiz2")}
-                      value={fillValues.quiz2}
-                      onChange={(e) => setFillValues((prev) => ({ ...prev, quiz2: e.target.value }))}
-                      data-testid="assessment-fill-quiz2"
-                    />
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="h-8 shrink-0"
-                      onClick={() => handleFillColumn("quiz2", 5)}
-                      data-testid="assessment-fill-quiz2-btn"
-                    >
-                      {t("fill_column")}
-                    </Button>
-                  </div>
-                </TableCell>
-                <TableCell className="text-center py-2">
-                  <div className="flex items-center justify-center gap-1">
-                    <Input
-                      type="number"
-                      min={0}
-                      max={10}
-                      step={0.5}
-                      className="score-table-input-10-fill"
-                      aria-label={t("chapter_test1_practical")}
-                      value={fillValues.chapter_test1_practical}
-                      onChange={(e) => setFillValues((prev) => ({ ...prev, chapter_test1_practical: e.target.value }))}
-                      data-testid="assessment-fill-practical"
-                    />
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="h-8 shrink-0"
-                      onClick={() => handleFillColumn("chapter_test1_practical", 10)}
-                      data-testid="assessment-fill-practical-btn"
-                    >
-                      {t("fill_column")}
-                    </Button>
-                  </div>
-                </TableCell>
-                <TableCell colSpan={3} />
-              </TableRow>
               {filteredStudents.length ? (
                 filteredStudents.map((student) => {
-                  const current = bulkScores[student.id] || student;
+                  const current = { ...student, ...bulkScores[student.id] };
                   const hasPendingChanges = Boolean(
                     bulkScores[student.id] && Object.keys(bulkScores[student.id]).length
                   );

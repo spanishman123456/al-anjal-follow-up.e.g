@@ -26,7 +26,7 @@ import { sortByClassOrder } from "@/lib/utils";
 import { quarterExamColumnLabels } from "@/lib/academicScope";
 import { buildAcademicExportFilename } from "@/lib/exportFilenames";
 import { StudentScoreClearButton } from "@/components/StudentScoreClearButton";
-import { Loader2 } from "lucide-react";
+import { Loader2, Sparkles } from "lucide-react";
 
 const toNumberOrNull = (value) => {
   if (value === null || value === undefined || value === "") return null;
@@ -77,17 +77,7 @@ export default function TotalMarks() {
   const [searchTerm, setSearchTerm] = useState("");
   const [bulkEditMode, setBulkEditMode] = useState(false);
   const [bulkScores, setBulkScores] = useState({});
-  const [fillValues, setFillValues] = useState({
-    attendance: "",
-    participation: "",
-    behavior: "",
-    homework: "",
-    quizPrimary: "",
-    quizSecondary: "",
-    chapter: "",
-    examPractical: "",
-    examTheory: "",
-  });
+  const [fillField, setFillField] = useState("attendance");
   const bulkFileInputRef = useRef(null);
   const latestLoadRequestIdRef = useRef(0);
   const [isLoadingStudents, setIsLoadingStudents] = useState(true);
@@ -317,45 +307,37 @@ export default function TotalMarks() {
     updateBulkScore(studentId, field, value);
   };
 
-  const handleFillValueChange = (field, value, max) => {
-    if (value === "" || value === null || value === undefined) {
-      setFillValues((prev) => ({ ...prev, [field]: value }));
-      return;
-    }
-    const num = Number(value);
-    if (Number.isNaN(num) || num < 0) return;
-    if (num > max) {
-      warnMarksExceeded(max);
-      return;
-    }
-    setFillValues((prev) => ({ ...prev, [field]: value }));
-  };
+  const FILL_FIELDS = [
+    { key: quarterConfig.quizPrimaryField, label: quarterConfig.quizPrimaryLabel, max: 5 },
+    { key: quarterConfig.quizSecondaryField, label: quarterConfig.quizSecondaryLabel, max: 5 },
+    { key: quarterConfig.chapterField, label: t("assessment_chapter_test"), max: 10 },
+    { key: "homework", label: t("homework"), max: 5 },
+    { key: "attendance", label: t("attendance"), max: 2.5 },
+    { key: "participation", label: t("participation"), max: 2.5 },
+    { key: "behavior", label: t("behavior"), max: 5 },
+    { key: quarterConfig.examPracticalField, label: examColumnLabels.practical, max: 10 },
+    { key: quarterConfig.examTheoryField, label: examColumnLabels.theoretical, max: 10 },
+  ];
 
-  const applyFillColumn = (field, fillField, max) => {
+  const handleFillMaxSelectedClass = () => {
     if (filterClass === "all") {
       toast.error(t("select_class_to_clear_scores"));
       return;
     }
-    const raw = fillValues[fillField];
-    const resolvedRaw = raw === "" || raw === null || raw === undefined ? String(max) : raw;
-    const num = Number(resolvedRaw);
-    if (Number.isNaN(num) || num < 0) {
-      toast.error(t("enter_valid_value") || "Enter a valid number");
+    if (!rows.length) {
+      toast.error(t("no_data"));
       return;
     }
-    if (num > max) {
-      warnMarksExceeded(max);
-      return;
-    }
+    const field = FILL_FIELDS.find((f) => f.key === fillField) || FILL_FIELDS[0];
     setBulkEditMode(true);
     setBulkScores((prev) => {
       const next = { ...prev };
       rows.forEach((student) => {
-        next[student.id] = { ...next[student.id], [field]: resolvedRaw };
+        next[student.id] = { ...next[student.id], [field.key]: String(field.max) };
       });
       return next;
     });
-    toast.success(t("fill_applied") || "Value applied to all students in this column");
+    toast.success(t("fill_max_completed").replace(/\{count\}/g, String(rows.length)).replace(/\{field\}/g, field.label));
   };
 
   const handleBulkSave = async () => {
@@ -627,6 +609,20 @@ export default function TotalMarks() {
                 {t("edit_scores")}
               </Button>
             )}
+            <Select value={fillField} onValueChange={setFillField}>
+              <SelectTrigger className="w-full sm:w-[220px]" data-testid="total-marks-fill-field">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {FILL_FIELDS.map(({ key, label, max }) => (
+                  <SelectItem key={key} value={key}>{label} ({max})</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Button type="button" variant="secondary" onClick={handleFillMaxSelectedClass} disabled={filterClass === "all"} data-testid="total-marks-fill-max">
+              <Sparkles className="me-2 h-4 w-4" />
+              {t("fill_max_selected_class")}
+            </Button>
             <Button
               variant="outline"
               onClick={() => {
@@ -724,133 +720,6 @@ export default function TotalMarks() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              <TableRow className="bg-muted/50" data-testid="total-marks-fill-row">
-                  <TableCell colSpan={2} className="text-muted-foreground text-sm py-2">
-                    {t("fill_column")}:
-                  </TableCell>
-                  <TableCell className="py-2">
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-center gap-1">
-                        <span className="w-10 text-[11px] text-muted-foreground">{quarterConfig.quizPrimaryLabel}</span>
-                        {renderMiniInput({
-                          value: fillValues.quizPrimary,
-                          onChange: (e) => handleFillValueChange("quizPrimary", e.target.value, 5),
-                          max: 5,
-                          placeholder: "0-5",
-                        })}
-                        <Button type="button" variant="outline" size="sm" className="h-8" onClick={() => applyFillColumn(quarterConfig.quizPrimaryField, "quizPrimary", 5)}>
-                          {t("fill_column")}
-                        </Button>
-                      </div>
-                      <div className="flex items-center justify-center gap-1">
-                        <span className="w-10 text-[11px] text-muted-foreground">{quarterConfig.quizSecondaryLabel}</span>
-                        {renderMiniInput({
-                          value: fillValues.quizSecondary,
-                          onChange: (e) => handleFillValueChange("quizSecondary", e.target.value, 5),
-                          max: 5,
-                          placeholder: "0-5",
-                        })}
-                        <Button type="button" variant="outline" size="sm" className="h-8" onClick={() => applyFillColumn(quarterConfig.quizSecondaryField, "quizSecondary", 5)}>
-                          {t("fill_column")}
-                        </Button>
-                      </div>
-                    </div>
-                  </TableCell>
-                  <TableCell className="py-2">
-                    <div className="flex items-center justify-center gap-1">
-                      {renderMiniInput({
-                        value: fillValues.chapter,
-                        onChange: (e) => handleFillValueChange("chapter", e.target.value, 10),
-                        max: 10,
-                        placeholder: "0-10",
-                      })}
-                      <Button type="button" variant="outline" size="sm" className="h-8" onClick={() => applyFillColumn(quarterConfig.chapterField, "chapter", 10)}>
-                        {t("fill_column")}
-                      </Button>
-                    </div>
-                  </TableCell>
-                  <TableCell className="py-2">
-                    <div className="flex items-center justify-center gap-1">
-                      {renderMiniInput({
-                        value: fillValues.homework,
-                        onChange: (e) => handleFillValueChange("homework", e.target.value, 5),
-                        max: 5,
-                        placeholder: "0-5",
-                      })}
-                      <Button type="button" variant="outline" size="sm" className="h-8" onClick={() => applyFillColumn("homework", "homework", 5)}>
-                        {t("fill_column")}
-                      </Button>
-                    </div>
-                  </TableCell>
-                  <TableCell className="py-2">
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-center gap-1">
-                        <span className="w-10 text-[11px] text-muted-foreground">A</span>
-                        {renderMiniInput({
-                          value: fillValues.attendance,
-                          onChange: (e) => handleFillValueChange("attendance", e.target.value, 2.5),
-                          max: 2.5,
-                          placeholder: "0-2.5",
-                        })}
-                        <Button type="button" variant="outline" size="sm" className="h-8" onClick={() => applyFillColumn("attendance", "attendance", 2.5)}>
-                          {t("fill_column")}
-                        </Button>
-                      </div>
-                      <div className="flex items-center justify-center gap-1">
-                        <span className="w-10 text-[11px] text-muted-foreground">P</span>
-                        {renderMiniInput({
-                          value: fillValues.participation,
-                          onChange: (e) => handleFillValueChange("participation", e.target.value, 2.5),
-                          max: 2.5,
-                          placeholder: "0-2.5",
-                        })}
-                        <Button type="button" variant="outline" size="sm" className="h-8" onClick={() => applyFillColumn("participation", "participation", 2.5)}>
-                          {t("fill_column")}
-                        </Button>
-                      </div>
-                    </div>
-                  </TableCell>
-                  <TableCell className="py-2">
-                    <div className="flex items-center justify-center gap-1">
-                      {renderMiniInput({
-                        value: fillValues.behavior,
-                        onChange: (e) => handleFillValueChange("behavior", e.target.value, 5),
-                        max: 5,
-                        placeholder: "0-5",
-                      })}
-                      <Button type="button" variant="outline" size="sm" className="h-8" onClick={() => applyFillColumn("behavior", "behavior", 5)}>
-                        {t("fill_column")}
-                      </Button>
-                    </div>
-                  </TableCell>
-                  <TableCell className="py-2">
-                    <div className="flex items-center justify-center gap-1">
-                      {renderMiniInput({
-                        value: fillValues.examPractical,
-                        onChange: (e) => handleFillValueChange("examPractical", e.target.value, 10),
-                        max: 10,
-                        placeholder: "0-10",
-                      })}
-                      <Button type="button" variant="outline" size="sm" className="h-8" onClick={() => applyFillColumn(quarterConfig.examPracticalField, "examPractical", 10)}>
-                        {t("fill_column")}
-                      </Button>
-                    </div>
-                  </TableCell>
-                  <TableCell className="py-2">
-                    <div className="flex items-center justify-center gap-1">
-                      {renderMiniInput({
-                        value: fillValues.examTheory,
-                        onChange: (e) => handleFillValueChange("examTheory", e.target.value, 10),
-                        max: 10,
-                        placeholder: "0-10",
-                      })}
-                      <Button type="button" variant="outline" size="sm" className="h-8" onClick={() => applyFillColumn(quarterConfig.examTheoryField, "examTheory", 10)}>
-                        {t("fill_column")}
-                      </Button>
-                    </div>
-                  </TableCell>
-                  <TableCell colSpan={2} />
-                </TableRow>
               {rows.length ? (
                 rows.map((student) => (
                   <TableRow key={student.id} data-testid={`total-marks-row-${student.id}`}>

@@ -89,7 +89,7 @@ describe("International student rewards match the Arabic direct toggle", () => {
     expect(source).toContain("if (hasBadge)");
     expect(source).toContain("handleRemoveBadge(student)");
     expect(source).toContain("handleAwardBadge(student, computePerformanceLevel(currentScores))");
-    expect(source).toContain('{hasBadge ? t("remove_badge") : t("badge")}');
+    expect(source).toContain('{hasBadge ? "Remove Badge" : "Badge"}');
   });
 
   it("does not restore the obsolete badge reward modal", () => {

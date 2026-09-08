@@ -37,7 +37,7 @@ import { PerformanceLevelBadge } from "@/components/PerformanceLevelBadge";
 import { quarterExamColumnLabels } from "@/lib/academicScope";
 import { buildAcademicExportFilename } from "@/lib/exportFilenames";
 import { StudentScoreClearButton } from "@/components/StudentScoreClearButton";
-import { Loader2 } from "lucide-react";
+import { Loader2, Sparkles } from "lucide-react";
 
 const formatScore = (value, suffix = "") => {
   if (value === null || value === undefined) return "—";
@@ -143,7 +143,7 @@ export default function FinalExamsAssessment() {
   const [bulkScores, setBulkScores] = useState({});
   const [bulkConfirmOpen, setBulkConfirmOpen] = useState(false);
   const [clearScoresOpen, setClearScoresOpen] = useState(false);
-  const [fillValues, setFillValues] = useState({ quarter1_practical: "", quarter1_theory: "" });
+  const [fillField, setFillField] = useState("quarter1_practical");
   const bulkFileInputRef = useRef(null);
   const latestLoadRequestIdRef = useRef(0);
   const [isLoadingStudents, setIsLoadingStudents] = useState(true);
@@ -257,19 +257,6 @@ export default function FinalExamsAssessment() {
     );
   };
 
-  const handleFillValueChange = (field, value, max) => {
-    if (value === "" || value === null || value === undefined) {
-      setFillValues((prev) => ({ ...prev, [field]: value }));
-      return;
-    }
-    const num = Number(value);
-    if (!Number.isNaN(num) && num > max) {
-      warnMarksExceeded(max);
-      return;
-    }
-    setFillValues((prev) => ({ ...prev, [field]: value }));
-  };
-
   const handleScoreChange = (studentId, field, value, max) => {
     if (value === "" || value === null || value === undefined) {
       updateBulkScore(studentId, field, value);
@@ -296,12 +283,19 @@ export default function FinalExamsAssessment() {
         week_id: activeWeekId,
       }, { timeout: BULK_SAVE_TIMEOUT_MS });
       setBulkScores((prev) => {
+        const draft = prev[student.id];
+        if (!draft || parseScore(draft[field]) !== newVal) return prev;
+        const nextDraft = { ...draft };
+        delete nextDraft[field];
         const next = { ...prev };
-        delete next[student.id];
+        if (Object.keys(nextDraft).length) next[student.id] = nextDraft;
+        else delete next[student.id];
         return next;
       });
+      setStudents((previous) => previous.map((item) => (
+        item.id === student.id ? { ...item, [field]: newVal } : item
+      )));
       window.dispatchEvent(new CustomEvent("students-updated"));
-      loadData(activeWeekId);
       toast.success(t("student_updated"));
     } catch (error) {
       toast.error(getApiErrorMessage(error) || t("student_update_failed"));
@@ -318,30 +312,28 @@ export default function FinalExamsAssessment() {
     await saveScoreOnBlur(student, "quarter1_theory", parseScore(current.quarter1_theory));
   };
 
-  const handleFillColumn = (field, max) => {
+  const FILL_FIELDS = [
+    { key: "quarter1_practical", label: t("quarter1_practical_exam"), max: 10 },
+    { key: "quarter1_theory", label: t("quarter1_theoretical_exam"), max: 10 },
+  ];
+
+  const handleFillMaxSelectedClass = () => {
     if (filterClass === "all") {
       toast.error(t("select_class_to_clear_scores"));
       return;
     }
-    const raw = fillValues[field];
-    const resolvedRaw = raw === "" || raw == null ? String(max) : raw;
-    const num = Number(resolvedRaw);
-    if (Number.isNaN(num) || num < 0) {
-      toast.error(t("enter_valid_value") || "Enter a valid number");
+    if (!filteredStudents.length) {
+      toast.error(t("no_data"));
       return;
     }
-    if (num > max) {
-      warnMarksExceeded(max);
-      return;
-    }
-    const value = resolvedRaw;
+    const field = FILL_FIELDS.find((f) => f.key === fillField) || FILL_FIELDS[0];
     setBulkEditMode(true);
     setBulkScores((prev) => {
       const next = { ...prev };
-      filteredStudents.forEach((s) => { next[s.id] = { ...next[s.id], [field]: value }; });
+      filteredStudents.forEach((s) => { next[s.id] = { ...next[s.id], [field.key]: String(field.max) }; });
       return next;
     });
-    toast.success(t("fill_applied") || "Value applied");
+    toast.success(t("fill_max_completed").replace(/\{count\}/g, String(filteredStudents.length)).replace(/\{field\}/g, field.label));
   };
 
   const openBulkSaveConfirm = () => {
@@ -573,6 +565,20 @@ export default function FinalExamsAssessment() {
             ) : (
               <>
                 <Button variant="outline" onClick={startBulkEdit} data-testid="final-exams-edit-scores">{t("edit_scores")}</Button>
+                <Select value={fillField} onValueChange={setFillField}>
+                  <SelectTrigger className="w-full sm:w-[220px]" data-testid="final-exams-fill-field">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {FILL_FIELDS.map(({ key, label, max }) => (
+                      <SelectItem key={key} value={key}>{label} ({max})</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Button type="button" variant="secondary" onClick={handleFillMaxSelectedClass} disabled={filterClass === "all"} data-testid="final-exams-fill-max">
+                  <Sparkles className="me-2 h-4 w-4" />
+                  {t("fill_max_selected_class")}
+                </Button>
                 <Button variant="outline" onClick={() => setClearScoresOpen(true)} disabled={filterClass === "all"} data-testid="final-exams-clear-scores">{t("clear_selected_class_scores")}</Button>
               </>
             )}
@@ -662,24 +668,6 @@ export default function FinalExamsAssessment() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              <TableRow className="bg-muted/50">
-                <TableCell colSpan={2} className="text-muted-foreground text-sm py-2">{t("fill_column")}:</TableCell>
-                <TableCell className="text-center py-2">
-                  <div className="flex items-center justify-center gap-1">
-                    <Input type="number" min={0} max={10} step={0.5} className="score-table-input-10-fill" placeholder="0–10"
-                      value={fillValues.quarter1_practical} onChange={(e) => handleFillValueChange("quarter1_practical", e.target.value, 10)} />
-                    <Button type="button" variant="outline" size="sm" className="h-8" onClick={() => handleFillColumn("quarter1_practical", 10)}>{t("fill_column")}</Button>
-                  </div>
-                </TableCell>
-                <TableCell className="text-center py-2">
-                  <div className="flex items-center justify-center gap-1">
-                    <Input type="number" min={0} max={10} step={0.5} className="score-table-input-10-fill" placeholder="0–10"
-                      value={fillValues.quarter1_theory} onChange={(e) => handleFillValueChange("quarter1_theory", e.target.value, 10)} />
-                    <Button type="button" variant="outline" size="sm" className="h-8" onClick={() => handleFillColumn("quarter1_theory", 10)}>{t("fill_column")}</Button>
-                  </div>
-                </TableCell>
-                <TableCell colSpan={4} />
-              </TableRow>
               {filteredStudents.length ? (
                 filteredStudents.map((student) => {
                   const current = { ...student, ...(bulkScores[student.id] || {}) };

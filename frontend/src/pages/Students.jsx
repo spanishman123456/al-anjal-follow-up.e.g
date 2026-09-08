@@ -40,7 +40,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { MoreHorizontal, Award, FileText, MessageCircle, PartyPopper, Loader2 } from "lucide-react";
+import { MoreHorizontal, Award, FileText, MessageCircle, PartyPopper, Loader2, Sparkles } from "lucide-react";
 import { AssessmentPageFooter } from "@/components/AssessmentPageFooter";
 import { buildAcademicExportFilename } from "@/lib/exportFilenames";
 import "@/reward-modal.css";
@@ -883,52 +883,49 @@ export default function Students() {
   };
 
   const handleAttendanceBlur = async (student) => {
-    const current = bulkScores[student.id] || student;
+    const current = { ...student, ...bulkScores[student.id] };
     await saveScoreOnBlur(student, "attendance", parseScore(current.attendance));
   };
   const handleParticipationBlur = async (student) => {
-    const current = bulkScores[student.id] || student;
+    const current = { ...student, ...bulkScores[student.id] };
     await saveScoreOnBlur(student, "participation", parseScore(current.participation));
   };
   const handleBehaviorBlur = async (student) => {
-    const current = bulkScores[student.id] || student;
+    const current = { ...student, ...bulkScores[student.id] };
     await saveScoreOnBlur(student, "behavior", parseScore(current.behavior));
   };
   const handleHomeworkBlur = async (student) => {
-    const current = bulkScores[student.id] || student;
+    const current = { ...student, ...bulkScores[student.id] };
     await saveScoreOnBlur(student, "homework", parseScore(current.homework));
   };
 
-  const [fillValues, setFillValues] = useState({
-    attendance: "",
-    participation: "",
-    behavior: "",
-    homework: "",
-  });
+  const FILL_FIELDS = [
+    { key: "attendance", label: t("attendance") },
+    { key: "participation", label: t("participation") },
+    { key: "behavior", label: t("behavior") },
+    { key: "homework", label: t("homework") },
+  ];
+  const [fillField, setFillField] = useState(FILL_FIELDS[0].key);
 
-  const handleFillColumn = (field) => {
-    const max = MARKS_MAX[field];
+  const handleFillMaxSelectedClass = () => {
     if (filterClass === "all") {
       toast.error(t("select_class_to_clear_scores"));
       return;
     }
-    const raw = fillValues[field] === "" || fillValues[field] == null ? String(max) : fillValues[field];
-    const num = Number(raw);
-    if (Number.isNaN(num) || num < 0) {
-      toast.error(t("enter_valid_value") || "Enter a valid number");
+    if (!filteredStudents.length) {
+      toast.error(t("no_data"));
       return;
     }
-    const value = max != null && num > max ? String(max) : raw;
-    if (max != null && num > max) toast.warning(t("marks_exceeded").replace(/{max}/g, String(max)));
+    const max = MARKS_MAX[fillField];
     setBulkEditMode(true);
     setBulkScores((prev) => {
       const next = { ...prev };
       filteredStudents.forEach((s) => {
-        next[s.id] = { ...next[s.id], [field]: value };
+        next[s.id] = { ...next[s.id], [fillField]: String(max) };
       });
       return next;
     });
-    toast.success(t("fill_applied") || "Value applied to all students in this column");
+    toast.success(t("fill_max_completed").replace(/\{count\}/g, String(filteredStudents.length)).replace(/\{field\}/g, t(fillField)));
   };
 
   const handleBulkSave = async () => {
@@ -1071,6 +1068,28 @@ export default function Students() {
                   >
                     {t("edit_scores")}
                   </Button>
+                  <Select value={fillField} onValueChange={setFillField}>
+                    <SelectTrigger className="w-full sm:w-[220px]" data-testid="students-fill-field">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {FILL_FIELDS.map(({ key, label }) => (
+                        <SelectItem key={key} value={key}>
+                          {label} ({MARKS_MAX[key]})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={handleFillMaxSelectedClass}
+                    disabled={filterClass === "all"}
+                    data-testid="students-fill-max"
+                  >
+                    <Sparkles className="me-2 h-4 w-4" />
+                    {t("fill_max_selected_class")}
+                  </Button>
                   <Button
                     variant="outline"
                     onClick={() => setClearScoresOpen(true)}
@@ -1108,6 +1127,28 @@ export default function Students() {
                     data-testid="bulk-edit-scores"
                   >
                     {t("edit_scores")}
+                  </Button>
+                  <Select value={fillField} onValueChange={setFillField}>
+                    <SelectTrigger className="w-full sm:w-[220px]" data-testid="students-fill-field">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {FILL_FIELDS.map(({ key, label }) => (
+                        <SelectItem key={key} value={key}>
+                          {label} ({MARKS_MAX[key]})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={handleFillMaxSelectedClass}
+                    disabled={filterClass === "all"}
+                    data-testid="students-fill-max"
+                  >
+                    <Sparkles className="me-2 h-4 w-4" />
+                    {t("fill_max_selected_class")}
                   </Button>
                   <Button
                     variant="outline"
@@ -1354,115 +1395,9 @@ export default function Students() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              <TableRow className="bg-muted/50" data-testid="students-fill-row">
-                <TableCell colSpan={2} className="text-muted-foreground text-sm py-2">
-                  {t("fill_column")}:
-                </TableCell>
-                <TableCell className="text-center py-2">
-                  <div className="flex items-center justify-center gap-1">
-                    <Input
-                      type="number"
-                      min={0}
-                      max={2.5}
-                      step={0.5}
-                      className="score-table-input-5-fill"
-                      placeholder="0–2.5"
-                      value={fillValues.attendance}
-                      onChange={(e) => setFillValues((prev) => ({ ...prev, attendance: e.target.value }))}
-                      data-testid="students-fill-attendance"
-                    />
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="h-8 shrink-0"
-                      onClick={() => handleFillColumn("attendance")}
-                      data-testid="students-fill-attendance-btn"
-                    >
-                      {t("fill_column")}
-                    </Button>
-                  </div>
-                </TableCell>
-                <TableCell className="text-center py-2">
-                  <div className="flex items-center justify-center gap-1">
-                    <Input
-                      type="number"
-                      min={0}
-                      max={2.5}
-                      step={0.5}
-                      className="score-table-input-5-fill"
-                      placeholder="0–2.5"
-                      value={fillValues.participation}
-                      onChange={(e) => setFillValues((prev) => ({ ...prev, participation: e.target.value }))}
-                      data-testid="students-fill-participation"
-                    />
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="h-8 shrink-0"
-                      onClick={() => handleFillColumn("participation")}
-                      data-testid="students-fill-participation-btn"
-                    >
-                      {t("fill_column")}
-                    </Button>
-                  </div>
-                </TableCell>
-                <TableCell className="text-center py-2">
-                  <div className="flex items-center justify-center gap-1">
-                    <Input
-                      type="number"
-                      min={0}
-                      max={5}
-                      step={0.5}
-                      className="score-table-input-5-fill"
-                      placeholder="0–5"
-                      value={fillValues.behavior}
-                      onChange={(e) => setFillValues((prev) => ({ ...prev, behavior: e.target.value }))}
-                      data-testid="students-fill-behavior"
-                    />
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="h-8 shrink-0"
-                      onClick={() => handleFillColumn("behavior")}
-                      data-testid="students-fill-behavior-btn"
-                    >
-                      {t("fill_column")}
-                    </Button>
-                  </div>
-                </TableCell>
-                <TableCell className="text-center py-2">
-                  <div className="flex items-center justify-center gap-1">
-                    <Input
-                      type="number"
-                      min={0}
-                      max={5}
-                      step={0.5}
-                      className="score-table-input-5-fill"
-                      placeholder="0–5"
-                      value={fillValues.homework}
-                      onChange={(e) => setFillValues((prev) => ({ ...prev, homework: e.target.value }))}
-                      data-testid="students-fill-homework"
-                    />
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="h-8 shrink-0"
-                      onClick={() => handleFillColumn("homework")}
-                      data-testid="students-fill-homework-btn"
-                    >
-                      {t("fill_column")}
-                    </Button>
-                  </div>
-                </TableCell>
-                <TableCell colSpan={20} />
-              </TableRow>
               {filteredStudents.length ? (
                 filteredStudents.map((student) => {
-                  const currentScores = bulkScores[student.id] || student;
+                  const currentScores = { ...student, ...bulkScores[student.id] };
                   const hasBadge = badgeStudentIds.has(String(student.id));
                   return (
                     <TableRow key={student.id} data-testid={`student-row-${student.id}`}>
@@ -1552,12 +1487,12 @@ export default function Students() {
                         />
                       </TableCell>
                       <TableCell data-testid={`student-total-${student.id}`} className="text-center">
-                        {formatScore(computeTotalScore(bulkScores[student.id] || student), "/15")}
+                        {formatScore(computeTotalScore({ ...student, ...bulkScores[student.id] }), "/15")}
                       </TableCell>
                       <TableCell data-testid={`student-performance-${student.id}`} className="text-center">
                         <PerformanceLevelBadge
-                          level={computePerformanceLevel(bulkScores[student.id] || student)}
-                          label={t(computePerformanceLevel(bulkScores[student.id] || student))}
+                          level={computePerformanceLevel({ ...student, ...bulkScores[student.id] })}
+                          label={t(computePerformanceLevel({ ...student, ...bulkScores[student.id] }))}
                           data-testid={`student-performance-badge-${student.id}`}
                         />
                       </TableCell>
