@@ -41,6 +41,25 @@ def test_reads_only_student_and_submission_grade_and_matches_normalized_arabic()
     assert matches[0]["score"] == 4.5
 
 
+def test_reads_submission_mark_header_variant():
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.append(["Student Name", "Submission Mark"])
+    sheet.append(["Test Student", 27])
+    output = io.BytesIO()
+    workbook.save(output)
+    parsed = read_score_sheet(output.getvalue(), "scores.xlsx")
+    assert parsed["rows"] == [{"row": 2, "name": "Test Student", "raw_score": 27}]
+
+
+def test_matches_student_by_alt_full_name_when_primary_name_differs():
+    rows = read_score_sheet(score_file([("احمد عبدالمنعم الماجد", 4, "6A")]), "scores.xlsx")["rows"]
+    roster = [{"id": "s1", "full_name": "AHMED ABDELMONEIM ELMAGED", "alt_full_name": "احمد عبدالمنعم الماجد"}]
+    summary, matches = match_score_rows(rows, roster, lambda _student: 5, lambda _student: None)
+    assert summary["matched_count"] == 1
+    assert matches[0]["student_id"] == "s1"
+
+
 def test_duplicate_ambiguous_blank_and_out_of_range_rows_are_not_applied():
     rows = [
         {"row": 2, "name": "Duplicate", "raw_score": 4},

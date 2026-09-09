@@ -289,7 +289,7 @@ def make_router(db, get_current_user, section_query):
         classes = await db.classes.find({"$and": [scope_filter, {"id": {"$in": payload.class_ids}}]}, {"_id": 0, "id": 1, "name": 1}).to_list(201)
         if set(c["id"] for c in classes) != set(payload.class_ids):
             fail("baseline_invalid_classes")
-        students = await db.students.find({"$and": [scope_filter, {"class_id": {"$in": payload.class_ids}}]}, {"_id": 0, "id": 1, "full_name": 1, "class_id": 1}).sort("full_name", 1).to_list(5001)
+        students = await db.students.find({"$and": [scope_filter, {"class_id": {"$in": payload.class_ids}}]}, {"_id": 0, "id": 1, "full_name": 1, "alt_full_name": 1, "class_id": 1}).sort("full_name", 1).to_list(5001)
         if not students or len(students) > 5000:
             fail("baseline_roster_size")
         names = {c["id"]: c["name"] for c in classes}
@@ -401,6 +401,17 @@ def make_router(db, get_current_user, section_query):
         except ScoreSheetError as exc:
             fail(str(exc), 400)
         roster = [row for row in record["roster"] if not class_id or row["class_id"] == class_id]
+        # alt_full_name is a matching aid a teacher can add at any time, including
+        # after this record's roster was already snapshotted at setup - re-fetch the
+        # current value from db.students rather than trusting the frozen snapshot,
+        # so setting it later still helps re-imports into existing records.
+        roster_ids = [row["id"] for row in roster]
+        if roster_ids:
+            alt_name_docs = await db.students.find(
+                {"id": {"$in": roster_ids}}, {"_id": 0, "id": 1, "alt_full_name": 1}
+            ).to_list(len(roster_ids))
+            alt_names = {doc["id"]: doc.get("alt_full_name") for doc in alt_name_docs}
+            roster = [{**row, "alt_full_name": alt_names.get(row["id"])} for row in roster]
         summary, matches = match_score_rows(
             parsed["rows"],
             roster,

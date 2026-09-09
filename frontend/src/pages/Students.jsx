@@ -1029,6 +1029,29 @@ export default function Students() {
     }
   };
 
+  const [altNameEdits, setAltNameEdits] = useState({});
+  const getAltNameValue = (student) => altNameEdits[student.id] ?? student.alt_full_name ?? "";
+  const handleAltNameChange = (studentId, value) => {
+    setAltNameEdits((previous) => ({ ...previous, [studentId]: value }));
+  };
+  const handleAltNameBlur = async (student) => {
+    const value = (altNameEdits[student.id] ?? student.alt_full_name ?? "").trim();
+    if (value === (student.alt_full_name || "")) return;
+    try {
+      await api.put(`/students/${student.id}`, { alt_full_name: value || null });
+      setStudents((previous) => previous.map((item) => (
+        item.id === student.id ? { ...item, alt_full_name: value || null } : item
+      )));
+      setAltNameEdits((previous) => {
+        const next = { ...previous };
+        delete next[student.id];
+        return next;
+      });
+    } catch (error) {
+      toast.error(getApiErrorMessage(error) || t("student_update_failed"));
+    }
+  };
+
   return (
     <div className="space-y-8" data-testid="students-page">
       <PageHeader
@@ -1426,6 +1449,15 @@ export default function Students() {
                             </span>
                           )}
                         </span>
+                        <Input
+                          value={getAltNameValue(student)}
+                          onChange={(event) => handleAltNameChange(student.id, event.target.value)}
+                          onBlur={() => handleAltNameBlur(student)}
+                          placeholder={t("alt_full_name_placeholder")}
+                          title={t("alt_full_name_hint")}
+                          className="mt-1 h-6 max-w-[190px] px-1.5 py-0 text-xs text-muted-foreground"
+                          data-testid={`student-alt-name-${student.id}`}
+                        />
                       </TableCell>
                       <TableCell data-testid={`student-class-${student.id}`}>
                         {student.class_name}

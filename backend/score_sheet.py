@@ -154,9 +154,16 @@ def match_score_rows(
     """Match unique normalized names and validate against each target maximum."""
     roster_by_name: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
     for student in roster:
-        key = normalize_student_name(student.get("full_name"))
-        if key:
-            roster_by_name[key].append(student)
+        # alt_full_name lets one student match under either script (e.g. a name kept in
+        # English for an International-section roster plus an Arabic alias), since the
+        # source test platform sometimes exports the same class's names in either
+        # language. Dedupe keys per student first so a student whose two names happen
+        # to normalize the same doesn't get listed twice under that key (which would
+        # make them look ambiguous against themselves).
+        keys = {normalize_student_name(value) for value in (student.get("full_name"), student.get("alt_full_name"))}
+        for key in keys:
+            if key:
+                roster_by_name[key].append(student)
 
     file_keys = [normalize_student_name(row["name"]) for row in imported_rows]
     duplicate_keys = {key for key, count in Counter(file_keys).items() if key and count > 1}

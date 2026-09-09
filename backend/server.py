@@ -4947,6 +4947,11 @@ class ClassUpdate(BaseModel):
 
 class StudentBase(BaseModel):
     full_name: str
+    # Optional name in the school's other language/script (e.g. an Arabic name for an
+    # International-section student), so a score-sheet upload matches a student by
+    # either name - the source test platform sometimes exports names in either script
+    # for the same class, but full_name itself only ever holds one.
+    alt_full_name: Optional[str] = None
     class_id: str
     class_name: str
     student_number: Optional[str] = None
@@ -4979,6 +4984,7 @@ class StudentRecord(StudentBase):
 
 class StudentCreate(BaseModel):
     full_name: str
+    alt_full_name: Optional[str] = None
     class_id: str
     student_number: Optional[str] = None
     school_section: str = SCHOOL_SECTION_INTERNATIONAL
@@ -5004,6 +5010,7 @@ class StudentCreate(BaseModel):
 
 class StudentUpdate(BaseModel):
     full_name: Optional[str] = None
+    alt_full_name: Optional[str] = None
     class_id: Optional[str] = None
     school_section: Optional[str] = None
     academic_year: Optional[str] = None
