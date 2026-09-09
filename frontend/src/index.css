@@ -607,6 +607,20 @@ html:not(.dark) .section-bg-alt-4 {
     box-shadow: 0 10px 24px -6px rgba(0, 0, 0, 0.3), 0 4px 14px -4px rgba(0, 0, 0, 0.15);
 }
 
+/* Opt a single section out of the hover lift while keeping its background:
+   a long list reads as the whole block jumping rather than responding. */
+.section-bg-alt-1.no-section-pop:hover,
+.section-bg-alt-2.no-section-pop:hover,
+.section-bg-alt-3.no-section-pop:hover,
+.section-bg-alt-4.no-section-pop:hover,
+.dark .section-bg-alt-1.no-section-pop:hover,
+.dark .section-bg-alt-2.no-section-pop:hover,
+.dark .section-bg-alt-3.no-section-pop:hover,
+.dark .section-bg-alt-4.no-section-pop:hover {
+    transform: none;
+    box-shadow: none;
+}
+
 @layer base {
     [data-debug-wrapper="true"] {
         display: contents !important;

@@ -279,7 +279,7 @@ export default function Classes() {
         </CardContent>
       </Card>
 
-      <section className="section-bg-alt-1 grid gap-6 rounded-xl border border-border/50 p-4 md:grid-cols-2 xl:grid-cols-3 animate-stagger" data-testid="classes-grid">
+      <section className="section-bg-alt-1 no-section-pop grid gap-6 rounded-xl border border-border/50 p-4 md:grid-cols-2 xl:grid-cols-3 animate-stagger" data-testid="classes-grid">
         {isLoadingClasses && !classes.length && (
           <p className="inline-flex items-center gap-2 text-sm text-muted-foreground" data-testid="classes-loading">
             <Loader2 className="h-4 w-4 animate-spin" />
