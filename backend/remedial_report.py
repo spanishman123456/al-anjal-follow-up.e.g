@@ -279,18 +279,25 @@ def render_remedial_pdf(snapshot: Dict[str, Any], details: Dict[str, Any], lang:
     story.extend([_p(report_title, title, arabic=is_arabic), Spacer(1, 2 * mm)])
 
     if is_arabic:
+        # ReportLab lays table columns left-to-right regardless of the text inside them,
+        # so an Arabic [label, value] row (correct for English's "From: value") puts the
+        # label on the physical LEFT - backwards for RTL, where the label should read
+        # first, on the right. Put the value column first (left) and the label second
+        # (right) instead; the student table below already does this for the same reason.
         meta_rows = [
-            [_p("من:", label, arabic=True), _p(f"{teacher_role}/ {teacher_name}", normal, arabic=True)],
-            [_p("إلى:", label, arabic=True), _p(f"{supervisor_role}/ {supervisor_name}".rstrip("/ ").rstrip(), normal, arabic=True)],
-            [_p("الموضوع:", label, arabic=True), _p(f"نتيجة تحليل {source_label} لمادة {course_name}", normal, arabic=True)],
+            [_p(f"{teacher_role}/ {teacher_name}", normal, arabic=True), _p("من:", label, arabic=True)],
+            [_p(f"{supervisor_role}/ {supervisor_name}".rstrip("/ ").rstrip(), normal, arabic=True), _p("إلى:", label, arabic=True)],
+            [_p(f"نتيجة تحليل {source_label} لمادة {course_name}", normal, arabic=True), _p("الموضوع:", label, arabic=True)],
         ]
+        meta_widths = [152 * mm, 24 * mm]
     else:
         meta_rows = [
             [_p("From:", label), _p(f"{teacher_role} / {teacher_name}", normal)],
             [_p("To:", label), _p(f"{supervisor_role} / {supervisor_name}".rstrip("/ ").rstrip(), normal)],
             [_p("About:", label), _p(f"Analysis of {source_label} results for {course_name}", normal)],
         ]
-    meta = Table(meta_rows, colWidths=[24 * mm, 152 * mm])
+        meta_widths = [24 * mm, 152 * mm]
+    meta = Table(meta_rows, colWidths=meta_widths)
     meta.setStyle(TableStyle([
         ("VALIGN", (0, 0), (-1, -1), "TOP"),
         ("LINEBELOW", (0, 0), (-1, -1), 0.35, colors.HexColor("#B9C2D3")),
@@ -302,11 +309,11 @@ def render_remedial_pdf(snapshot: Dict[str, Any], details: Dict[str, Any], lang:
     at_or_above = snapshot.get("stats", {}).get("at_or_above_50", 0)
     if is_arabic:
         paragraph = (
-            f"تم إجراء تحليل لنتائج {source_label} لمادة {course_name} للعام الدراسي {year}. وجاءت النتائج العامة مبشّرة، "
-            f"حيث حصل {at_or_above} من الطلاب على 50% فأكثر من الدرجة النهائية. إلا أنني منشغل البال بشأن الطلاب الذين "
-            f"حصلوا على أقل من {threshold} من {maximum}، إذ يمثلون تحديًا كبيرًا ليس لأنفسهم فقط بل لزملائهم أيضًا "
-            f"المتأثرين بعدم استيعابهم لـ{learning_area}. ولمعالجة هذا الأمر، سيتم تنفيذ خطة علاجية لهؤلاء الطلاب الذين "
-            "حصلوا على درجات أقل من المتوسط بوضوح، مع قائمة بأسمائهم موضحة في الجدول التالي."
+            f"تم إجراء تحليل لنتائج {source_label} لمادة {course_name} خلال {plan_date} من العام الدراسي {year}. "
+            f"وجاءت النتائج العامة مبشّرة، حيث حصل {at_or_above} من الطلاب على 50% فأكثر من الدرجة النهائية. إلا أن "
+            f"الطلاب الذين حصلوا على أقل من {threshold} من {maximum} يمثلون تحديًا كبيرًا ليس لأنفسهم فقط بل لزملائهم "
+            f"أيضًا المتأثرين بعدم استيعابهم لمحتوى {learning_area}. ولمعالجة هذا الأمر، سيتم تنفيذ خطة علاجية لهؤلاء "
+            "الطلاب الذين حصلوا على درجات أقل من المتوسط بوضوح، مع قائمة بأسمائهم موضحة في الجدول التالي."
         )
         paragraph_above = (
             f"أما الطلاب الذين حصلوا على {threshold} فأكثر، فيمثل ذلك تحديًا إيجابيًا للمعلم، الذي يتطلع إلى استمرار "
@@ -314,12 +321,14 @@ def render_remedial_pdf(snapshot: Dict[str, Any], details: Dict[str, Any], lang:
         )
     else:
         paragraph = (
-            f"An analysis of the {source_label} results for {course_name} was conducted for the {year} academic year. "
-            f"The overall results are promising, with {at_or_above} student(s) scoring at or above 50% of the final mark. "
-            f"However, I am concerned about the students who scored less than {threshold} out of {maximum}, as they present "
-            f"a significant challenge, not only to themselves but also to their peers, who are affected by their inability "
-            f"to grasp {learning_area}. To address this issue, I will implement a remedial plan for those students who scored "
-            "well below average, along with a list of those involved below."
+            # No "during" here: the placeholder ("During Weeks 1 & 2") already supplies it,
+            # matching how the same value reads standalone in the table's date column.
+            f"An analysis of the {source_label} results for {course_name} was conducted {plan_date} of the "
+            f"{year} academic year. The overall results are promising, with {at_or_above} student(s) scoring at or "
+            f"above 50% of the final mark. However, I am concerned about the students who scored less than {threshold} "
+            f"out of {maximum}, as they present a significant challenge, not only to themselves but also to their peers, "
+            f"who are affected by their inability to grasp {learning_area}. To address this issue, I will implement a "
+            "remedial plan for those students who scored well below average, along with a list of those involved below."
         )
         paragraph_above = (
             f"As for the students who scored {threshold} or above, this represents a positive challenge for the teacher, "
