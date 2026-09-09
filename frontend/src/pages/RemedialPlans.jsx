@@ -32,7 +32,7 @@ function downloadBlob(blob, filename) {
 }
 
 export default function RemedialPlans() {
-  const { language, semester, quarter, schoolSection, academicYear, profile } = useOutletContext();
+  const { language, semester, quarter, schoolSection, academicYear } = useOutletContext();
   const t = useTranslations(language);
   const semesterNumber = semester === "semester2" ? 2 : 1;
   const quarterNumber = Number(quarter) || 1;
@@ -63,9 +63,12 @@ export default function RemedialPlans() {
     setForm((current) => ({
       ...current,
       department: current.department || (schoolSection === "arabic" ? t("remedial_default_department_ar") : t("remedial_default_department_en")),
-      teacherName: current.teacherName || profile?.name || profile?.full_name || profile?.username || "",
     }));
-  }, [profile, schoolSection, t]);
+    // Teacher intentionally left blank rather than defaulted from the logged-in
+    // profile - the account signed in is often a generic "Administrator" login
+    // shared across teachers, not the actual teacher who should sign the letter,
+    // so a name here would just have to be deleted and retyped every time.
+  }, [schoolSection, t]);
 
   const selectedSource = useMemo(
     () => sources.find((item) => sourceKey(item) === selectedSourceKey) || null,
