@@ -38,6 +38,9 @@ NAME_HEADERS = {
 }
 SCORE_HEADERS = {
     "درجةالتسليم", "درجهالتسليم", "submissiongrade", "submittedgrade", "submissionscore",
+    # The school's actual test-platform export for the International section uses
+    # "Submission Mark" rather than "Submission Grade" - both mean the same column.
+    "submissionmark", "submittedmark",
 }
 MAX_UPLOAD_BYTES = 10 * 1024 * 1024
 
