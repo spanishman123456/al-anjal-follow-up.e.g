@@ -484,7 +484,7 @@ export default function ArabicStudents() {
           <p className="basis-full text-xs text-muted-foreground">{t("fill_max_selected_class_hint")}</p>
         </CardContent></Card>
 
-        <Card><CardContent className="p-0"><div className="overflow-x-auto"><table className="w-full min-w-[1220px] text-sm"><thead className="bg-[#10162A] text-white"><tr><th className="sticky start-0 z-10 bg-[#10162A] p-3 text-start">{t("student")}</th><th className="p-3 text-start">{t("class")}</th>{CONTINUOUS_FIELDS.map(({ key }) => <th key={key} className="p-3 text-center">{t(key)} /10</th>)}<th className="p-3 text-center">{t("weekly_total")} /40</th><th className="p-3 text-center">{t("quarter_average")} /40</th><th className="p-3 text-center">{t("performance_level")}</th><th className="p-3 text-center">{t("actions")}</th></tr></thead><tbody>{filteredStudents.map((student) => {
+        <Card noHoverPop><CardContent className="p-0"><div className="overflow-x-auto"><table className="w-full min-w-[1220px] text-sm"><thead className="bg-[#10162A] text-white"><tr><th className="sticky start-0 z-10 bg-[#10162A] p-3 text-start">{t("student")}</th><th className="p-3 text-start">{t("class")}</th>{CONTINUOUS_FIELDS.map(({ key }) => <th key={key} className="p-3 text-center">{t(key)} /10</th>)}<th className="p-3 text-center">{t("weekly_total")} /40</th><th className="p-3 text-center">{t("quarter_average")} /40</th><th className="p-3 text-center">{t("performance_level")}</th><th className="p-3 text-center">{t("actions")}</th></tr></thead><tbody>{filteredStudents.map((student) => {
           const current = values[student.id] || {};
           const total = weeklyTotal(current);
           const level = weeklyLevel(current);

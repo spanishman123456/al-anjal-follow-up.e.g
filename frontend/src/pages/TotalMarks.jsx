@@ -701,7 +701,7 @@ export default function TotalMarks() {
         </CardContent>
       </Card>
 
-      <Card data-testid="total-marks-table-card">
+      <Card noHoverPop data-testid="total-marks-table-card">
         <CardContent className="pt-6">
           <Table data-testid="total-marks-table">
             <TableHeader>

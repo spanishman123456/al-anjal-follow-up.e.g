@@ -37,6 +37,9 @@ export default function RemedialPlans() {
   const semesterNumber = semester === "semester2" ? 2 : 1;
   const quarterNumber = Number(quarter) || 1;
   const isArabic = language === "ar";
+  // The report is an official school letter: its language follows the section it
+  // describes (Arabic section -> Arabic, International -> English), not the UI toggle.
+  const reportLang = schoolSection === "arabic" ? "ar" : "en";
   const [sources, setSources] = useState([]);
   const [classes, setClasses] = useState([]);
   const [selectedSourceKey, setSelectedSourceKey] = useState("");
@@ -118,7 +121,7 @@ export default function RemedialPlans() {
           semester: semesterNumber,
           quarter: quarterNumber,
           class_id: selectedClassId === "all" ? undefined : selectedClassId,
-          lang: language,
+          lang: reportLang,
         },
       });
       setSnapshot(response.data);
@@ -128,7 +131,7 @@ export default function RemedialPlans() {
     } finally {
       setLoadingPreview(false);
     }
-  }, [academicYear, language, quarterNumber, schoolSection, selectedClassId, selectedSourceKey, semesterNumber, t]);
+  }, [academicYear, reportLang, quarterNumber, schoolSection, selectedClassId, selectedSourceKey, semesterNumber, t]);
 
   useEffect(() => { loadPreview(); }, [loadPreview]);
 
@@ -165,7 +168,7 @@ export default function RemedialPlans() {
         semester: semesterNumber,
         quarter: quarterNumber,
         class_id: selectedClassId === "all" ? null : selectedClassId,
-        lang: language,
+        lang: reportLang,
         snapshot_id: snapshot.snapshot_id,
         subject: form.subject.trim(),
         skill_weakness: form.skillWeakness.trim(),
@@ -253,7 +256,7 @@ export default function RemedialPlans() {
         <CardHeader><CardTitle>{t("remedial_report_details")}</CardTitle><CardDescription>{t("remedial_manual_fields_help")}</CardDescription></CardHeader>
         <CardContent className="grid gap-4 md:grid-cols-2">
           <div className="space-y-2"><label className="text-sm font-medium" htmlFor="remedial-subject">{t("remedial_subject")}</label><Input id="remedial-subject" value={form.subject} onChange={(event) => setForm((current) => ({ ...current, subject: event.target.value }))} data-testid="remedial-subject" /></div>
-          <div className="space-y-2"><label className="text-sm font-medium" htmlFor="remedial-date">{t("remedial_plan_date")}</label><Input id="remedial-date" type="date" value={form.remedialPlanDate} onChange={(event) => setForm((current) => ({ ...current, remedialPlanDate: event.target.value }))} data-testid="remedial-plan-date" /></div>
+          <div className="space-y-2"><label className="text-sm font-medium" htmlFor="remedial-date">{t("remedial_plan_date")}</label><Input id="remedial-date" type="text" placeholder={t("remedial_plan_date_placeholder")} value={form.remedialPlanDate} onChange={(event) => setForm((current) => ({ ...current, remedialPlanDate: event.target.value }))} data-testid="remedial-plan-date" /></div>
           <div className="space-y-2 md:col-span-2"><label className="text-sm font-medium" htmlFor="remedial-weakness">{t("remedial_skill_weakness")}</label><Textarea id="remedial-weakness" value={form.skillWeakness} onChange={(event) => setForm((current) => ({ ...current, skillWeakness: event.target.value }))} rows={3} data-testid="remedial-skill-weakness" /></div>
           <div className="space-y-2"><label className="text-sm font-medium" htmlFor="remedial-department">{t("remedial_department")}</label><Input id="remedial-department" value={form.department} onChange={(event) => setForm((current) => ({ ...current, department: event.target.value }))} /></div>
           <div className="space-y-2"><label className="text-sm font-medium" htmlFor="remedial-teacher">{t("teacher")}</label><Input id="remedial-teacher" value={form.teacherName} onChange={(event) => setForm((current) => ({ ...current, teacherName: event.target.value }))} /></div>

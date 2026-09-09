@@ -236,7 +236,17 @@ def render_remedial_pdf(snapshot: Dict[str, Any], details: Dict[str, Any], lang:
     department = details.get("department") or dept_default
     teacher_name = details.get("teacher_name") or ("المعلم" if is_arabic else "Teacher")
     supervisor_name = details.get("supervisor_name") or ""
-    subject = details.get("subject") or ("المادة" if is_arabic else "the selected subject")
+    # Roles carried by the letter: the department's teacher and supervisor, as in the
+    # school's own report ("Computer Teacher" / "Computer Supervisor").
+    teacher_role = "معلم الحاسب الآلي" if is_arabic else "Computer Teacher"
+    supervisor_role = "مشرف الحاسب الآلي" if is_arabic else "Computer Supervisor"
+    # The course this report belongs to is fixed per section; the teacher's own
+    # "subject / learning area" entry (e.g. "Microbit") is the topic the struggling
+    # students could not grasp, which is a different thing and reads that way below.
+    course_name = "المهارات الرقمية" if is_arabic else "Computer Science"
+    learning_area = details.get("subject") or (
+        "المهارات التي تناولها هذا الاختبار" if is_arabic else "the skills covered in this test"
+    )
     # Falls back to a phrase that still reads naturally inside "...their inability to grasp {weakness}"
     # rather than a dead-end placeholder, while staying honest that the system has no way to infer
     # which specific skill a student struggled with from a total score alone - only the teacher,
@@ -270,15 +280,15 @@ def render_remedial_pdf(snapshot: Dict[str, Any], details: Dict[str, Any], lang:
 
     if is_arabic:
         meta_rows = [
-            [_p("من:", label, arabic=True), _p(teacher_name, normal, arabic=True)],
-            [_p("إلى:", label, arabic=True), _p(supervisor_name or "المشرف التربوي", normal, arabic=True)],
-            [_p("الموضوع:", label, arabic=True), _p(f"نتيجة تحليل {source_label} لمادة {subject}", normal, arabic=True)],
+            [_p("من:", label, arabic=True), _p(f"{teacher_role}/ {teacher_name}", normal, arabic=True)],
+            [_p("إلى:", label, arabic=True), _p(f"{supervisor_role}/ {supervisor_name}".rstrip("/ ").rstrip(), normal, arabic=True)],
+            [_p("الموضوع:", label, arabic=True), _p(f"نتيجة تحليل {source_label} لمادة {course_name}", normal, arabic=True)],
         ]
     else:
         meta_rows = [
-            [_p("From:", label), _p(teacher_name, normal)],
-            [_p("To:", label), _p(supervisor_name or "Academic Supervisor", normal)],
-            [_p("About:", label), _p(f"Analysis of {source_label} results for {subject}", normal)],
+            [_p("From:", label), _p(f"{teacher_role} / {teacher_name}", normal)],
+            [_p("To:", label), _p(f"{supervisor_role} / {supervisor_name}".rstrip("/ ").rstrip(), normal)],
+            [_p("About:", label), _p(f"Analysis of {source_label} results for {course_name}", normal)],
         ]
     meta = Table(meta_rows, colWidths=[24 * mm, 152 * mm])
     meta.setStyle(TableStyle([
@@ -292,28 +302,28 @@ def render_remedial_pdf(snapshot: Dict[str, Any], details: Dict[str, Any], lang:
     at_or_above = snapshot.get("stats", {}).get("at_or_above_50", 0)
     if is_arabic:
         paragraph = (
-            f"تم إجراء تحليل لنتائج {source_label} لمادة {subject} للعام الدراسي {year}. وجاءت النتائج العامة مبشّرة، "
+            f"تم إجراء تحليل لنتائج {source_label} لمادة {course_name} للعام الدراسي {year}. وجاءت النتائج العامة مبشّرة، "
             f"حيث حصل {at_or_above} من الطلاب على 50% فأكثر من الدرجة النهائية. إلا أنني منشغل البال بشأن الطلاب الذين "
             f"حصلوا على أقل من {threshold} من {maximum}، إذ يمثلون تحديًا كبيرًا ليس لأنفسهم فقط بل لزملائهم أيضًا "
-            f"المتأثرين بعدم استيعابهم لـ{weakness}. ولمعالجة هذا الأمر، سيتم تنفيذ خطة علاجية لهؤلاء الطلاب الذين "
+            f"المتأثرين بعدم استيعابهم لـ{learning_area}. ولمعالجة هذا الأمر، سيتم تنفيذ خطة علاجية لهؤلاء الطلاب الذين "
             "حصلوا على درجات أقل من المتوسط بوضوح، مع قائمة بأسمائهم موضحة في الجدول التالي."
         )
         paragraph_above = (
             f"أما الطلاب الذين حصلوا على {threshold} فأكثر، فيمثل ذلك تحديًا إيجابيًا للمعلم، الذي يتطلع إلى استمرار "
-            "تطور أدائهم مع الوقت."
+            "تطور أدائهم مع الوقت من خلال إسناد تحديات لهم ذات مستوى أعلى."
         )
     else:
         paragraph = (
-            f"An analysis of the {source_label} results for {subject} was conducted for the {year} academic year. "
+            f"An analysis of the {source_label} results for {course_name} was conducted for the {year} academic year. "
             f"The overall results are promising, with {at_or_above} student(s) scoring at or above 50% of the final mark. "
             f"However, I am concerned about the students who scored less than {threshold} out of {maximum}, as they present "
             f"a significant challenge, not only to themselves but also to their peers, who are affected by their inability "
-            f"to grasp {weakness}. To address this issue, I will implement a remedial plan for those students who scored "
+            f"to grasp {learning_area}. To address this issue, I will implement a remedial plan for those students who scored "
             "well below average, along with a list of those involved below."
         )
         paragraph_above = (
             f"As for the students who scored {threshold} or above, this represents a positive challenge for the teacher, "
-            "who looks forward to continued improvement in their performance over time."
+            "who looks forward to continued improvement in their performance over time by assigning them higher-level challenges."
         )
     story.extend([
         _p(paragraph, normal, arabic=is_arabic, wrap_chars=90 if is_arabic else None),
@@ -375,13 +385,13 @@ def render_remedial_pdf(snapshot: Dict[str, Any], details: Dict[str, Any], lang:
 
     if is_arabic:
         signature_data = [[
-            _p(f"المعلم\n{teacher_name}", center, arabic=True),
-            _p(f"المشرف التربوي\n{supervisor_name or '........................'}", center, arabic=True),
+            _p(f"{teacher_role}\n{teacher_name}", center, arabic=True),
+            _p(f"{supervisor_role}\n{supervisor_name or '........................'}", center, arabic=True),
         ]]
     else:
         signature_data = [[
-            _p(f"Teacher\n{teacher_name}", center),
-            _p(f"Supervisor\n{supervisor_name or '........................'}", center),
+            _p(f"{teacher_role}\n{teacher_name}", center),
+            _p(f"{supervisor_role}\n{supervisor_name or '........................'}", center),
         ]]
     signatures = Table(signature_data, colWidths=[88 * mm, 88 * mm])
     signatures.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "TOP")]))

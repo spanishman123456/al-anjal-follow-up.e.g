@@ -603,7 +603,7 @@ export default function AssessmentMarksQ2() {
         </CardContent>
       </Card>
 
-      <Card data-testid="assessment-q2-table-card">
+      <Card noHoverPop data-testid="assessment-q2-table-card">
         <CardContent className="pt-6">
           <Table data-testid="assessment-q2-marks-table">
             <TableHeader>

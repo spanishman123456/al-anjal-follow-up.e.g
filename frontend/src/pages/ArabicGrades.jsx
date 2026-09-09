@@ -397,7 +397,7 @@ export default function ArabicGrades() {
         </CardContent>
       </Card>
 
-      <Card>
+      <Card noHoverPop>
         <CardContent className="p-0">
           <div className="overflow-x-auto">
             <table className="w-full min-w-[1220px] text-sm">

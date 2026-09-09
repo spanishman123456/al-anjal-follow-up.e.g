@@ -1377,7 +1377,7 @@ export default function Students() {
         </CardContent>
       </Card>
 
-      <Card data-testid="students-table-card">
+      <Card noHoverPop data-testid="students-table-card">
         <CardContent className="pt-6">
           <div className="table-responsive-wrap">
           <Table data-testid="students-table">

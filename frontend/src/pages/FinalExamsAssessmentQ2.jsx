@@ -655,7 +655,7 @@ export default function FinalExamsAssessmentQ2() {
         {t("final_exams_total_formula_hint")}
       </p>
 
-      <Card data-testid="final-exams-q2-table-card">
+      <Card noHoverPop data-testid="final-exams-q2-table-card">
         <CardContent className="pt-6">
           <Table data-testid="final-exams-q2-marks-table">
             <TableHeader>
