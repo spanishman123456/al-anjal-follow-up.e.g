@@ -160,19 +160,46 @@ def _safe(value: Any) -> str:
     return str(value or "").replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
 
+def _wrap_by_width(text: str, font_name: str, font_size: float, max_width: float) -> List[str]:
+    """Greedily wraps LOGICAL Arabic text into lines whose *reshaped* (ligature-joined)
+    width fits max_width, measured in the actual font - unlike a fixed character count,
+    this adapts to the real column/paragraph width instead of guessing and either
+    under-filling the line (a ragged block that reads like a narrow column) or overflowing it.
+    """
+    words = text.split(" ")
+    lines: List[str] = []
+    current: List[str] = []
+    for word in words:
+        candidate = " ".join(current + [word]) if current else word
+        width = pdfmetrics.stringWidth(_shape(candidate), font_name, font_size)
+        if current and width > max_width:
+            lines.append(" ".join(current))
+            current = [word]
+        else:
+            current.append(word)
+    if current:
+        lines.append(" ".join(current))
+    return lines or [""]
+
+
 def _p(
     text: Any,
     style: ParagraphStyle,
     *,
     arabic: bool = False,
     wrap_chars: Optional[int] = None,
+    wrap_width: Optional[float] = None,
+    wrap_font: Optional[str] = None,
+    wrap_font_size: Optional[float] = None,
 ) -> Paragraph:
     raw = str(text or "")
     if not arabic:
         return Paragraph(_safe(raw).replace("\n", "<br/>"), style)
     logical_lines: List[str] = []
     for explicit_line in raw.splitlines() or [""]:
-        if wrap_chars and len(explicit_line) > wrap_chars:
+        if wrap_width and wrap_font and wrap_font_size:
+            logical_lines.extend(_wrap_by_width(explicit_line, wrap_font, wrap_font_size, wrap_width))
+        elif wrap_chars and len(explicit_line) > wrap_chars:
             logical_lines.extend(textwrap.wrap(explicit_line, width=wrap_chars, break_long_words=False, break_on_hyphens=False))
         else:
             logical_lines.append(explicit_line)
@@ -255,6 +282,18 @@ def render_remedial_pdf(snapshot: Dict[str, Any], details: Dict[str, Any], lang:
         "المهارات التي تناولها هذا الاختبار" if is_arabic else "the skills covered in this test"
     )
     plan_date = details.get("remedial_plan_date") or "-"
+    # Test administration and result analysis are two separate moments in the letter's
+    # opening ("a test was conducted during week 1&2 ... an analysis was then conducted
+    # during week 4&5"); test_conducted_date is optional since not every teacher fills
+    # it in immediately, in which case that opening clause is skipped rather than shown
+    # with a placeholder dash.
+    test_conducted_date = (details.get("test_conducted_date") or "").strip()
+    class_names = ", ".join(item["name"] for item in snapshot.get("classes") or [] if item.get("name"))
+    semester_number = snapshot.get("scope", {}).get("semester")
+    if is_arabic:
+        semester_word = {1: "الأول", 2: "الثاني"}.get(semester_number, "")
+    else:
+        semester_word = {1: "first", 2: "second"}.get(semester_number, "")
     source_label = snapshot["source"]["label"]
     year = snapshot["scope"]["academic_year"]
     threshold = _number(snapshot["source"]["threshold"])
@@ -308,9 +347,24 @@ def render_remedial_pdf(snapshot: Dict[str, Any], details: Dict[str, Any], lang:
 
     at_or_above = snapshot.get("stats", {}).get("at_or_above_50", 0)
     if is_arabic:
+        if test_conducted_date:
+            # Two separate moments, as in the letter: the test was administered during
+            # one window, the results were analyzed during another (often later) one.
+            semester_clause = f" للفصل {semester_word}" if semester_word else ""
+            opening = (
+                f"تم عمل اختبار تشخيصي لصف {class_names or source_label} في مادة {course_name} خلال "
+                f"{test_conducted_date}{semester_clause} من العام الدراسي {year}. ثم تم إجراء تحليل لنتائج الطلاب "
+                f"خلال {plan_date}، وجاءت النتائج العامة مبشّرة، "
+            )
+        else:
+            # No test-administration date on hand: fall back to naming just the analysis.
+            opening = (
+                f"تم إجراء تحليل لنتائج {source_label} لمادة {course_name} خلال {plan_date} من العام الدراسي {year}. "
+                "وجاءت النتائج العامة مبشّرة، "
+            )
         paragraph = (
-            f"تم إجراء تحليل لنتائج {source_label} لمادة {course_name} خلال {plan_date} من العام الدراسي {year}. "
-            f"وجاءت النتائج العامة مبشّرة، حيث حصل {at_or_above} من الطلاب على 50% فأكثر من الدرجة النهائية. إلا أن "
+            opening
+            + f"حيث حصل {at_or_above} من الطلاب على 50% فأكثر من الدرجة النهائية. إلا أن "
             f"الطلاب الذين حصلوا على أقل من {threshold} من {maximum} يمثلون تحديًا كبيرًا ليس لأنفسهم فقط بل لزملائهم "
             f"أيضًا المتأثرين بعدم استيعابهم لمحتوى {learning_area}. ولمعالجة هذا الأمر، سيتم تنفيذ خطة علاجية لهؤلاء "
             "الطلاب الذين حصلوا على درجات أقل من المتوسط بوضوح، مع قائمة بأسمائهم موضحة في الجدول التالي."
@@ -320,11 +374,26 @@ def render_remedial_pdf(snapshot: Dict[str, Any], details: Dict[str, Any], lang:
             "تطور أدائهم مع الوقت من خلال إسناد تحديات لهم ذات مستوى أعلى."
         )
     else:
+        if test_conducted_date:
+            semester_clause = f" of the {semester_word} semester" if semester_word else ""
+            opening = (
+                # No "during" before {plan_date}: its value already supplies it (e.g.
+                # "During Week 3"), same as the fallback opening below.
+                f"A diagnostic test was conducted for {class_names or source_label} in {course_name} during "
+                f"{test_conducted_date}{semester_clause} of the {year} academic year. An analysis of the students' "
+                f"results was then conducted {plan_date}, and the overall results are promising, "
+            )
+        else:
+            # No "during" before {plan_date} here: the placeholder ("During Weeks 1 & 2")
+            # already supplies it, matching how the same value reads standalone in the
+            # table's date column.
+            opening = (
+                f"An analysis of the {source_label} results for {course_name} was conducted {plan_date} of the "
+                f"{year} academic year. The overall results are promising, "
+            )
         paragraph = (
-            # No "during" here: the placeholder ("During Weeks 1 & 2") already supplies it,
-            # matching how the same value reads standalone in the table's date column.
-            f"An analysis of the {source_label} results for {course_name} was conducted {plan_date} of the "
-            f"{year} academic year. The overall results are promising, with {at_or_above} student(s) scoring at or "
+            opening
+            + f"with {at_or_above} student(s) scoring at or "
             f"above 50% of the final mark. However, I am concerned about the students who scored less than {threshold} "
             f"out of {maximum}, as they present a significant challenge, not only to themselves but also to their peers, "
             f"who are affected by their inability to grasp {learning_area}. To address this issue, I will implement a "
@@ -334,10 +403,14 @@ def render_remedial_pdf(snapshot: Dict[str, Any], details: Dict[str, Any], lang:
             f"As for the students who scored {threshold} or above, this represents a positive challenge for the teacher, "
             "who looks forward to continued improvement in their performance over time by assigning them higher-level challenges."
         )
+    # Full content width (A4 minus the 14mm side margins), so lines actually fill it
+    # instead of stopping short - a fixed character count was cutting lines well before
+    # the real margin, leaving the paragraph looking like a narrow half-empty column.
+    body_width = A4[0] - 28 * mm
     story.extend([
-        _p(paragraph, normal, arabic=is_arabic, wrap_chars=90 if is_arabic else None),
+        _p(paragraph, normal, arabic=is_arabic, wrap_width=body_width if is_arabic else None, wrap_font=font, wrap_font_size=10),
         Spacer(1, 3 * mm),
-        _p(paragraph_above, normal, arabic=is_arabic, wrap_chars=90 if is_arabic else None),
+        _p(paragraph_above, normal, arabic=is_arabic, wrap_width=body_width if is_arabic else None, wrap_font=font, wrap_font_size=10),
         Spacer(1, 5 * mm),
     ])
 
