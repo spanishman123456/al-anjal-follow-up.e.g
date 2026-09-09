@@ -5535,6 +5535,7 @@ class RemedialReportExportRequest(BaseModel):
     subject: str = Field(min_length=1, max_length=200)
     skill_weakness: str = Field(min_length=1, max_length=700)
     test_conducted_date: Optional[str] = Field(default=None, max_length=100)
+    analysis_date: Optional[str] = Field(default=None, max_length=100)
     remedial_plan_date: str = Field(min_length=1, max_length=100)
     department: Optional[str] = Field(default=None, max_length=200)
     teacher_name: Optional[str] = Field(default=None, max_length=200)
@@ -7772,8 +7773,8 @@ async def export_remedial_report_pdf(
         raise HTTPException(status_code=409, detail="remedial_no_weak_students")
     details = payload.model_dump(
         include={
-            "subject", "skill_weakness", "test_conducted_date", "remedial_plan_date",
-            "department", "teacher_name", "supervisor_name",
+            "subject", "skill_weakness", "test_conducted_date", "analysis_date",
+            "remedial_plan_date", "department", "teacher_name", "supervisor_name",
         }
     )
     content = await run_in_threadpool(render_remedial_pdf, snapshot, details, payload.lang)

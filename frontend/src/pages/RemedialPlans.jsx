@@ -52,6 +52,7 @@ export default function RemedialPlans() {
     subject: "",
     skillWeakness: "",
     testConductedDate: "",
+    analysisDate: "",
     remedialPlanDate: "",
     department: "",
     teacherName: "",
@@ -174,6 +175,7 @@ export default function RemedialPlans() {
         subject: form.subject.trim(),
         skill_weakness: form.skillWeakness.trim(),
         test_conducted_date: form.testConductedDate.trim() || null,
+        analysis_date: form.analysisDate.trim() || null,
         remedial_plan_date: form.remedialPlanDate.trim(),
         department: form.department.trim() || null,
         teacher_name: form.teacherName.trim() || null,
@@ -259,6 +261,7 @@ export default function RemedialPlans() {
         <CardContent className="grid gap-4 md:grid-cols-2">
           <div className="space-y-2"><label className="text-sm font-medium" htmlFor="remedial-subject">{t("remedial_subject")}</label><Input id="remedial-subject" value={form.subject} onChange={(event) => setForm((current) => ({ ...current, subject: event.target.value }))} data-testid="remedial-subject" /></div>
           <div className="space-y-2"><label className="text-sm font-medium" htmlFor="remedial-test-date">{t("remedial_test_conducted_date")}</label><Input id="remedial-test-date" type="text" placeholder={t("remedial_test_conducted_date_placeholder")} value={form.testConductedDate} onChange={(event) => setForm((current) => ({ ...current, testConductedDate: event.target.value }))} data-testid="remedial-test-conducted-date" /></div>
+          <div className="space-y-2"><label className="text-sm font-medium" htmlFor="remedial-analysis-date">{t("remedial_analysis_date")}</label><Input id="remedial-analysis-date" type="text" placeholder={t("remedial_analysis_date_placeholder")} value={form.analysisDate} onChange={(event) => setForm((current) => ({ ...current, analysisDate: event.target.value }))} data-testid="remedial-analysis-date" /></div>
           <div className="space-y-2"><label className="text-sm font-medium" htmlFor="remedial-date">{t("remedial_plan_date")}</label><Input id="remedial-date" type="text" placeholder={t("remedial_plan_date_placeholder")} value={form.remedialPlanDate} onChange={(event) => setForm((current) => ({ ...current, remedialPlanDate: event.target.value }))} data-testid="remedial-plan-date" /></div>
           <div className="space-y-2 md:col-span-2"><label className="text-sm font-medium" htmlFor="remedial-weakness">{t("remedial_skill_weakness")}</label><Textarea id="remedial-weakness" value={form.skillWeakness} onChange={(event) => setForm((current) => ({ ...current, skillWeakness: event.target.value }))} rows={3} data-testid="remedial-skill-weakness" /></div>
           <div className="space-y-2"><label className="text-sm font-medium" htmlFor="remedial-department">{t("remedial_department")}</label><Input id="remedial-department" value={form.department} onChange={(event) => setForm((current) => ({ ...current, department: event.target.value }))} /></div>

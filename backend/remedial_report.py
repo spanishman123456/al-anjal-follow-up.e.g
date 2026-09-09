@@ -282,12 +282,16 @@ def render_remedial_pdf(snapshot: Dict[str, Any], details: Dict[str, Any], lang:
         "المهارات التي تناولها هذا الاختبار" if is_arabic else "the skills covered in this test"
     )
     plan_date = details.get("remedial_plan_date") or "-"
-    # Test administration and result analysis are two separate moments in the letter's
-    # opening ("a test was conducted during week 1&2 ... an analysis was then conducted
-    # during week 4&5"); test_conducted_date is optional since not every teacher fills
-    # it in immediately, in which case that opening clause is skipped rather than shown
-    # with a placeholder dash.
+    # Test administration, result analysis, and the remedial plan itself are three
+    # separate moments in the letter's opening ("a test was conducted during week 1&2,
+    # results were then analyzed during week 3, then a remedial plan for week 4 was
+    # put in place") - analysis necessarily happens before the plan it feeds into, so
+    # analysis_date must stay a distinct field from remedial_plan_date rather than
+    # reusing it. Both test_conducted_date and analysis_date are optional since not
+    # every teacher fills them in immediately, in which case the corresponding opening
+    # clause is skipped rather than shown with a placeholder dash.
     test_conducted_date = (details.get("test_conducted_date") or "").strip()
+    analysis_date = (details.get("analysis_date") or "").strip()
     class_names = ", ".join(item["name"] for item in snapshot.get("classes") or [] if item.get("name"))
     semester_number = snapshot.get("scope", {}).get("semester")
     if is_arabic:
@@ -346,6 +350,10 @@ def render_remedial_pdf(snapshot: Dict[str, Any], details: Dict[str, Any], lang:
     story.extend([meta, Spacer(1, 5 * mm)])
 
     at_or_above = snapshot.get("stats", {}).get("at_or_above_50", 0)
+    # analysis_date is when results were analyzed - necessarily before remedial_plan_date
+    # (the plan it feeds into), so it must never default to reusing plan_date's value
+    # except as a last-resort fallback for reports created before this field existed.
+    effective_analysis_date = analysis_date or plan_date
     if is_arabic:
         if test_conducted_date:
             # Two separate moments, as in the letter: the test was administered during
@@ -354,12 +362,12 @@ def render_remedial_pdf(snapshot: Dict[str, Any], details: Dict[str, Any], lang:
             opening = (
                 f"تم عمل اختبار تشخيصي لصف {class_names or source_label} في مادة {course_name} خلال "
                 f"{test_conducted_date}{semester_clause} من العام الدراسي {year}. ثم تم إجراء تحليل لنتائج الطلاب "
-                f"خلال {plan_date}، وجاءت النتائج العامة مبشّرة، "
+                f"خلال {effective_analysis_date}، وجاءت النتائج العامة مبشّرة، "
             )
         else:
             # No test-administration date on hand: fall back to naming just the analysis.
             opening = (
-                f"تم إجراء تحليل لنتائج {source_label} لمادة {course_name} خلال {plan_date} من العام الدراسي {year}. "
+                f"تم إجراء تحليل لنتائج {source_label} لمادة {course_name} خلال {effective_analysis_date} من العام الدراسي {year}. "
                 "وجاءت النتائج العامة مبشّرة، "
             )
         paragraph = (
@@ -370,25 +378,25 @@ def render_remedial_pdf(snapshot: Dict[str, Any], details: Dict[str, Any], lang:
             "الطلاب الذين حصلوا على درجات أقل من المتوسط بوضوح، مع قائمة بأسمائهم موضحة في الجدول التالي."
         )
         paragraph_above = (
-            f"أما الطلاب الذين حصلوا على {threshold} فأكثر، فيمثل ذلك تحديًا إيجابيًا للمعلم، الذي يتطلع إلى استمرار "
+            f"الطلاب الذين حصلوا على {threshold} فأكثر، يمثل ذلك تحديًا إيجابيًا للمعلم، الذي يتطلع إلى استمرار "
             "تطور أدائهم مع الوقت من خلال إسناد تحديات لهم ذات مستوى أعلى."
         )
     else:
         if test_conducted_date:
             semester_clause = f" of the {semester_word} semester" if semester_word else ""
             opening = (
-                # No "during" before {plan_date}: its value already supplies it (e.g.
-                # "During Week 3"), same as the fallback opening below.
+                # No "during" before {effective_analysis_date}: its value already
+                # supplies it (e.g. "During Week 3"), same as the fallback opening below.
                 f"A diagnostic test was conducted for {class_names or source_label} in {course_name} during "
                 f"{test_conducted_date}{semester_clause} of the {year} academic year. An analysis of the students' "
-                f"results was then conducted {plan_date}, and the overall results are promising, "
+                f"results was then conducted {effective_analysis_date}, and the overall results are promising, "
             )
         else:
-            # No "during" before {plan_date} here: the placeholder ("During Weeks 1 & 2")
-            # already supplies it, matching how the same value reads standalone in the
-            # table's date column.
+            # No "during" before {effective_analysis_date} here: the placeholder ("During
+            # Weeks 1 & 2") already supplies it, matching how the same value reads
+            # standalone in the table's date column.
             opening = (
-                f"An analysis of the {source_label} results for {course_name} was conducted {plan_date} of the "
+                f"An analysis of the {source_label} results for {course_name} was conducted {effective_analysis_date} of the "
                 f"{year} academic year. The overall results are promising, "
             )
         paragraph = (
@@ -400,13 +408,20 @@ def render_remedial_pdf(snapshot: Dict[str, Any], details: Dict[str, Any], lang:
             "remedial plan for those students who scored well below average, along with a list of those involved below."
         )
         paragraph_above = (
-            f"As for the students who scored {threshold} or above, this represents a positive challenge for the teacher, "
+            f"The students who scored {threshold} or above represent a positive challenge for the teacher, "
             "who looks forward to continued improvement in their performance over time by assigning them higher-level challenges."
         )
     # Full content width (A4 minus the 14mm side margins), so lines actually fill it
     # instead of stopping short - a fixed character count was cutting lines well before
     # the real margin, leaving the paragraph looking like a narrow half-empty column.
-    body_width = A4[0] - 28 * mm
+    # SimpleDocTemplate's page Frame also carries its own default 6pt left/right padding
+    # on top of the page margins; without subtracting it, a line wrapped to exactly the
+    # margin width is a hair too wide for the frame, so ReportLab silently re-wraps that
+    # single pre-wrapped line on its own (LTR, word-count) logic - which, applied to an
+    # already bidi-reordered Arabic string, tears a word like the sentence's own first
+    # word out onto its own garbled line. Subtract the frame padding plus a small buffer
+    # for glyph-metric rounding so our line never needs ReportLab's own further wrapping.
+    body_width = A4[0] - 28 * mm - 16
     story.extend([
         _p(paragraph, normal, arabic=is_arabic, wrap_width=body_width if is_arabic else None, wrap_font=font, wrap_font_size=10),
         Spacer(1, 3 * mm),
