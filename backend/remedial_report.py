@@ -316,7 +316,19 @@ def render_remedial_pdf(snapshot: Dict[str, Any], details: Dict[str, Any], lang:
         header_data = [[logo, _p(f"{school_ar}\n{school_en}\n{department}", label, arabic=True)]]
         header_widths = [38 * mm, 138 * mm]
     else:
-        header_data = [[_p(f"{school_en}\n{school_ar}\n{department}", label), logo]]
+        # school_ar is Arabic text inside an otherwise-Latin header line; the Paragraph's
+        # own style (label -> LATIN_FONT_BOLD) has no Arabic glyphs, which rendered that
+        # line as solid tofu boxes. Wrap just that line in a <font> span using the Arabic
+        # bold font (already registered by _register_fonts() above regardless of report
+        # language) with its text shaped/bidi-reordered, while the English lines stay in
+        # the Paragraph's default Latin font.
+        header_text = Paragraph(
+            f"{_safe(school_en)}<br/>"
+            f'<font name="{ARABIC_FONT_BOLD}">{_safe(_shape(school_ar))}</font><br/>'
+            f"{_safe(department)}",
+            label,
+        )
+        header_data = [[header_text, logo]]
         header_widths = [138 * mm, 38 * mm]
     header = Table(header_data, colWidths=header_widths)
     header.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "MIDDLE"), ("ALIGN", (0, 0), (0, 0), "LEFT"), ("ALIGN", (-1, 0), (-1, 0), "RIGHT")]))
@@ -389,7 +401,7 @@ def render_remedial_pdf(snapshot: Dict[str, Any], details: Dict[str, Any], lang:
                 + f"حيث حصل جميع الطلاب ({at_or_above}) على 50% فأكثر من الدرجة النهائية. ويمثل ذلك تحديًا كبيرًا "
                 "وإيجابيًا للمعلم، الذي يتطلع إلى الاستمرار في تطوير أداء هؤلاء الطلاب بالانتقال بهم من مستوى الأداء "
                 "المتوسط إلى مستوى الطالب الممتاز والمحترف، من خلال إسناد تحديات ذات مستوى أعلى وأوراق عمل إضافية "
-                "تنمّي مهاراتهم بشكل مستمر، مع قائمة بأسمائهم ودرجاتهم موضحة في الجدول التالي."
+                "تنمّي مهاراتهم بشكل مستمر."
             )
             paragraph_above = ""
         else:
@@ -429,7 +441,7 @@ def render_remedial_pdf(snapshot: Dict[str, Any], details: Dict[str, Any], lang:
                 "significant and positive challenge for the teacher, who looks forward to continuing to develop these "
                 "students' performance, moving them from an average level to that of an excellent, professional-performing "
                 "student, by assigning them higher-level challenges and additional worksheets to continuously build their "
-                "skills, with a list of their names and marks shown in the table below."
+                "skills."
             )
             paragraph_above = ""
         else:
@@ -464,66 +476,59 @@ def render_remedial_pdf(snapshot: Dict[str, Any], details: Dict[str, Any], lang:
         ])
     story.append(Spacer(1, 5 * mm))
 
-    # When nobody scored below 50%, list everyone (top_students) instead of the empty
-    # weak-students list, under headers that describe enrichment work rather than remediation.
-    students = (snapshot.get("top_students") or []) if no_weak_students else weak_students
-    if is_arabic:
-        header_values = (
-            ["تاريخ خطة التحدي الإضافي", "مجال التحدي الإضافي", "الدرجة", "الفصل", "اسم الطالب", "م"]
-            if no_weak_students
-            else ["تاريخ الخطة العلاجية", "نقطة الضعف المهارية", "الدرجة", "الفصل", "اسم الطالب", "م"]
-        )
-        rows = [
-            [
-                plan_date,
-                weakness,
-                item["score_label"],
-                item["class_name"],
-                item["full_name"],
-                str(index),
+    # No student table at all when nobody needs remediation - there's no remedial plan
+    # to list anyone against, so the letter stands on the praise paragraph alone.
+    if not no_weak_students:
+        students = weak_students
+        if is_arabic:
+            header_values = ["تاريخ الخطة العلاجية", "نقطة الضعف المهارية", "الدرجة", "الفصل", "اسم الطالب", "م"]
+            rows = [
+                [
+                    plan_date,
+                    weakness,
+                    item["score_label"],
+                    item["class_name"],
+                    item["full_name"],
+                    str(index),
+                ]
+                for index, item in enumerate(students, 1)
             ]
-            for index, item in enumerate(students, 1)
-        ]
-        widths = [30 * mm, 49 * mm, 22 * mm, 20 * mm, 48 * mm, 9 * mm]
-    else:
-        header_values = (
-            ["No.", "Name", "Class", "Marks", "Additional Challenge Area", "Date of Enrichment Plan"]
-            if no_weak_students
-            else ["No.", "Name", "Class", "Marks", "Skill Weakness Point", "Date of Remedial Plan"]
-        )
-        rows = [
-            [
-                str(index),
-                item["full_name"],
-                item["class_name"],
-                item["score_label"],
-                weakness,
-                plan_date,
+            widths = [30 * mm, 49 * mm, 22 * mm, 20 * mm, 48 * mm, 9 * mm]
+        else:
+            header_values = ["No.", "Name", "Class", "Marks", "Skill Weakness Point", "Date of Remedial Plan"]
+            rows = [
+                [
+                    str(index),
+                    item["full_name"],
+                    item["class_name"],
+                    item["score_label"],
+                    weakness,
+                    plan_date,
+                ]
+                for index, item in enumerate(students, 1)
             ]
-            for index, item in enumerate(students, 1)
-        ]
-        widths = [10 * mm, 47 * mm, 21 * mm, 23 * mm, 48 * mm, 29 * mm]
+            widths = [10 * mm, 47 * mm, 21 * mm, 23 * mm, 48 * mm, 29 * mm]
 
-    table_data = [[_p(value, header_cell, arabic=is_arabic) for value in header_values]]
-    for row in rows:
-        arabic_wraps = [24, 27, 12, 14, 26, 4]
-        table_data.append([
-            _p(value, small, arabic=is_arabic, wrap_chars=arabic_wraps[index] if is_arabic else None)
-            for index, value in enumerate(row)
-        ])
-    table = Table(table_data, colWidths=widths, repeatRows=1, hAlign="CENTER")
-    table.setStyle(TableStyle([
-        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#241244")),
-        ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
-        ("GRID", (0, 0), (-1, -1), 0.65, colors.HexColor("#667085")),
-        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-        ("ALIGN", (0, 0), (-1, -1), "CENTER"),
-        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#F7F8FC")]),
-        ("TOPPADDING", (0, 0), (-1, -1), 6),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
-    ]))
-    story.append(table)
-    story.append(Spacer(1, 9 * mm))
+        table_data = [[_p(value, header_cell, arabic=is_arabic) for value in header_values]]
+        for row in rows:
+            arabic_wraps = [24, 27, 12, 14, 26, 4]
+            table_data.append([
+                _p(value, small, arabic=is_arabic, wrap_chars=arabic_wraps[index] if is_arabic else None)
+                for index, value in enumerate(row)
+            ])
+        table = Table(table_data, colWidths=widths, repeatRows=1, hAlign="CENTER")
+        table.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#241244")),
+            ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+            ("GRID", (0, 0), (-1, -1), 0.65, colors.HexColor("#667085")),
+            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+            ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+            ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#F7F8FC")]),
+            ("TOPPADDING", (0, 0), (-1, -1), 6),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+        ]))
+        story.append(table)
+        story.append(Spacer(1, 9 * mm))
 
     if is_arabic:
         signature_data = [[

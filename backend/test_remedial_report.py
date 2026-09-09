@@ -57,8 +57,9 @@ def test_remedial_pdf_switches_to_enrichment_wording_when_nobody_is_below_50():
     reader = PdfReader(io.BytesIO(pdf))
     text = "\n".join(page.extract_text() or "" for page in reader.pages)
     assert "Enrichment Plan Report" in text
-    assert "A Student" in text and "B Student" in text
-    assert "Additional Challenge Area" in text
+    # No remedial plan for anyone means no student table at all - just the praise paragraph.
+    assert "A Student" not in text and "B Student" not in text
+    assert "Additional Challenge Area" not in text
     assert "remedial plan for those students who scored well below average" not in text
 
 
