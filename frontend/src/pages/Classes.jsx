@@ -287,7 +287,7 @@ export default function Classes() {
           </p>
         )}
         {classes.map((cls) => (
-          <Card key={cls.class_id} className="card-hover" data-testid={`class-card-${cls.class_id}`}>
+          <Card key={cls.class_id} noHoverPop data-testid={`class-card-${cls.class_id}`}>
             <CardHeader className="flex flex-row items-start justify-between">
               <CardTitle data-testid={`class-card-title-${cls.class_id}`}>
                 {cls.class_name}

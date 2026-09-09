@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
 import { Award, PartyPopper, Sparkles, Star } from "lucide-react";
 import "@/reward-celebration.css";
 
@@ -157,7 +158,15 @@ export function RewardCelebration({ celebration, title, subtitle }) {
   }, [celebration]);
 
   if (!celebration?.id) return null;
-  return (
+  // Rendered through a portal straight into <body>: this overlay is
+  // `position: fixed`, which only stays pinned to the actual viewport when
+  // none of its ancestors set a `transform`/`filter`/`will-change` (any of
+  // those makes that ancestor the fixed-position containing block instead).
+  // Mounting inline inside a long, scrollable page risked exactly that, so
+  // the banner rendered anchored to the row that triggered it instead of
+  // the viewport — invisible unless that row happened to be scrolled near
+  // the top. A portal sidesteps the whole ancestor chain.
+  return createPortal(
     <div className="reward-celebration" aria-live="polite" data-testid="reward-celebration">
       <canvas ref={canvasRef} className="reward-celebration-canvas" aria-hidden="true" />
       <PartyPopper className="reward-cannon reward-cannon-start" aria-hidden="true" />
@@ -169,6 +178,7 @@ export function RewardCelebration({ celebration, title, subtitle }) {
         <strong>{celebration.studentName}</strong>
         <p className="reward-celebration-subtitle">{subtitle}</p>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

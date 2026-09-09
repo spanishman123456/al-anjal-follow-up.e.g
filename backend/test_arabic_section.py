@@ -14,6 +14,7 @@ from server import (
     SCHOOL_SECTION_INTERNATIONAL,
     arabic_educational_stage_for_grade,
     arabic_exam_raw_max_for_grade,
+    validate_arabic_exam_raw_max_override,
     arabic_score_summary,
     arabic_weekly_continuous_summary,
     classify_arabic_quarter_total,
@@ -191,13 +192,40 @@ def test_clear_arabic_grades_is_limited_to_one_class_and_exact_term():
 
 def test_stage_is_derived_from_canonical_class_grade():
     assert arabic_educational_stage_for_grade(4) == "primary"
-    assert arabic_exam_raw_max_for_grade(6) == 15
+    assert arabic_exam_raw_max_for_grade(6) == 10
     assert arabic_educational_stage_for_grade(7) == "middle"
     assert arabic_exam_raw_max_for_grade(9) == 20
     assert arabic_educational_stage_for_grade(10) == "secondary"
     assert arabic_exam_raw_max_for_grade(12) == 20
     with pytest.raises(ValueError):
         arabic_exam_raw_max_for_grade(None)
+
+
+def test_exam_raw_max_override_applies_only_to_middle_and_secondary():
+    # Primary is always /10 and ignores any override, whatever a stray value was.
+    assert arabic_exam_raw_max_for_grade(4, override=20) == 10
+    assert arabic_exam_raw_max_for_grade(4, override=15) == 10
+    # Middle/secondary default to /20 unless the class has an explicit /15 override.
+    assert arabic_exam_raw_max_for_grade(8, override=None) == 20
+    assert arabic_exam_raw_max_for_grade(8, override=15) == 15
+    assert arabic_exam_raw_max_for_grade(8, override=20) == 20
+    assert arabic_exam_raw_max_for_grade(11, override=15) == 15
+    # An invalid/unrecognized override value falls back to the default rather than propagating garbage.
+    assert arabic_exam_raw_max_for_grade(8, override=17) == 20
+
+
+def test_exam_raw_max_override_validation():
+    # Primary cannot carry an override at all.
+    with pytest.raises(HTTPException) as error:
+        validate_arabic_exam_raw_max_override(4, 15)
+    assert error.value.status_code == 422
+    # Middle/secondary override must be exactly 15 or 20.
+    with pytest.raises(HTTPException) as error:
+        validate_arabic_exam_raw_max_override(8, 17)
+    assert error.value.status_code == 422
+    assert validate_arabic_exam_raw_max_override(8, 15) == 15
+    assert validate_arabic_exam_raw_max_override(11, 20) == 20
+    assert validate_arabic_exam_raw_max_override(8, None) is None
 
 
 @pytest.mark.parametrize(

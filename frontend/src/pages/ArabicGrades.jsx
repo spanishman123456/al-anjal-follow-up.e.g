@@ -26,7 +26,7 @@ import { StudentScoreClearButton } from "@/components/StudentScoreClearButton";
 const semesterNumber = (semester) => (semester === "semester2" ? 2 : 1);
 
 export default function ArabicGrades() {
-  const { language, semester, quarter, academicYear, classes = [], schoolSection } = useOutletContext();
+  const { language, semester, quarter, academicYear, classes = [], schoolSection, loadClasses } = useOutletContext();
   const t = useTranslations(language);
   const [classId, setClassId] = useState("all");
   const [searchTerm, setSearchTerm] = useState("");
@@ -109,6 +109,25 @@ export default function ArabicGrades() {
     [payload, t],
   );
   const selectedClass = classes.find((item) => item.id === classId);
+  const selectedClassStage = selectedClass?.grade == null
+    ? null
+    : Number(selectedClass.grade) <= 6 ? "primary" : Number(selectedClass.grade) <= 9 ? "middle" : "secondary";
+  const [savingExamRawMax, setSavingExamRawMax] = useState(false);
+
+  const setExamRawMaxOverride = async (value) => {
+    if (!selectedClass) return;
+    setSavingExamRawMax(true);
+    try {
+      await api.put(`/classes/${selectedClass.id}`, { exam_raw_max_override: Number(value) });
+      toast.success(t("exam_raw_max_updated"));
+      await loadClasses?.();
+      await loadGrades();
+    } catch (error) {
+      toast.error(getLocalizedApiErrorMessage(error, t, "grades_save_failed"));
+    } finally {
+      setSavingExamRawMax(false);
+    }
+  };
   const savedGradeStudentCount = rows.filter((student) => ARABIC_EXAM_FIELDS.some((key) => student[key] != null)).length;
 
   const updateValue = (studentId, key, raw, max) => {
@@ -279,6 +298,21 @@ export default function ArabicGrades() {
               <SelectTrigger className="w-full md:w-64" data-testid="arabic-grades-class-filter"><SelectValue /></SelectTrigger>
               <SelectContent><SelectItem value="all">{t("all_classes")}</SelectItem>{classes.map((item) => <SelectItem key={item.id} value={item.id}>{item.name}</SelectItem>)}</SelectContent>
             </Select>
+            {selectedClass && selectedClassStage && selectedClassStage !== "primary" && (
+              <Select
+                value={String(selectedClass.exam_raw_max_override ?? 20)}
+                onValueChange={setExamRawMaxOverride}
+                disabled={savingExamRawMax}
+              >
+                <SelectTrigger className="w-full md:w-56" data-testid="arabic-grades-exam-raw-max">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="15">{t("exam_raw_max_of")} 15</SelectItem>
+                  <SelectItem value="20">{t("exam_raw_max_of")} 20</SelectItem>
+                </SelectContent>
+              </Select>
+            )}
           </div>
         </CardHeader>
         <CardContent>

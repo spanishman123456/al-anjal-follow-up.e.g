@@ -4922,6 +4922,10 @@ class ClassBase(BaseModel):
     school_section: str = SCHOOL_SECTION_INTERNATIONAL
     academic_year: Optional[str] = None
     notes: Optional[str] = None
+    # Arabic-section middle/secondary classes: teacher-chosen raw exam maximum
+    # (15 or 20) each theory/practical raw score is scaled from to reach /30.
+    # Primary is always 10 and ignores this field entirely.
+    exam_raw_max_override: Optional[float] = None
 
 
 class ClassRecord(ClassBase):
@@ -4938,6 +4942,7 @@ class ClassUpdate(BaseModel):
     school_section: Optional[str] = None
     academic_year: Optional[str] = None
     notes: Optional[str] = None
+    exam_raw_max_override: Optional[float] = None
 
 
 class StudentBase(BaseModel):
@@ -5117,8 +5122,32 @@ def arabic_educational_stage_for_grade(grade: Any) -> str:
     return "secondary"
 
 
-def arabic_exam_raw_max_for_grade(grade: Any) -> float:
-    return 15.0 if arabic_educational_stage_for_grade(grade) == "primary" else 20.0
+def arabic_exam_raw_max_for_grade(grade: Any, override: Optional[float] = None) -> float:
+    """Raw max each theory/practical score is scaled from to reach /30.
+
+    Primary (grades 1-6) is always out of 10 and ignores any override.
+    Middle/secondary classes default to 20 unless the class has an explicit
+    exam_raw_max_override of 15 or 20 (teacher's own exam is out of 15 or 20).
+    """
+    if arabic_educational_stage_for_grade(grade) == "primary":
+        return 10.0
+    if override in (15, 15.0, 20, 20.0):
+        return float(override)
+    return 20.0
+
+
+def validate_arabic_exam_raw_max_override(grade: Any, override: Optional[float]) -> Optional[float]:
+    """Reject a stored override that doesn't apply: primary has none, others must be 15 or 20."""
+    if override is None:
+        return None
+    if arabic_educational_stage_for_grade(grade) == "primary":
+        raise HTTPException(
+            status_code=422,
+            detail="exam_raw_max_override only applies to middle/secondary Arabic classes; primary is always out of 10",
+        )
+    if override not in (15, 15.0, 20, 20.0):
+        raise HTTPException(status_code=422, detail="exam_raw_max_override must be 15 or 20")
+    return float(override)
 
 
 def validate_arabic_exam_values(values: Dict[str, Any], exam_raw_max: float) -> None:
@@ -5222,14 +5251,14 @@ def classify_arabic_quarter_total(total: Optional[float]) -> str:
 
 def arabic_score_summary(
     score: Optional[Dict[str, Any]],
-    exam_raw_max: float = 15.0,
+    exam_raw_max: float = 10.0,
     continuous_total_override: Optional[float] = None,
     continuous_has_data: Optional[bool] = None,
 ) -> Dict[str, Any]:
     """Calculate the isolated Arabic /100 quarter, including the derived weekly /40 average."""
     source = score or {}
-    if exam_raw_max not in (15, 20, 15.0, 20.0):
-        raise ValueError("Arabic exam raw maximum must be 15 or 20")
+    if exam_raw_max not in (10, 15, 20, 10.0, 15.0, 20.0):
+        raise ValueError("Arabic exam raw maximum must be 10, 15, or 20")
     entered_fields = [key for key in ARABIC_SCORE_FIELDS if source.get(key) is not None]
     legacy_continuous_total = sum(float(source.get(key) or 0) for key in ARABIC_CONTINUOUS_LIMITS)
     if continuous_has_data is None:
@@ -5666,6 +5695,11 @@ async def create_class(payload: ClassBase, current_user: Dict[str, Any] = Depend
             data["grade"] = resolve_arabic_class_grade(data)
         except ValueError:
             raise HTTPException(status_code=422, detail="arabic_class_grade_required")
+        data["exam_raw_max_override"] = validate_arabic_exam_raw_max_override(
+            data["grade"], data.get("exam_raw_max_override")
+        )
+    else:
+        data["exam_raw_max_override"] = None
     # Prevent duplicate: class with same normalized name (e.g. 5A, 5 A, 5a) already exists
     norm_name = _normalize_class_name_for_uniqueness(payload.name)
     if norm_name:
@@ -5713,6 +5747,10 @@ async def update_class(class_id: str, payload: ClassUpdate):
             update_data["grade"] = resolve_arabic_class_grade(prospective)
         except ValueError:
             raise HTTPException(status_code=422, detail="arabic_class_grade_required")
+        if "exam_raw_max_override" in update_data:
+            update_data["exam_raw_max_override"] = validate_arabic_exam_raw_max_override(
+                update_data["grade"], update_data.get("exam_raw_max_override")
+            )
     update_data["updated_at"] = iso_now()
     result = await db.classes.find_one_and_update({"id": class_id}, {"$set": update_data}, return_document=True)
     result.pop("_id", None)
@@ -8075,7 +8113,7 @@ async def build_arabic_grading_payload(
             item["grade"] = grade
             item["section"] = normalize_class_section(item.get("section")) or parse_class_name(item.get("name") or "").get("section")
             item["educational_stage"] = arabic_educational_stage_for_grade(grade)
-            item["exam_raw_max"] = arabic_exam_raw_max_for_grade(grade)
+            item["exam_raw_max"] = arabic_exam_raw_max_for_grade(grade, item.get("exam_raw_max_override"))
         except ValueError:
             issue = {"code": "arabic_class_grade_required", "class_id": item["id"], "class_name": item.get("name", item["id"])}
             configuration_issues.append(issue)
@@ -8247,7 +8285,8 @@ async def save_arabic_grades(
     student_map = {item["id"]: item for item in students}
     class_ids = sorted({item.get("class_id") for item in students if item.get("class_id")})
     class_docs = await db.classes.find(
-        {"id": {"$in": class_ids}}, {"_id": 0, "id": 1, "name": 1, "grade": 1, "school_section": 1}
+        {"id": {"$in": class_ids}},
+        {"_id": 0, "id": 1, "name": 1, "grade": 1, "school_section": 1, "exam_raw_max_override": 1},
     ).to_list(1000)
     class_map = {item["id"]: item for item in class_docs}
     assigned = _teacher_assigned_class_ids(current_user)
@@ -8265,7 +8304,9 @@ async def save_arabic_grades(
         if not class_doc or record_school_section(class_doc) != SCHOOL_SECTION_ARABIC:
             raise HTTPException(status_code=409, detail="Arabic student's class metadata is missing or mismatched")
         try:
-            exam_raw_max = arabic_exam_raw_max_for_grade(resolve_arabic_class_grade(class_doc))
+            exam_raw_max = arabic_exam_raw_max_for_grade(
+                resolve_arabic_class_grade(class_doc), class_doc.get("exam_raw_max_override")
+            )
         except ValueError:
             raise HTTPException(status_code=409, detail="arabic_class_grade_required")
         try:
