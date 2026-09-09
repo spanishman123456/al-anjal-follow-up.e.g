@@ -35,6 +35,33 @@ def test_remedial_snapshot_uses_strict_below_half_and_excludes_blanks():
     assert len(snapshot["snapshot_id"]) == 64
 
 
+def test_remedial_snapshot_tracks_top_students_for_the_all_passing_case():
+    snapshot = _snapshot([
+        {"id": "a", "full_name": "A Student", "class_id": "class-5a", "class_name": "5A", "score": 20},
+        {"id": "b", "full_name": "B Student", "class_id": "class-5a", "class_name": "5A", "score": 25},
+    ])
+    assert snapshot["students"] == []
+    assert [row["id"] for row in snapshot["top_students"]] == ["a", "b"]
+
+
+def test_remedial_pdf_switches_to_enrichment_wording_when_nobody_is_below_50():
+    snapshot = _snapshot([
+        {"id": "a", "full_name": "A Student", "class_id": "class-5a", "class_name": "5A", "score": 20},
+        {"id": "b", "full_name": "B Student", "class_id": "class-5a", "class_name": "5A", "score": 25},
+    ])
+    pdf = render_remedial_pdf(snapshot, {
+        "subject": "Computer Science",
+        "skill_weakness": "Advanced programming challenges",
+        "remedial_plan_date": "2026-09-10",
+    }, "en")
+    reader = PdfReader(io.BytesIO(pdf))
+    text = "\n".join(page.extract_text() or "" for page in reader.pages)
+    assert "Enrichment Plan Report" in text
+    assert "A Student" in text and "B Student" in text
+    assert "Additional Challenge Area" in text
+    assert "remedial plan for those students who scored well below average" not in text
+
+
 def test_remedial_pdf_renders_reference_table_and_can_paginate():
     rows = [
         {

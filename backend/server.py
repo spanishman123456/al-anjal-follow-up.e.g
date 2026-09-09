@@ -7776,8 +7776,11 @@ async def export_remedial_report_pdf(
     )
     if snapshot["snapshot_id"] != payload.snapshot_id:
         raise HTTPException(status_code=409, detail="remedial_snapshot_conflict")
-    if not snapshot.get("students"):
-        raise HTTPException(status_code=409, detail="remedial_no_weak_students")
+    # A report is still worth exporting when nobody scored below 50% - render_remedial_pdf
+    # switches to praising the whole class and proposing enrichment work in that case.
+    # Only block when there's no recorded score at all to report on.
+    if not snapshot.get("stats", {}).get("scored"):
+        raise HTTPException(status_code=409, detail="remedial_no_scored_students")
     details = payload.model_dump(
         include={
             "subject", "skill_weakness", "test_conducted_date", "analysis_date",

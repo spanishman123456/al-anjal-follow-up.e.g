@@ -88,6 +88,10 @@ def build_remedial_snapshot(
         raise ValueError("Remedial report maximum must be greater than zero")
 
     normalized_rows: List[Dict[str, Any]] = []
+    # Mirrors normalized_rows for the >=50% side, so a report can still be built (praising
+    # the whole class and proposing enrichment work) when nobody actually needs remediation -
+    # otherwise that "everyone passed" case would have no student list to put in the letter at all.
+    top_rows: List[Dict[str, Any]] = []
     scored_count = 0
     for item in rows:
         if class_id and item.get("class_id") != class_id:
@@ -98,22 +102,20 @@ def build_remedial_snapshot(
         numeric_score = float(score)
         scored_count += 1
         percentage = numeric_score / max_score * 100
-        if percentage >= 50:
-            continue
-        normalized_rows.append(
-            {
-                "id": str(item.get("id") or item.get("student_id") or ""),
-                "full_name": str(item.get("full_name") or item.get("student_name") or "").strip(),
-                "class_id": str(item.get("class_id") or ""),
-                "class_name": str(item.get("class_name") or "").strip(),
-                "score": round(numeric_score, 2),
-                "maximum": round(max_score, 2),
-                "score_label": f"{_number(numeric_score)} / {_number(max_score)}",
-                "percentage": round(percentage, 2),
-            }
-        )
+        entry = {
+            "id": str(item.get("id") or item.get("student_id") or ""),
+            "full_name": str(item.get("full_name") or item.get("student_name") or "").strip(),
+            "class_id": str(item.get("class_id") or ""),
+            "class_name": str(item.get("class_name") or "").strip(),
+            "score": round(numeric_score, 2),
+            "maximum": round(max_score, 2),
+            "score_label": f"{_number(numeric_score)} / {_number(max_score)}",
+            "percentage": round(percentage, 2),
+        }
+        (normalized_rows if percentage < 50 else top_rows).append(entry)
 
     normalized_rows.sort(key=lambda item: (item["class_name"].casefold(), item["full_name"].casefold()))
+    top_rows.sort(key=lambda item: (item["class_name"].casefold(), item["full_name"].casefold()))
     visible_classes = [
         {
             "id": str(item.get("id") or ""),
@@ -145,6 +147,7 @@ def build_remedial_snapshot(
             "at_or_above_50": max(scored_count - len(normalized_rows), 0),
         },
         "students": normalized_rows,
+        "top_students": top_rows,
     }
     digest_payload = json.dumps(_jsonable(snapshot), ensure_ascii=False, sort_keys=True, separators=(",", ":"))
     snapshot["snapshot_id"] = hashlib.sha256(digest_payload.encode("utf-8")).hexdigest()
@@ -302,6 +305,11 @@ def render_remedial_pdf(snapshot: Dict[str, Any], details: Dict[str, Any], lang:
     year = snapshot["scope"]["academic_year"]
     threshold = _number(snapshot["source"]["threshold"])
     maximum = _number(snapshot["source"]["maximum"])
+    weak_students = snapshot.get("students") or []
+    # No one scored below 50% - there's nobody to list as needing remediation, so the
+    # letter instead praises the whole class and proposes enrichment work, listing
+    # everyone's marks (top_students) below rather than blocking the export entirely.
+    no_weak_students = not weak_students
 
     logo = Image(str(LOGO_PATH), width=31 * mm, height=20 * mm) if LOGO_PATH.exists() else Spacer(31 * mm, 20 * mm)
     if is_arabic:
@@ -314,11 +322,16 @@ def render_remedial_pdf(snapshot: Dict[str, Any], details: Dict[str, Any], lang:
     header.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "MIDDLE"), ("ALIGN", (0, 0), (0, 0), "LEFT"), ("ALIGN", (-1, 0), (-1, 0), "RIGHT")]))
 
     story: List[Any] = [header, Spacer(1, 4 * mm)]
-    report_title = (
-        f"تقرير تحليل {source_label} والخطة العلاجية"
-        if is_arabic
-        else f"{source_label} Analysis and Remedial Plan Report"
-    )
+    if no_weak_students:
+        report_title = (
+            f"تقرير تحليل {source_label} وخطة الإثراء" if is_arabic else f"{source_label} Analysis and Enrichment Plan Report"
+        )
+    else:
+        report_title = (
+            f"تقرير تحليل {source_label} والخطة العلاجية"
+            if is_arabic
+            else f"{source_label} Analysis and Remedial Plan Report"
+        )
     story.extend([_p(report_title, title, arabic=is_arabic), Spacer(1, 2 * mm)])
 
     if is_arabic:
@@ -370,17 +383,27 @@ def render_remedial_pdf(snapshot: Dict[str, Any], details: Dict[str, Any], lang:
                 f"تم إجراء تحليل لنتائج {source_label} لمادة {course_name} خلال {effective_analysis_date} من العام الدراسي {year}. "
                 "وجاءت النتائج العامة مبشّرة، "
             )
-        paragraph = (
-            opening
-            + f"حيث حصل {at_or_above} من الطلاب على 50% فأكثر من الدرجة النهائية. إلا أن "
-            f"الطلاب الذين حصلوا على أقل من {threshold} من {maximum} يمثلون تحديًا كبيرًا ليس لأنفسهم فقط بل لزملائهم "
-            f"أيضًا المتأثرين بعدم استيعابهم لمحتوى {learning_area}. ولمعالجة هذا الأمر، سيتم تنفيذ خطة علاجية لهؤلاء "
-            "الطلاب الذين حصلوا على درجات أقل من المتوسط بوضوح، مع قائمة بأسمائهم موضحة في الجدول التالي."
-        )
-        paragraph_above = (
-            f"الطلاب الذين حصلوا على {threshold} فأكثر، يمثل ذلك تحديًا إيجابيًا للمعلم، الذي يتطلع إلى استمرار "
-            "تطور أدائهم مع الوقت من خلال إسناد تحديات لهم ذات مستوى أعلى."
-        )
+        if no_weak_students:
+            paragraph = (
+                opening
+                + f"حيث حصل جميع الطلاب ({at_or_above}) على 50% فأكثر من الدرجة النهائية. ويمثل ذلك تحديًا كبيرًا "
+                "وإيجابيًا للمعلم، الذي يتطلع إلى الاستمرار في تطوير أداء هؤلاء الطلاب بالانتقال بهم من مستوى الأداء "
+                "المتوسط إلى مستوى الطالب الممتاز والمحترف، من خلال إسناد تحديات ذات مستوى أعلى وأوراق عمل إضافية "
+                "تنمّي مهاراتهم بشكل مستمر، مع قائمة بأسمائهم ودرجاتهم موضحة في الجدول التالي."
+            )
+            paragraph_above = ""
+        else:
+            paragraph = (
+                opening
+                + f"حيث حصل {at_or_above} من الطلاب على 50% فأكثر من الدرجة النهائية. إلا أن "
+                f"الطلاب الذين حصلوا على أقل من {threshold} من {maximum} يمثلون تحديًا كبيرًا ليس لأنفسهم فقط بل لزملائهم "
+                f"أيضًا المتأثرين بعدم استيعابهم لمحتوى {learning_area}. ولمعالجة هذا الأمر، سيتم تنفيذ خطة علاجية لهؤلاء "
+                "الطلاب الذين حصلوا على درجات أقل من المتوسط بوضوح، مع قائمة بأسمائهم موضحة في الجدول التالي."
+            )
+            paragraph_above = (
+                f"الطلاب الذين حصلوا على {threshold} فأكثر، يمثل ذلك تحديًا إيجابيًا للمعلم، الذي يتطلع إلى استمرار "
+                "تطور أدائهم مع الوقت من خلال إسناد تحديات لهم ذات مستوى أعلى."
+            )
     else:
         if test_conducted_date:
             semester_clause = f" of the {semester_word} semester" if semester_word else ""
@@ -399,18 +422,29 @@ def render_remedial_pdf(snapshot: Dict[str, Any], details: Dict[str, Any], lang:
                 f"An analysis of the {source_label} results for {course_name} was conducted {effective_analysis_date} of the "
                 f"{year} academic year. The overall results are promising, "
             )
-        paragraph = (
-            opening
-            + f"with {at_or_above} student(s) scoring at or "
-            f"above 50% of the final mark. However, I am concerned about the students who scored less than {threshold} "
-            f"out of {maximum}, as they present a significant challenge, not only to themselves but also to their peers, "
-            f"who are affected by their inability to grasp {learning_area}. To address this issue, I will implement a "
-            "remedial plan for those students who scored well below average, along with a list of those involved below."
-        )
-        paragraph_above = (
-            f"The students who scored {threshold} or above represent a positive challenge for the teacher, "
-            "who looks forward to continued improvement in their performance over time by assigning them higher-level challenges."
-        )
+        if no_weak_students:
+            paragraph = (
+                opening
+                + f"with all {at_or_above} student(s) scoring at or above 50% of the final mark. This represents a "
+                "significant and positive challenge for the teacher, who looks forward to continuing to develop these "
+                "students' performance, moving them from an average level to that of an excellent, professional-performing "
+                "student, by assigning them higher-level challenges and additional worksheets to continuously build their "
+                "skills, with a list of their names and marks shown in the table below."
+            )
+            paragraph_above = ""
+        else:
+            paragraph = (
+                opening
+                + f"with {at_or_above} student(s) scoring at or "
+                f"above 50% of the final mark. However, I am concerned about the students who scored less than {threshold} "
+                f"out of {maximum}, as they present a significant challenge, not only to themselves but also to their peers, "
+                f"who are affected by their inability to grasp {learning_area}. To address this issue, I will implement a "
+                "remedial plan for those students who scored well below average, along with a list of those involved below."
+            )
+            paragraph_above = (
+                f"The students who scored {threshold} or above represent a positive challenge for the teacher, "
+                "who looks forward to continued improvement in their performance over time by assigning them higher-level challenges."
+            )
     # Full content width (A4 minus the 14mm side margins), so lines actually fill it
     # instead of stopping short - a fixed character count was cutting lines well before
     # the real margin, leaving the paragraph looking like a narrow half-empty column.
@@ -422,16 +456,23 @@ def render_remedial_pdf(snapshot: Dict[str, Any], details: Dict[str, Any], lang:
     # word out onto its own garbled line. Subtract the frame padding plus a small buffer
     # for glyph-metric rounding so our line never needs ReportLab's own further wrapping.
     body_width = A4[0] - 28 * mm - 16
-    story.extend([
-        _p(paragraph, normal, arabic=is_arabic, wrap_width=body_width if is_arabic else None, wrap_font=font, wrap_font_size=10),
-        Spacer(1, 3 * mm),
-        _p(paragraph_above, normal, arabic=is_arabic, wrap_width=body_width if is_arabic else None, wrap_font=font, wrap_font_size=10),
-        Spacer(1, 5 * mm),
-    ])
+    story.append(_p(paragraph, normal, arabic=is_arabic, wrap_width=body_width if is_arabic else None, wrap_font=font, wrap_font_size=10))
+    if paragraph_above:
+        story.extend([
+            Spacer(1, 3 * mm),
+            _p(paragraph_above, normal, arabic=is_arabic, wrap_width=body_width if is_arabic else None, wrap_font=font, wrap_font_size=10),
+        ])
+    story.append(Spacer(1, 5 * mm))
 
-    students = snapshot.get("students") or []
+    # When nobody scored below 50%, list everyone (top_students) instead of the empty
+    # weak-students list, under headers that describe enrichment work rather than remediation.
+    students = (snapshot.get("top_students") or []) if no_weak_students else weak_students
     if is_arabic:
-        header_values = ["تاريخ الخطة العلاجية", "نقطة الضعف المهارية", "الدرجة", "الفصل", "اسم الطالب", "م"]
+        header_values = (
+            ["تاريخ خطة التحدي الإضافي", "مجال التحدي الإضافي", "الدرجة", "الفصل", "اسم الطالب", "م"]
+            if no_weak_students
+            else ["تاريخ الخطة العلاجية", "نقطة الضعف المهارية", "الدرجة", "الفصل", "اسم الطالب", "م"]
+        )
         rows = [
             [
                 plan_date,
@@ -445,7 +486,11 @@ def render_remedial_pdf(snapshot: Dict[str, Any], details: Dict[str, Any], lang:
         ]
         widths = [30 * mm, 49 * mm, 22 * mm, 20 * mm, 48 * mm, 9 * mm]
     else:
-        header_values = ["No.", "Name", "Class", "Marks", "Skill Weakness Point", "Date of Remedial Plan"]
+        header_values = (
+            ["No.", "Name", "Class", "Marks", "Additional Challenge Area", "Date of Enrichment Plan"]
+            if no_weak_students
+            else ["No.", "Name", "Class", "Marks", "Skill Weakness Point", "Date of Remedial Plan"]
+        )
         rows = [
             [
                 str(index),

@@ -151,8 +151,8 @@ export default function RemedialPlans() {
   }, [loadPreview, loadSources]);
 
   const handleExport = async () => {
-    if (!snapshot?.students?.length) {
-      toast.error(t("remedial_no_weak_students"));
+    if (!snapshot?.stats?.scored) {
+      toast.error(t("remedial_no_scored_students"));
       return;
     }
     if (!form.subject.trim() || !form.skillWeakness.trim() || !form.remedialPlanDate.trim()) {
@@ -210,7 +210,7 @@ export default function RemedialPlans() {
         testIdPrefix="remedial"
         badges={[t("remedial_strict_below_50"), schoolSection === "arabic" ? t("arabic_section") : t("international_section")]}
         action={
-          <Button onClick={handleExport} disabled={exporting || loadingPreview || !snapshot?.students?.length} data-testid="remedial-export-pdf">
+          <Button onClick={handleExport} disabled={exporting || loadingPreview || !snapshot?.stats?.scored} data-testid="remedial-export-pdf">
             {exporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
             {t("remedial_export_pdf")}
           </Button>
