@@ -237,7 +237,13 @@ def render_remedial_pdf(snapshot: Dict[str, Any], details: Dict[str, Any], lang:
     teacher_name = details.get("teacher_name") or ("المعلم" if is_arabic else "Teacher")
     supervisor_name = details.get("supervisor_name") or ""
     subject = details.get("subject") or ("المادة" if is_arabic else "the selected subject")
-    weakness = details.get("skill_weakness") or ("تُحدد بواسطة المعلم" if is_arabic else "To be specified by the teacher")
+    # Falls back to a phrase that still reads naturally inside "...their inability to grasp {weakness}"
+    # rather than a dead-end placeholder, while staying honest that the system has no way to infer
+    # which specific skill a student struggled with from a total score alone - only the teacher,
+    # who wrote and marked the test, knows that (e.g. "Variables Blocks - Micro Bit Components").
+    weakness = details.get("skill_weakness") or (
+        "المهارات التي تناولها هذا الاختبار" if is_arabic else "the skills covered in this test"
+    )
     plan_date = details.get("remedial_plan_date") or "-"
     source_label = snapshot["source"]["label"]
     year = snapshot["scope"]["academic_year"]
@@ -283,20 +289,38 @@ def render_remedial_pdf(snapshot: Dict[str, Any], details: Dict[str, Any], lang:
     ]))
     story.extend([meta, Spacer(1, 5 * mm)])
 
+    at_or_above = snapshot.get("stats", {}).get("at_or_above_50", 0)
     if is_arabic:
         paragraph = (
-            f"تم تحليل نتائج {source_label} لمادة {subject} للعام الدراسي {year}. وبعد مراجعة الدرجات المرصودة، "
-            f"تبين وجود طلاب حصلوا على أقل من {threshold} من {maximum}، أي أقل من 50% من الدرجة النهائية. "
-            f"ويحتاج هؤلاء الطلاب إلى دعم موجه في: {weakness}. ولمعالجة ذلك سيتم تنفيذ خطة علاجية للطلاب الموضحة أسماؤهم ودرجاتهم في الجدول التالي."
+            f"تم إجراء تحليل لنتائج {source_label} لمادة {subject} للعام الدراسي {year}. وجاءت النتائج العامة مبشّرة، "
+            f"حيث حصل {at_or_above} من الطلاب على 50% فأكثر من الدرجة النهائية. إلا أنني منشغل البال بشأن الطلاب الذين "
+            f"حصلوا على أقل من {threshold} من {maximum}، إذ يمثلون تحديًا كبيرًا ليس لأنفسهم فقط بل لزملائهم أيضًا "
+            f"المتأثرين بعدم استيعابهم لـ{weakness}. ولمعالجة هذا الأمر، سيتم تنفيذ خطة علاجية لهؤلاء الطلاب الذين "
+            "حصلوا على درجات أقل من المتوسط بوضوح، مع قائمة بأسمائهم موضحة في الجدول التالي."
+        )
+        paragraph_above = (
+            f"أما الطلاب الذين حصلوا على {threshold} فأكثر، فيمثل ذلك تحديًا إيجابيًا للمعلم، الذي يتطلع إلى استمرار "
+            "تطور أدائهم مع الوقت."
         )
     else:
         paragraph = (
             f"An analysis of the {source_label} results for {subject} was conducted for the {year} academic year. "
-            f"After reviewing the recorded results, the students listed below scored less than {threshold} out of {maximum}, "
-            f"which is below 50% of the final mark. These students require targeted support in: {weakness}. "
-            "To address this concern, a remedial plan will be implemented for the students shown in the following table."
+            f"The overall results are promising, with {at_or_above} student(s) scoring at or above 50% of the final mark. "
+            f"However, I am concerned about the students who scored less than {threshold} out of {maximum}, as they present "
+            f"a significant challenge, not only to themselves but also to their peers, who are affected by their inability "
+            f"to grasp {weakness}. To address this issue, I will implement a remedial plan for those students who scored "
+            "well below average, along with a list of those involved below."
         )
-    story.extend([_p(paragraph, normal, arabic=is_arabic, wrap_chars=90 if is_arabic else None), Spacer(1, 5 * mm)])
+        paragraph_above = (
+            f"As for the students who scored {threshold} or above, this represents a positive challenge for the teacher, "
+            "who looks forward to continued improvement in their performance over time."
+        )
+    story.extend([
+        _p(paragraph, normal, arabic=is_arabic, wrap_chars=90 if is_arabic else None),
+        Spacer(1, 3 * mm),
+        _p(paragraph_above, normal, arabic=is_arabic, wrap_chars=90 if is_arabic else None),
+        Spacer(1, 5 * mm),
+    ])
 
     students = snapshot.get("students") or []
     if is_arabic:

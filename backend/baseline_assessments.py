@@ -161,9 +161,9 @@ COPY = {
         "reading": "Result interpretation", "evidence": "Evidence from total marks", "next": "Suggested next step",
         "support_title": "Support priorities", "summary_title": "Performance summary",
         "empty": "No scores have been recorded. No performance conclusion is available.",
-        "recommend_high": "Offer a more challenging practical activity, then check that the student can apply learning independently.",
-        "recommend_medium": "Review the actual answers with the student and practise the items missed before a short follow-up check.",
-        "recommend_support": "Prioritize individual review of the actual answers, guided practice and a short follow-up assessment. Do not infer a specific weak topic from this total alone.",
+        "recommend_high": "Offer a more challenging practical activity, then check that the student can apply learning independently. This result is a positive challenge for the teacher, who can expect continued improvement in this student's performance over time.",
+        "recommend_medium": "Review the actual answers with the student and practise the items missed before a short follow-up check. This result is a positive challenge for the teacher, who can expect continued improvement in this student's performance over time.",
+        "recommend_support": "This result places the student among those who need a remedial plan. Prioritize individual review of the actual answers, guided practice on the skills covered in this test, and a short follow-up assessment. Do not infer which specific topic they struggled with from this total alone - only a review of their actual answers can show that.",
         "recommend_missing": "Record the student's result before making a performance judgment.",
     },
     "ar": {
@@ -179,9 +179,9 @@ COPY = {
         "reading": "تفسير النتيجة", "evidence": "دلالات الدرجة الإجمالية", "next": "الخطوة المقترحة",
         "support_title": "أولويات الدعم", "summary_title": "ملخص الأداء",
         "empty": "لم تُرصد درجات بعد؛ لا تتوفر نتيجة للحكم على المستوى.",
-        "recommend_high": "تقديم نشاط عملي أكثر تحديًا، ثم التحقق من قدرة الطالب على تطبيق ما تعلمه بصورة مستقلة.",
-        "recommend_medium": "مراجعة الإجابات الفعلية مع الطالب والتدريب على الفقرات غير المجابة بصورة صحيحة، ثم إجراء متابعة قصيرة.",
-        "recommend_support": "إعطاء أولوية لمراجعة الإجابات الفعلية بصورة فردية، وتدريب موجه ثم تقييم متابعة قصير. لا تُستنتج صعوبة في موضوع محدد من الدرجة وحدها.",
+        "recommend_high": "تقديم نشاط عملي أكثر تحديًا، ثم التحقق من قدرة الطالب على تطبيق ما تعلمه بصورة مستقلة. تمثل هذه النتيجة تحديًا إيجابيًا للمعلم، الذي يمكنه توقع استمرار تطور أداء هذا الطالب مع الوقت.",
+        "recommend_medium": "مراجعة الإجابات الفعلية مع الطالب والتدريب على الفقرات غير المجابة بصورة صحيحة، ثم إجراء متابعة قصيرة. تمثل هذه النتيجة تحديًا إيجابيًا للمعلم، الذي يمكنه توقع استمرار تطور أداء هذا الطالب مع الوقت.",
+        "recommend_support": "تضع هذه النتيجة الطالب ضمن الطلاب الذين يحتاجون خطة علاجية. أعطِ أولوية لمراجعة الإجابات الفعلية بصورة فردية، والتدريب الموجه على المهارات التي تناولها هذا الاختبار، ثم تقييم متابعة قصير. لا تُستنتج نقطة الضعف المحددة من الدرجة الإجمالية وحدها — مراجعة الإجابات الفعلية هي ما يحدد ذلك بدقة.",
         "recommend_missing": "رصد نتيجة الطالب أولًا قبل إصدار حكم على مستواه.",
     },
 }
@@ -229,10 +229,10 @@ def build_snapshot(record, lang="en", class_id=None):
         row["insights"] = [{"title": c["reading"], "body": reading}, {"title": c["evidence"], "body": evidence}, {"title": c["next"], "body": c[f"recommend_{row['level']}"]}]
     if lang == "ar":
         summary = f"رُصدت درجات {stats['graded']} من {stats['total']} طالبًا، باكتمال {fmt(stats['completion'])}%. متوسط النتائج المرصودة {fmt(stats['mean'])}%." if valid else c["empty"]
-        support = f"يحتاج {counts['support']} من الطلاب المرصودة درجاتهم إلى دعم، و{counts['medium']} إلى تثبيت التعلم، و{counts['high']} إلى أنشطة إثرائية. لم تُرصد درجات {counts['missing']} طالبًا؛ ولا يُصنفون ضمن الضعاف."
+        support = f"يحتاج {counts['support']} من الطلاب المرصودة درجاتهم إلى خطة علاجية، و{counts['medium']} إلى تثبيت التعلم، و{counts['high']} إلى أنشطة إثرائية. لم تُرصد درجات {counts['missing']} طالبًا؛ ولا يُصنفون ضمن الضعاف."
     else:
         summary = f"Scores recorded for {stats['graded']} of {stats['total']} students ({fmt(stats['completion'])}% complete). Mean of recorded results: {fmt(stats['mean'])}%." if valid else c["empty"]
-        support = f"{counts['support']} scored students need support, {counts['medium']} need consolidation, and {counts['high']} are ready for enrichment. {counts['missing']} are not scored and are not classified as weak."
+        support = f"{counts['support']} scored students need a remedial plan, {counts['medium']} need consolidation, and {counts['high']} are ready for enrichment. {counts['missing']} are not scored and are not classified as weak."
     snapshot = {"record": {k: record[k] for k in ("id", "title", "test_date", "teacher_name", "school_section", "academic_year", "semester", "quarter", "max_score", "revision")},
                 "lang": lang, "labels": c, "title": c["diagnostic" if record["school_section"] == "arabic" else "pre"],
                 "stats": stats, "classes": classes, "students": rows,
