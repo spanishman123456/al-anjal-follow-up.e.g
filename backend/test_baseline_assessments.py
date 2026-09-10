@@ -20,8 +20,11 @@ class Cursor:
     def __init__(self, rows):
         self.rows = rows
 
-    def sort(self, key, direction):
-        self.rows.sort(key=lambda r: str(r.get(key, "")), reverse=direction < 0)
+    def sort(self, key, direction=None):
+        # Mirrors pymongo: either sort("field", 1) or sort([("field", 1), ("other", 1)]).
+        keys = [(key, direction if direction is not None else 1)] if isinstance(key, str) else list(key)
+        for field, way in reversed(keys):
+            self.rows.sort(key=lambda r, f=field: str(r.get(f, "")), reverse=way < 0)
         return self
 
     async def to_list(self, limit):

@@ -289,7 +289,9 @@ def make_router(db, get_current_user, section_query):
         classes = await db.classes.find({"$and": [scope_filter, {"id": {"$in": payload.class_ids}}]}, {"_id": 0, "id": 1, "name": 1}).to_list(201)
         if set(c["id"] for c in classes) != set(payload.class_ids):
             fail("baseline_invalid_classes")
-        students = await db.students.find({"$and": [scope_filter, {"class_id": {"$in": payload.class_ids}}]}, {"_id": 0, "id": 1, "full_name": 1, "alt_full_name": 1, "class_id": 1}).sort("full_name", 1).to_list(5001)
+        # sort_order carries the school's own roster order, which is not alphabetical;
+        # full_name only breaks ties between students sharing a sort_order.
+        students = await db.students.find({"$and": [scope_filter, {"class_id": {"$in": payload.class_ids}}]}, {"_id": 0, "id": 1, "full_name": 1, "alt_full_name": 1, "class_id": 1}).sort([("sort_order", 1), ("full_name", 1)]).to_list(5001)
         if not students or len(students) > 5000:
             fail("baseline_roster_size")
         names = {c["id"]: c["name"] for c in classes}
