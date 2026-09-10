@@ -7947,7 +7947,9 @@ async def get_arabic_weekly_scores(
             ]
         },
         {"_id": 0},
-    ).sort([("class_name", 1), ("full_name", 1)]).to_list(10000)
+        # sort_order carries the school's own roster order, which is not alphabetical;
+        # full_name only breaks ties between students sharing a sort_order.
+    ).sort([("class_name", 1), ("sort_order", 1), ("full_name", 1)]).to_list(10000)
     student_ids = [item["id"] for item in students]
     score_scope = {
         "student_id": {"$in": student_ids},
@@ -8114,7 +8116,9 @@ async def build_arabic_grading_payload(
     students = await db.students.find(
         {"$and": student_scope},
         {"_id": 0},
-    ).sort([("class_name", 1), ("full_name", 1)]).to_list(10000)
+        # sort_order carries the school's own roster order, which is not alphabetical;
+        # full_name only breaks ties between students sharing a sort_order.
+    ).sort([("class_name", 1), ("sort_order", 1), ("full_name", 1)]).to_list(10000)
     if student_id and not students:
         raise HTTPException(status_code=404, detail="arabic_report_student_not_found")
     student_class_ids = {item.get("class_id") for item in students}
