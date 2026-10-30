@@ -238,3 +238,11 @@ def test_missing_required_headers_has_stable_error():
     workbook.save(output)
     with pytest.raises(ScoreSheetError, match="score_sheet_missing_columns"):
         read_score_sheet(output.getvalue(), "bad.xlsx")
+
+
+def test_student_update_carries_an_identity_number():
+    """Identity numbers decide which student an imported row belongs to, and a
+    roster enrolled without them can only gain them by editing, so the update
+    model has to accept the field the create model already has."""
+    payload = server.StudentUpdate(student_number="1173129469")
+    assert payload.model_dump(exclude_unset=True) == {"student_number": "1173129469"}

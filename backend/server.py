@@ -5012,6 +5012,7 @@ class StudentUpdate(BaseModel):
     full_name: Optional[str] = None
     alt_full_name: Optional[str] = None
     class_id: Optional[str] = None
+    student_number: Optional[str] = None
     school_section: Optional[str] = None
     academic_year: Optional[str] = None
     attendance: Optional[float] = None
