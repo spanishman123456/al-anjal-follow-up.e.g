@@ -35,12 +35,26 @@ REFERENCE_HEADERS = [
 
 NAME_HEADERS = {
     "اسمالطالب", "الطالب", "studentname", "student", "fullname", "studentfullname",
+    # The newer test-platform export labels the same column "الاسم الكامل".
+    "الاسمالكامل", "الاسم",
 }
 SCORE_HEADERS = {
     "درجةالتسليم", "درجهالتسليم", "submissiongrade", "submittedgrade", "submissionscore",
     # The school's actual test-platform export for the International section uses
     # "Submission Mark" rather than "Submission Grade" - both mean the same column.
     "submissionmark", "submittedmark",
+    # The newer Arabic export simply calls it "الدرجة".
+    "الدرجة", "الدرجه",
+}
+# Only used when no header matches SCORE_HEADERS exactly, so a future export that
+# names the column "درجة الاختبار" still imports. Deliberately not mirrored for
+# names: "اسم المعلم" would otherwise be picked up as the student column.
+SCORE_HEADER_PREFIXES = ("درجة", "درجه")
+# Optional column. When present it is far more reliable than the name, which the
+# test platform and the roster often spell differently.
+ID_HEADERS = {
+    "رقمالهوية", "الهوية", "رقمالطالب", "رقمالهويةالوطنية",
+    "studentid", "studentnumber", "identitynumber", "nationalid",
 }
 MAX_UPLOAD_BYTES = 10 * 1024 * 1024
 
@@ -59,6 +73,24 @@ def normalize_student_name(value: Any) -> str:
     text = re.sub(r"[\u064b-\u065f\u0670\u06d6-\u06ed\u0640]", "", text)
     text = text.translate(str.maketrans({"أ": "ا", "إ": "ا", "آ": "ا", "ٱ": "ا", "ى": "ي"}))
     return re.sub(r"[^\w\d]+", "", text, flags=re.UNICODE)
+
+
+def normalize_student_number(value: Any) -> str:
+    """Reduce an identity number to bare digits.
+
+    The same ID arrives as text in one export and as a spreadsheet number in
+    another, so a plain str() would turn 1182751840 into "1182751840.0" and
+    never match the roster.
+    """
+    if value is None or (isinstance(value, float) and pd.isna(value)):
+        return ""
+    if isinstance(value, bool):
+        return ""
+    if isinstance(value, float) and value.is_integer():
+        value = int(value)
+    text = unicodedata.normalize("NFKC", str(value)).strip()
+    text = text.translate(str.maketrans("٠١٢٣٤٥٦٧٨٩", "0123456789"))
+    return "".join(character for character in text if character.isdigit())
 
 
 def parse_score_value(value: Any) -> float | None:
@@ -88,12 +120,19 @@ def parse_score_value(value: Any) -> float | None:
 
 def _header_positions(values: Iterable[Any]) -> Dict[str, int]:
     positions: Dict[str, int] = {}
+    prefixed_score: int | None = None
     for index, value in enumerate(values):
         normalized = normalize_header(value)
         if normalized in NAME_HEADERS and "name" not in positions:
             positions["name"] = index
         if normalized in SCORE_HEADERS and "score" not in positions:
             positions["score"] = index
+        if normalized in ID_HEADERS and "number" not in positions:
+            positions["number"] = index
+        if prefixed_score is None and normalized.startswith(SCORE_HEADER_PREFIXES):
+            prefixed_score = index
+    if "score" not in positions and prefixed_score is not None:
+        positions["score"] = prefixed_score
     return positions
 
 
@@ -139,7 +178,14 @@ def read_score_sheet(content: bytes, filename: str) -> Dict[str, Any]:
             blank_name_count += 1
             continue
         raw_score = row.iloc[positions["score"]] if positions["score"] < len(row) else None
-        rows.append({"row": row_index + 1, "name": str(raw_name).strip(), "raw_score": raw_score})
+        number_index = positions.get("number")
+        raw_number = row.iloc[number_index] if number_index is not None and number_index < len(row) else None
+        rows.append({
+            "row": row_index + 1,
+            "name": str(raw_name).strip(),
+            "raw_score": raw_score,
+            "student_number": normalize_student_number(raw_number),
+        })
     if not rows:
         raise ScoreSheetError("score_sheet_no_students")
     return {"sheet_name": sheet_name, "rows": rows, "blank_name_count": blank_name_count}
@@ -151,9 +197,13 @@ def match_score_rows(
     max_score_for: Callable[[Dict[str, Any]], float],
     current_score_for: Callable[[Dict[str, Any]], Any],
 ) -> Tuple[Dict[str, Any], List[Dict[str, Any]]]:
-    """Match unique normalized names and validate against each target maximum."""
+    """Match each row to one roster student and validate against its maximum."""
     roster_by_name: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
+    roster_by_number: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
     for student in roster:
+        number = normalize_student_number(student.get("student_number"))
+        if number:
+            roster_by_number[number].append(student)
         # alt_full_name lets one student match under either script (e.g. a name kept in
         # English for an International-section roster plus an Arabic alias), since the
         # source test platform sometimes exports the same class's names in either
@@ -165,8 +215,32 @@ def match_score_rows(
             if key:
                 roster_by_name[key].append(student)
 
-    file_keys = [normalize_student_name(row["name"]) for row in imported_rows]
-    duplicate_keys = {key for key, count in Counter(file_keys).items() if key and count > 1}
+    def resolve(row: Dict[str, Any]) -> Tuple[str, Dict[str, Any] | None, bool]:
+        """Identify the roster student for one row: (identity, student, ambiguous).
+
+        The identity number wins when it is present and unique, because the test
+        platform and the roster regularly spell the same student's name
+        differently; the name is only consulted as a fallback.
+        """
+        number = normalize_student_number(row.get("student_number"))
+        if number:
+            found = roster_by_number.get(number, [])
+            if len(found) == 1:
+                return f"number:{number}", found[0], False
+            if len(found) > 1:
+                return f"number:{number}", None, True
+        key = normalize_student_name(row.get("name"))
+        found = roster_by_name.get(key, [])
+        if len(found) == 1:
+            return f"name:{key}", found[0], False
+        return f"name:{key}", None, len(found) > 1
+
+    resolutions = [resolve(row) for row in imported_rows]
+    # Two rows pointing at the same student are ambiguous and are applied to nobody.
+    duplicate_keys = {
+        identity for identity, count in Counter(identity for identity, _, _ in resolutions).items()
+        if count > 1 and identity not in ("name:", "number:")
+    }
     matches: List[Dict[str, Any]] = []
     unmatched_names: List[str] = []
     ambiguous_names: List[str] = []
@@ -175,18 +249,16 @@ def match_score_rows(
     duplicate_count = 0
     new_count = overwrite_count = unchanged_count = 0
 
-    for row, key in zip(imported_rows, file_keys):
-        if key in duplicate_keys:
+    for row, (identity, student, ambiguous) in zip(imported_rows, resolutions):
+        if identity in duplicate_keys:
             duplicate_count += 1
             continue
-        candidates = roster_by_name.get(key, [])
-        if not candidates:
-            unmatched_names.append(row["name"])
-            continue
-        if len(candidates) != 1:
+        if ambiguous:
             ambiguous_names.append(row["name"])
             continue
-        student = candidates[0]
+        if student is None:
+            unmatched_names.append(row["name"])
+            continue
         try:
             score = parse_score_value(row.get("raw_score"))
             if score is None:

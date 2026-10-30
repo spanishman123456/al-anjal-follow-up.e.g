@@ -403,17 +403,21 @@ def make_router(db, get_current_user, section_query):
         except ScoreSheetError as exc:
             fail(str(exc), 400)
         roster = [row for row in record["roster"] if not class_id or row["class_id"] == class_id]
-        # alt_full_name is a matching aid a teacher can add at any time, including
-        # after this record's roster was already snapshotted at setup - re-fetch the
-        # current value from db.students rather than trusting the frozen snapshot,
-        # so setting it later still helps re-imports into existing records.
+        # alt_full_name and student_number are matching aids that can be filled in at
+        # any time, including after this record's roster was snapshotted at setup -
+        # re-fetch them from db.students rather than trusting the frozen snapshot, so
+        # a later edit still helps re-imports into existing records.
         roster_ids = [row["id"] for row in roster]
         if roster_ids:
-            alt_name_docs = await db.students.find(
-                {"id": {"$in": roster_ids}}, {"_id": 0, "id": 1, "alt_full_name": 1}
+            live_docs = await db.students.find(
+                {"id": {"$in": roster_ids}}, {"_id": 0, "id": 1, "alt_full_name": 1, "student_number": 1}
             ).to_list(len(roster_ids))
-            alt_names = {doc["id"]: doc.get("alt_full_name") for doc in alt_name_docs}
-            roster = [{**row, "alt_full_name": alt_names.get(row["id"])} for row in roster]
+            live = {doc["id"]: doc for doc in live_docs}
+            roster = [{
+                **row,
+                "alt_full_name": live.get(row["id"], {}).get("alt_full_name"),
+                "student_number": live.get(row["id"], {}).get("student_number"),
+            } for row in roster]
         summary, matches = match_score_rows(
             parsed["rows"],
             roster,

@@ -29,7 +29,7 @@ def score_file(rows):
 
 def test_reads_only_student_and_submission_grade_and_matches_normalized_arabic():
     parsed = read_score_sheet(score_file([("أحمد علي", "٤٫٥", "4A")]), "scores.xlsx")
-    assert parsed["rows"] == [{"row": 2, "name": "أحمد علي", "raw_score": "٤٫٥"}]
+    assert parsed["rows"] == [{"row": 2, "name": "أحمد علي", "raw_score": "٤٫٥", "student_number": ""}]
     summary, matches = match_score_rows(
         parsed["rows"],
         [{"id": "s1", "full_name": "احمد على", "quiz1": 2}],
@@ -49,7 +49,43 @@ def test_reads_submission_mark_header_variant():
     output = io.BytesIO()
     workbook.save(output)
     parsed = read_score_sheet(output.getvalue(), "scores.xlsx")
-    assert parsed["rows"] == [{"row": 2, "name": "Test Student", "raw_score": 27}]
+    assert parsed["rows"] == [{"row": 2, "name": "Test Student", "raw_score": 27, "student_number": ""}]
+
+
+def test_reads_newer_arabic_export_headers_and_identity_column():
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.append(["رقم الهوية", "الاسم الكامل", "وقت التسليم", "الدرجة", "الفصل"])
+    sheet.append([1182751840, "أسامه أيوب آل بن عبد", "2026-09-16 09:41:35", 9, "أ"])
+    output = io.BytesIO()
+    workbook.save(output)
+    parsed = read_score_sheet(output.getvalue(), "scores.xlsx")
+    assert parsed["rows"] == [{
+        "row": 2, "name": "أسامه أيوب آل بن عبد", "raw_score": 9, "student_number": "1182751840",
+    }]
+
+
+def test_identity_number_matches_even_when_the_name_is_spelled_differently():
+    rows = [{"row": 2, "name": "عبدالمحسن Ahmed Almulhim", "raw_score": 8, "student_number": "1183693976"}]
+    roster = [{"id": "s1", "full_name": "عبدالمحسن أحمد الملحم", "student_number": "1183693976"}]
+    summary, matches = match_score_rows(rows, roster, lambda _student: 10, lambda _student: None)
+    assert summary["matched_count"] == 1
+    assert matches[0]["student_id"] == "s1"
+
+
+def test_identity_number_separates_two_students_sharing_a_name():
+    rows = [
+        {"row": 2, "name": "محمد الملحم", "raw_score": 7, "student_number": "111"},
+        {"row": 3, "name": "محمد الملحم", "raw_score": 9, "student_number": "222"},
+    ]
+    roster = [
+        {"id": "a", "full_name": "محمد الملحم", "student_number": "111"},
+        {"id": "b", "full_name": "محمد الملحم", "student_number": "222"},
+    ]
+    summary, matches = match_score_rows(rows, roster, lambda _student: 10, lambda _student: None)
+    # Without the identity number both rows would collide as duplicates and be dropped.
+    assert summary["matched_count"] == 2
+    assert {m["student_id"]: m["score"] for m in matches} == {"a": 7.0, "b": 9.0}
 
 
 def test_matches_student_by_alt_full_name_when_primary_name_differs():
