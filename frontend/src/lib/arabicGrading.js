@@ -6,6 +6,11 @@ export const ARABIC_CONTINUOUS_FIELDS = [
 ];
 
 export const ARABIC_EXAM_FIELDS = ["theory_test_1", "theory_test_2", "practical_test"];
+
+// Mirrors ARABIC_BEST_THEORY_WEIGHT / ARABIC_PRACTICAL_WEIGHT in backend/server.py:
+// the /60 exam block gives the better theory attempt /20 and the practical /40.
+export const ARABIC_BEST_THEORY_WEIGHT = 20;
+export const ARABIC_PRACTICAL_WEIGHT = 40;
 export const ARABIC_SCORE_FIELDS = [
   ...ARABIC_CONTINUOUS_FIELDS,
   ...ARABIC_EXAM_FIELDS.map((key) => ({ key, test: true })),
@@ -44,8 +49,10 @@ export function calculateArabicQuarter(values, examRawMax, derivedContinuousTota
     .map(Number);
   const bestTheoryRaw = theories.length ? Math.max(...theories) : null;
   const practicalRaw = entered(source.practical_test) ? Number(source.practical_test) : null;
-  const bestTheoryWeighted = bestTheoryRaw === null ? null : (bestTheoryRaw / examRawMax) * 30;
-  const practicalWeighted = practicalRaw === null ? null : (practicalRaw / examRawMax) * 30;
+  const bestTheoryWeighted =
+    bestTheoryRaw === null ? null : (bestTheoryRaw / examRawMax) * ARABIC_BEST_THEORY_WEIGHT;
+  const practicalWeighted =
+    practicalRaw === null ? null : (practicalRaw / examRawMax) * ARABIC_PRACTICAL_WEIGHT;
   const testsTotal = (bestTheoryWeighted ?? 0) + (practicalWeighted ?? 0);
   const hasGrades = hasDerivedContinuous || ARABIC_SCORE_FIELDS.some(({ key }) => entered(source[key]));
   return {

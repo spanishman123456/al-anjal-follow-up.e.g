@@ -6,15 +6,15 @@ import {
 } from "./arabicGrading";
 
 describe("stage-aware Arabic quarter grading", () => {
-  it("weights the best primary theory and one practical", () => {
+  it("doubles the better primary theory attempt and scales the practical to 40", () => {
     const result = calculateArabicQuarter(
-      { theory_test_1: 11, theory_test_2: 13, practical_test: 12 },
-      15,
+      { theory_test_1: 8, theory_test_2: 10, practical_test: 9 },
+      10,
     );
-    expect(result.bestTheoryRaw).toBe(13);
-    expect(result.bestTheoryWeighted).toBe(26);
-    expect(result.practicalWeighted).toBe(24);
-    expect(result.testsTotal).toBe(50);
+    expect(result.bestTheoryRaw).toBe(10);
+    expect(result.bestTheoryWeighted).toBe(20);
+    expect(result.practicalWeighted).toBe(36);
+    expect(result.testsTotal).toBe(56);
   });
 
   it("weights middle and secondary exams from raw scores out of 20", () => {
@@ -22,9 +22,9 @@ describe("stage-aware Arabic quarter grading", () => {
       { theory_test_1: 14, theory_test_2: 17, practical_test: 18 },
       20,
     );
-    expect(result.bestTheoryWeighted).toBe(25.5);
-    expect(result.practicalWeighted).toBe(27);
-    expect(result.testsTotal).toBe(52.5);
+    expect(result.bestTheoryWeighted).toBe(17);
+    expect(result.practicalWeighted).toBe(36);
+    expect(result.testsTotal).toBe(53);
   });
 
   it("keeps entered zero distinct from blank and calculates provisionally", () => {
@@ -37,8 +37,8 @@ describe("stage-aware Arabic quarter grading", () => {
     });
     expect(calculateArabicQuarter({}, 15).quarterTotal).toBeNull();
     expect(calculateArabicQuarter({ theory_test_1: 6, theory_test_2: null }, 15).bestTheoryRaw).toBe(6);
-    expect(formatArabicScore(26)).toBe("26");
-    expect(formatArabicScore(25.5)).toBe("25.5");
+    expect(formatArabicScore(36)).toBe("36");
+    expect(formatArabicScore(17.5)).toBe("17.5");
   });
 
   it("fills one selected column with each student's correct maximum and preserves all other edits", () => {
