@@ -53,7 +53,7 @@ export default function ArabicAnalytics({ variant = "analytics" }) {
     completionTitle: "اكتمال الرصد والاختبارات",
     completionHint: "يوضح اكتمال كل اختبار وعدد أسابيع أعمال السنة المرصودة في نطاق الفصل أو الطالب المختار.",
     componentsTitle: "توزيع الدرجة الموزونة",
-    componentsHint: "أعمال السنة من 40، وأفضل اختبار نظري من 30، والاختبار العملي من 30.",
+    componentsHint: "أعمال السنة من 40، وأفضل اختبار نظري من 20، والاختبار العملي من 40.",
     rawTestsTitle: "أداء كل اختبار على حدة",
     rawTestsHint: "تعرض المقارنة كنسبة من الحد الخام المناسب للمرحلة حتى تظل المقارنة عادلة.",
     contributionTitle: "مساهمة مكونات الدرجة النهائية",
@@ -77,7 +77,7 @@ export default function ArabicAnalytics({ variant = "analytics" }) {
     completionTitle: "Score and test completion",
     completionHint: "Shows completion for every test and the recorded continuous-assessment weeks in the selected scope.",
     componentsTitle: "Weighted score distribution",
-    componentsHint: "Continuous assessment /40, best theory /30, and practical /30.",
+    componentsHint: "Continuous assessment /40, best theory /20, and practical /40.",
     rawTestsTitle: "Each test performance",
     rawTestsHint: "Raw tests are normalized to percentages so stages with different raw maxima remain comparable.",
     contributionTitle: "Final-score component contribution",
@@ -161,8 +161,8 @@ export default function ArabicAnalytics({ variant = "analytics" }) {
 
   const componentData = useMemo(() => [
     { name: t("continuous_assessment"), score: numericAverage(scopedStudents.map((item) => item.continuous_total).filter((value) => value != null)) ?? 0, max: 40 },
-    { name: t("best_theory"), score: numericAverage(scopedStudents.map((item) => item.best_theory_weighted).filter((value) => value != null)) ?? 0, max: 30 },
-    { name: t("practical_weighted"), score: numericAverage(scopedStudents.map((item) => item.practical_weighted).filter((value) => value != null)) ?? 0, max: 30 },
+    { name: t("best_theory"), score: numericAverage(scopedStudents.map((item) => item.best_theory_weighted).filter((value) => value != null)) ?? 0, max: 20 },
+    { name: t("practical_weighted"), score: numericAverage(scopedStudents.map((item) => item.practical_weighted).filter((value) => value != null)) ?? 0, max: 40 },
   ], [scopedStudents, t]);
 
   const rawTestData = useMemo(() => SCORE_FIELDS.map((field) => {
@@ -329,7 +329,7 @@ export default function ArabicAnalytics({ variant = "analytics" }) {
       </div>
 
       <ChartCard title={t("detailed_analysis")} subtitle={copy.rawTestsHint} span="full" testId="arabic-detailed-analysis">
-        <div className="overflow-x-auto"><table className="w-full min-w-[1320px] text-sm"><thead className="bg-[#10162A] text-white"><tr><th className="p-3 text-start">{t("student")}</th><th className="p-3 text-start">{t("class")}</th><th className="p-3 text-center">{t("continuous_assessment")} /40</th>{SCORE_FIELDS.map((field) => <th key={field} className="p-3 text-center">{t(field)}</th>)}<th className="p-3 text-center">{t("best_theory")} /30</th><th className="p-3 text-center">{t("practical_weighted")} /30</th><th className="p-3 text-center">/100</th><th className="p-3 text-center">{t("performance_level")}</th></tr></thead><tbody>{scopedStudents.map((student) => <tr key={student.id} className="border-b"><td className="p-3 font-semibold">{student.full_name}</td><td className="p-3">{student.class_name}</td><td className="p-3 text-center">{formatArabicScore(student.continuous_total)}</td>{SCORE_FIELDS.map((field) => <td key={field} className="p-3 text-center">{student[field] == null ? "—" : `${formatArabicScore(student[field])}/${student.exam_raw_max}`}</td>)}<td className="p-3 text-center">{formatArabicScore(student.best_theory_weighted)}</td><td className="p-3 text-center">{formatArabicScore(student.practical_weighted)}</td><td className="p-3 text-center font-bold">{formatArabicScore(student.quarter_total)}</td><td className="p-3 text-center"><PerformanceLevelBadge level={student.performance_level} label={t(student.performance_level)} /></td></tr>)}</tbody></table></div>
+        <div className="overflow-x-auto"><table className="w-full min-w-[1320px] text-sm"><thead className="bg-[#10162A] text-white"><tr><th className="p-3 text-start">{t("student")}</th><th className="p-3 text-start">{t("class")}</th><th className="p-3 text-center">{t("continuous_assessment")} /40</th>{SCORE_FIELDS.map((field) => <th key={field} className="p-3 text-center">{t(field)}</th>)}<th className="p-3 text-center">{t("best_theory")} /20</th><th className="p-3 text-center">{t("practical_weighted")} /40</th><th className="p-3 text-center">/100</th><th className="p-3 text-center">{t("performance_level")}</th></tr></thead><tbody>{scopedStudents.map((student) => <tr key={student.id} className="border-b"><td className="p-3 font-semibold">{student.full_name}</td><td className="p-3">{student.class_name}</td><td className="p-3 text-center">{formatArabicScore(student.continuous_total)}</td>{SCORE_FIELDS.map((field) => <td key={field} className="p-3 text-center">{student[field] == null ? "—" : `${formatArabicScore(student[field])}/${student.exam_raw_max}`}</td>)}<td className="p-3 text-center">{formatArabicScore(student.best_theory_weighted)}</td><td className="p-3 text-center">{formatArabicScore(student.practical_weighted)}</td><td className="p-3 text-center font-bold">{formatArabicScore(student.quarter_total)}</td><td className="p-3 text-center"><PerformanceLevelBadge level={student.performance_level} label={t(student.performance_level)} /></td></tr>)}</tbody></table></div>
       </ChartCard>
 
       <div className="rounded-2xl border bg-card p-5 text-sm leading-7 text-muted-foreground" data-testid="arabic-analytics-formula-note">

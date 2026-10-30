@@ -101,14 +101,24 @@ class _Collection:
         return SimpleNamespace(deleted_count=before - len(self.rows))
 
 
-def test_primary_uses_best_theory_and_weights_each_contribution_to_30():
+def test_best_theory_carries_20_and_the_practical_carries_40():
     result = arabic_score_summary(
         {"theory_test_1": 11, "theory_test_2": 13, "practical_test": 12}, exam_raw_max=15
     )
     assert result["best_theory_raw"] == 13
-    assert result["best_theory_weighted"] == 26
-    assert result["practical_weighted"] == 24
-    assert result["tests_total"] == 50
+    assert result["best_theory_weighted"] == pytest.approx(13 / 15 * 20)
+    assert result["practical_weighted"] == 32
+    assert result["tests_total"] == pytest.approx(13 / 15 * 20 + 32)
+
+
+def test_primary_out_of_10_simply_doubles_the_better_theory_attempt():
+    result = arabic_score_summary(
+        {"theory_test_1": 8, "theory_test_2": 10, "practical_test": 9}, exam_raw_max=10
+    )
+    assert result["best_theory_raw"] == 10
+    assert result["best_theory_weighted"] == 20
+    assert result["practical_weighted"] == 36
+    assert result["tests_total"] == 56
 
 
 def test_middle_secondary_uses_raw_max_20_without_early_rounding():
@@ -116,9 +126,9 @@ def test_middle_secondary_uses_raw_max_20_without_early_rounding():
         {"theory_test_1": 14, "theory_test_2": 17, "practical_test": 18}, exam_raw_max=20
     )
     assert result["best_theory_raw"] == 17
-    assert result["best_theory_weighted"] == 25.5
-    assert result["practical_weighted"] == 27
-    assert result["tests_total"] == 52.5
+    assert result["best_theory_weighted"] == 17
+    assert result["practical_weighted"] == 36
+    assert result["tests_total"] == 53
 
 
 @pytest.mark.parametrize(
@@ -410,9 +420,9 @@ def test_arabic_pdf_and_excel_exports_render_new_model_rows():
         "tests_completed": 3, "tests_missing": 0,
         "students": [{
             "full_name": "محمد أحمد", "class_name": "رابع أ", "has_grades": True,
-            "exam_raw_max": 15, "theory_test_1": 11, "theory_test_2": 13, "practical_test": 12,
-            "continuous_total": 40, "best_theory_weighted": 26, "practical_weighted": 24,
-            "tests_total": 50, "quarter_total": 90, "test_completion_count": 3,
+            "exam_raw_max": 10, "theory_test_1": 8, "theory_test_2": 9, "practical_test": 9,
+            "continuous_total": 40, "best_theory_weighted": 18, "practical_weighted": 36,
+            "tests_total": 54, "quarter_total": 94, "test_completion_count": 3,
         }],
     }
     pdf = generate_arabic_grades_pdf(payload, "ar")

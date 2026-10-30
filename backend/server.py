@@ -3003,8 +3003,8 @@ def _arabic_report_chart_labels(lang: str) -> Dict[str, str]:
     if _normalize_lang(lang) == "ar":
         return {
             "continuous": "أعمال السنة /40",
-            "theory": "أفضل نظري /30",
-            "practical": "العملي /30",
+            "theory": "أفضل نظري /20",
+            "practical": "العملي /40",
             "theory1": "النظري 1",
             "theory2": "النظري 2",
             "practical_raw": "العملي",
@@ -3017,8 +3017,8 @@ def _arabic_report_chart_labels(lang: str) -> Dict[str, str]:
         }
     return {
         "continuous": "Continuous /40",
-        "theory": "Best theory /30",
-        "practical": "Practical /30",
+        "theory": "Best theory /20",
+        "practical": "Practical /40",
         "theory1": "Theory 1",
         "theory2": "Theory 2",
         "practical_raw": "Practical",
@@ -3076,7 +3076,7 @@ def create_arabic_component_bar_chart(students: List[Dict[str, Any]], lang: str 
         _arabic_report_average([row.get("best_theory_weighted") for row in students]) or 0,
         _arabic_report_average([row.get("practical_weighted") for row in students]) or 0,
     ]
-    maxima = [40, 30, 30]
+    maxima = [40, ARABIC_BEST_THEORY_WEIGHT, ARABIC_PRACTICAL_WEIGHT]
     if not students or not any(value > 0 for value in values):
         return _analytics_empty_chart("No weighted score data")
     _chart_prepare_mpl()
@@ -4923,7 +4923,7 @@ class ClassBase(BaseModel):
     academic_year: Optional[str] = None
     notes: Optional[str] = None
     # Arabic-section middle/secondary classes: teacher-chosen raw exam maximum
-    # (15 or 20) each theory/practical raw score is scaled from to reach /30.
+    # (15 or 20) each theory/practical raw score is scaled from before weighting.
     # Primary is always 10 and ignores this field entirely.
     exam_raw_max_override: Optional[float] = None
 
@@ -5112,6 +5112,9 @@ ARABIC_CONTINUOUS_LIMITS: Dict[str, float] = {
 }
 ARABIC_EXAM_FIELDS = ("theory_test_1", "theory_test_2", "practical_test")
 ARABIC_SCORE_FIELDS = (*ARABIC_CONTINUOUS_LIMITS.keys(), *ARABIC_EXAM_FIELDS)
+# The /60 exam block: the better theory attempt carries /20 and the practical /40.
+ARABIC_BEST_THEORY_WEIGHT = 20.0
+ARABIC_PRACTICAL_WEIGHT = 40.0
 
 
 def arabic_educational_stage_for_grade(grade: Any) -> str:
@@ -5130,7 +5133,7 @@ def arabic_educational_stage_for_grade(grade: Any) -> str:
 
 
 def arabic_exam_raw_max_for_grade(grade: Any, override: Optional[float] = None) -> float:
-    """Raw max each theory/practical score is scaled from to reach /30.
+    """Raw max each theory/practical score is scaled from before weighting.
 
     Primary (grades 1-6) is always out of 10 and ignores any override.
     Middle/secondary classes default to 20 unless the class has an explicit
@@ -5280,8 +5283,12 @@ def arabic_score_summary(
     ]
     best_theory_raw = max(theory_values) if theory_values else None
     practical_raw = float(source["practical_test"]) if source.get("practical_test") is not None else None
-    best_theory_weighted = best_theory_raw / exam_raw_max * 30 if best_theory_raw is not None else None
-    practical_weighted = practical_raw / exam_raw_max * 30 if practical_raw is not None else None
+    best_theory_weighted = (
+        best_theory_raw / exam_raw_max * ARABIC_BEST_THEORY_WEIGHT if best_theory_raw is not None else None
+    )
+    practical_weighted = (
+        practical_raw / exam_raw_max * ARABIC_PRACTICAL_WEIGHT if practical_raw is not None else None
+    )
     tests_total = (best_theory_weighted or 0) + (practical_weighted or 0)
     has_grades = bool(entered_fields or continuous_has_data)
     total = continuous_total + tests_total if has_grades else None
@@ -8427,8 +8434,8 @@ def generate_arabic_grades_excel(payload: Dict[str, Any], lang: str = "en") -> b
         "theory_test_1": "الاختبار النظري 1 (خام)" if is_ar else "Theory Test 1 (Raw)",
         "theory_test_2": "الاختبار النظري 2 (خام)" if is_ar else "Theory Test 2 (Raw)",
         "practical_test": "الاختبار العملي (خام)" if is_ar else "Practical Test (Raw)",
-        "best_theory_weighted": "أفضل نظري /30" if is_ar else "Best Theory /30",
-        "practical_weighted": "العملي الموزون /30" if is_ar else "Practical Weighted /30",
+        "best_theory_weighted": "أفضل نظري /20" if is_ar else "Best Theory /20",
+        "practical_weighted": "العملي الموزون /40" if is_ar else "Practical Weighted /40",
         "tests_total": "إجمالي الاختبارات /60" if is_ar else "Exam Total /60",
         "quarter_total": "إجمالي الربع /100" if is_ar else "Quarter Total /100",
         "legacy_migration_status": "حالة ترحيل النموذج السابق" if is_ar else "Legacy Migration Status",
@@ -8538,7 +8545,7 @@ def generate_arabic_grades_pdf(payload: Dict[str, Any], lang: str = "en") -> byt
             "class_average": "متوسط الدرجة حسب الفصل",
             "class_average_sub": "متوسط إجمالي الربع من 100 لكل فصل داخل النطاق.",
             "components": "توزيع الدرجة الموزونة",
-            "components_sub": "أعمال السنة من 40، وأفضل اختبار نظري من 30، والاختبار العملي من 30.",
+            "components_sub": "أعمال السنة من 40، وأفضل اختبار نظري من 20، والاختبار العملي من 40.",
             "raw_tests": "أداء كل اختبار على حدة",
             "raw_tests_sub": "مقارنة الدرجات الخام كنسب مئوية لمراعاة اختلاف الحد الأعلى حسب المرحلة.",
             "contribution": "مساهمة مكونات الدرجة النهائية",
@@ -8569,7 +8576,7 @@ def generate_arabic_grades_pdf(payload: Dict[str, Any], lang: str = "en") -> byt
             "class_average": "Average total by class",
             "class_average_sub": "Average quarter total out of 100 for each class in scope.",
             "components": "Weighted score distribution",
-            "components_sub": "Continuous /40, best theory /30, and practical /30.",
+            "components_sub": "Continuous /40, best theory /20, and practical /40.",
             "raw_tests": "Each test performance",
             "raw_tests_sub": "Raw scores normalized to percentages for fair comparison across stages.",
             "contribution": "Final-score component contribution",
@@ -8590,8 +8597,8 @@ def generate_arabic_grades_pdf(payload: Dict[str, Any], lang: str = "en") -> byt
     component_text = (
         f"{visual_copy['components']}: "
         f"{format_arabic_score(component_averages['continuous'])}/40, "
-        f"{format_arabic_score(component_averages['theory'])}/30, "
-        f"{format_arabic_score(component_averages['practical'])}/30."
+        f"{format_arabic_score(component_averages['theory'])}/20, "
+        f"{format_arabic_score(component_averages['practical'])}/40."
     )
     raw_names = {
         "theory_test_1": "النظري 1" if code == "ar" else "Theory 1",
@@ -8724,8 +8731,8 @@ def generate_arabic_grades_pdf(payload: Dict[str, Any], lang: str = "en") -> byt
             "النظري 1" if code == "ar" else "Theory 1",
             "النظري 2" if code == "ar" else "Theory 2",
             "العملي" if code == "ar" else "Practical",
-            "أفضل نظري /30" if code == "ar" else "Best Theory /30",
-            "العملي الموزون /30" if code == "ar" else "Practical /30",
+            "أفضل نظري /20" if code == "ar" else "Best Theory /20",
+            "العملي الموزون /40" if code == "ar" else "Practical /40",
             _tr("Tests /60", code), _tr("Quarter /100", code),
         ]
         detail_header[2] = "أعمال السنة /40" if code == "ar" else "Continuous /40"

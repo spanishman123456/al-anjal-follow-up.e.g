@@ -400,7 +400,7 @@ export default function ArabicGrades() {
         <CardContent className="p-0">
           <div className="overflow-x-auto">
             <table className="w-full min-w-[1220px] text-sm">
-              <thead className="bg-[#10162A] text-white"><tr><th className="sticky start-0 z-10 bg-[#10162A] p-3 text-start">{t("student")}</th><th className="p-3 text-start">{t("class")}</th><th className="p-3 text-center">{t("continuous_assessment")} /40</th>{ARABIC_EXAM_FIELDS.map((key) => <th key={key} className="p-3 text-center">{t(key)} ({t("raw_score")})</th>)}<th className="p-3 text-center">{t("best_theory")} /30</th><th className="p-3 text-center">{t("practical_weighted")} /30</th><th className="p-3 text-center">/60</th><th className="p-3 text-center">/100</th><th className="p-3 text-center">{t("actions")}</th></tr></thead>
+              <thead className="bg-[#10162A] text-white"><tr><th className="sticky start-0 z-10 bg-[#10162A] p-3 text-start">{t("student")}</th><th className="p-3 text-start">{t("class")}</th><th className="p-3 text-center">{t("continuous_assessment")} /40</th>{ARABIC_EXAM_FIELDS.map((key) => <th key={key} className="p-3 text-center">{t(key)} ({t("raw_score")})</th>)}<th className="p-3 text-center">{t("best_theory")} /20</th><th className="p-3 text-center">{t("practical_weighted")} /40</th><th className="p-3 text-center">/60</th><th className="p-3 text-center">/100</th><th className="p-3 text-center">{t("actions")}</th></tr></thead>
               <tbody>
                 {filteredRows.map((student) => {
                   const current = values[student.id] || {};

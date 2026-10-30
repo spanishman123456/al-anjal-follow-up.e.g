@@ -90,13 +90,13 @@ Arabic grading is dispatched separately from the protected International pipelin
 ```
 Weekly continuous /40 = performance tasks 10 + participation 10 + interaction 10 + attendance 10
 Quarter continuous /40 = arithmetic mean of entered weekly totals
-Best Theory /30 = max(valid Theory 1 raw, valid Theory 2 raw) / stage raw maximum × 30
-Practical /30 = Practical Test raw / stage raw maximum × 30
-Tests /60 = Best Theory 30 + Practical 30
+Best Theory /20 = max(valid Theory 1 raw, valid Theory 2 raw) / stage raw maximum × 20
+Practical /40 = Practical Test raw / stage raw maximum × 40
+Tests /60 = Best Theory 20 + Practical 40
 Quarter /100 = continuous 40 + tests 60
 ```
 
-Primary (grades 1–6) raw exams are `/15`; Middle (grades 7–9) and Secondary (grade 10+) raw exams are `/20`. Stage is derived only from canonical `classes.grade`. All three attempts—Theory 1, Theory 2, and Practical—must be entered for full completion, while available valid entries may produce a provisional total. Semester 1 displays Q1/Q2; Semester 2 displays Q3/Q4. Each quarter is independent. Internal quarter 1 uses weeks 1–9 and internal quarter 2 uses weeks 10–18 in both semesters. A score of `0` counts as entered/tested; `null` is missing. Only weeks containing at least one entered component participate in the continuous average.
+Primary (grades 1–6) raw exams are always `/10` and ignore any class override, so the better theory attempt is simply doubled; Middle (grades 7–9) and Secondary (grade 10+) raw exams are `/20` unless the class sets an `exam_raw_max_override` of 15. The weights live in `ARABIC_BEST_THEORY_WEIGHT` / `ARABIC_PRACTICAL_WEIGHT` in `server.py`. Stage is derived only from canonical `classes.grade`. All three attempts—Theory 1, Theory 2, and Practical—must be entered for full completion, while available valid entries may produce a provisional total. Semester 1 displays Q1/Q2; Semester 2 displays Q3/Q4. Each quarter is independent. Internal quarter 1 uses weeks 1–9 and internal quarter 2 uses weeks 10–18 in both semesters. A score of `0` counts as entered/tested; `null` is missing. Only weeks containing at least one entered component participate in the continuous average.
 
 Arabic performance bands now mirror the International mechanism proportionally to their different maxima: weekly continuous `/40` uses on-level `>=34.6667`, approach `>=26.6667`; quarter `/100` uses on-level `>=92`, approach `>=86`; lower scored totals are `below`, and wholly empty records remain `no_data`. Analytics, class summaries, student rows, PDF and Excel must use the same backend result.
 
@@ -108,7 +108,7 @@ Every score-entry surface exposes two deliberately scoped clear actions: exact s
 
 Column-fill tools also require one exact class. Leaving the fill input blank on International matrices means “use this column's maximum”; Arabic weekly and Arabic exam editors provide an explicit maximum-fill selector. Values are staged for review and saved through the normal bulk-save flow.
 
-Arabic Analytics mirrors the International class-first then optional-student workflow while retaining the Arabic `/100` formula. It shows exam completion, performance distribution, class averages, weighted `/40 + /30 + /30` components, every raw exam normalized to its stage maximum, component contribution, student totals, class completion, top/support lists, and the detailed raw/weighted table.
+Arabic Analytics mirrors the International class-first then optional-student workflow while retaining the Arabic `/100` formula. It shows exam completion, performance distribution, class averages, weighted `/40 + /20 + /40` components, every raw exam normalized to its stage maximum, component contribution, student totals, class completion, top/support lists, and the detailed raw/weighted table.
 
 Arabic Reports now renders that same interactive analytical board rather than a separate summary-only page. Its PDF export reproduces the same decision-support structure with seven chart families, an analytical explanation table, class breakdown, detailed raw/weighted student rows, top totals, and completion follow-up. Both PDF and Excel can be scoped to the selected class or one selected student; the backend validates that the student belongs to the permitted class/year/section scope before exporting.
 
