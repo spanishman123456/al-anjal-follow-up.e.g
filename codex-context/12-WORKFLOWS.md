@@ -100,10 +100,11 @@ Class roster deletion:
 
 Arabic smart bulk grading:
 
-1. Select one exact class and one editable grade column.
-2. “Fill maximum” stages `/10` for continuous fields or each student’s stage-aware `/15` or `/20` raw exam maximum.
+1. Select one editable grade column. A class may be selected or left on “all classes”; “Fill maximum” covers whichever scope is loaded, so every Arabic class can be filled in one action.
+2. “Fill maximum” stages `/10` for continuous fields or each student’s stage-aware `/15` or `/20` raw exam maximum, resolved per student so mixed classes stay correct.
 3. Confirm before overwriting an entered non-maximum value.
 4. Review the table and use the existing Save Grades action; the fill action itself does not persist.
+5. Clearing grades/scores still requires one exact class — only the fill action is scope-wide.
 
 ## W9 — Award reward certificate
 

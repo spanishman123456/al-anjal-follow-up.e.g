@@ -197,11 +197,9 @@ export default function ArabicStudents() {
     }
   };
 
+  // Fills whichever class scope is loaded: every class at once when "all
+  // classes" is selected, or just the one class when a class is picked.
   const fillSelectedClassMaximum = () => {
-    if (classId === "all") {
-      toast.error(t("select_class_to_clear_scores"));
-      return;
-    }
     if (!students.length) {
       toast.error(t("no_data"));
       return;
@@ -213,7 +211,11 @@ export default function ArabicStudents() {
       });
       return next;
     });
-    toast.success(t("fill_max_completed"));
+    toast.success(
+      t("fill_max_completed")
+        .replace("{count}", String(students.length))
+        .replace("{field}", t(fillField)),
+    );
   };
 
   const clearSelectedClassScores = async () => {
@@ -479,7 +481,7 @@ export default function ArabicStudents() {
 
         <Card data-testid="arabic-weekly-smart-tools"><CardContent className="flex flex-wrap items-center gap-3 pt-6">
           <Select value={fillField} onValueChange={setFillField}><SelectTrigger className="w-full sm:w-[260px]" data-testid="arabic-weekly-fill-field"><SelectValue /></SelectTrigger><SelectContent>{CONTINUOUS_FIELDS.map(({ key }) => <SelectItem key={key} value={key}>{t(key)} /10</SelectItem>)}</SelectContent></Select>
-          <Button type="button" variant="secondary" onClick={fillSelectedClassMaximum} disabled={classId === "all" || loading || !students.length} data-testid="arabic-weekly-fill-max"><Sparkles className="me-2 h-4 w-4" />{t("fill_max_selected_class")}</Button>
+          <Button type="button" variant="secondary" onClick={fillSelectedClassMaximum} disabled={loading || !students.length} data-testid="arabic-weekly-fill-max"><Sparkles className="me-2 h-4 w-4" />{t("fill_max_selected_class")}</Button>
           <Button type="button" variant="destructive" onClick={clearSelectedClassScores} disabled={classId === "all" || loading || !students.length} data-testid="arabic-weekly-clear-class"><Trash2 className="me-2 h-4 w-4" />{t("clear_selected_class_scores")}</Button>
           <p className="basis-full text-xs text-muted-foreground">{t("fill_max_selected_class_hint")}</p>
         </CardContent></Card>

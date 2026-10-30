@@ -138,11 +138,10 @@ export default function ArabicGrades() {
     }));
   };
 
+  // Fills the rows currently shown, which may span every class at once when
+  // "all classes" is selected. The maximum is resolved per student, so a
+  // mixed-class selection still gets each student's own stage maximum.
   const fillSelectedColumnWithMaximum = () => {
-    if (classId === "all") {
-      toast.error(t("bulk_grade_class_required"));
-      return;
-    }
     if (!filteredRows.length) return;
     const overwritesEnteredScore = filteredRows.some((student) => {
       const current = values[student.id]?.[bulkFillField];
@@ -379,7 +378,7 @@ export default function ArabicGrades() {
             <Button
               variant="secondary"
               onClick={fillSelectedColumnWithMaximum}
-              disabled={saving || loading || !rows.length || classId === "all"}
+              disabled={saving || loading || !rows.length}
               data-testid="arabic-fill-max-column"
             >
               <Sparkles className="me-2 h-4 w-4" />{t("fill_max_for_class")}
