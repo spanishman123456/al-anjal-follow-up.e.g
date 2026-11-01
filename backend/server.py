@@ -8102,6 +8102,55 @@ async def save_arabic_weekly_scores(
     return {"status": "saved", "updated": len(operations)}
 
 
+async def arabic_scopes_holding_marks(
+    student_ids: List[str], academic_year: str
+) -> List[Dict[str, Any]]:
+    """Which semester/quarter of this year actually hold marks for these students.
+
+    Only consulted when the requested scope came back empty. A quarter nobody has
+    been marked in looks exactly like lost data on screen, so the UI needs to be
+    able to say where the marks really are instead of showing a blank table.
+    """
+
+    def pipeline(fields) -> List[Dict[str, Any]]:
+        return [
+            {"$match": {
+                "student_id": {"$in": student_ids},
+                "academic_year": academic_year,
+                "school_section": SCHOOL_SECTION_ARABIC,
+                # $ne: None also excludes an absent field, so a row that was created
+                # and later cleared does not count as a mark.
+                "$or": [{field: {"$ne": None}} for field in fields],
+            }},
+            {"$group": {
+                "_id": {"semester": "$semester", "quarter": "$quarter"},
+                "students": {"$addToSet": "$student_id"},
+            }},
+        ]
+
+    found: Dict[Tuple[Any, Any], set] = {}
+    for collection, fields in (
+        (db.arabic_quarter_scores, ARABIC_EXAM_FIELDS),
+        (db.arabic_weekly_scores, tuple(ARABIC_CONTINUOUS_LIMITS)),
+    ):
+        for doc in await collection.aggregate(pipeline(fields)).to_list(50):
+            key = (doc["_id"].get("semester"), doc["_id"].get("quarter"))
+            found.setdefault(key, set()).update(doc["students"])
+    return sorted(
+        (
+            {
+                "semester": semester,
+                "quarter": quarter,
+                "display_quarter": quarter + 2 if semester == 2 else quarter,
+                "student_count": len(ids),
+            }
+            for (semester, quarter), ids in found.items()
+            if semester in (1, 2) and quarter in (1, 2) and ids
+        ),
+        key=lambda item: (-item["student_count"], item["semester"], item["quarter"]),
+    )
+
+
 async def build_arabic_grading_payload(
     academic_year: str,
     semester: int,
@@ -8245,11 +8294,22 @@ async def build_arabic_grading_payload(
         for row in rows
         if row.get("legacy_migration_status") == "manual_review" and row.get("practical_test") is None
     ]
+    # An empty quarter is indistinguishable from lost data on screen, and the
+    # selected term lives in the browser, so two devices can disagree about it.
+    marks_elsewhere = (
+        await arabic_scopes_holding_marks(student_ids, academic_year)
+        if total_students and not with_grades
+        else []
+    )
     return {
         "school_section": SCHOOL_SECTION_ARABIC,
         "academic_year": academic_year,
         "semester": semester,
         "quarter": quarter,
+        "marks_elsewhere": [
+            item for item in marks_elsewhere
+            if (item["semester"], item["quarter"]) != (semester, quarter)
+        ],
         "display_quarter": quarter + 2 if semester == 2 else quarter,
         "selected_student_id": student_id,
         "selected_student_name": rows[0].get("full_name") if student_id and rows else None,

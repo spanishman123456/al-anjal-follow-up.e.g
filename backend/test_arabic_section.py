@@ -436,3 +436,92 @@ def test_arabic_pdf_and_excel_exports_render_new_model_rows():
     assert "متوسط أعمال السنة /40" in headers
     assert "الاختبار العملي (خام)" in headers
     assert all("العملي 1" not in str(header) and "العملي 2" not in str(header) for header in headers)
+
+
+class _ScopeCursor:
+    """Evaluates just the two aggregation stages arabic_scopes_holding_marks uses."""
+
+    def __init__(self, rows, pipeline):
+        self.rows, self.pipeline = rows, pipeline
+
+    @staticmethod
+    def _matches(row, match):
+        for key, condition in match.items():
+            if key == "$or":
+                if not any(
+                    row.get(field) is not None
+                    for clause in condition
+                    for field in clause
+                ):
+                    return False
+            elif isinstance(condition, dict) and "$in" in condition:
+                if row.get(key) not in condition["$in"]:
+                    return False
+            elif row.get(key) != condition:
+                return False
+        return True
+
+    async def to_list(self, _limit):
+        match = self.pipeline[0]["$match"]
+        groups = {}
+        for row in self.rows:
+            if self._matches(row, match):
+                key = (row.get("semester"), row.get("quarter"))
+                groups.setdefault(key, set()).add(row["student_id"])
+        return [
+            {"_id": {"semester": semester, "quarter": quarter}, "students": sorted(ids)}
+            for (semester, quarter), ids in groups.items()
+        ]
+
+
+class _ScopeCollection:
+    def __init__(self, rows):
+        self.rows = rows
+
+    def aggregate(self, pipeline):
+        return _ScopeCursor(self.rows, pipeline)
+
+
+def _scope_db(quarter_rows, weekly_rows):
+    return SimpleNamespace(
+        arabic_quarter_scores=_ScopeCollection(quarter_rows),
+        arabic_weekly_scores=_ScopeCollection(weekly_rows),
+    )
+
+
+def _arabic_row(student_id, semester, quarter, **fields):
+    return {
+        "student_id": student_id, "academic_year": "2026-2027",
+        "school_section": "arabic", "semester": semester, "quarter": quarter, **fields,
+    }
+
+
+def test_empty_quarter_reports_where_the_marks_actually_are(monkeypatch):
+    """An unmarked quarter looks exactly like lost data, so it has to name the
+    quarter that does hold the marks."""
+    monkeypatch.setattr(server, "db", _scope_db(
+        quarter_rows=[
+            _arabic_row("s1", 1, 1, theory_test_1=8),
+            _arabic_row("s2", 1, 1, practical_test=9),
+            _arabic_row("s3", 2, 2, theory_test_2=7),
+            # Created then cleared: every mark is null, so this quarter holds nothing.
+            _arabic_row("s1", 1, 2, theory_test_1=None, theory_test_2=None, practical_test=None),
+        ],
+        weekly_rows=[_arabic_row("s3", 1, 1, participation=6)],
+    ))
+    found = asyncio.run(server.arabic_scopes_holding_marks(["s1", "s2", "s3"], "2026-2027"))
+    assert found == [
+        {"semester": 1, "quarter": 1, "display_quarter": 1, "student_count": 3},
+        {"semester": 2, "quarter": 2, "display_quarter": 4, "student_count": 1},
+    ]
+
+
+def test_scope_lookup_ignores_other_years_and_other_students(monkeypatch):
+    monkeypatch.setattr(server, "db", _scope_db(
+        quarter_rows=[
+            _arabic_row("s1", 1, 1, theory_test_1=8) | {"academic_year": "2025-2026"},
+            _arabic_row("stranger", 1, 2, theory_test_1=8),
+        ],
+        weekly_rows=[],
+    ))
+    assert asyncio.run(server.arabic_scopes_holding_marks(["s1"], "2026-2027")) == []

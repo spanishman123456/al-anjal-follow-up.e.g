@@ -3,7 +3,7 @@ import { useOutletContext } from "react-router-dom";
 import { AlertTriangle, Download, Save, Sparkles, TestTube2, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { api, getLocalizedApiErrorMessage } from "@/lib/api";
-import { displayQuarterNumber } from "@/lib/academicScope";
+import { applySemesterQuarterSelectValue, displayQuarterLabel, displayQuarterNumber } from "@/lib/academicScope";
 import {
   ARABIC_EXAM_FIELDS,
   calculateArabicQuarter,
@@ -26,7 +26,7 @@ import { StudentScoreClearButton } from "@/components/StudentScoreClearButton";
 const semesterNumber = (semester) => (semester === "semester2" ? 2 : 1);
 
 export default function ArabicGrades() {
-  const { language, semester, quarter, academicYear, classes = [], schoolSection, loadClasses } = useOutletContext();
+  const { language, semester, setSemester, quarter, setQuarter, academicYear, classes = [], schoolSection, loadClasses } = useOutletContext();
   const t = useTranslations(language);
   const [classId, setClassId] = useState("all");
   const [searchTerm, setSearchTerm] = useState("");
@@ -322,6 +322,29 @@ export default function ArabicGrades() {
               return <div key={key} className="rounded-xl border bg-muted/25 p-3"><p className="font-medium">{t(key)}</p><p className="mt-1 text-sm text-emerald-600">{t("tested")}: {item.completed || 0}</p><p className="text-sm text-rose-600">{t("not_tested")}: {item.missing || 0}</p></div>;
             })}
           </div>
+          {(payload?.marks_elsewhere?.length || 0) > 0 && (
+            <div className="mt-4 rounded-xl border-2 border-amber-400 bg-amber-50 p-4 text-sm text-amber-950 dark:border-amber-600 dark:bg-amber-950/40 dark:text-amber-100" data-testid="arabic-grades-empty-scope">
+              <p className="font-semibold">{t("empty_term_title").replace("{term}", displayQuarterLabel(t, semester, quarter))}</p>
+              <p className="mt-1">{t("empty_term_hint")}</p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {payload.marks_elsewhere.map((scope) => (
+                  <Button
+                    key={`${scope.semester}-${scope.quarter}`}
+                    size="sm"
+                    variant="secondary"
+                    data-testid={`arabic-grades-goto-${scope.semester}-${scope.quarter}`}
+                    onClick={() => applySemesterQuarterSelectValue(
+                      `semester${scope.semester}-${scope.quarter}`, setSemester, setQuarter,
+                    )}
+                  >
+                    {t("empty_term_goto")
+                      .replace("{term}", `${t("quarter")} ${scope.display_quarter}`)
+                      .replace("{count}", String(scope.student_count))}
+                  </Button>
+                ))}
+              </div>
+            </div>
+          )}
           {(payload?.migration?.manual_review_count || 0) > 0 && (
             <div className="mt-4 rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-100">
               <p className="font-semibold">{t("legacy_grades_manual_review")}: {payload.migration.manual_review_count}</p>
