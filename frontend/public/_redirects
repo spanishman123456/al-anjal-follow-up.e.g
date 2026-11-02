@@ -1,3 +1,8 @@
+# The follow-up record shared with the supervisor is a standalone page, not part
+# of the React app, and is opened directly without signing in. It has to win over
+# the SPA fallback below, which would otherwise hand back the app shell.
+/record.html    /record.html    200
+
 # SPA fallback (Netlify-style). Render Static Sites normally need a dashboard
 # rewrite instead; see DEPLOY-FULL-ON-RENDER.md. Safe to keep for other hosts.
 /*    /index.html   200
