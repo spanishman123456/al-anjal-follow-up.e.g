@@ -57,10 +57,10 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
   padding-right: max(16px, env(safe-area-inset-right, 0px));
   padding-block: 15px;
 }
-.bar-in .lg { height: 42px; width: auto; flex: none; }
+.bar-in .lg { height: 58px; width: auto; flex: none; }
 /* Only the marks that are printed in colour need a light chip behind them. */
-.bar-in .lg-chip { background: #fff; border-radius: 8px; padding: 5px 8px; }
-.bar-in .lg-sm { height: 40px; }
+.bar-in .lg-chip { background: #fff; border-radius: 9px; padding: 6px 10px; }
+.bar-in .lg-sm { height: 54px; }
 .bar-in .lgs { display: flex; gap: 8px; align-items: center; }
 .bar-in .t { font-weight: 700; font-size: 1.06rem; flex: 1 1 auto; min-width: 0; }
 .bar-in .t small { display: block; font-weight: 400; font-size: .74rem; color: #a5b4cf; }
@@ -1141,11 +1141,21 @@ tbody tr.clk:hover td { background: color-mix(in srgb, var(--brand-2) 9%, transp
 
   function masthead(lang, title, subtitle, facts) {
     var t = T[lang];
-    var imgs = [(LOGOS.anjalColour || LOGOS.anjal) ? '<img src="' + (LOGOS.anjalColour || LOGOS.anjal) + '" style="height:62px;margin:0 16px">' : "",
-                LOGOS.moe ? '<img src="' + LOGOS.moe + '" style="height:60px;margin:0 14px">' : "",
-                LOGOS.cognia ? '<img src="' + LOGOS.cognia + '" style="height:54px;margin:0 14px">' : ""].join("");
+    // Word lays images out inline and wraps them when they do not fit, which stacked
+    // the three marks. One fixed three-column row keeps them side by side.
+    var anjal = LOGOS.anjalColour || LOGOS.anjal;
+    var cells = [
+      anjal ? '<img src="' + anjal + '" height="78">' : "",
+      LOGOS.moe ? '<img src="' + LOGOS.moe + '" height="78">' : "",
+      LOGOS.cognia ? '<img src="' + LOGOS.cognia + '" height="70">' : ""
+    ].filter(function (x) { return x; });
+    var width = Math.floor(100 / cells.length);
+    var imgs = '<table style="width:100%;border-collapse:collapse"><tr>' +
+      cells.map(function (c) {
+        return '<td style="width:' + width + '%;text-align:center;vertical-align:middle;padding:4px 8px">' + c + '</td>';
+      }).join("") + '</tr></table>';
     return '<table style="width:100%;border-collapse:collapse;margin-bottom:14px">' +
-      '<tr><td style="padding:0 0 12px 0;text-align:center">' + imgs + '</td></tr>' +
+      '<tr><td style="padding:0 0 14px 0;text-align:center">' + imgs + '</td></tr>' +
       '<tr><td style="border-top:3px solid #123a63;border-bottom:1px solid #d7dfea;padding:11px 0;text-align:center">' +
       '<div style="font-size:19pt;font-weight:700;color:#123a63">' + esc(title) + '</div>' +
       '<div style="font-size:11pt;color:#4b5768">' + esc(subtitle) + '</div>' +
@@ -1239,30 +1249,118 @@ tbody tr.clk:hover td { background: color-mix(in srgb, var(--brand-2) 9%, transp
     return out;
   }
 
+  /* ---- charts inside the exported files ----
+     A chart only exists on screen as live SVG that leans on the page's CSS
+     variables and classes. Neither survives being lifted out of the document, so
+     each one is cloned, has its colours and text rules baked in, and is rasterised
+     to a PNG that Word and the print view can both show. */
+  var CHART_VARS = ["--on", "--mid", "--low", "--up", "--down", "--flat", "--ink", "--ink-2",
+    "--ink-3", "--line", "--sunk", "--card", "--panel", "--brand", "--brand-2", "--accent",
+    "--on-soft", "--low-soft", "--flat-soft", "--mid-soft"];
+
+  function resolvedVars() {
+    var cs = getComputedStyle(document.documentElement), map = {};
+    CHART_VARS.forEach(function (name) {
+      map[name] = (cs.getPropertyValue(name) || "").trim() || "#333333";
+    });
+    return map;
+  }
+
+  function svgToPng(svgEl, scale) {
+    return new Promise(function (resolve) {
+      try {
+        var vb = (svgEl.getAttribute("viewBox") || "0 0 600 400").split(/\s+/);
+        var w = Math.ceil(parseFloat(vb[2])), hgt = Math.ceil(parseFloat(vb[3]));
+        var clone = svgEl.cloneNode(true);
+        clone.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+        clone.setAttribute("width", w);
+        clone.setAttribute("height", hgt);
+        var vars = resolvedVars();
+        var css = "<style>" +
+          "text{font-family:'Segoe UI',Arial,sans-serif;direction:ltr}" +
+          ".axis{font-size:10.5px;fill:" + vars["--ink-3"] + "}" +
+          ".nlab{font-size:10.5px;fill:" + vars["--ink-2"] + "}" +
+          ".vlab{font-size:10.5px;font-weight:700}" +
+          ".gl{stroke:" + vars["--line"] + ";stroke-dasharray:2 5}" +
+          "</style>";
+        var markup = new XMLSerializer().serializeToString(clone);
+        markup = markup.replace(/^<svg/, "<svg");
+        markup = markup.replace("><", ">" + css + "<");
+        CHART_VARS.forEach(function (name) {
+          markup = markup.split("var(" + name + ")").join(vars[name]);
+        });
+        markup = markup.replace(/var\(--[a-z0-9-]+\)/gi, vars["--ink-2"]);
+        var ratio = scale || 2;
+        var img = new Image();
+        img.onload = function () {
+          var canvas = document.createElement("canvas");
+          canvas.width = w * ratio; canvas.height = hgt * ratio;
+          var ctx = canvas.getContext("2d");
+          ctx.fillStyle = "#ffffff";
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+          try { resolve({ url: canvas.toDataURL("image/png"), w: w, h: hgt }); }
+          catch (e) { resolve(null); }
+        };
+        img.onerror = function () { resolve(null); };
+        img.src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(markup);
+      } catch (e) { resolve(null); }
+    });
+  }
+
+  /* Render a chart off-screen, rasterise it, then throw the node away. */
+  function chartImage(buildFn, maxWidth) {
+    var holder = document.createElement("div");
+    holder.style.cssText = "position:absolute;left:-10000px;top:0;width:900px";
+    document.body.appendChild(holder);
+    holder.appendChild(buildFn());
+    var svg = holder.querySelector("svg");
+    var done = svg ? svgToPng(svg, 2) : Promise.resolve(null);
+    return done.then(function (png) {
+      if (holder.parentNode) holder.parentNode.removeChild(holder);
+      if (!png) return "";
+      var width = Math.min(maxWidth || 660, png.w);
+      return '<p style="margin:12px 0 20px;text-align:center;page-break-inside:avoid">' +
+        '<img src="' + png.url + '" width="' + width + '" style="max-width:100%"></p>';
+    });
+  }
+
+  function chartSection(title, buildFn, maxWidth) {
+    return chartImage(buildFn, maxWidth).then(function (html) {
+      return html ? hx(title) + html : "";
+    });
+  }
+
   function reportHtml(scope) {
-    var lang = scope.lang, t = T[lang], body = "";
+    var lang = scope.lang, t = T[lang], body = "", charts = [];
     if (scope.kind === "student") {
       var c = scope.cls, s0 = scope.stu, avg = attAvg(c);
       body += masthead(lang, t.studentReport + " — " + s0.n, c.name + " · " + c.sec,
         t.term + ": " + D.term + " · " + D.year);
       body += hx(t.reading);
       body += bulletsHtml(lang === "en" ? enStudentInsights(c, s0) : studentInsights(c, s0), lang);
+      body += "<!--CHARTS-->";
+      charts.push(chartSection(t.vsClassTitle, function () { return chartAttempts(c, s0); }, 520));
+      charts.push(chartSection(t.componentsTitle, function () { return chartComponents(s0); }, 520));
+      charts.push(chartSection(t.positionTitle, function () { return chartSpread(c, s0); }, 520));
       body += hx(t.test);
       body += tableHtml([t.test, t.mark, t.pctv, t.classAvg], c.labels.map(function (l, i) {
         var pv = pct(s0)[i];
         return [{ v: l }, s0.a[i] === null ? t.none : r1(s0.a[i]) + " / " + s0.m[i],
           pv === null ? t.none : r0(pv) + "%", avg[i] === null ? t.none : r0(avg[i]) + "%"];
       }), "right");
-      body += hx(t.components);
-      body += tableHtml([t.components, t.mark, t.pctv], s0.comp.map(function (cp) {
-        return [{ v: cp[0] }, r1(cp[1]) + " / " + cp[2], r0(cp[2] ? cp[1] / cp[2] * 100 : 0) + "%"];
-      }), "right");
+
     } else if (scope.kind === "class") {
       var c2 = scope.cls;
       body += masthead(lang, t.classReport + " — " + c2.name, c2.sec,
         t.students + ": " + c2.students.length + " · " + t.term + ": " + D.term + " · " + D.year);
       body += hx(t.summary);
-      body += bulletsHtml(lang === "en" ? enClassInsights(c2) : classInsights(c2), lang);
+      body += bulletsHtml(classInsights(c2, lang), lang);
+      body += "<!--CHARTS-->";
+      charts.push(chartSection(t.movementTitle, function () { return chartMovement(c2, function () {}); }, 680));
+      charts.push(chartSection(t.heatTitle, function () { return chartHeatmap(c2, function () {}); }, 680));
+      charts.push(chartSection(t.pathPanel, function () { return chartAttempts(c2, null); }, 520));
+      charts.push(chartSection(t.spreadPanel, function () { return chartSpread(c2, null); }, 520));
       body += hx(t.detail);
       var cr = classRows(c2, lang);
       body += tableHtml(cr.headers, cr.rows, "right");
@@ -1281,6 +1379,13 @@ tbody tr.clk:hover td { background: color-mix(in srgb, var(--brand-2) 9%, transp
         : [["<b>" + all.length + "</b> طالبًا في <b>" + list.length + "</b> فصول.", null],
            ["<b>" + tot.up + "</b> تحسّن، <b>" + tot.flat + "</b> ثابت، <b>" + tot.down + "</b> تراجع.",
             tot.up >= tot.down ? "good" : "bad"]], lang);
+      body += "<!--CHARTS-->";
+      charts.push(chartSection(t.classes, function () {
+        return chartRanked(list.map(function (x) { return [x.name, clsAvgPct(x) || 0, bandColour(clsAvgPct(x))]; }), 100, "%", null);
+      }, 560));
+      list.forEach(function (x) {
+        charts.push(chartSection(t.movementTitle + " — " + x.name, function () { return chartMovement(x, function () {}); }, 680));
+      });
       body += hx(t.classes);
       body += tableHtml([t.cls, t.students, t.total, t.pctv, t.improved, t.held, t.declined],
         list.map(function (x) {
@@ -1294,10 +1399,23 @@ tbody tr.clk:hover td { background: color-mix(in srgb, var(--brand-2) 9%, transp
         body += tableHtml(cr2.headers, cr2.rows, "right");
       });
     }
-    return '<html dir="' + t.dir + '"><head><meta charset="utf-8"><title>' + esc(scope.title) + '</title></head>' +
-      '<body style="font-family:Segoe UI,Arial,sans-serif;color:#111827;margin:28px">' + body +
-      '<p style="font-size:9pt;color:#78869b;margin-top:22px;border-top:1px solid #dde4ee;padding-top:8px">' +
-      esc(t.school + " · " + t.record + " · " + stamp()) + '</p></body></html>';
+    return Promise.all(charts).then(function (parts) {
+      var doc = body.split("<!--CHARTS-->").join(parts.join(""));
+      var sheet = '<style>' +
+        '@page{size:A4;margin:14mm}' +
+        'body{font-family:"Segoe UI",Arial,sans-serif;color:#111827;font-size:10.5pt;line-height:1.6}' +
+        'h2{page-break-after:avoid;break-after:avoid}' +
+        'table{page-break-inside:auto}' +
+        'tr{page-break-inside:avoid;break-inside:avoid}' +
+        'thead{display:table-header-group}' +
+        'img{page-break-inside:avoid;break-inside:avoid}' +
+        'ul{margin:6px 0 16px}li{margin:5px 0}' +
+        '</style>';
+      return '<html dir="' + t.dir + '"><head><meta charset="utf-8"><title>' + esc(scope.title) + '</title>' + sheet + '</head>' +
+        '<body style="margin:0">' + doc +
+        '<p style="font-size:9pt;color:#78869b;margin-top:22px;border-top:1px solid #dde4ee;padding-top:8px">' +
+        esc(t.school + " · " + t.record + " · " + stamp()) + '</p></body></html>';
+    });
   }
 
   function save(name, mime, text) {
@@ -1310,13 +1428,32 @@ tbody tr.clk:hover td { background: color-mix(in srgb, var(--brand-2) 9%, transp
       setTimeout(function () { if (a.parentNode) a.parentNode.removeChild(a); URL.revokeObjectURL(url); }, 500);
     } catch (e) { notice(); }
   }
-  function exportWord(scope) { save(safeName(scope.title) + ".doc", "application/msword", reportHtml(scope)); }
-  function exportExcel(scope) { save(safeName(scope.title) + ".xls", "application/vnd.ms-excel", reportHtml(scope)); }
+  function busy(on) {
+    document.querySelectorAll(".expbar .btn").forEach(function (b) { b.disabled = on; });
+  }
+  function exportWord(scope) {
+    busy(true);
+    reportHtml(scope).then(function (doc) {
+      save(safeName(scope.title) + ".doc", "application/msword", doc);
+    }).catch(notice).then(function () { busy(false); });
+  }
+  function exportExcel(scope) {
+    // A spreadsheet carries the numbers, not pictures of them; charts are dropped.
+    busy(true);
+    reportHtml(scope).then(function (doc) {
+      save(safeName(scope.title) + ".xls", "application/vnd.ms-excel",
+        doc.replace(/<p style="margin:12px 0 20px;text-align:center;page-break-inside:avoid">[\s\S]*?<\/p>/g, ""));
+    }).catch(notice).then(function () { busy(false); });
+  }
   function exportPdf(scope) {
     var w = window.open("", "_blank");
     if (!w) { notice(); return; }
-    w.document.open(); w.document.write(reportHtml(scope)); w.document.close(); w.focus();
-    setTimeout(function () { try { w.print(); } catch (e) {} }, 400);
+    busy(true);
+    reportHtml(scope).then(function (doc) {
+      w.document.open(); w.document.write(doc); w.document.close(); w.focus();
+      setTimeout(function () { try { w.print(); } catch (e) {} }, 500);
+    }).catch(function () { try { w.close(); } catch (e) {} notice(); })
+      .then(function () { busy(false); });
   }
   function notice() {
     var n = h("div", "card pad mt");
